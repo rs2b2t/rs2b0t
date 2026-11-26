@@ -428,13 +428,6 @@ function gearHasBrokenAxe() {
     );
 }
 
-async function gearWaitBankLoaded() {
-    if (typeof Bank.loaded === 'function') {
-        await Execution.delayUntil(() => Bank.loaded() || Bank.items().length > 0, 3000);
-    }
-    await Execution.delayTicks(1);
-}
-
 function chopOp(actions: string[]) {
     return actions.find(a => /chop/i.test(a)) ?? null;
 }
@@ -960,14 +953,15 @@ export default class GnomeMagicChopper extends LoopingBot {
             }
         }
 
-        await gearWaitBankLoaded();
+        if (!(await Bank.waitReady(3000))) return true;
 
         this.log('gear: depositing all except Knife');
+        const carriedAxe = bestAxe(Skills.level('woodcutting'), name => Inventory.contains(name));
         await Bank.depositAllMatching(name => {
             const n = (name ?? '').toLowerCase();
             return !!n && n !== 'knife';
         });
-        await Execution.delayTicks(1);
+        if (carriedAxe && !(await Execution.delayUntil(() => Bank.count(carriedAxe) > 0, 3000))) return true;
 
         const wc = Skills.level('woodcutting');
         const best = bestAxe(wc, n => gearAxeCount(n) > 0 || (Bank.count(n) || 0) > 0);
@@ -985,14 +979,12 @@ export default class GnomeMagicChopper extends LoopingBot {
                 await Execution.delayTicks(2);
                 return true;
             }
-            await Execution.delayTicks(1);
         }
 
         if (this.fletchEnabled() && !gearHasKnife()) {
             if ((Bank.count('Knife') || 0) > 0) {
                 this.log('gear: withdrawing Knife');
                 await Bank.withdrawX('Knife', 1);
-                await Execution.delayTicks(1);
             } else {
                 await Bank.close();
                 this.stopNoKnife('gear');
@@ -1001,14 +993,12 @@ export default class GnomeMagicChopper extends LoopingBot {
         }
 
         await Bank.close();
-        await Execution.delayTicks(1);
 
         const held = gearBestHeldAxe();
         if (held && !Equipment.contains(held) && canWieldTool(held, Skills.level('attack'))) {
             this.status = `gear: wield ${held}`;
             this.log(`gear: wielding ${held}`);
             await Equipment.equip(held);
-            await Execution.delayTicks(1);
         } else if (held && !canWieldTool(held, Skills.level('attack'))) {
             this.log(`gear: keeping ${held} in pack (Attack too low to wield)`);
         }
@@ -1270,7 +1260,6 @@ export default class GnomeMagicChopper extends LoopingBot {
             }
             this.log('wrong bank open, closing');
             await Bank.close();
-            await Execution.delayTicks(1);
         }
 
         if (!(await this.enterBankStairs())) {
@@ -1573,12 +1562,10 @@ export default class GnomeMagicChopper extends LoopingBot {
             }
         }
 
-        await gearWaitBankLoaded();
+        if (!(await Bank.waitReady(3000))) return;
         await Bank.depositAllMatching(name => !isKeepTool(name));
-        await Execution.delayTicks(1);
         await this.restockEssentialsFromOpenBank();
         await Bank.close();
-        await Execution.delayTicks(1);
 
         this.bankTrips++;
         this.status = 'returning to magics';
@@ -1587,11 +1574,7 @@ export default class GnomeMagicChopper extends LoopingBot {
 
     async restockEssentialsFromOpenBank() {
         const needKnife = this.fletchEnabled();
-        if (!Bank.isOpen()) {
-            return hasEssentialsAfterBank(needKnife);
-        }
-        await Execution.delayUntil(() => Bank.loaded() || !Bank.isOpen(), 3000);
-        if (!Bank.isOpen()) {
+        if (!(await Bank.waitReady(3000))) {
             return hasEssentialsAfterBank(needKnife);
         }
 
@@ -1599,7 +1582,6 @@ export default class GnomeMagicChopper extends LoopingBot {
             if ((Bank.count('Knife') || 0) > 0) {
                 this.log('gear: withdrawing Knife');
                 await Bank.withdrawX('Knife', 1);
-                await Execution.delayTicks(1);
             } else {
                 if (this.recovering()) {
                     this.log('death: Knife not in this bank, will retry restock');
@@ -1616,7 +1598,6 @@ export default class GnomeMagicChopper extends LoopingBot {
             if (best) {
                 this.log(`gear: withdrawing ${best}`);
                 await Bank.withdrawX(best, 1);
-                await Execution.delayTicks(1);
             } else {
                 this.log(`gear: WARNING, no usable axe in bank for WC ${wc}`);
             }
@@ -1727,12 +1708,11 @@ export default class GnomeMagicChopper extends LoopingBot {
             }
         }
 
-        await gearWaitBankLoaded();
+        if (!(await Bank.waitReady(3000))) return;
         await Bank.depositAllMatching(name => {
             const n = (name ?? '').toLowerCase();
             return !!n && n !== 'knife' && n !== 'coins';
         });
-        await Execution.delayTicks(1);
 
         const have = gearInvCoins();
         if (have < DEATH_GP) {
@@ -1744,7 +1724,6 @@ export default class GnomeMagicChopper extends LoopingBot {
                 const take = Math.min(need, banked);
                 this.log(`death: withdrawing ${take}gp (${have} held, need ${DEATH_GP})`);
                 await Bank.withdrawX('Coins', take);
-                await Execution.delayTicks(1);
             }
         } else {
             this.log(`death: already holding ${have}gp`);
@@ -1753,7 +1732,6 @@ export default class GnomeMagicChopper extends LoopingBot {
         const coins = gearInvCoins();
         const ownSteel = gearHasSteelOrBetter();
         await Bank.close();
-        await Execution.delayTicks(1);
 
         if (ownSteel) {
             this.log('death: already own steel+ axe, banking Knife then boats');
@@ -1824,7 +1802,6 @@ export default class GnomeMagicChopper extends LoopingBot {
 
         this.log('gear: bought Steel axe from Bob');
         await Shop.close();
-        await Execution.delayTicks(1);
 
         if (!Equipment.contains(GEAR_STEEL_AXE) && canWieldTool(GEAR_STEEL_AXE, Skills.level('attack'))) {
             await Equipment.equip(GEAR_STEEL_AXE);
@@ -1838,8 +1815,7 @@ export default class GnomeMagicChopper extends LoopingBot {
         const held = gearBestHeldAxe();
         if (held && Equipment.contains(held) && !Inventory.isFull()) {
             this.log(`death: unequipping ${held} to bank it`);
-            await Equipment.unequip(held);
-            await Execution.delayTicks(1);
+            if (!(await Equipment.unequip(held)) || !(await Execution.delayUntil(() => Inventory.contains(held), 3000))) return;
         }
 
         if (!Bank.isOpen()) {
@@ -1850,18 +1826,21 @@ export default class GnomeMagicChopper extends LoopingBot {
             }
         }
 
-        await gearWaitBankLoaded();
+        if (!(await Bank.waitReady(3000))) return;
+        const knife = Inventory.contains('Knife');
         await Bank.depositAllMatching(name => {
             const n = (name ?? '').toLowerCase();
             return !!n && n !== 'coins';
         });
-        await Execution.delayTicks(1);
+        if ((knife || held) && !(await Execution.delayUntil(
+            () => (!knife || Bank.count('Knife') > 0) && (!held || Bank.count(held) > 0 || Equipment.contains(held)),
+            3000
+        ))) return;
 
         const knifeBanked = (Bank.count('Knife') || 0) > 0;
         const axeBanked = gearHasSteelOrBetter();
         const coins = gearInvCoins();
         await Bank.close();
-        await Execution.delayTicks(1);
 
         if (!knifeBanked) {
             if (gearHasKnife()) {
@@ -2379,19 +2358,16 @@ export default class GnomeMagicChopper extends LoopingBot {
             }
         }
 
-        await gearWaitBankLoaded();
+        if (!(await Bank.waitReady(3000))) return;
         await Bank.depositAllMatching(name => !isKeepTool(name));
-        await Execution.delayTicks(1);
         await this.restockEssentialsFromOpenBank();
         await Bank.close();
-        await Execution.delayTicks(1);
 
         const needKnife = this.fletchEnabled();
         if (hasEssentialsAfterBank(needKnife)) {
             const held = gearBestHeldAxe();
             if (held && !Equipment.contains(held) && canWieldTool(held, Skills.level('attack'))) {
                 await Equipment.equip(held);
-                await Execution.delayTicks(1);
             }
             this.gearReady = true;
             this.recoverPhase = RECOVER.NONE;

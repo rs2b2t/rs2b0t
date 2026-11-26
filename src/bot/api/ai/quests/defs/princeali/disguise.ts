@@ -4,7 +4,7 @@ import { Traversal } from '../../../../walking/Traversal.js';
 import { Bank } from '../../../../bank/Bank.js';
 import { GroundItems } from '../../../../grounditems/GroundItems.js';
 import { Npcs } from '../../../../npcs/Npcs.js';
-import { driveUntil, settleScene } from '../../exec/prompts.js';
+import { findSceneTarget, driveUntil, settleScene } from '../../exec/prompts.js';
 import { gatherWool, type WoolSites } from '../../exec/wool.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { AGGIE_PASTE, NED_WIG, PA_ITEM, PA_LOC, PA_NPC, PA_SHOP, PA_TILE } from './areas.js';
@@ -154,8 +154,7 @@ async function useHeldOnNpc(
     if (!(await Traversal.walkResilient(near, { radius: 3, attempts: 3, timeoutMs: 120_000, log }))) {
         return false;
     }
-    await settleScene();
-    const npc = Npcs.query().name(npcName).within(10).nearest();
+    const npc = await findSceneTarget(() => Npcs.query().name(npcName).within(10).nearest());
     const item = heldItem(itemId);
     if (!npc || !item) {
         log(`useHeldOnNpc: no '${npcName}' or no item ${itemId} in the pack`);

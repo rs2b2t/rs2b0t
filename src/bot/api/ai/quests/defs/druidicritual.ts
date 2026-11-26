@@ -1,4 +1,5 @@
-import { actions, reader } from '../../../../adapter/ClientAdapter.js';
+import { Modals } from '../../../ui/widgets/Modals.js';
+import { findSceneTarget } from '../exec/prompts.js';
 import { Execution } from '../../../execution/Execution.js';
 import { Game } from '../../../game/Game.js';
 import Tile from '../../../../geometry/Tile.js';
@@ -46,10 +47,7 @@ async function readDruidicRitualStage(): Promise<number | undefined> {
     // Why: druidquest is a server-only varp, so the rendered journal is the stage oracle.
     const lines = await Quests.journal('Druidic Ritual');
     const stage = parseDruidicRitualJournal(lines);
-    if (reader.modals().main !== -1) {
-        actions.closeModal();
-        await Execution.delayTicks(1);
-    }
+    await Modals.closeIfOpen();
     return stage;
 }
 
@@ -164,14 +162,13 @@ async function huntMeat(meat: RitualMeat, log: (message: string) => void): Promi
         await Execution.delayUntil(() => !Game.inCombat(), 120_000);
         return takeMeatDrop(meat);
     }
-    const target = Npcs.query()
+    const target = await findSceneTarget(() => Npcs.query()
         .where(n => n.id === meat.npcId && !n.inCombat && !n.targetsAnotherPlayer())
         .action('Attack')
         .within(15)
-        .nearest();
+        .nearest(), 2);
     if (!target) {
         log(`waiting for an available ${meat.npc} at the guaranteed ${meat.raw} source`);
-        await Execution.delayTicks(2);
         return false;
     }
     Game.setCombatStyle('strength');

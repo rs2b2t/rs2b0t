@@ -27,8 +27,8 @@ let takes: number;
 
 const restoreExec = stubProps(Execution, {
     delayUntil: async (condition: () => boolean): Promise<boolean> => condition(),
-    delayTicks: async (): Promise<void> => {
-        waits += 1;
+    delayTicks: async (ticks: number): Promise<void> => {
+        waits += ticks;
     }
 });
 const restoreGame = stubProps(Game, {
@@ -142,9 +142,23 @@ describe('grabGround', () => {
         }
     });
 
+    test('waitIfMissing picks up the egg on its respawn tick', async () => {
+        const restore = stubProps(Execution, { delayTicks: async ticks => {
+            waits += ticks;
+            ground = [eggOnGround()];
+        } });
+        try {
+            expect(await grab(true)).toBe(true);
+            expect(takes).toBe(1);
+            expect(waits).toBe(1);
+        } finally {
+            restore();
+        }
+    });
+
     test('waitIfMissing delays when the pen is still empty', async () => {
         expect(await grab(true)).toBe(false);
         expect(walks).toBe(1);
-        expect(waits).toBe(1);
+        expect(waits).toBe(2);
     });
 });

@@ -5,7 +5,7 @@ import { Locs, type Loc } from '../../../../locs/Locs.js';
 import { Skills } from '../../../../skills/Skills.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
-import { settleScene } from '../../exec/prompts.js';
+import { findSceneTarget } from '../../exec/prompts.js';
 import { pickaxeAt } from '../knightssword/supplies.js';
 import { BOB, DOMMIK, NS_ID, NS_LOC, NS_NAME, NS_TILE, URHNEY } from './areas.js';
 
@@ -55,10 +55,9 @@ async function atFurnace(
     if (!(await Traversal.walkResilient(NS_TILE.FURNACE, { radius: 2, attempts: 4, timeoutMs: 300_000, log }))) {
         return false;
     }
-    await settleScene();
     // Why: the furnace is 2 locs and only one carries `op2=Smelt`, so prefer that half; the other is only a use-on target.
-    const furnace = Locs.query().name(NS_LOC.FURNACE).action('Smelt').within(8).nearest()
-        ?? Locs.query().name(NS_LOC.FURNACE).within(8).nearest();
+    const furnace = await findSceneTarget(() => Locs.query().name(NS_LOC.FURNACE).action('Smelt').within(8).nearest()
+        ?? Locs.query().name(NS_LOC.FURNACE).within(8).nearest());
     if (!furnace) {
         log('no Furnace in reach of the Al Kharid stand');
         return false;

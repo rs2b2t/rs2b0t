@@ -6,6 +6,7 @@ interface Options {
     tabs(): string[];
     activeTab(): string;
     worldRouting: boolean;
+    assignGroup?(usernames: string[], name: string): Promise<void>;
     edit(profile: RosterProfile): void | Promise<void>;
 }
 
@@ -33,15 +34,15 @@ function select(id: string): HTMLSelectElement {
     return el;
 }
 
-function choices(el: HTMLSelectElement, values: string[]): void {
+function choices(el: HTMLSelectElement | HTMLDataListElement, values: string[]): void {
     if (JSON.stringify(Array.from(el.options).map(option => option.value)) === JSON.stringify(values)) return;
-    const previous = el.value;
+    const previous = 'value' in el ? el.value : undefined;
     el.replaceChildren(...values.map(value => {
         const option = node('option', '', value);
         option.value = value;
         return option;
     }));
-    if (values.includes(previous)) el.value = previous;
+    if ('value' in el && previous !== undefined && values.includes(previous)) el.value = previous;
 }
 
 export class RosterPanel {
@@ -49,6 +50,9 @@ export class RosterPanel {
     private dialog = node('section', 'mbx-roster-dialog');
     private tabs = node('div', 'mbx-roster-tabs');
     private search = node('input');
+    private groupName = node('input');
+    private groupNames = node('datalist');
+    private moveGroup = button('Move to group', () => { void this.assignGroup(); }, 'mbx-roster-move-group');
     private count = node('strong');
     private tbody = node('tbody');
     private scopeLabel = node('span');
@@ -105,6 +109,20 @@ export class RosterPanel {
             const action = button(LABELS[kind], () => { this.kind = kind; this.refresh(); });
             action.dataset.action = kind;
             toolbar.append(action);
+        }
+        if (options.assignGroup) {
+            this.groupNames.id = 'mbx-roster-groups';
+            this.groupName.setAttribute('list', this.groupNames.id);
+            this.groupName.setAttribute('aria-label', 'Profile group name');
+            this.groupName.placeholder = 'New or existing group';
+            this.groupName.oninput = () => { this.moveGroup.disabled = !this.selected.size || !this.groupName.value.trim(); };
+            this.groupName.onkeydown = event => {
+                if (event.key === 'Enter' && !event.isComposing) {
+                    event.preventDefault();
+                    this.moveGroup.click();
+                }
+            };
+            toolbar.append(this.groupName, this.groupNames, this.moveGroup);
         }
         const content = node('div', 'mbx-roster-content');
         const roster = node('div', 'mbx-roster-list');
@@ -193,6 +211,7 @@ export class RosterPanel {
         const names = new Set(this.visible().map(profile => profile.username));
         for (const name of this.selected) if (!names.has(name)) this.selected.delete(name);
         this.refreshTabs(profiles);
+        choices(this.groupNames, this.options.tabs());
         choices(this.script, this.actions.scripts());
         choices(this.source, profiles.map(profile => profile.username));
         const visible = this.visible();
@@ -232,6 +251,7 @@ export class RosterPanel {
         }
         this.apply.disabled = busy || !this.selected.size || ((this.kind === 'copy' || this.kind === 'assign') && !this.script.value) || (this.kind === 'copy' && !this.source.value);
         this.applyStart.disabled = this.apply.disabled;
+        this.moveGroup.disabled = busy || !this.selected.size || !this.groupName.value.trim();
         if (active instanceof HTMLElement && this.dialog.contains(active) && active.hasAttribute('disabled')) this.el.querySelector<HTMLButtonElement>('#mbx-roster-close')!.focus();
         for (const action of Array.from(this.el.querySelectorAll<HTMLButtonElement>('[data-action]'))) action.setAttribute('aria-pressed', String(action.dataset.action === this.kind));
     }
@@ -285,7 +305,7 @@ export class RosterPanel {
         const script = this.actions.selectedScript(profile);
         let values = '';
         try { if (script) values = Object.values(this.actions.settings(profile.username, script)).join(' · '); } catch { values = ''; }
-        cells[1].querySelector('small')!.textContent = values || (profile.slot ? profile.tab : `${profile.tab} · Saved profile`);
+        cells[1].querySelector('small')!.textContent = [profile.tab, values || (profile.slot ? '' : 'Saved profile')].filter(Boolean).join(' · ');
         cells[2].textContent = script || 'None';
         const slot = profile.slot;
         cells[3].textContent = !slot ? `W${profile.world} (saved)` : slot.switchingWorld !== null ? `${slot.world === null ? 'World' : `W${slot.world}`} → W${slot.switchingWorld}` : slot.ingame && slot.world !== null ? `W${slot.world}` : `W${slot.targetWorld} (target)`;
@@ -294,6 +314,20 @@ export class RosterPanel {
         const result = this.results.get(profile.username);
         cells[4].replaceChildren(node('span', profile.slot?.scriptState === 'running' ? 'is-running' : '', state));
         if (result) cells[4].append(node('small', `mbx-roster-result is-${result.state}`, result.message));
+    }
+
+    private async assignGroup(): Promise<void> {
+        if (this.moveGroup.disabled || !this.options.assignGroup) return;
+        const usernames = [...this.selected];
+        const name = this.groupName.value.trim();
+        this.pending = true;
+        this.refresh();
+        try {
+            await this.options.assignGroup(usernames, name);
+            this.selected.clear();
+            this.message.textContent = `Moved ${usernames.length} ${usernames.length === 1 ? 'profile' : 'profiles'} to ${name}.`;
+        } catch (err) { this.message.textContent = this.error(err); }
+        finally { this.pending = false; this.refresh(); }
     }
 
     private async run(start = false): Promise<void> {

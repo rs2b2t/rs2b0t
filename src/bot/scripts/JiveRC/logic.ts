@@ -49,6 +49,14 @@ export const RUNES: Record<string, RuneType> = {
         templeMapX: 44,
         unnote: null
     },
+    'Law runes': {
+        talisman: 'Law talisman', rune: 'Law rune', level: 54,
+        ruins: new Tile(2858, 3378, 0),
+        runnerBank: new Tile(3093, 3243, 0),
+        masterBank: new Tile(3093, 3243, 0),
+        templeMapX: 38,
+        unnote: null
+    },
     'Cosmic runes': {
         talisman: 'Cosmic talisman', rune: 'Cosmic rune', level: 27,
         ruins: new Tile(3173, 9501, 0),
@@ -79,8 +87,8 @@ export function coinTargetFor(setting: number): number {
     return Math.max(MIN_COIN_TARGET, Math.floor(setting) || 0);
 }
 
-export function planStoreStep(stock: number, noted: number, unnoted: number): StoreStep {
-    const need = TRADE_CAP - unnoted;
+export function planStoreStep(stock: number, noted: number, unnoted: number, capacity = TRADE_CAP): StoreStep {
+    const need = capacity - unnoted;
     if (need <= 0) {
         return { op: 'done' };
     }

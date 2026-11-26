@@ -1,6 +1,5 @@
+import { Modals } from '../../../../ui/widgets/Modals.js';
 import { normalizeJournal as normalize } from '../../journalText.js';
-import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
-import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 import { NS_QUEST, NS_STAGE } from './areas.js';
@@ -77,10 +76,7 @@ export async function readDruidProgress(): Promise<QuestProgress | undefined> {
     const lines = await Quests.journal(NS_QUEST);
     const progress = parseDruidJournal(lines);
     // Why: the swamp gate's refusal is a mesbox on main, and while one is up every journal read comes back empty.
-    if (reader.modals().main !== -1) {
-        actions.closeModal();
-        await Execution.delayTicks(1);
-    }
+    await Modals.closeIfOpen();
     if (progress) {
         lastGood = progress;
     }

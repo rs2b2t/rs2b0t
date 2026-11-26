@@ -8,8 +8,8 @@ import { Traversal } from '../../../../walking/Traversal.js';
 import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
 import { ensureBarcrawl } from '../../barcrawl/RunBarcrawl.js';
 import { curePoison, poisonMark, stockAntipoison } from './antipoison.js';
-import { gotoNpc, openDialogue, pickPreferred, talkThrough } from '../../exec/primitives.js';
-import { driveUntil, settleScene } from '../../exec/prompts.js';
+import { afterDialogueAction, gotoNpc, openDialogue, pickPreferred, talkThrough } from '../../exec/primitives.js';
+import { findSceneTarget, driveUntil, settleScene } from '../../exec/prompts.js';
 import {
     ABBOT, EVERY_CAGE, SC_ID, SC_TILE, SCORPION_NPC, SEER, caughtIn, type ScorpionKey
 } from './areas.js';
@@ -46,8 +46,7 @@ export async function askTheSeer(log: (m: string) => void): Promise<boolean> {
             heard = true;
         }
         if (ChatDialog.canContinue()) {
-            await ChatDialog.continue();
-            await Execution.delayTicks(1);
+            await afterDialogueAction(await ChatDialog.continue(), 1);
             continue;
         }
         const options = ChatDialog.options();
@@ -57,8 +56,7 @@ export async function askTheSeer(log: (m: string) => void): Promise<boolean> {
                 log(`scorpcatcher: the Seer offered [${options.join(' | ')}] and none of it asks about the scorpions`);
                 return false;
             }
-            await ChatDialog.chooseOption(pick);
-            await Execution.delayTicks(2);
+            await afterDialogueAction(await ChatDialog.chooseOption(pick), 2);
             continue;
         }
         if (heard && !ChatDialog.isOpen()) {
@@ -167,7 +165,6 @@ async function joinTheOrder(log: (m: string) => void): Promise<boolean> {
     if (!(await Traversal.walkResilient(SC_TILE.ABBOT, { radius: 3, attempts: 3, timeoutMs: WALK_MS, log }))) {
         return false;
     }
-    await Execution.delayTicks(2);
     log('scorpcatcher: asking Abbot Langley to join the order');
     return talkThrough(ABBOT.npc, ABBOT.prefer, log);
 }
@@ -176,8 +173,7 @@ async function climbToTheRobes(log: (m: string) => void): Promise<boolean> {
     if (!(await Traversal.walkResilient(SC_TILE.MONASTERY_LADDER, { radius: 1, attempts: 3, timeoutMs: WALK_MS, log }))) {
         return false;
     }
-    await settleScene();
-    const ladder = Locs.query().where(loc => loc.id === SC_ID.MONASTERY_LADDER).action('Climb-up').within(5).nearest();
+    const ladder = await findSceneTarget(() => Locs.query().where(loc => loc.id === SC_ID.MONASTERY_LADDER).action('Climb-up').within(5).nearest());
     if (!ladder || !(await ladder.interact('Climb-up'))) {
         log('scorpcatcher: no monastery ladder to climb');
         return false;

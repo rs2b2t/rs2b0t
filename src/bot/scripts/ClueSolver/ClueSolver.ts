@@ -1,3 +1,4 @@
+import { clueRequirements } from '../../api/ai/clues/requirements.js';
 import { openClueBank } from '../../api/ai/clues/bankAccess.js';
 import { foodHealAmount, shouldEatToUseFood } from '../../api/combat/food.js';
 import { TaskBot } from '../../api/bot/Bot.js';
@@ -23,6 +24,8 @@ import { LOADOUT_SETTING } from '../../api/loadout/loadoutSetting.js';
 
 export const SETTINGS: SettingsSchema = {
     loadout: LOADOUT_SETTING,
+    food: { type: 'string', default: '', label: 'Food (blank uses loadout)' },
+    allowClueWilderness: { type: 'boolean', default: true, label: 'Allow Wilderness clue steps' },
     foodWithdraw: { type: 'number', default: 8, min: 1, max: 27, label: 'Food to withdraw' },
 
     restorePrayer: { type: 'boolean', default: true, label: 'Top up prayer between trails', help: 'prays at the nearest altar after the bank stop; hard dig guardians are fought under Protect from Magic' },
@@ -40,17 +43,21 @@ export default class ClueSolver extends TaskBot {
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
 
-        const food = scriptFood(this.settings, '');
+        const food = this.settings.str('food').trim() || scriptFood(this.settings, '');
         const foodPat = food.toLowerCase();
         this.solveClue = new SolveClue({
             log: m => this.log(m),
             setStatus: s => {
+                if (this.delegated && (s === 'clue solved' || s === 'clue abandoned')) this.requestFinish(s);
                 if (s === 'clue solved') {
                     this.solved++;
                     this.returnToBank = true;
                 }
                 this.setStatus(s);
             },
+            beforeStep: id => !this.settings.bool('allowClueWilderness', true) && clueRequirements(id).wilderness ? 'abandon' : undefined,
+            retryAbandoned: this.delegated,
+            discardAbandoned: this.delegated,
             isFood: name => foodPat !== '' && (name ?? '').toLowerCase().includes(foodPat),
             foodName: () => food,
             foodWithdraw: () => this.settings.num('foodWithdraw', 8),

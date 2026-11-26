@@ -58,7 +58,7 @@ Edgeville dungeon monkey bars — restock via dungeon ladder or after death. NOT
 | Setting | Type | Default | Notes |
 |---|---|---|---|
 | `loadout` | string | `""` | Loadout — one of:  |
-| `food` | string | `"Lobster"` | Food |
+| `food` | string | `""` | Food |
 | `foodAmount` | number (5–28) | `20` | Food to withdraw |
 | `minFood` | number (0–28) | `1` | Bank below food count |
 | `restockMode` | string | `"After death only"` | Restock mode — one of: Dungeon ladder (out of food), After death only |
@@ -156,6 +156,7 @@ Start-or-coordinate fighter — kills any named NPC in its leash, loots selected
 | `solveClues` | boolean | `true` | Solve clue drops |
 | `banking` | string | `"Auto"` | Banking — one of: Auto, None |
 | `bankLocation` | string | `"Nearest"` | Bank location — one of: Nearest, Varrock East, Varrock West, Al Kharid, Draynor, Falador East, Falador West, Edgeville, Seers, Catherby, Yanille, Ardougne West, Ardougne East, Canifis, Shilo Village, Zanaris, Fishing Guild, Legends Guild, Shantay Pass, Mage Arena, Grand Tree, Duel Arena |
+| `bankTeleport` | string | `"Off"` | Bank teleport — one of: Off, Varrock, Falador, Camelot, Ardougne |
 | `travelCoins` | number (0–200000) | `0` | Travel coins per trip |
 | `travelItems` | string[] | `[]` | Travel items |
 | `bankAtLootSlots` | number (1–27) | `12` | Bank at loot slots |
@@ -318,7 +319,7 @@ Wilderness green dragons N of Edgeville: melee/mage w/ anti-dragon shield, banks
 | `combatStyle` | string | `"melee"` | Combat style — one of: melee, mage |
 | `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence |
 | `useSpecial` | boolean | `true` | Use special attacks |
-| `weapon` | string | `"Rune scimitar"` | Weapon — one of: Bronze scimitar, Iron scimitar, Steel scimitar, Black scimitar, Mithril scimitar, Adamant scimitar, Rune scimitar, Bronze sword, Iron sword, Steel sword, Black sword, Mithril sword, Adamant sword, Rune sword, Bronze longsword, Iron longsword, Steel longsword, Black longsword, Mithril longsword, Adamant longsword, Rune longsword, Dragon longsword, Bronze dagger, Iron dagger, Steel dagger, Black dagger, Mithril dagger, Adamant dagger, Rune dagger, Dragon dagger, Dragon dagger(p), Dragon battleaxe, Dragon mace |
+| `weapon` | string | `"Rune scimitar"` | Weapon — one of: Bronze scimitar, Iron scimitar, Steel scimitar, Black scimitar, Mithril scimitar, Adamant scimitar, Rune scimitar, Bronze sword, Iron sword, Steel sword, Black sword, Mithril sword, Adamant sword, Rune sword, Bronze longsword, Iron longsword, Steel longsword, Black longsword, Mithril longsword, Adamant longsword, Rune longsword, Dragon longsword, Bronze dagger, Iron dagger, Steel dagger, Black dagger, Mithril dagger, Adamant dagger, Rune dagger, Dragon dagger, Dragon dagger(p), Dragon battleaxe, Rune mace, Dragon mace |
 | `staff` | string | `"Staff of fire"` | Staff — one of: Staff, Magic staff, Staff of air, Staff of water, Staff of earth, Staff of fire, Battlestaff, Air battlestaff, Water battlestaff, Earth battlestaff, Fire battlestaff, Mystic air staff, Mystic water staff, Mystic earth staff, Mystic fire staff |
 | `spell` | string | `"Fire Strike"` | Autocast spell — one of: Wind Strike, Water Strike, Earth Strike, Fire Strike, Wind Bolt, Water Bolt, Earth Bolt, Fire Bolt, Wind Blast, Water Blast, Earth Blast, Fire Blast, Wind Wave, Water Wave, Earth Wave, Fire Wave |
 | `runesWithdraw` | number (1–1000) | `150` | Casts of runes per bank trip |
@@ -331,10 +332,11 @@ Wilderness green dragons N of Edgeville: melee/mage w/ anti-dragon shield, banks
 | `foodReserve` | number (0–27) | `4` | Food kept back from slot-freeing |
 | `solveClues` | boolean | `true` | Solve clue drops |
 | `escape` | string | `"Flee to bank"` | Escape mode — one of: Flee to bank, Teleport to Varrock |
-| `loot` | string[] | `["Adamant full helm","Adamantite ore","Chaos talisman","Coins","Dragon bones","Dragon spear","Dragonhide","Fire rune","Half of a key","Herb","Law rune","Mithril axe","Mithril kiteshield","Mithril spear","Nature rune","Nature talisman","Rune dagger","Rune javelin","Rune spear","Shield left half","Steel battleaxe","Steel platelegs","Uncut diamond","Uncut emerald","Uncut ruby","Uncut sapphire","Water rune"]` | Loot to pick up (drop table) — one of: Adamant full helm, Adamantite ore, Bass, Chaos talisman, Coins, Dragon bones, Dragon spear, Dragonhide, Fire rune, Half of a key, Herb, Law rune, Mithril axe, Mithril kiteshield, Mithril spear, Nature rune, Nature talisman, Rune dagger, Rune javelin, Rune spear, Shield left half, Steel battleaxe, Steel platelegs, Uncut diamond, Uncut emerald, Uncut ruby, Uncut sapphire, Water rune |
+| `loot` | string[] | `["Adamant full helm","Adamantite ore","Chaos talisman","Coins","Dragon bones","Dragon spear","Dragonhide","Fire rune","Half of a key","Herb","Law rune","Mithril axe","Mithril kiteshield","Mithril spear","Nature rune","Nature talisman","Rune dagger","Rune javelin","Rune spear","Shield left half","Steel battleaxe","Steel platelegs","Uncut diamond","Uncut emerald","Uncut ruby","Uncut sapphire","Water rune","Adamant platebody","Adamantite bar","Blood rune","Chocolate cake","Death rune","Mithril 2h sword","Mithril battleaxe","Mithril javelin","Rune arrow","Rune dart","Rune longsword"]` | Loot to pick up (drop table) — one of: Adamant full helm, Adamantite ore, Bass, Chaos talisman, Coins, Dragon bones, Dragon spear, Dragonhide, Fire rune, Half of a key, Herb, Law rune, Mithril axe, Mithril kiteshield, Mithril spear, Nature rune, Nature talisman, Rune dagger, Rune javelin, Rune spear, Shield left half, Steel battleaxe, Steel platelegs, Uncut diamond, Uncut emerald, Uncut ruby, Uncut sapphire, Water rune, Adamant platebody, Adamantite bar, Blood rune, Chocolate cake, Death rune, Mithril 2h sword, Mithril battleaxe, Mithril javelin, Rune arrow, Rune dart, Rune longsword |
 | `buryBones` | boolean | `false` | Bury dragon bones |
 | `bankCommonJunk` | boolean | `true` | Also grab shared gems/junk |
-| `anchorTile` | tile | `{"x":3096,"z":3814,"level":0}` | Dragon field tile |
+| `target` | string | `"Green dragon"` | Wilderness dragon — one of: Green dragon, Red dragon |
+| `anchorTile` | tile | `{"x":3096,"z":3814,"level":0}` | Green dragon field tile |
 | `bankTile` | tile | `{"x":3094,"z":3493,"level":0}` | Bank stand tile (Edgeville) |
 | `logDetail` | string | `"Normal"` | Log detail — one of: Normal, Verbose |
 
@@ -400,7 +402,7 @@ Taverley Dungeon blue or black dragons, or the Heroes' Guild dragon fought throu
 | `enclaveTargets` | string | `"both"` | Gu'Tanoth targets — one of: both, dragons, demons |
 | `combatStyle` | string | `"range"` | Combat style — one of: melee, mage, range |
 | `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence |
-| `weapon` | string | `"Best available"` | Weapon — one of: Best available, Bronze scimitar, Iron scimitar, Steel scimitar, Black scimitar, Mithril scimitar, Adamant scimitar, Rune scimitar, Bronze sword, Iron sword, Steel sword, Black sword, Mithril sword, Adamant sword, Rune sword, Bronze longsword, Iron longsword, Steel longsword, Black longsword, Mithril longsword, Adamant longsword, Rune longsword, Dragon longsword, Bronze dagger, Iron dagger, Steel dagger, Black dagger, Mithril dagger, Adamant dagger, Rune dagger, Dragon dagger, Dragon dagger(p), Dragon battleaxe, Dragon mace |
+| `weapon` | string | `"Best available"` | Weapon — one of: Best available, Bronze scimitar, Iron scimitar, Steel scimitar, Black scimitar, Mithril scimitar, Adamant scimitar, Rune scimitar, Bronze sword, Iron sword, Steel sword, Black sword, Mithril sword, Adamant sword, Rune sword, Bronze longsword, Iron longsword, Steel longsword, Black longsword, Mithril longsword, Adamant longsword, Rune longsword, Dragon longsword, Bronze dagger, Iron dagger, Steel dagger, Black dagger, Mithril dagger, Adamant dagger, Rune dagger, Dragon dagger, Dragon dagger(p), Dragon battleaxe, Rune mace, Dragon mace |
 | `staff` | string | `"Staff of fire"` | Staff — one of: Staff, Magic staff, Staff of air, Staff of water, Staff of earth, Staff of fire, Battlestaff, Air battlestaff, Water battlestaff, Earth battlestaff, Fire battlestaff, Mystic air staff, Mystic water staff, Mystic earth staff, Mystic fire staff |
 | `spell` | string | `"Fire Strike"` | Autocast spell — one of: Wind Strike, Water Strike, Earth Strike, Fire Strike, Wind Bolt, Water Bolt, Earth Bolt, Fire Bolt, Wind Blast, Water Blast, Earth Blast, Fire Blast, Wind Wave, Water Wave, Earth Wave, Fire Wave |
 | `runesWithdraw` | number (1–2000) | `150` | Casts of runes per bank trip |
@@ -767,16 +769,17 @@ Spam-attaches feathers to stackable dart tips at the five-action-per-tick server
 
 ### AccountLeveler
 
-Trains melee first, then remaining combat skills, then other enabled members skills to 60. Includes guard runs for clues, with one retry before discarding a failed trail. Stocks essence in batches of 1,000 and uses Edgeville monkey bars from Agility 15. Buys supplies, runs required quests, and recovers from death. Wilderness training is optional and enabled by default.
+Randomly rotates between unfinished combat and skilling tasks up to level 70 and completes their supply and quest prerequisites. Optional Hard clue farming repeatedly hunts hellhounds, solves trails, and prepares supported quest and skill requirements while retaining the clue. Buys or gathers supplies and recovers from death. Wilderness training and clue steps follow the Wilderness setting. The dedicated Seers Market supplier gathers and sells goods in lots of 1,000 on World 1.
 
 - Tags: `training`, `combat`, `skilling`, `quests`, `clues`, `banking`, `death-recovery`
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
-| `targetLevel` | number (2–60) | `60` | Target level |
-| `marketAxes` | boolean | `true` | Try Seers market axes |
-| `marketAxeBudget` | number (0–1000000) | `50000` | Market axe price limit |
-| `wilderness` | boolean | `true` | Allow Wilderness training |
+| `mode` | string | `"Train skills"` | Goal — one of: Train skills, Hard clue farming |
+| `supplierOnly` | boolean | `false` | Supply Seers Market only |
+| `supplySeers` | boolean | `true` | Supply Seers after target |
+| `targetLevel` | number (2–70) | `70` | Target level |
+| `wilderness` | boolean | `true` | Allow Wilderness |
 
 ## Herblore
 
@@ -804,7 +807,7 @@ Collects red spiders' eggs, snape grass, eye of newt, chocolate dust, white berr
 
 ### PotionMaker
 
-Banks at the nearest bank, withdraws vials of water and a chosen herb, spam-makes 14 unfinished potions, then withdraws a chosen secondary to finish them and deposits the potions, repeating the cycle. Each leg picks an herb and a secondary from the dropdowns, or types one via Custom
+Brews up to 14 potions per bank trip. Select a herb and secondary from the dropdowns or enter their names with Custom.
 
 - Tags: `herblore`, `potion`, `banking`, `members`, `afk`
 
@@ -858,8 +861,9 @@ Alchemy loop — tick the items to alch and the bot drains them richest first, w
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
+| `useFireRunes` | boolean | `false` | Use fire runes instead of a staff |
 | `spell` | string | `"High"` | Spell — one of: High Level Alchemy, Low Level Alchemy |
-| `items` | string[] | `["black_dragonhide_body","red_dragonhide_body","blue_dragonhide_body","dragonhide_body","black_dragonhide_chaps","red_dragonhide_chaps","blue_dragonhide_chaps","dragonhide_chaps","magic_longbow","steel_platebody","yew_longbow"]` | Items to alch — one of: Custom item (named below), Adamant 2h sword (3,840), Adamant kiteshield (3,264), Adamant platebody (7,680), Adamant platelegs (3,840), Air battlestaff (9,300), Battlestaff (4,200), Black d'hide body (8,088), Black d'hide chaps (3,732), Black platebody (2,304), Blue d'hide body (5,616), Blue d'hide chaps (2,592), Earth battlestaff (9,300), Fire battlestaff (9,300), Green d'hide body (4,680), Green d'hide chaps (2,340), Magic longbow (1,536), Maple longbow (384), Mithril 2h sword (1,560), Mithril kiteshield (1,326), Mithril platebody (3,120), Mithril platelegs (1,560), Red d'hide body (6,738), Red d'hide chaps (3,108), Rune 2h sword (38,400), Rune chainbody (30,000), Rune full helm (21,120), Rune kiteshield (32,640), Rune platebody (39,000), Rune platelegs (38,400), Rune scimitar (15,360), Rune sq shield (23,040), Steel 2h sword (600), Steel platebody (1,200), Steel platelegs (600), Water battlestaff (9,300), Yew longbow (768) |
+| `items` | string[] | `["black_dragonhide_body","red_dragonhide_body","blue_dragonhide_body","dragonhide_body","black_dragonhide_chaps","red_dragonhide_chaps","blue_dragonhide_chaps","dragonhide_chaps","magic_longbow","steel_platebody","yew_longbow"]` | Items to alch — one of: Custom item (named below), Adamant 2h sword (3,840), Adamant kiteshield (3,264), Adamant platebody (7,680), Adamant platelegs (3,840), Air battlestaff (9,300), Battlestaff (4,200), Black d'hide body (8,088), Black d'hide chaps (3,732), Black platebody (2,304), Blue d'hide body (5,616), Blue d'hide chaps (2,592), Earth battlestaff (9,300), Fire battlestaff (9,300), Green d'hide body (4,680), Green d'hide chaps (2,340), Magic longbow (1,536), Maple longbow (384), Mithril 2h sword (1,560), Mithril kiteshield (1,326), Mithril platebody (3,120), Mithril platelegs (1,560), Red d'hide body (6,738), Red d'hide chaps (3,108), Rune 2h sword (38,400), Rune chainbody (30,000), Rune full helm (21,120), Rune kiteshield (32,640), Rune platebody (39,000), Rune platelegs (38,400), Rune plateskirt (38,400), Rune scimitar (15,360), Rune sq shield (23,040), Steel 2h sword (600), Steel platebody (1,200), Steel platelegs (600), Water battlestaff (9,300), Yew longbow (768) |
 | `customItem` | string | `""` | Custom item |
 | `alchs` | number (1–1000) | `27` | Alchs per trip |
 
@@ -1142,14 +1146,14 @@ Farms free anti-dragonbreath shields from Duke Horacio in Lumbridge Castle (requ
 
 ### JiveRC
 
-Master/runner crafting for Nature, Air and Cosmic runes. Nature runners unnote at Jiminua, Air runners bank at Falador East, and Cosmic runners bank in Zanaris. Start Cosmic accounts in Zanaris or the cosmic altar.
+Solo or master/runner crafting for Nature, Air, Cosmic and Law runes. Solo banks its own essence or unnotes Nature essence at Jiminua. Law uses Draynor bank and the direct Port Sarim ferry, banking equipment before boarding. Start Cosmic accounts in Zanaris or the cosmic altar.
 
-- Tags: `runecrafting`, `nature`, `air`, `cosmic`, `trade`, `master`, `runner`, `jive`
+- Tags: `runecrafting`, `nature`, `air`, `cosmic`, `law`, `solo`, `trade`, `master`, `runner`, `jive`
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
-| `rune` | string | `"Nature runes"` | Rune — one of: Nature runes, Air runes, Cosmic runes |
-| `mode` | string | `"Master"` | Mode — one of: Master, Runner |
+| `rune` | string | `"Nature runes"` | Rune — one of: Nature runes, Air runes, Law runes, Cosmic runes |
+| `mode` | string | `"Master"` | Mode — one of: Master, Runner, Solo |
 | `partner` | string | `""` | Partner name(s) |
 | `bankEvery` | number (0–) | `60` | Bank everything every N minutes (0 = never) |
 | `withdrawEss` | number (0–) | `0` | Essence per restock (0 = default) |
@@ -1173,13 +1177,13 @@ Crafter + mule runecrafting loop — meet at the altar temple or overworld ruins
 
 ### RuneCrafter
 
-AIO Runecrafting (Air/Earth) — Solo banks its own essence and crafts at the altar; a Runner needs its own talisman and carries a full 26-essence load into the altar; the Mule Recipient camps next to the altar, never leaves, and crafts between the deliveries runners bring it
+AIO Runecrafting (Air/Earth/Fire). Solo banks its own essence and crafts at the altar; a Runner needs its own talisman and carries a full 26-essence load into the altar; the Mule Recipient camps next to the altar, never leaves, and crafts between deliveries.
 
 - Tags: `runecrafting`, `banking`, `trade`, `runner`, `mule`, `afk`
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
-| `rune` | string | `"Air runes"` | Rune — one of: Air runes, Earth runes |
+| `rune` | string | `"Air runes"` | Rune — one of: Air runes, Water runes, Fire runes, Earth runes |
 | `mode` | string | `"Solo"` | Mode — one of: Solo, Runner, Mule Recipient |
 | `partner` | string | `""` | Trade essence to (IGN) |
 
@@ -1224,6 +1228,7 @@ Smelts bars with the Superheat Item spell instead of a furnace — withdraws ore
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
+| `useFireRunes` | boolean | `false` | Use fire runes instead of a staff |
 | `bar` | string | `"Bronze"` | Bar to smelt — one of: Bronze, Iron, Silver, Steel, Gold, Mithril, Adamant, Rune, Blurite |
 | `natures` | number (28–1000) | `50` | Nature runes to keep in the pack |
 | `goldsmithGauntlets` | boolean | `true` | Goldsmith gauntlets |
@@ -1295,6 +1300,8 @@ Solves the easy clue scroll (or opens the casket) in your pack — banks everyth
 | Setting | Type | Default | Notes |
 |---|---|---|---|
 | `loadout` | string | `""` | Loadout — one of:  |
+| `food` | string | `""` | Food (blank uses loadout) |
+| `allowClueWilderness` | boolean | `true` | Allow Wilderness clue steps |
 | `foodWithdraw` | number (1–27) | `8` | Food to withdraw |
 | `restorePrayer` | boolean | `true` | Top up prayer between trails |
 | `useTeleports` | boolean | `true` | Use teleports |

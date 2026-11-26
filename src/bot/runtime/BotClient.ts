@@ -16,7 +16,7 @@ const BACKGROUND_INGAME_LOGIC_HZ = 20;
 const BACKGROUND_TITLE_LOGIC_HZ = 10;
 
 export default class BotClient extends Client {
-    constructor(nodeid: number, lowmem: boolean, members: boolean) {
+    constructor(nodeid: number, lowmem: boolean, members: boolean, private readonly onInitialized?: () => void) {
         super(nodeid, lowmem, members);
         this.syncLogicRate();
         BotDiag.attach(this);
@@ -41,8 +41,16 @@ export default class BotClient extends Client {
         AutoRelogin.logoutRequested();
     }
 
+    override async maininit(): Promise<void> {
+        try {
+            await super.maininit();
+        } finally {
+            this.onInitialized?.();
+        }
+    }
+
     protected override async frameDelay(ms: number): Promise<void> {
-        await WorkerClock.sleep(ms, !RenderGate.enabled);
+        await WorkerClock.sleep(ms);
     }
 
     override async mainloop(): Promise<void> {

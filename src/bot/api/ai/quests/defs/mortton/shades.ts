@@ -7,7 +7,7 @@ import { Npcs, type Npc } from '../../../../npcs/Npcs.js';
 import { Skills } from '../../../../skills/Skills.js';
 import { Sustain } from '../../../../sustain/Sustain.js';
 import { Traversal } from '../../../../walking/Traversal.js';
-import { settleScene } from '../../exec/prompts.js';
+import { findSceneTarget } from '../../exec/prompts.js';
 import { SM_ID, SM_NPC_ID, SM_TILE } from './areas.js';
 
 /** Razmire wants 5 sets of remains in one pack before he takes any. */
@@ -64,11 +64,9 @@ export async function huntShade(log: (m: string) => void): Promise<boolean> {
         if (!(await Traversal.walkResilient(SM_TILE.TOWN, { radius: 4, attempts: 3, timeoutMs: 180_000, log }))) {
             return false;
         }
-        await settleScene();
-        shade = target();
+        shade = await findSceneTarget(target, 6);
         if (!shade) {
             log('no Loar Shadow in the streets yet — they respawn on their own timer');
-            await Execution.delayTicks(4);
             return false;
         }
     }

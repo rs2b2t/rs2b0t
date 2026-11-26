@@ -1,3 +1,4 @@
+import { Modals } from '../../../../ui/widgets/Modals.js';
 import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Locs } from '../../../../locs/Locs.js';
@@ -31,10 +32,7 @@ function pressJournal(): boolean {
 }
 
 export async function releaseJournal(): Promise<void> {
-    if (modalOpen()) {
-        actions.closeModal();
-        await Execution.delayTicks(1);
-    }
+    await Modals.closeIfOpen();
 }
 
 export interface StalledApproach {

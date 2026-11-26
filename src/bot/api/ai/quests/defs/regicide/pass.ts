@@ -6,7 +6,7 @@ import { Locs } from '../../../../locs/Locs.js';
 import type { Loc } from '../../../../model/Loc.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import Tile from '../../../../../geometry/Tile.js';
-import { driveUntil, settleScene } from '../../exec/prompts.js';
+import { findSceneTarget, driveUntil, settleScene } from '../../exec/prompts.js';
 import { UP_ITEM, UP_LOC, UP_TILE, pastGridTile, upassArea } from '../upass/areas.js';
 import { enterMainCavern } from '../upass/area2.js';
 import {
@@ -92,8 +92,7 @@ async function climbWell(log: (m: string) => void): Promise<boolean> {
     if (!(await travelTo(UP_TILE.WELL, 3, log))) {
         return false;
     }
-    await settleScene();
-    const well = locById(UP_LOC.WELL, null, 10);
+    const well = await findSceneTarget(() => locById(UP_LOC.WELL, null, 10));
     const op = well?.actions()[0];
     if (!well || !op) {
         log('no well in the orb corridor');
@@ -111,8 +110,7 @@ async function openVoyageDoor(log: (m: string) => void): Promise<boolean> {
     if (!(await travelTo(RG_TILE.IBAN_DOOR, 3, log))) {
         return false;
     }
-    await settleScene();
-    const door = locById(UP_LOC.IBAN_DOOR_L, null, 8) ?? locById(UP_LOC.IBAN_DOOR_R, null, 8);
+    const door = await findSceneTarget(() => locById(UP_LOC.IBAN_DOOR_L, null, 8) ?? locById(UP_LOC.IBAN_DOOR_R, null, 8));
     const op = door?.actions()[0];
     if (!door || !op || !(await door.interact(op))) {
         log("no doors on Iban's temple");
@@ -135,8 +133,7 @@ async function climbVoyageWell(log: (m: string) => void): Promise<boolean> {
             return false;
         }
     }
-    await settleScene();
-    const well = locById(RG_LOC.WELL_OF_VOYAGE, 'Climb-down', 10);
+    const well = await findSceneTarget(() => locById(RG_LOC.WELL_OF_VOYAGE, 'Climb-down', 10));
     if (!well || !(await well.interact('Climb-down'))) {
         log('no Well of Voyage to climb into');
         return false;
@@ -149,8 +146,7 @@ async function leaveVoyageTemple(log: (m: string) => void): Promise<boolean> {
     if (!(await Traversal.walkResilient(RG_TILE.VOYAGE_EXIT, { radius: 3, attempts: 3, timeoutMs: 90_000, log }))) {
         return false;
     }
-    await settleScene();
-    const exit = locById(RG_LOC.TEMPLE_EXIT, 'Exit', 12);
+    const exit = await findSceneTarget(() => locById(RG_LOC.TEMPLE_EXIT, 'Exit', 12));
     if (!exit || !(await exit.interact('Exit'))) {
         log('no cave exit in the voyage temple');
         return false;
@@ -167,11 +163,10 @@ async function climbUnicornTunnel(log: (m: string) => void): Promise<boolean> {
         log(`could not stand at (${UNICORN_TUNNEL_STAND.x},${UNICORN_TUNNEL_STAND.z}) for the unicorn tunnel`);
         return false;
     }
-    await settleScene();
-    const door = Locs.query()
+    const door = await findSceneTarget(() => Locs.query()
         .where(loc => (loc.id === UP_LOC.UNICORN_DOOR_L || loc.id === UP_LOC.UNICORN_DOOR_R)
             && UNICORN_TUNNEL_DOORS.some(at => at.x === loc.tile().x && at.z === loc.tile().z))
-        .nearest();
+        .nearest());
     const op = door?.actions()[0];
     if (!door || !op) {
         log(`no unicorn tunnel door at z 9611 from (${Game.tile()?.x},${Game.tile()?.z})`);

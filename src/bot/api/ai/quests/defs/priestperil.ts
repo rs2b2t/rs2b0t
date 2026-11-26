@@ -1,3 +1,4 @@
+import { findSceneTarget } from '../exec/prompts.js';
 import { Execution } from '../../../execution/Execution.js';
 import { Game } from '../../../game/Game.js';
 import { ChatDialog } from '../../../ui/dialogue/ChatDialog.js';
@@ -191,10 +192,9 @@ async function monkHuntLeg(log: (m: string) => void): Promise<boolean> {
         await Execution.delayUntil(() => heldId(GOLDEN_KEY_ID), 6000);
         return false;
     }
-    const monk = Npcs.query().where(n => n.id === MONK3_NPC_ID).action('Attack').within(14).nearest();
+    const monk = await findSceneTarget(() => Npcs.query().where(n => n.id === MONK3_NPC_ID).action('Attack').within(14).nearest(), 4);
     if (!monk) {
         log('priestperil: no key-dropping Monk of Zamorak (id 1046) in the temple — waiting on respawn');
-        await Execution.delayTicks(4);
         return false;
     }
     log('priestperil: attacking Monk of Zamorak (id 1046) for the golden key');
@@ -271,7 +271,7 @@ async function monumentLeg(log: (m: string) => void): Promise<boolean> {
         if (!(await key.useOn(monument))) {
             continue;
         }
-        await Execution.delayTicks(3);
+        await Execution.delayUntilTicks(() => heldId(IRON_KEY_ID), 3);
     }
     if (heldId(IRON_KEY_ID)) {
         log('priestperil: iron key obtained');
@@ -505,9 +505,8 @@ async function mineEssence(log: (m: string) => void): Promise<boolean> {
             log('priestperil: essence — left the mine mid-dig (random event?); yielding');
             return false;
         }
-        const rock = Locs.query().name('Rune Essence').action('Mine').nearest();
+        const rock = await findSceneTarget(() => Locs.query().name('Rune Essence').action('Mine').nearest(), 3);
         if (!rock) {
-            await Execution.delayTicks(3);
             continue;
         }
         if (!(await rock.interact('Mine'))) {

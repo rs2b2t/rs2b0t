@@ -8,7 +8,7 @@ import { Inventory } from '../../../../inventory/Inventory.js';
 import { Locs, type Loc } from '../../../../locs/Locs.js';
 import type Tile from '../../../../../geometry/Tile.js';
 import { Traversal } from '../../../../walking/Traversal.js';
-import { heldId, settleScene, useOnLoc } from '../../exec/prompts.js';
+import { findSceneTarget, heldId, settleScene, useOnLoc } from '../../exec/prompts.js';
 import {
     BONES_OBJ,
     FEED_OBJ,
@@ -98,9 +98,8 @@ async function takeBones(n: SheepIndex, log: (m: string) => void): Promise<boole
         if (heldId(id) > 0) {
             return true;
         }
-        const bones = GroundItems.query().where(item => item.id === id).within(12).nearest();
+        const bones = await findSceneTarget(() => GroundItems.query().where(item => item.id === id).within(12).nearest(), 2);
         if (!bones) {
-            await Execution.delayTicks(2);
             continue;
         }
         const at = bones.tile();

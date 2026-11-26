@@ -84,6 +84,15 @@ try {
     );
     await second.refresh();
     assert.equal(second.list().find(p => p.username === 'first')?.password, 'updated');
+    await Promise.all([first.assignGroup(['first'], 'Ores'), second.assignGroup(['second'], 'Logs')]);
+    await reopened.refresh();
+    const groups = reopened.adoptGroupState();
+    assert.equal(groups.assignments.get('first'), 'Ores');
+    assert.equal(groups.assignments.get('second'), 'Logs');
+    await reopened.saveTabState(groups.tabs.filter(tab => tab !== 'Ores'), new Map(), 'Main');
+    await first.refresh();
+    assert.equal(first.list().find(p => p.username === 'first')?.tab, 'Main');
+    assert.equal(first.list().find(p => p.username === 'second')?.tab, 'Logs');
     first.reset();
     await second.refresh();
     assert.equal(second.status(), 'empty');

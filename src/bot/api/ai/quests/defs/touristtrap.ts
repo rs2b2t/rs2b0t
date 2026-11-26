@@ -1,5 +1,6 @@
+import { Modals } from '../../../ui/widgets/Modals.js';
+import { findSceneTarget } from '../exec/prompts.js';
 import { normalizeJournal as journalText } from '../journalText.js';
-import { actions, reader } from '../../../../adapter/ClientAdapter.js';
 import { EventSignal } from '../../../execution/EventSignal.js';
 import { Execution } from '../../../execution/Execution.js';
 import { Game } from '../../../game/Game.js';
@@ -93,10 +94,7 @@ async function readTouristTrapStage(): Promise<number | undefined> {
 
     const lines = await Quests.journal(active.name);
     const stage = parseTouristTrapJournal(lines);
-    if (reader.modals().main !== -1) {
-        actions.closeModal();
-        await Execution.delayTicks(1);
-    }
+    await Modals.closeIfOpen();
     return stage;
 }
 
@@ -1106,13 +1104,12 @@ async function recoverSlaveOutfitFromRowdy(log: (m: string) => void): Promise<bo
                 continue;
             }
             if (!(await walk(ROWDY_SLAVE, 6, log))) return false;
-            const rowdy = Npcs.query()
+            const rowdy = await findSceneTarget(() => Npcs.query()
                 .where(npc => npc.id === NPC.ROWDY_SLAVE && !npc.inCombat && !npc.targetsAnotherPlayer())
                 .action('Attack')
                 .within(18)
-                .nearest();
+                .nearest(), 2);
             if (!rowdy) {
-                await Execution.delayTicks(2);
                 continue;
             }
             log(`defeating the Rowdy slave for '${name}'`);

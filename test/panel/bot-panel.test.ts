@@ -4,6 +4,7 @@ import type { BotHostImpl } from '#/bot/runtime/BotHost.js';
 import { ScriptRegistry } from '#/bot/runtime/ScriptRegistry.js';
 import { ScriptRunner } from '#/bot/runtime/ScriptRunner.js';
 import BotPanel from '#/bot/panel/BotPanel.js';
+import { Credentials } from '#/bot/runtime/Credentials.js';
 import { TARGET, resolveTarget } from '#/client/config/target.js';
 import { attach, detach } from '#/bot/adapter/ClientAdapter.js';
 
@@ -57,6 +58,31 @@ test('sidebar omits chat and low-value status rows', () => {
     const status = sections.find(section => title(section) === 'status');
     expect(status).toBeDefined();
     expect(Array.from(status!.querySelectorAll('.rs2b0t-key'), node => node.textContent)).toEqual(['state', 'world', 'player', 'tile', 'modals']);
+});
+
+test('global settings can reveal and hide a password without saving edits', () => {
+    Credentials.save('fixture', 'saved-password');
+    const root = document.createElement('div');
+    new BotPanel(root, { selfTestMissing: [], addDrawListener: () => {} } as unknown as BotHostImpl);
+    const open = Array.from(root.querySelectorAll('button')).find(b => b.textContent === 'Global settings')!;
+    open.click();
+    const input = document.querySelector<HTMLInputElement>('input[placeholder="password"]')!;
+    const toggle = document.querySelector<HTMLButtonElement>('button[aria-label="Show password"]');
+    expect(input.type).toBe('password');
+    expect(toggle).not.toBeNull();
+    toggle!.click();
+    expect(input.type).toBe('text');
+    expect(input.value).toBe('saved-password');
+    expect(toggle!.getAttribute('aria-label')).toBe('Hide password');
+    input.value = 'edited-password';
+    toggle!.click();
+    expect(input.type).toBe('password');
+    toggle!.click();
+    input.closest('.rs2b0t-modal')!.querySelector<HTMLButtonElement>('button')!.click();
+    open.click();
+    expect(input.type).toBe('password');
+    expect(input.value).toBe('edited-password');
+    expect(Credentials.get()?.password).toBe('saved-password');
 });
 
 test('world status identifies the connected world only after login', () => {

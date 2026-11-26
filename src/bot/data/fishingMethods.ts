@@ -81,6 +81,15 @@ export const FISHING_METHODS: FishingMethod[] = [
     }
 ];
 
+export const FISH_RECIPES = [
+    { level: 1, cooking: 1, food: 'Shrimps', method: 'Small net — shrimp/anchovy', location: 'Draynor Village', tool: 'Small fishing net' },
+    { level: 20, cooking: 15, food: 'Trout', method: 'Fly fishing — trout/salmon', location: 'Barbarian Village', tool: 'Fly fishing rod' },
+    { level: 30, cooking: 25, food: 'Salmon', method: 'Fly fishing — trout/salmon', location: 'Barbarian Village', tool: 'Fly fishing rod' },
+    { level: 40, cooking: 40, food: 'Lobster', method: 'Lobster cage — lobster', location: 'Catherby', tool: 'Lobster pot' },
+    { level: 50, cooking: 45, food: 'Swordfish', method: 'Harpoon — tuna/swordfish', location: 'Catherby', tool: 'Harpoon' },
+    { level: 76, cooking: 80, food: 'Shark', method: 'Harpoon — sharks', location: 'Catherby', tool: 'Harpoon' }
+] as const;
+
 export const FISHING_METHOD_OPTIONS = FISHING_METHODS.map(m => m.name);
 
 /** Knife + carrier log that the 3-tick fly method keeps alongside the rod and feathers. */

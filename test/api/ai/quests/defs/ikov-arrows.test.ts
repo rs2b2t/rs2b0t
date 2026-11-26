@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 
+import { reader } from '#/bot/adapter/ClientAdapter.js';
+import { Execution } from '#/bot/api/execution/Execution.js';
+import { Equipment } from '#/bot/api/equipment/Equipment.js';
+import { Input } from '#/bot/input/Input.js';
+import { stubProps } from '../../../../lib/stubSingletons.js';
 import { arrowAction } from '#/bot/api/ai/quests/defs/ikov/fight.js';
 
 describe('Temple of Ikov arrow supply', () => {
@@ -24,4 +29,26 @@ describe('Temple of Ikov arrow supply', () => {
     test('a sweep that already ran is the end of the fight', () => {
         expect(arrowAction(0, 0, false)).toBe('spent');
     });
+});
+
+test('wields the finished magic shortbow when its unstrung namesake comes first in the pack', async () => {
+    const stave = { id: 72, name: 'Magic shortbow', count: 1, slot: 0, comId: 3214, ops: [] };
+    const bow = { ...stave, id: 861, slot: 1, ops: ['Wield'] };
+    let wielded = false;
+    const restoreReader = stubProps(reader, {
+        bankComId: () => -1, inventory: () => [stave, bow], equipment: () => wielded ? [bow] : []
+    });
+    const restoreInput = stubProps(Input, { heldOp: (id, slot) => {
+        wielded = id === bow.id && slot === bow.slot;
+        return wielded;
+    } });
+    const restoreExecution = stubProps(Execution, { delayUntil: async condition => condition() });
+    try {
+        expect(await Equipment.equipById(bow.id)).toBe(true);
+        expect(wielded).toBe(true);
+    } finally {
+        restoreExecution();
+        restoreInput();
+        restoreReader();
+    }
 });

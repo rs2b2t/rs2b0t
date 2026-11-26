@@ -8,6 +8,5 @@ import { Locs } from '../../../../locs/Locs.js';
  * @see docs/decisions/level-change-lag.md
  */
 export async function settleScene(within: number = 16): Promise<void> {
-    await Execution.delayTicks(2);
-    await Execution.delayUntil(() => Locs.query().within(within).count() > 0, 5000);
+    await Execution.delayUntil(() => Locs.query().within(within).exists(), 5000);
 }

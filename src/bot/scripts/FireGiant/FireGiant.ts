@@ -1,3 +1,4 @@
+import { configuredLootNames } from '../../api/bank/bankRules.js';
 import { RANGED_WEAPONS, rangeLoadoutOf } from '../../api/combat/ranged.js';
 import { CUSTOM_RANGED_SETTINGS, rangedItem } from '../../api/combat/rangedSettings.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
@@ -25,6 +26,7 @@ import { combatKeepNames } from '../../api/combat/keepList.js';
 import { depositAllExcept, matchesCommonBankLoot } from '../../api/bank/Banking.js';
 import { GroundItems } from '../../api/grounditems/GroundItems.js';
 import { Npcs, type Npc } from '../../api/npcs/Npcs.js';
+import { findSceneTarget } from '../../api/walking/Reach.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { DirectNavigator } from '../../event/webwalk/DirectNavigator.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
@@ -506,7 +508,6 @@ class ArmAutocast implements Task {
     }
     async execute(): Promise<void> {
         this.bot.setStatus(`arming autocast: ${SPELL}`);
-        await Execution.delayTicks(3);
         if (await Autocast.arm(SPELL, m => this.bot.log(m))) {
             this.fails = 0;
         } else if (++this.fails >= ASSERT_BATCH) {
@@ -906,11 +907,8 @@ class EnterDungeon implements Task {
     }
 
     private async boardRaft(): Promise<void> {
-        const raft = Locs.query().name(RAFT_LOC).action(RAFT_OP).nearest();
-        if (raft === null) {
-            await Execution.delayTicks(2);
-            return;
-        }
+        const raft = await findSceneTarget(() => Locs.query().name(RAFT_LOC).action(RAFT_OP).nearest());
+        if (raft === null) return;
         this.bot.setStatus('boarding the log raft');
         if (!(await raft.interact(RAFT_OP))) {
             await Execution.delayTicks(2);
@@ -1091,10 +1089,7 @@ class Fight implements Task {
             const target = usesSafespot()
                 ? candidates.sort((a, b) => eastFirst({ x: a.tile().x, distance: a.distance() }, { x: b.tile().x, distance: b.distance() }))[0]
                 : candidates.sort((a, b) => a.distance() - b.distance())[0];
-            if (!target) {
-                await Execution.delayTicks(2);
-                return;
-            }
+            if (!target) return;
 
             if (usesSafespot() && target.distance() > attackRangeFor(STYLE, WEAPON)) {
                 if (!(await this.leash(target.index))) {
@@ -1217,7 +1212,7 @@ export default class FireGiant extends TaskBot {
         RUNE_BUFFER = this.settings.num('runeBuffer', 500);
         AMMO_WITHDRAW = this.settings.num('ammoWithdraw', 500);
         FOOD_WITHDRAW = this.settings.num('foodWithdraw', 20);
-        LOOT_SET = new Set(this.settings.list('loot', DEFAULT_LOOT).map(s => s.toLowerCase()));
+        LOOT_SET = new Set(configuredLootNames(this.settings.list('loot', DEFAULT_LOOT)));
         BANK_COMMON = this.settings.bool('bankCommonJunk', true);
         BURY_BONES = this.settings.bool('buryBones', false);
         if (BURY_BONES) {

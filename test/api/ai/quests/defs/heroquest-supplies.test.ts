@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import { Skills } from '#/bot/api/skills/Skills.js';
 
-import { HERO_ID, HERO_NAMED } from '#/bot/api/ai/quests/defs/heroquest/areas.js';
+import { Game } from '#/bot/api/game/Game.js';
+import { Inventory } from '#/bot/api/inventory/Inventory.js';
+import { Shop } from '#/bot/api/shop/Shop.js';
+import { HERO_ID, HERO_NAMED, HERO_TILE } from '#/bot/api/ai/quests/defs/heroquest/areas.js';
 import { disguiseOwned, disguiseStep } from '#/bot/api/ai/quests/defs/heroquest/blackarm.js';
 import { eelStep } from '#/bot/api/ai/quests/defs/heroquest/eel.js';
 import { combatKitStep, featherStep } from '#/bot/api/ai/quests/defs/heroquest/feather.js';
@@ -242,6 +245,29 @@ describe('the firebird feather chain', () => {
             tile: { x: 2847, z: 3387, level: 0 } as QuestSnapshot['tile']
         }));
         expect(name(step)).toContain('sail back');
+    });
+
+    test('uses the owned skirt for the Ice Queen, including when platelegs are banked', () => {
+        const kit = { wornIds: new Set([1113, 1303]) };
+        expect(combatKitStep(snap({ ...kit, bankIds: new Map([[1093, 1]]) })))
+            .toMatchObject({ kind: 'withdraw', items: [{ id: 1093, name: 'Rune plateskirt', qty: 1 }] });
+        expect(combatKitStep(snap({ ...kit, invIds: new Map([[1093, 1]]), bankIds: new Map([[1079, 1]]) })))
+            .toEqual({ kind: 'equip', item: 'Rune plateskirt' });
+        expect(combatKitStep(snap({ wornIds: new Set([1113, 1303, 1093]), bankIds: new Map([[1079, 1]]) }))).toBeNull();
+    });
+
+    test('buys the skirt when Scavvo is out of platelegs', async () => {
+        const step = combatKitStep(snap({ wornIds: new Set([1113, 1303]) }));
+        if (step?.kind !== 'custom') throw Error('expected a shop trip');
+        spyOn(Game, 'tile').mockReturnValue(HERO_TILE.SCAVVO);
+        spyOn(Shop, 'open').mockResolvedValue(true);
+        spyOn(Shop, 'close').mockResolvedValue(undefined);
+        spyOn(Shop, 'stock').mockReturnValue([{ name: 'Rune plateskirt', count: 1, slot: 0 }]);
+        const buy = spyOn(Shop, 'buy').mockResolvedValue(1);
+        spyOn(Inventory, 'count').mockImplementation(name => name === 'Coins' ? 100_000
+            : name === 'Rune plateskirt' ? buy.mock.calls.length : 0);
+        expect(await step.run(() => {})).toBe(true);
+        expect(buy).toHaveBeenCalledWith('Rune plateskirt', 1);
     });
 
     test('the combat kit is bought once and worn after', () => {

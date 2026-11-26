@@ -231,33 +231,32 @@ describe('equipFloor inventory awareness', () => {
         expect(floor).toBe(DP_STAGE.FOUND_COMBO);
     });
 
-    test('holding any stone ball raises floor to FOUND_COMBO', () => {
+    test('picking up a stone ball does not advance the guard storyline', () => {
         const floor = equipFloor(
-            snap({ progress: progress(DP_STAGE.FOUND_COMBO), invIds: [DEATH_ITEM.BALL_RED.id] }),
-            progress(DP_STAGE.GIVEN_IOU)
+            snap({ invIds: [DEATH_ITEM.BALL_RED.id] }), progress(DP_STAGE.STARTED)
         );
-        expect(floor).toBe(DP_STAGE.FOUND_COMBO);
+        expect(floor).toBe(DP_STAGE.STARTED);
     });
 });
 
 describe('effectiveMap inventory awareness', () => {
-    test('climbing boots imply tenzing + saba', () => {
+    test('tradeable climbing boots alone do not skip Saba or Tenzing', () => {
         const m = effectiveMap(
             snap({ invIds: [DEATH_ITEM.CLIMBING_BOOTS.id] }),
             progress(DP_STAGE.STARTED)
         );
-        expect(m.tenzing).toBe(true);
-        expect(m.saba).toBe(true);
+        expect(m.tenzing).toBe(false);
+        expect(m.saba).toBe(false);
         expect(m.smithy).toBe(false);
     });
 
-    test('spiked boots imply given_cert', () => {
+    test('tradeable spiked boots alone do not skip the certificate', () => {
         const m = effectiveMap(
             snap({ invIds: [DEATH_ITEM.SPIKED_BOOTS.id] }),
             progress(DP_STAGE.UNLOCKED_DOOR)
         );
-        expect(m.given_cert).toBe(true);
-        expect(m.smithy).toBe(true);
+        expect(m.given_cert).toBe(false);
+        expect(m.smithy).toBe(false);
     });
 
     test('secret way map implies got_map', () => {
@@ -310,13 +309,13 @@ describe('decide', () => {
         expect(step.kind === 'buy' && step.item.toLowerCase().includes('asgarnian')).toBe(true);
     });
 
-    test('given ale with coins but no cocktail buys a Blurberry special', () => {
+    test('given ale with coins but no cocktail gambles at the inn', () => {
         const inv = new Map<string, number>([['coins', 500]]);
         const step = decide({
             ...snap({ progress: progress(DP_STAGE.GIVEN_ALE) }),
             inv
         });
-        expect(step).toMatchObject({ kind: 'buy', item: 'Blurberry special', qty: 1, shop: { npc: 'Barman', anchor: { x: 2482, z: 3488, level: 1 } } });
+        expect(customName(step)).toContain('gamble');
     });
 
     test('holding IOU → read it', () => {
@@ -396,6 +395,32 @@ describe('decide', () => {
         expect(customName(step)).toMatch(/certificate|Denulth/i);
     });
 
+    for (const [flag, item] of [
+        [DP_FLAG.ENTRANCE_CERT, DEATH_ITEM.ENTRANCE_CERT],
+        [DP_FLAG.GOT_MAP, DEATH_ITEM.SECRET_MAP],
+        [DP_FLAG.SCOUTED, DEATH_ITEM.SECRET_MAP]
+    ] as const) {
+        test(`recovers a banked ${item.name} at ${flag} before asking for another`, () => {
+            const state = snap({ progress: progress(DP_STAGE.UNLOCKED_DOOR, [flag]),
+                invIds: [DEATH_ITEM.COMBINATION.id], bankKnown: false });
+            expect(decide(state).kind).toBe('scanBank');
+            state.bankKnown = true;
+            state.bankIds = new Map([[item.id, 1]]);
+            expect(decide(state)).toMatchObject({ kind: 'withdraw', items: [{ ...item, qty: 1 }] });
+            state.freeSlots = 0;
+            expect(decide(state).kind).toBe('deposit');
+        });
+    }
+
+    test('noted trout cannot satisfy the delivery', () => {
+        const state = snap({ progress: progress(DP_STAGE.UNLOCKED_DOOR, [DP_FLAG.GIVEN_CERT]),
+            inv: [...Array(10).fill('Trout'), ...Array(10).fill('Bread')],
+            invIds: [DEATH_ITEM.COMBINATION.id, DEATH_ITEM.SPIKED_BOOTS.id,
+                ...Array(10).fill(DEATH_ITEM.BREAD.id), ...Array(10).fill(334)],
+            bank: Array(10).fill('Trout') });
+        expect(decide(state)).toMatchObject({ kind: 'withdraw', items: [{ ...DEATH_ITEM.TROUT, qty: 10 }] });
+    });
+
     test('unlocked + scouted + map + combo → Denulth hand-in', () => {
         const step = decide(snap({
             progress: progress(DP_STAGE.UNLOCKED_DOOR, [
@@ -421,6 +446,56 @@ describe('decide', () => {
         if (step.kind === 'withdraw') {
             expect(step.items.some(i => i.name.toLowerCase().includes('iron'))).toBe(true);
         }
+    });
+
+    for (const item of [DEATH_ITEM.SPIKED_BOOTS, DEATH_ITEM.CLIMBING_BOOTS]) {
+        test(`withdraws banked ${item.name} before asking Tenzing for replacements`, () => {
+            const state = snap({ progress: progress(DP_STAGE.UNLOCKED_DOOR, [DP_FLAG.GIVEN_CERT]),
+                inv: ['Iron bar'], invIds: [DEATH_ITEM.IRON_BAR.id], bank: [item.name] });
+            expect(decide(state)).toMatchObject({ kind: 'withdraw', items: [{ ...item, qty: 1 }] });
+        });
+    }
+
+    test('recovers banked spiked boots without sourcing another iron bar', () => {
+        const state = snap({ progress: progress(DP_STAGE.UNLOCKED_DOOR, [DP_FLAG.GIVEN_CERT]) });
+        state.bankIds = new Map([[DEATH_ITEM.SPIKED_BOOTS.id, 1], [DEATH_ITEM.CLIMBING_BOOTS.id, 1]]);
+        expect(decide(state)).toMatchObject({ kind: 'withdraw', items: [{ ...DEATH_ITEM.SPIKED_BOOTS, qty: 1 }] });
+    });
+
+    test('loads the food before travelling to replace genuinely lost boots', () => {
+        const state = snap({ progress: progress(DP_STAGE.UNLOCKED_DOOR, [DP_FLAG.GIVEN_CERT]),
+            bank: Array(10).fill('Bread') });
+        expect(decide(state)).toMatchObject({ kind: 'withdraw', items: [{ ...DEATH_ITEM.BREAD, qty: 10 }] });
+        state.invIds = new Map([[DEATH_ITEM.BREAD.id, 10], [DEATH_ITEM.TROUT.id, 10]]);
+        state.freeSlots = 0;
+        expect(decide(state).kind).toBe('deposit');
+        state.freeSlots = 1;
+        expect(customName(decide(state))).toBe('reclaim climbing boots from Tenzing');
+    });
+
+    test('deposits carried trout notes when the bank has too few cooked trout', () => {
+        const state = snap({ progress: progress(DP_STAGE.UNLOCKED_DOOR, [DP_FLAG.GIVEN_CERT]),
+            inv: [...Array(10).fill('Trout')], invIds: [DEATH_ITEM.SPIKED_BOOTS.id,
+                ...Array(10).fill(DEATH_ITEM.BREAD.id), 334] });
+        const step = decide(state);
+        expect(step.kind).toBe('deposit');
+        if (step.kind === 'deposit') expect(step.keep).not.toContain('trout');
+    });
+
+    test('withdraws boots, ten bread and ten trout before the Tenzing hand-in', () => {
+        const state = snap({ progress: progress(DP_STAGE.UNLOCKED_DOOR, [DP_FLAG.GIVEN_CERT]),
+            bank: ['Spiked boots', ...Array(10).fill('Bread'), ...Array(10).fill('Trout')] });
+        for (const item of [DEATH_ITEM.SPIKED_BOOTS, DEATH_ITEM.BREAD, DEATH_ITEM.TROUT]) {
+            const qty = item.id === DEATH_ITEM.SPIKED_BOOTS.id ? 1 : 10;
+            expect(decide(state)).toMatchObject({ kind: 'withdraw', items: [{ ...item, qty }] });
+            state.inv.set(item.name.toLowerCase(), qty);
+            state.invIds = new Map([...state.invIds!, [item.id, qty]]);
+            state.freeSlots! -= qty;
+        }
+        expect(customName(decide(state))).toBe('deliver supplies and spiked boots to Tenzing');
+        state.inv.set('trout', 9);
+        state.invIds = new Map([...state.invIds!].map(([id, qty]) => [id, id === DEATH_ITEM.TROUT.id ? 9 : qty]));
+        expect(decide(state)).toMatchObject({ kind: 'withdraw', items: [{ ...DEATH_ITEM.TROUT, qty: 1 }] });
     });
 });
 
@@ -525,7 +600,7 @@ for (const id of [2028, 2064]) {
         const step = decide({ ...snap({ progress: progress(DP_STAGE.GIVEN_ALE), invIds: [id] }), inv: new Map([['coins', 500], ['blurberry special', 1]]) });
         expect(customName(step)).toContain('Blurberry');
     });
-    test(`withdraws banked cocktail ${id} before buying one`, () => {
+    test(`withdraws banked cocktail ${id} before gambling`, () => {
         const step = decide({ ...snap({ progress: progress(DP_STAGE.GIVEN_ALE) }), inv: new Map([['coins', 500]]), bankIds: new Map([[id, 1]]) });
         expect(step).toMatchObject({ kind: 'withdraw', items: [{ id, qty: 1 }] });
     });
@@ -537,15 +612,6 @@ test('startup deposit keeps a carried Blurberry special', () => {
     if (step.kind === 'deposit') expect(step.keep).toContain('blurberry special');
 });
 
-for (const coins of [131, 400]) {
-    test(`buying the cocktail with ${coins} coins leaves enough for gambling`, () => {
-        const before = { ...snap({ progress: progress(DP_STAGE.GIVEN_ALE) }), bank: new Map(), bankCoins: 0, inv: new Map([['coins', coins]]) };
-        expect(decide(before).kind).toBe('buy');
-        const after = { ...before, inv: new Map([['coins', coins - 30], ['blurberry special', 1]]), invIds: new Map([[2028, 1]]) };
-        expect(customName(decide(after))).toContain('gamble');
-    });
-}
-
 for (const id of [2028, 2064]) {
     test(`banked or held cocktail ${id} only needs the 101gp stake`, () => {
         const base = { ...snap({ progress: progress(DP_STAGE.GIVEN_ALE) }), bank: new Map(), bankCoins: 0, inv: new Map([['coins', 101]]) };
@@ -554,7 +620,7 @@ for (const id of [2028, 2064]) {
     });
 }
 
-test('reserves the cocktail price when the shop is still needed', () => {
-    const step = decide({ ...snap({ progress: progress(DP_STAGE.GIVEN_ALE) }), bank: new Map(), bankCoins: 0, inv: new Map([['coins', 130]]) });
-    expect(step.kind).toBe('wait');
+test('can resume gambling with just the stake and an unscanned bank', () => {
+    const step = decide({ ...snap({ progress: progress(DP_STAGE.GIVEN_ALE), bankKnown: false }), inv: new Map([['coins', 101]]) });
+    expect(customName(step)).toContain('gamble');
 });

@@ -5,6 +5,7 @@ import { Execution } from '../../api/execution/Execution.js';
 import { Game } from '../../api/game/Game.js';
 import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
 import Tile from '../../geometry/Tile.js';
+import { findSceneTarget } from '../../api/walking/Reach.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { ContinueDialog } from '../../api/tasks/ContinueDialog.js';
 import { Bank } from '../../api/bank/Bank.js';
@@ -552,14 +553,13 @@ class StealCoins implements Task {
             await Traversal.walkResilient(spot.anchor, { radius: 4, attempts: 3, timeoutMs: 90_000, log: m => this.bot.log(`  ${m}`) });
             return;
         }
-        const guard = Npcs.query()
+        const guard = await findSceneTarget(() => Npcs.query()
             .name('Guard')
             .action('Pickpocket')
             .where(n => n.tile().distanceTo(spot.anchor) <= spot.leash)
-            .nearest();
+            .nearest());
         if (!guard) {
             this.bot.setStatus('no guard in range — waiting');
-            await Execution.delayTicks(2);
             return;
         }
         if (!Reachability.canReach(guard.tile(), { adjacentOk: true })) {
@@ -816,15 +816,14 @@ class ClimbOutOfPit implements Task {
     async execute(): Promise<void> {
         this.bot.noteFall();
         this.bot.setStatus('climbing out of the pit');
-        const rope =
+        const rope = await findSceneTarget(() =>
             Locs.query().name('Climbing rope').within(20).nearest() ??
             Locs.query()
                 .within(20)
                 .where(l => /climbing rope/i.test(l.name ?? ''))
-                .nearest();
+                .nearest());
         if (!rope) {
             this.bot.log('fallen into the pit but no Climbing rope in range — waiting');
-            await Execution.delayTicks(2);
             return;
         }
         const op = rope.actions().find(a => /climb/i.test(a)) ?? rope.actions()[0];
@@ -983,7 +982,6 @@ class SpikeWait implements Task {
     async execute(): Promise<void> {
         this.bot.noteHint();
         this.bot.setStatus(this.bot.tagged() ? 'waiting for next pillar' : 'on target — tag');
-        await Execution.delayTicks(1);
     }
 }
 

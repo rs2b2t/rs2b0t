@@ -1,5 +1,5 @@
+import { Modals } from '../../../ui/widgets/Modals.js';
 import { normalizeJournal as journalText } from '../journalText.js';
-import { actions, reader } from '../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../execution/Execution.js';
 import { Inventory } from '../../../inventory/Inventory.js';
 import { Quests } from '../../../ui/questlog/Quests.js';
@@ -93,10 +93,7 @@ async function readRomeoJulietStage(): Promise<number | undefined> {
     // rjquest never reaches the client as a varp; the server renders the journal from it, which makes it the oracle.
     const lines = await Quests.journal('Romeo & Juliet');
     const stage = parseRomeoJulietJournal(lines);
-    if (reader.modals().main !== -1) {
-        actions.closeModal();
-        await Execution.delayTicks(1);
-    }
+    await Modals.closeIfOpen();
     return stage;
 }
 

@@ -1,3 +1,4 @@
+import { configuredLootNames } from '#/bot/api/bank/bankRules.js';
 import { describe, expect, test } from 'bun:test';
 import {
     COMMON_BANK_LOOT,
@@ -8,6 +9,12 @@ import {
     matchesCommonBankLoot,
     PERIODIC_BANK_SETTINGS
 } from '#/bot/api/bank/Banking.js';
+
+test('platelegs on a loot list also collect the plain rune skirt once', () => {
+    expect(configuredLootNames([' Rune Platelegs ', 'Rune plateskirt'])).toEqual(['rune platelegs', 'rune plateskirt']);
+    expect(configuredLootNames(['Rune platelegs'])).toContain('rune plateskirt');
+    expect(configuredLootNames(['Rune platelegs (t)'])).toEqual(['rune platelegs (t)']);
+});
 
 describe('matchesCommonBankLoot', () => {
     test('matches each junk category (case-insensitive contains)', () => {

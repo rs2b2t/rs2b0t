@@ -596,3 +596,39 @@ test('hunt waits for a reachable respawn instead of returning after one remain',
     expect(attacks).toBe(2);
     expect(state.pack.filter(i => i.id === 3404)).toHaveLength(2);
 });
+
+test('waits for a used chest to close only when another key needs it', async () => {
+    const state = fixture();
+    state.tile = { x: 3459, z: 9719, level: 0 };
+    state.pack = [item(3469, 3), item(1941, 0)];
+    const chest = { id: 4130, typecode: 2, tile: state.tile, name: 'Silver Chest', ops: ['Open'], distance: 1 };
+    const opens: number[] = [];
+    state.locs = [chest];
+    spyOn(reader, 'locs').mockImplementation(() => state.tick < (opens.at(-1) ?? -4) + 4 ? [] : [chest]);
+    spyOn(Input, 'interactLoc').mockImplementation(() => {
+        opens.push(state.tick);
+        state.pack[0].count--;
+        state.pack[1].count += 25;
+        return true;
+    });
+    expect(await new Minigame(() => {}, async () => true).openChests()).toBe(true);
+    expect(opens).toEqual([0, 4]);
+    expect(state.tick).toBe(4);
+});
+
+test('hands off on the door landing tick while the previous gate is still transformed', async () => {
+    const state = fixture();
+    const gate = CATACOMB_DOORS.find(door => door.from === 15 && door.to === 10)!;
+    state.tile = gate.at;
+    spyOn(MorttonRoute.prototype, 'area').mockRestore();
+    spyOn(Reachability, 'canReach').mockImplementation(tile => tile.x === state.tile.x && tile.z === state.tile.z && tile.level === state.tile.level);
+    state.pack = [item(3469)];
+    state.locs = [{ id: gate.id, typecode: 2, tile: gate.at, name: 'Steel Door', ops: ['Open'], distance: 0 }];
+    spyOn(Input, 'interactLoc').mockImplementation(() => {
+        state.tile = gate.across;
+        state.locs = [];
+        return true;
+    });
+    expect(await new MorttonRoute(() => {}, async () => true).area(10)).toBe(true);
+    expect(state.tick).toBe(0);
+});

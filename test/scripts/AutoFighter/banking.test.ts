@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import AutoFighter from '#/bot/scripts/AutoFighter/AutoFighter.js';
+import { reader } from '#/bot/adapter/ClientAdapter.js';
 import type { Task } from '#/bot/api/bot/Bot.js';
 import { Bank } from '#/bot/api/bank/Bank.js';
+import { BankTeleport } from '#/bot/api/bank/BankTeleport.js';
+import { Equipment } from '#/bot/api/equipment/Equipment.js';
 import { Inventory, InvItem } from '#/bot/api/inventory/Inventory.js';
 import { Game } from '#/bot/api/game/Game.js';
 import { Skills } from '#/bot/api/skills/Skills.js';
@@ -63,6 +66,65 @@ beforeEach(async () => {
 afterEach(() => {
     bot.disposeSubscriptions();
     for (const restore of restores.reverse()) restore();
+});
+
+test.each([0, 1, 6])('a mage under continuous attack leaves on its last cast and restocks to %i casts', async casts => {
+    const held: Record<string, number> = { 'Chaos rune': 24, 'Fire rune': 6 };
+    restores.push(
+        stubProps(reader, { selfSlot: () => 1, npcs: () => [{ index: 2, id: 82, name: 'Lesser demon', faceEntity: 32769,
+            inCombat: true, anim: -1, level: 82, size: 2, tile: BASEMENT, distance: 1, ops: ['Attack'], health: 40, totalHealth: 79 }] }),
+        stubProps(Game, { inCombat: () => true }),
+        stubProps(Equipment, { items: () => [new InvItem({ name: 'Staff of air', id: 1381, count: 1, slot: 3, comId: 1, ops: [] })] }),
+        stubProps(Inventory, { count: name => held[name] ?? 0 }),
+        stubProps(Bank, {
+            withdrawX: async name => { if (name === 'Fire rune') held[name] = Math.max(2, casts * 4); return casts > 0; },
+            withdraw: async () => false
+        })
+    );
+    bot.disposeSubscriptions();
+    bot = new Fighter();
+    let finished = '';
+    bot.bindFinish(reason => { finished = reason; });
+    bot.bindLog(() => {});
+    bot.settings = new SettingsBag({ target: 'Lesser demon', combatStyle: 'mage', spell: 'Fire Bolt', runesWithdraw: 24, foodWithdraw: 0, solveClues: false });
+    await bot.onStart();
+    bot.noteSupplyEmpty(true);
+    const bank = bot.registered.find(task => task.constructor.name === 'BankRun')!;
+    const fight = bot.registered.find(task => task.constructor.name === 'Fight')!;
+    expect(bank.validate()).toBe(false);
+    held['Fire rune'] -= 4;
+    expect(fight.validate()).toBe(false);
+    expect(bank.validate()).toBe(true);
+    await bank.execute();
+    expect(walked).toEqual(casts < 6 ? [GUILD_BANK] : [GUILD_BANK, BASEMENT]);
+    if (casts < 6) expect(finished).toBe('Insufficient runes for spell training');
+    else expect(finished).toBe('');
+});
+
+test.each(['BankRun', 'PanicRetreat'])('%s attempts the configured escape before walking to the bank', async taskName => {
+    const events: string[] = [];
+    restores.push(stubProps(BankTeleport, {
+        cast: async name => { events.push(`teleport:${name}`); return false; },
+        stock: async name => { events.push(`stock:${name}`); }
+    }));
+    restores.push(stubProps(Traversal, { walkResilient: async () => { events.push('walk'); return true; } }));
+    bot.settings = new SettingsBag({ target: 'Baby blue dragon', food: 'Trout', foodWithdraw: 5, bankTeleport: 'Falador', solveClues: false });
+    await bot.onStart();
+    await bot.registered.find(task => task.constructor.name === taskName)!.execute();
+    expect(events[0]).toBe('teleport:Falador');
+    expect(events).toContain('walk');
+    expect(events).toContain('stock:Falador');
+});
+
+test('baby dragon melee uses the equipped longsword controlled stance', async () => {
+    let selected = 'strength';
+    restores.push(stubProps(Equipment, { contains: name => name === 'Dragon longsword' }));
+    restores.push(stubProps(Game, { hasCombatStyle: style => style === selected,
+        setCombatStyle: style => { selected = String(style); return true; }, combatStyleResolution: () => null }));
+    bot.settings = new SettingsBag({ target: 'Baby red dragon', combatStyle: 'melee', meleeStyle: 'strength', solveClues: false });
+    await bot.onStart();
+    await bot.registered.find(task => task.constructor.name === 'SetAttackStyle')!.execute();
+    expect(selected).toBe('controlled');
 });
 
 test('food restocking walks to the upstairs guild banker and returns to the shadow warriors', async () => {
@@ -179,4 +241,17 @@ test.each([
     await bot.registered.find(task => task.constructor.name === 'BankRun')!.execute();
     expect(withdrawals).toEqual(expected ? [{ name: 'Trout', count: expected }] : []);
     expect(food).toBe(carried + expected);
+});
+
+test('a full supplied pack only triggers loot banking when it contains something to deposit', async () => {
+    const items = Array.from({ length: 27 }, (_, slot) => new InvItem({ name: 'Lobster', id: 379, count: 1, slot, comId: 1, ops: ['Eat'] }));
+    const stack = (name: string, id: number) => new InvItem({ name, id, count: 1, slot: 27, comId: 1, ops: [] });
+    items.push(stack('Law rune', 563));
+    restores.push(stubProps(Inventory, { items: () => items, isFull: () => true }));
+    bot.settings = new SettingsBag({ target: 'Lesser demon', food: 'Lobster', bankTeleport: 'Falador', loot: ['Law rune', 'Uncut ruby'], bankAtLootSlots: 27 });
+    await bot.onStart();
+    const bank = bot.registered.find(task => task.constructor.name === 'BankRun')!;
+    expect(bank.validate()).toBe(false);
+    items[27] = stack('Uncut ruby', 1619);
+    expect(bank.validate()).toBe(true);
 });

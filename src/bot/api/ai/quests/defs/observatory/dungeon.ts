@@ -7,7 +7,7 @@ import { Quests } from '../../../../ui/questlog/Quests.js';
 import { Modals } from '../../../../ui/widgets/Modals.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import { isUnderground } from '../../exec/primitives.js';
-import { driveUntil, heldId, settleScene } from '../../exec/prompts.js';
+import { findSceneTarget, driveUntil, heldId, settleScene } from '../../exec/prompts.js';
 import { attackable, fight } from '../trollstronghold/combat.js';
 import { OBS_ID, OBS_LOC, OBS_LOC_NAME, OBS_QUEST, OBS_TILE } from './areas.js';
 
@@ -82,8 +82,7 @@ export async function fetchKeepKey(log: (m: string) => void): Promise<boolean> {
     if (!(await walk(OBS_TILE.KEY_CHEST_STAND, log, 0))) {
         return false;
     }
-    await settleScene();
-    const shut = locById(OBS_LOC.KEY_CHEST_SHUT, 4);
+    const shut = await findSceneTarget(() => locById(OBS_LOC.KEY_CHEST_SHUT, 4));
     if (shut) {
         log('observatory: opening the keep-key chest');
         if (!(await shut.interact('Open'))) {
@@ -203,8 +202,7 @@ export async function fetchLensMould(log: (m: string) => void): Promise<boolean>
         if (!(await walk(OBS_TILE.SACK_STAND, log, 0))) {
             return false;
         }
-        await settleScene();
-        const sack = locById(OBS_LOC.SACK, 4);
+        const sack = await findSceneTarget(() => locById(OBS_LOC.SACK, 4));
         if (!sack) {
             log(`observatory: no sack at (${OBS_TILE.SACK_STAND.x},${OBS_TILE.SACK_STAND.z})`);
             return false;
@@ -236,8 +234,7 @@ export async function useTelescope(log: (m: string) => void): Promise<boolean> {
         if (!(await walk(OBS_TILE.DOME_LADDER_FOOT, log, 0))) {
             return false;
         }
-        await settleScene();
-        const ladder = Locs.query().name(OBS_LOC_NAME.LADDER).action('Climb-up').within(4).nearest();
+        const ladder = await findSceneTarget(() => Locs.query().name(OBS_LOC_NAME.LADDER).action('Climb-up').within(4).nearest());
         if (!ladder) {
             log(`observatory: no dome ladder at (${OBS_TILE.DOME_LADDER_FOOT.x},${OBS_TILE.DOME_LADDER_FOOT.z})`);
             return false;
@@ -257,8 +254,7 @@ export async function useTelescope(log: (m: string) => void): Promise<boolean> {
     if (!(await walk(OBS_TILE.TELESCOPE_STAND, log, 1))) {
         return false;
     }
-    await settleScene();
-    const telescope = locById(OBS_LOC.TELESCOPE, 6);
+    const telescope = await findSceneTarget(() => locById(OBS_LOC.TELESCOPE, 6));
     if (!telescope) {
         log(`observatory: no telescope at (${OBS_TILE.TELESCOPE_STAND.x},${OBS_TILE.TELESCOPE_STAND.z})`);
         return false;

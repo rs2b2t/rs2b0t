@@ -2,7 +2,7 @@ import { Execution } from '../../../../execution/Execution.js';
 import { Game } from '../../../../game/Game.js';
 import { GroundItems } from '../../../../grounditems/GroundItems.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
-import { driveUntil, settleScene } from '../../exec/prompts.js';
+import { driveUntil, findSceneTarget } from '../../exec/prompts.js';
 import { BIO_ITEM, BIO_LOC, BIO_NPC, BIO_TILE, inPigeonZone } from './areas.js';
 import { heldId } from './gear.js';
 import { locById, talkAt, walkTo } from './travel.js';
@@ -36,8 +36,7 @@ export async function takeBirdfeed(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(BIO_TILE.JERICO_CUPBOARD, 1, log))) {
         return false;
     }
-    await settleScene();
-    const open = locById(BIO_LOC.JERICO_CUPBOARD_OPEN, 'Search', 6);
+    const open = await findSceneTarget(() => locById(BIO_LOC.JERICO_CUPBOARD_OPEN, 'Search', 6));
     if (open) {
         if (!(await open.interact('Search'))) {
             return false;
@@ -57,11 +56,9 @@ export async function takePigeons(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(BIO_TILE.PIGEON_SPAWN, 1, log))) {
         return false;
     }
-    await settleScene();
-    const cage = GroundItems.query().where(item => item.id === BIO_ITEM.PIGEONS.id).within(8).nearest();
+    const cage = await findSceneTarget(() => GroundItems.query().where(item => item.id === BIO_ITEM.PIGEONS.id).within(8).nearest(), 6);
     if (!cage) {
         log(`no full Pigeon cage at (${BIO_TILE.PIGEON_SPAWN.x},${BIO_TILE.PIGEON_SPAWN.z}) — waiting for the respawn`);
-        await Execution.delayTicks(4);
         return false;
     }
     if (!(await cage.interact('Take'))) {
@@ -75,8 +72,7 @@ export async function feedTheTower(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(BIO_TILE.WATCHTOWER, 1, log))) {
         return false;
     }
-    await settleScene();
-    const tower = locById(BIO_LOC.WATCHTOWER, null, 8);
+    const tower = await findSceneTarget(() => locById(BIO_LOC.WATCHTOWER, null, 8));
     const feed = Inventory.items().find(item => item.id === BIO_ITEM.BIRDFEED.id);
     if (!tower || !feed) {
         log(`no ${tower ? 'Bird feed' : 'Watchtower'} for the distraction`);

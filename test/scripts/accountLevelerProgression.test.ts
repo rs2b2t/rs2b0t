@@ -19,8 +19,8 @@ const snapshot = (): LevelerSnapshot => ({
     bankReady: true, target: 60, wilderness: true, now: 1000
 });
 
-test.each([undefined, 40, 60, 99])('target %s defaults to 60, supports 60 and preserves lower choices', async target => {
-    expect(SETTINGS.targetLevel).toMatchObject({ default: 60, max: 60 });
+test.each([undefined, 40, 60, 70, 99])('target %s defaults to 70, supports 70 and preserves lower choices', async target => {
+    expect(SETTINGS.targetLevel).toMatchObject({ default: 70, max: 70 });
     const bot = new AccountLeveler();
     bot.settings = new SettingsBag(target === undefined ? {} : { targetLevel: target });
     bot.bindLog(() => {});
@@ -29,7 +29,7 @@ test.each([undefined, 40, 60, 99])('target %s defaults to 60, supports 60 and pr
     spyOn(BotHost, 'addFrameListener').mockReturnValue(() => {});
     try {
         await bot.onStart();
-        expect(bot['target']).toBe(target === 40 ? 40 : 60);
+        expect(bot['target']).toBe(target === undefined ? 70 : Math.min(target, 70));
     } finally { bot.onStop(); bot.disposeSubscriptions(); }
 });
 
@@ -64,6 +64,37 @@ test('disabling Wilderness keeps agility on the Gnome course', () => {
     expect(methodFor(s, 'agility', emptyMemory(), () => 0)?.script).toBe('GnomeCourse');
 });
 
+test('hitpoints training finishes the current fight before switching from Strength to Attack', async () => {
+    const s = snapshot();
+    Object.assign(s.levels, { attack: 20, strength: 24, defence: 1, hitpoints: 25 });
+    const plan = methodFor(s, 'hitpoints', emptyMemory(), () => 0)!;
+    expect(plan).toMatchObject({ meleeMilestone: 25, settings: { meleeStyle: 'strength' } });
+    const bot = new AccountLeveler();
+    spyOn(Game, 'sceneReady').mockReturnValue(true);
+    spyOn(Game, 'tile').mockReturnValue(null);
+    const combat = spyOn(Game, 'inCombat').mockReturnValue(true);
+    spyOn(Game, 'myName').mockReturnValue(null);
+    bot['snapshot'] = () => s;
+    bot['eat'] = async () => {};
+    bot['observe'] = () => {};
+    spyOn(bot['activity'], 'loop').mockResolvedValue(undefined);
+    try {
+        bot['phase'] = 'train';
+        bot['session'].start(plan, Date.now(), () => 0);
+        bot['pendingPlans'] = [plan];
+        s.levels.strength = 25;
+        await bot.loop();
+        expect(bot['session'].plan).toBe(plan);
+        combat.mockReturnValue(false);
+        await bot.loop();
+        expect(String(bot['phase'])).toBe('bank');
+        expect(bot['pendingPlans']).toEqual([]);
+        expect(planNext(s, bot['session'].memory, () => 0)).toMatchObject({ plan: {
+            objective: 'hitpoints', meleeMilestone: 25, settings: { meleeStyle: 'attack' }
+        } });
+    } finally { bot.onStop(); }
+});
+
 test.each([0, 26, 27, 500, 999])('runecrafting with %s essence only stocks up below a load', count => {
     const s = snapshot(); s.levels.runecraft = 20; s.stock['rune essence'] = count;
     const next = planNext(s, { ...emptyMemory(), objective: 'runecraft' }, () => 0);
@@ -78,15 +109,30 @@ test.each([0, 26, 27, 500, 999])('runecrafting with %s essence only stocks up be
     }
 });
 
-test('large explicit essence requests are not reduced to the standard batch', () => {
-    expect(producer(snapshot(), 'runecraft', { item: 'Rune essence', count: 1500 }, emptyMemory(), () => 0)?.output?.count).toBe(1500);
+test.each(['Rune essence', 'Coal', 'Oak logs'])('larger gathering requests keep their requested quantity for %s', item => {
+    expect(producer(snapshot(), 'economy', { item, count: 1500 }, emptyMemory(), () => 0)?.output?.count).toBe(1500);
 });
 
-test('essence stocking finishes the batch and banks it before resuming runecrafting, even after session expiry', async () => {
+test.each([['mining', 'Iron ore'], ['woodcutting', 'Willow logs']])('%s tops up the selected resource before rotating', (skill, item) => {
+    const s = snapshot();
+    s.levels[skill] = 59;
+    Object.assign(s.stock, { 'copper ore': 1200, logs: 1200, [item.toLowerCase()]: 999 });
+    const plan = () => methodFor(s, skill, emptyMemory(), () => 0)!;
+    expect(plan().output).toEqual({ item, count: 1000 });
+    s.stock[item.toLowerCase()]++;
+    s.bankStock = { ...s.stock, [item.toLowerCase()]: 999 };
+    expect(plan().output).toEqual({ item, count: 1000 });
+    s.bankStock = { ...s.stock };
+    expect(plan().output).toBeUndefined();
+});
+
+test.each([
+    ['runecraft', 'Rune essence'], ['smithing', 'Coal'], ['fletching', 'Oak logs']
+])('%s waits for the final deposit of %s even after session expiry', async (skill, item) => {
     const bot = new AccountLeveler();
-    const s = snapshot(); s.levels.runecraft = 20;
-    const plan = producer(s, 'runecraft', { item: 'Rune essence', count: 27 }, emptyMemory(), () => 0)!;
-    const craft = methodFor(s, 'runecraft', emptyMemory(), () => 0)!;
+    const s = snapshot(); s.levels[skill] = 20;
+    const plan = producer(s, skill, { item, count: 27 }, emptyMemory(), () => 0)!;
+    const craft = methodFor(s, skill, emptyMemory(), () => 0)!;
     let bankOpen = false;
     let carried = 27;
     spyOn(Game, 'sceneReady').mockReturnValue(true);
@@ -95,7 +141,7 @@ test('essence stocking finishes the batch and banks it before resuming runecraft
     spyOn(Game, 'myName').mockReturnValue(null);
     spyOn(Bank, 'isOpen').mockImplementation(() => bankOpen);
     spyOn(Bank, 'ready').mockImplementation(() => bankOpen);
-    spyOn(Inventory, 'count').mockImplementation(name => name === 'Rune essence' ? carried : 0);
+    spyOn(Inventory, 'count').mockImplementation(name => name === item ? carried : 0);
     bot['snapshot'] = () => s;
     bot['eat'] = async () => {};
     bot['observe'] = () => {};
@@ -105,18 +151,20 @@ test('essence stocking finishes the batch and banks it before resuming runecraft
         bot['session'].start(plan, Date.now(), () => 0);
         bot['session'].remainingMs = 0;
         bot['pendingPlans'] = [craft];
-        s.stock['rune essence'] = 54;
+        s.stock[item.toLowerCase()] = 54;
         await bot.loop();
         expect(work).toHaveBeenCalledTimes(1);
         expect(bot['session'].plan).toBe(plan);
-        s.stock['rune essence'] = 1008;
+        s.stock[item.toLowerCase()] = 1008;
+        s.bankStock = { [item.toLowerCase()]: 981 };
         await bot.loop();
         expect(work).toHaveBeenCalledTimes(2);
         expect(bot['session'].plan).toBe(plan);
-        bankOpen = true; carried = 0;
+        s.bankStock = { [item.toLowerCase()]: 1008 };
+        bankOpen = plan.script === 'EssMiner'; carried = 0;
         await bot.loop();
         expect(bot['session'].plan).toBeNull();
-        expect(bot['session'].memory.objective).toBe('runecraft');
+        expect(bot['session'].memory.objective).toBe(skill);
         expect(bot['pendingPlans']).toEqual([craft]);
         expect(String(bot['phase'])).toBe('bank');
     } finally { bot.onStop(); }

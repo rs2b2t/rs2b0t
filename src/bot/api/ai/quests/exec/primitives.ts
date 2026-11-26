@@ -2,7 +2,7 @@
 import { EventSignal } from '../../../execution/EventSignal.js';
 import { Execution } from '../../../execution/Execution.js';
 import { Game } from '../../../game/Game.js';
-import { Reach } from '../../../walking/Reach.js';
+import { findSceneTarget, Reach } from '../../../walking/Reach.js';
 import Tile from '../../../../geometry/Tile.js';
 import { ChatDialog } from '../../../ui/dialogue/ChatDialog.js';
 import { Locs } from '../../../locs/Locs.js';
@@ -83,12 +83,7 @@ async function hopLadder(hop: LadderHop, log: (m: string) => void): Promise<bool
     if (!ladder && hop.open !== undefined) {
         const closed = find(hop.open);
         if (closed && (await closed.interact(hop.open))) {
-            await Execution.delayTicks(2);
-            ladder = find(hop.op);
-            if (!ladder) {
-                await Execution.delayTicks(2);
-                ladder = find(hop.op);
-            }
+            ladder = await findSceneTarget(() => find(hop.op), 4);
         }
     }
     if (!ladder) {
@@ -192,6 +187,11 @@ export async function gotoNpc(stop: NpcStop, hops: LadderHop[], log: (m: string)
 /** A page turn's worth of quiet; a scene that walks an npc about wants its stop to name more. */
 const DIALOG_GAP_MS = 1500;
 
+export async function afterDialogueAction(advanced: boolean, fallbackTicks: number): Promise<void> {
+    if (advanced && (ChatDialog.canContinue() || ChatDialog.options().length > 0)) return;
+    await Execution.delayTicks(fallbackTicks);
+}
+
 export async function driveDialog(prefer: string[], log: (m: string) => void, gapMs = DIALOG_GAP_MS): Promise<boolean> {
     for (let i = 0; i < 120; i++) {
         if (EventSignal.pending()) {
@@ -203,8 +203,7 @@ export async function driveDialog(prefer: string[], log: (m: string) => void, ga
             }
         }
         if (ChatDialog.canContinue()) {
-            await ChatDialog.continue();
-            await Execution.delayTicks(1);
+            await afterDialogueAction(await ChatDialog.continue(), 1);
             continue;
         }
         const opts = ChatDialog.options();
@@ -213,8 +212,7 @@ export async function driveDialog(prefer: string[], log: (m: string) => void, ga
             if (!pick) {
                 log(`WARN: no preferred option in [${opts.join(' | ')}] — taking the last`);
             }
-            await ChatDialog.chooseOption(pick ?? opts[opts.length - 1]);
-            await Execution.delayTicks(2);
+            await afterDialogueAction(await ChatDialog.chooseOption(pick ?? opts[opts.length - 1]), 2);
             continue;
         }
         await Execution.delayTicks(1);
@@ -230,7 +228,8 @@ export async function openDialogue(npcName: string, log: (m: string) => void): P
         return true;
     }
     const find = (): Npc | null => Npcs.query().name(npcName).where(n => talkOp(n.actions()) !== null).nearest();
-    const npc = find();
+    const npc = await findSceneTarget(find);
+    if (dialogReady()) return true;
     if (!npc) {
         log(`no '${npcName}' nearby to talk to`);
         return false;
@@ -296,8 +295,7 @@ export async function talkChoosingBy(
             }
         }
         if (ChatDialog.canContinue()) {
-            await ChatDialog.continue();
-            await Execution.delayTicks(1);
+            await afterDialogueAction(await ChatDialog.continue(), 1);
             continue;
         }
         if (opts.length > 0) {
@@ -306,8 +304,7 @@ export async function talkChoosingBy(
                 log(`no rule or preference matched [${opts.join(' | ')}] after "${spoken.join(' ')}"`);
                 return false;
             }
-            await ChatDialog.chooseOption(pick);
-            await Execution.delayTicks(2);
+            await afterDialogueAction(await ChatDialog.chooseOption(pick), 2);
             continue;
         }
         if (!ChatDialog.isOpen()) {

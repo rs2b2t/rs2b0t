@@ -143,7 +143,6 @@ class BankTrip implements Task {
             return;
         }
         await Bank.depositInventory();
-        await Execution.delayTicks(1);
         this.bot.countTrip();
 
         const fibre = Bank.items().find(i => i.name?.toLowerCase() === this.bot.productName().toLowerCase() && i.count > 0);

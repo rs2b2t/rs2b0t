@@ -171,8 +171,7 @@ export async function talkUntil(
             continue;
         }
         if (reader.modals().main !== -1) {
-            await Modals.close();
-            await Execution.delayTicks(1);
+            if (!(await Modals.close())) await Execution.delayTicks(1);
             continue;
         }
         await Execution.delayTicks(1);

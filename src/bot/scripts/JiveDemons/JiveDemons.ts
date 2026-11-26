@@ -1,3 +1,4 @@
+import { configuredLootNames } from '../../api/bank/bankRules.js';
 import { reader } from '../../adapter/ClientAdapter.js';
 import { Bank } from '../../api/bank/Bank.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
@@ -388,7 +389,6 @@ class ArmAutocast implements Task {
     }
     async execute(): Promise<void> {
         this.bot.setStatus(`arming autocast: ${SPELL}`);
-        await Execution.delayTicks(3);
         if (await Autocast.arm(SPELL, m => this.bot.log(m))) {
             this.fails = 0;
         } else if (++this.fails >= ASSERT_BATCH) {
@@ -544,7 +544,7 @@ export default class JiveDemons extends TaskBot implements CombatHost {
         FOOD_RESERVE = this.settings.num('foodReserve', 4);
         ESCAPE_STOCK = this.settings.num('teleStock', 2);
         HEAL_TO = this.settings.num('healTo', 90) / 100;
-        LOOT_SET = new Set(this.settings.list('loot', DEFAULT_LOOT).map(s => s.toLowerCase()));
+        LOOT_SET = new Set(configuredLootNames(this.settings.list('loot', DEFAULT_LOOT)));
         // Why: fired arrows land where the demon dies and sit on no drop table, so the 500 a trip withdraws come home only if the loot set names them.
         if (STYLE === 'range') {
             LOOT_SET.add(AMMO.toLowerCase());

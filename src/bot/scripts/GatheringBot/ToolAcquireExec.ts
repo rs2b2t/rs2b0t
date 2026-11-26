@@ -30,7 +30,6 @@ export interface ToolAcquireHost {
     log(m: string): void;
     openBankAt(stand: Tile, log: (m: string) => void): Promise<boolean>;
     waitBankReady(log: (m: string) => void): Promise<boolean>;
-    bankPace(log?: (m: string) => void): Promise<void>;
     closeScriptBank(log: (m: string) => void, opts?: { allowForgetful?: boolean }): Promise<boolean>;
     walkToToolVendor?(vendor: ToolVendor, log: (m: string) => void): Promise<boolean>;
     heldCount(name: string): number;
@@ -106,8 +105,6 @@ export async function executeRepairPlan(
     } else if (await host.waitBankReady(log)) {
         const keep = new Set(acquireKeepNames(plan, host.gearKeepNamesList()).map(n => n.toLowerCase()));
         await Bank.depositAllMatching(name => name.length > 0 && !keep.has(name.toLowerCase()));
-        await Execution.delayUntilTicks(() => Bank.loaded() || !Bank.isOpen(), 5);
-        await host.bankPace();
         await host.prepareWornSurplusForDeposit(log, acquireKeepNames(plan, host.gearKeepNamesList()));
         await host.depositSurplusGatherTools(log, acquireKeepNames(plan, host.gearKeepNamesList()));
         // Nurmof repairs cost gp, do not walk without the float when withdraw fails.
@@ -124,7 +121,7 @@ export async function executeRepairPlan(
         // Unequip broken tool after bank if pack now has room.
         if (Equipment.contains(plan.brokenName) && !Inventory.isFull()) {
             await Equipment.unequip(plan.brokenName);
-            await Execution.delayTicks(1);
+            await Execution.delayUntilTicks(() => Inventory.contains(plan.brokenName), 5);
         }
     }
 
@@ -170,9 +167,7 @@ export async function executeRepairPlan(
         host.markAcquireBackoff(35);
         return false;
     }
-    await Execution.delayTicks(2);
-    const afterBroken = host.heldCount(plan.brokenName);
-    if (afterBroken < beforeBroken) {
+    if (await Execution.delayUntilTicks(() => host.heldCount(plan.brokenName) < beforeBroken, 2)) {
         host.log(`acquire: repaired ${plan.brokenName} at ${plan.vendor.keeper}`);
         return true;
     }
@@ -227,8 +222,6 @@ export async function executeBuyPlans(
         const keepExtra = [...host.gearKeepNamesList(), ...plans.map(p => p.name)];
         const keep = new Set(acquireKeepNames(plans[0]!, keepExtra).map(n => n.toLowerCase()));
         await Bank.depositAllMatching(name => name.length > 0 && !keep.has(name.toLowerCase()));
-        await Execution.delayUntilTicks(() => Bank.loaded() || !Bank.isOpen(), 5);
-        await host.bankPace();
         await host.prepareWornSurplusForDeposit(log, acquireKeepNames(plans[0]!, keepExtra));
         await host.depositSurplusGatherTools(log, acquireKeepNames(plans[0]!, keepExtra));
 
@@ -284,9 +277,7 @@ export async function executeBuyPlans(
     // Close shop before Wield, pack ops are Sell-* while the shop main modal is open.
     await Shop.close();
     await Execution.delayUntilTicks(() => !Shop.isOpen(), 5);
-    await Execution.delayTicks(1);
     await Game.openSideTab(3);
-    await Execution.delayTicks(1);
     if (toEquip.length > 0) {
         await host.equipTools(toEquip, log, { bankDisplaced: false });
     }
@@ -326,8 +317,6 @@ export async function executeSmithPlan(
         }
         const keep = new Set(acquireKeepNames(plan, host.gearKeepNamesList()).map(n => n.toLowerCase()));
         await Bank.depositAllMatching(name => name.length > 0 && !keep.has(name.toLowerCase()));
-        await Execution.delayUntilTicks(() => Bank.loaded() || !Bank.isOpen(), 5);
-        await host.bankPace();
         await host.prepareWornSurplusForDeposit(log, acquireKeepNames(plan, host.gearKeepNamesList()));
         await host.depositSurplusGatherTools(log, acquireKeepNames(plan, host.gearKeepNamesList()));
 
@@ -340,10 +329,8 @@ export async function executeSmithPlan(
                 return false;
             }
             const one = withdrawOp(h.ops, '1') ?? 'Withdraw-1';
-            await host.bankPace();
             await Bank.withdraw(HAMMER, one);
             await Execution.delayUntilTicks(() => Inventory.count(HAMMER) > 0, 5);
-            await host.bankPace();
         }
         if (Inventory.count(plan.bar) < 1) {
             const b = Bank.items().find(i => (i.name ?? '').toLowerCase() === plan.bar.toLowerCase());
@@ -354,10 +341,8 @@ export async function executeSmithPlan(
                 return false;
             }
             const one = withdrawOp(b.ops, '1') ?? 'Withdraw-1';
-            await host.bankPace();
             await Bank.withdraw(plan.bar, one);
             await Execution.delayUntilTicks(() => Inventory.count(plan.bar) > 0, 5);
-            await host.bankPace();
         }
         await host.closeScriptBank(log, { allowForgetful: false });
     }
@@ -398,10 +383,8 @@ export async function executeSmithPlan(
     host.log(`acquire: smithed ${plan.name}`);
     if (ChatDialog.isMainMakePanel() || ChatDialog.isOpen()) {
         await Execution.delayUntilTicks(() => !ChatDialog.isMainMakePanel() && !ChatDialog.isOpen(), 5);
-        await Execution.delayTicks(1);
     }
     await Game.openSideTab(3);
-    await Execution.delayTicks(1);
     if (plan.equip && canWieldTool(plan.name, host.attackLevel())) {
         let equipped = await host.equipTools([plan.name], log, { bankDisplaced: false });
         if (!equipped && Inventory.first(plan.name) && !Equipment.contains(plan.name)) {

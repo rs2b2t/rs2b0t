@@ -1,4 +1,5 @@
-import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
+import { Modals } from '../../../../ui/widgets/Modals.js';
+import { reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Game } from '../../../../game/Game.js';
 import Tile from '../../../../../geometry/Tile.js';
@@ -11,7 +12,7 @@ import { Locs, type Loc } from '../../../../locs/Locs.js';
 import { Npcs } from '../../../../npcs/Npcs.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import { GameMessages } from '../../../../chatbox/gameMessages.js';
-import { heldId, settleScene, useOnLoc } from '../../exec/prompts.js';
+import { findSceneTarget, heldId, settleScene, useOnLoc } from '../../exec/prompts.js';
 import {
     BELLOWS_STAND,
     BOOKCASE,
@@ -53,8 +54,9 @@ async function closeBookModal(): Promise<void> {
         if (reader.modals().main === -1) {
             return;
         }
-        actions.closeModal();
-        await Execution.delayTicks(1);
+        if (!(await Modals.close())) {
+            await Execution.delayTicks(1);
+        }
     }
 }
 
@@ -65,8 +67,7 @@ export async function searchBookcase(log: (m: string) => void): Promise<boolean>
     if (!(await walkNear(BOOKCASE, 2, log))) {
         return false;
     }
-    await settleScene();
-    const bookcase = Locs.query().name('Bookcase').action('Search').within(6).nearest();
+    const bookcase = await findSceneTarget(() => Locs.query().name('Bookcase').action('Search').within(6).nearest());
     if (!bookcase) {
         log('no Bookcase to Search near Seers house');
         return false;
@@ -87,7 +88,7 @@ export async function readBatteredBook(log: (m: string) => void): Promise<boolea
     if (!(await book.interact('Read'))) {
         return false;
     }
-    await Execution.delayTicks(2);
+    await Execution.delayUntilTicks(() => reader.modals().main !== -1, 2);
     await closeBookModal();
     return true;
 }
@@ -147,10 +148,9 @@ export async function enterWorkshop(log: (m: string) => void): Promise<boolean> 
     if (!(await walkNear(SMITHY, 4, log))) {
         return false;
     }
-    await settleScene();
 
     // The "Odd looking wall" opens by oplocu with the Battered key; Push only works once it's unlocked for this player.
-    const wall = Locs.query().name('Odd looking wall').within(10).nearest();
+    const wall = await findSceneTarget(() => Locs.query().name('Odd looking wall').within(10).nearest());
     if (!wall) {
         log('no Odd looking wall near the Seers smithy');
         return false;
@@ -179,13 +179,8 @@ export async function enterWorkshop(log: (m: string) => void): Promise<boolean> 
     }
 
     // Stairs are inside; walk if needed, then Climb-down into the workshop pocket.
-    if (!(await walkNear(STAIRS_TOP, 3, log))) {
-        // Still try the climb from wherever we are if the stairs are visible.
-        await settleScene();
-    } else {
-        await settleScene();
-    }
-    const stairs = Locs.query().name('Staircase').action('Climb-down').within(8).nearest();
+    await walkNear(STAIRS_TOP, 3, log);
+    const stairs = await findSceneTarget(() => Locs.query().name('Staircase').action('Climb-down').within(8).nearest());
     if (!stairs) {
         log('no Staircase to Climb-down in the Seers smithy');
         return false;
@@ -204,8 +199,7 @@ export async function leaveWorkshop(log: (m: string) => void): Promise<boolean> 
     if (!(await walkNear(WORKSHOP_ARRIVAL, 3, log))) {
         return false;
     }
-    await settleScene();
-    const stairs = Locs.query().name('Staircase').action('Climb-up').within(8).nearest();
+    const stairs = await findSceneTarget(() => Locs.query().name('Staircase').action('Climb-up').within(8).nearest());
     if (!stairs) {
         log('no Staircase to Climb-up out of the workshop');
         return false;
@@ -447,8 +441,7 @@ export async function fixBellows(log: (m: string) => void): Promise<boolean> {
     if (!(await walkNear(BELLOWS_STAND, 3, log))) {
         return false;
     }
-    await settleScene();
-    const bellows = Locs.query().name('Bellows').action('Fix').within(10).nearest();
+    const bellows = await findSceneTarget(() => Locs.query().name('Bellows').action('Fix').within(10).nearest());
     if (!bellows) {
         log('no Bellows to Fix');
         return false;
@@ -457,8 +450,7 @@ export async function fixBellows(log: (m: string) => void): Promise<boolean> {
     if (!(await bellows.interact('Fix'))) {
         return false;
     }
-    await Execution.delayTicks(3);
-    return heldId(EW_ITEM.LEATHER.id) === 0 || heldId(EW_ITEM.THREAD.id) === 0;
+    return Execution.delayUntilTicks(() => heldId(EW_ITEM.LEATHER.id) === 0 || heldId(EW_ITEM.THREAD.id) === 0, 3);
 }
 
 export async function lightFurnace(log: (m: string) => void): Promise<boolean> {
@@ -599,9 +591,8 @@ async function takeElementalOre(log: (m: string) => void): Promise<boolean> {
     }
 
     for (let attempt = 0; attempt < 5; attempt++) {
-        const ground = findOreOnGround();
+        const ground = await findSceneTarget(findOreOnGround, 2);
         if (!ground) {
-            await Execution.delayTicks(2);
             continue;
         }
         const t = ground.tile();

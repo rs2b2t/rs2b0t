@@ -198,7 +198,7 @@ async function fightLoop(plan: FightPlan, log: (m: string) => void): Promise<boo
                 if (!(await pokeJossik(log))) {
                     return false;
                 }
-                await Execution.delayTicks(plan.summonDelay);
+                await Execution.delayUntilTicks(() => plan.target() !== null || plan.won(), plan.summonDelay);
                 continue;
             }
             if (now - reported >= 40) {

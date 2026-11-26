@@ -26,6 +26,7 @@ const expected: Record<string, { npcIds: number[]; maxThreat: number }> = {
     'edgeville-dungeon-earth-warriors': { npcIds: [124], maxThreat: 51 },
     'gu-tanoth-ogres': { npcIds: [114, 115], maxThreat: 53 },
     'taverley-baby-blue-dragons': { npcIds: [52], maxThreat: 48 },
+    'brimhaven-baby-red-dragons': { npcIds: [1589], maxThreat: 152 },
     'karamja-lesser-demons': { npcIds: [82], maxThreat: 82 },
     'crandor-lesser-demons': { npcIds: [82], maxThreat: 82 },
     'troll-stronghold-trolls': { npcIds: [1106, 1107, 1108, 1109, 1110, 1111, 1112], maxThreat: 69 },
@@ -38,7 +39,7 @@ const variants: Record<number, [number, number]> = {
     8: [16, 17], 9: [21, 22], 32: [20, 22], 52: [48, 50], 82: [82, 79], 110: [86, 111], 112: [42, 60],
     114: [53, 60], 115: [53, 60], 183: [23, 20], 475: [19, 22], 476: [19, 22], 862: [83, 80],
     1106: [69, 90], 1107: [69, 90], 1108: [69, 90], 1109: [69, 90], 1110: [69, 90], 1111: [69, 90], 1112: [69, 90],
-    1218: [42, 50]
+    1218: [42, 50], 1589: [65, 65]
 };
 const world = hasContentSource ? sourceWorld() : null;
 const hasNav = existsSync('out/collision.lcnav.gz');
@@ -87,6 +88,20 @@ test.skipIf(!hasNav)('earth warrior access uses the monkeybars and cannot bypass
     const path = route(camp, start, destination);
     expect(path.ok).toBe(true);
     if (path.ok) expect(path.hops.some(hop => hop.locName === 'Monkeybars')).toBe(true);
+});
+
+test.skipIf(!hasNav)('baby red dragon access requires the declared vines and log balance levels', () => {
+    const camp = ADVANCED_CAMPS.find(camp => camp.id === 'brimhaven-baby-red-dragons')!;
+    const start = { x: 2713, z: 9564, level: 0 };
+    const destination = { x: camp.x, z: camp.z, level: 0 };
+    expect(route({ ...camp, skills: { woodcutting: 21, agility: 30 } }, start, destination).ok).toBe(false);
+    expect(route({ ...camp, skills: { woodcutting: 22, agility: 29 } }, start, destination).ok).toBe(false);
+    const path = route(camp, start, destination);
+    expect(path.ok).toBe(true);
+    if (path.ok) {
+        expect(path.hops.some(hop => hop.locId === 5105)).toBe(true);
+        expect(path.hops.some(hop => hop.locName === 'Log balance')).toBe(true);
+    }
 });
 
 test.skipIf(!hasContentSource).each([...ADVANCED_CAMPS])('source verifies ordinary target variants at $id', camp => {

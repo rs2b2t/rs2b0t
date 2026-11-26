@@ -8,7 +8,7 @@ import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
 import { Locs } from '../../../../locs/Locs.js';
 import { GameMessages } from '../../../../chatbox/gameMessages.js';
-import { heldId, settleScene } from '../../exec/prompts.js';
+import { findSceneTarget, heldId, settleScene } from '../../exec/prompts.js';
 import { FC_ID, FC_ITEM, FC_LOC, inPerfectGoldZone } from './areas.js';
 
 const LEVER_UP = /^the lever is now up\.?$/i;
@@ -116,12 +116,11 @@ async function setLever(
             log(`could not reach the ${key} lever stand`);
             return false;
         }
-        await settleScene();
-        const lever = Locs.query()
+        const lever = await findSceneTarget(() => Locs.query()
             .where(l => l.id === spot.ids.down || l.id === spot.ids.up)
             .action('Pull')
             .within(3)
-            .nearest();
+            .nearest());
         if (!lever) {
             log(`no ${key} lever in the scene at (${spot.at.x},${spot.at.z})`);
             return false;
@@ -163,8 +162,7 @@ async function crossDoor(
         log(`could not reach the ${door.label} stand (${side.stand.x},${side.stand.z})`);
         return 'failed';
     }
-    await settleScene();
-    const shut = Locs.query().name('Door').action('Open').within(3).nearest();
+    const shut = await findSceneTarget(() => Locs.query().name('Door').action('Open').within(3).nearest());
     if (!shut) {
         log(`no ${door.label} in the scene`);
         return 'failed';
@@ -352,14 +350,12 @@ export async function minePerfectGold(log: (m: string) => void): Promise<boolean
             log('could not stand inside the perfect-gold zone');
             return false;
         }
-        await settleScene();
-        const rock = Locs.query()
+        const rock = await findSceneTarget(() => Locs.query()
             .where(l => l.id === 2098 || l.id === 2099)
             .action('Mine')
             .within(6)
-            .nearest();
+            .nearest(), 5);
         if (!rock) {
-            await Execution.delayTicks(3);
             continue;
         }
         const before = heldId(FC_ID.PERFECT_GOLD_ORE);

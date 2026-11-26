@@ -193,7 +193,8 @@ test('Miner nearest-bank flow carries Duel Arena chest access through', async ()
     (Locs as any).query = queryReturning([]);
     (Game as any).tile = () => ({ x: 3295, z: 3310, level: 0 });
     (Traversal as any).walkResilient = async () => true;
-    (Execution as any).delayTicks = async () => {};
+    let ticks = 0;
+    Execution.delayTicks = async n => { ticks += n; };
 
     let access: any = null;
     let deposited = false;
@@ -208,6 +209,7 @@ test('Miner nearest-bank flow carries Duel Arena chest access through', async ()
     const result = await Banking.bankNearest({ deposit: name => name.includes('ore') });
 
     expect(result).toBe(true);
+    expect(ticks).toBe(0);
     expect(access).toEqual({
         name: 'Open chest',
         op: 'Bank',

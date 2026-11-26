@@ -1,3 +1,4 @@
+import { findSceneTarget } from '../../exec/prompts.js';
 import type { WorldTile } from '../../../../../adapter/ClientAdapter.js';
 import { EventSignal } from '../../../../execution/EventSignal.js';
 import { Execution } from '../../../../execution/Execution.js';
@@ -15,7 +16,7 @@ import { Skills } from '../../../../skills/Skills.js';
 import { Sustain } from '../../../../sustain/Sustain.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import { WalkExecutor } from '../../../../../event/webwalk/WalkExecutor.js';
-import { driveDialog, talkThrough } from '../../exec/primitives.js';
+import { afterDialogueAction, driveDialog, talkThrough } from '../../exec/primitives.js';
 import { unwearable } from './armour.js';
 import {
     FISHERMAN,
@@ -56,8 +57,7 @@ function chebyshev(a: WorldTile, b: WorldTile): number {
 async function drain(): Promise<void> {
     for (let i = 0; i < 20 && (ChatDialog.isOpen() || ChatDialog.canContinue()); i++) {
         if (ChatDialog.canContinue()) {
-            await ChatDialog.continue();
-            await Execution.delayTicks(1);
+            await afterDialogueAction(await ChatDialog.continue(), 1);
             continue;
         }
         if (ChatDialog.options().length > 0) {
@@ -91,15 +91,14 @@ export async function merlinLeg(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(GRAIL_TILE.MERLIN_WORKSHOP, 2, log))) {
         return false;
     }
-    const merlin = Npcs.query().where(n => n.id === MERLIN_ID).action('Talk-to').within(8).nearest();
+    const findMerlin = () => Npcs.query().where(n => n.id === MERLIN_ID).action('Talk-to').within(8).nearest();
+    let merlin = findMerlin();
     if (!merlin) {
         log('no Merlin in the workshop — the door spawns him, so open it again');
         const door = Locs.query().name('Door').action('Open').within(6).nearest();
-        if (door) {
-            await door.interact('Open');
-            await Execution.delayTicks(3);
-        }
-        return false;
+        if (!door || !(await door.interact('Open'))) return false;
+        merlin = await findSceneTarget(findMerlin, 3);
+        if (!merlin) return false;
     }
     if (!(await merlin.interact('Talk-to'))) {
         return false;

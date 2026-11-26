@@ -30,8 +30,8 @@ test('ready mind runes are used before buying an ideal expensive chaos batch', (
     const kit = magicEquipment(s);
     expect(kit.spell).toBe('Wind Strike');
     expect(kit.casts).toBe(40);
-    expect(kit.needs).toEqual([{ item: 'Staff of air', count: 1, carry: 1, equip: true },
-        { item: 'Mind rune', count: 40, carry: 40, minimum: 1 }]);
+    expect(kit.needs).toEqual([{ item: 'Staff of fire', count: 1, carry: 1, equip: true },
+        { item: 'Mind rune', count: 40, carry: 40, minimum: 1 }, { item: 'Air rune', count: 40, carry: 40, minimum: 1 }]);
     expect(method(s, 'magic').settings.runesWithdraw).toBe(40);
 });
 
@@ -121,7 +121,7 @@ test('an exhausted eight-cast retry restores the same spell to 200 reserve and 1
     expect(refreshed.settings.spell).toBe('Fire Bolt');
     expect(refreshed.settings.runesWithdraw).toBe(150);
     expect(refreshed.needs).toContainEqual({ item: 'Chaos rune', count: 200, carry: 150, minimum: 1 });
-    expect(refreshed.needs).toContainEqual({ item: 'Fire rune', count: 800, carry: 600, minimum: 4 });
+    expect(refreshed.needs).toContainEqual({ item: 'Air rune', count: 600, carry: 450, minimum: 3 });
     expect(refreshed.id).toBe(plan.id);
 });
 
@@ -130,7 +130,7 @@ test('a mage retry rounds newly available runes to the same positive complete ca
     const refreshed = refreshConsumables(snapshot({ 'staff of air': 1, 'chaos rune': 87, 'fire rune': 131, coins: 500000 }, { magic: 35 }), plan);
     expect(refreshed.settings.runesWithdraw).toBe(32);
     expect(refreshed.needs).toContainEqual({ item: 'Chaos rune', count: 32, carry: 32, minimum: 1 });
-    expect(refreshed.needs).toContainEqual({ item: 'Fire rune', count: 128, carry: 128, minimum: 4 });
+    expect(refreshed.needs).toContainEqual({ item: 'Air rune', count: 96, carry: 96, minimum: 3 });
 });
 
 for (const [magic, spell] of [[17, 'Wind Bolt'], [23, 'Water Bolt'], [29, 'Earth Bolt'], [35, 'Fire Bolt']] as const) test(`a queued Strike activity upgrades to ${spell} after banking Paladin runes`, () => {
@@ -188,4 +188,69 @@ test('leather crafting uses available thread and restores its target after consu
     s.stock.thread = 0;
     const refreshed = refreshConsumables(s, plan);
     expect(refreshed.settings.threadPerTrip).toBe(100);
+});
+
+test('prefers a fire staff for Fire Bolt and packs three air runes per cast', () => {
+    const s = snapshot({ 'staff of fire': 1, 'staff of air': 1, 'air rune': 25, 'fire rune': 400, 'chaos rune': 12 });
+    const kit = magicEquipment(s);
+    expect(kit.spell).toBe('Fire Bolt');
+    expect(kit.casts).toBe(8);
+    expect(kit.needs).toEqual([
+        { item: 'Staff of fire', count: 1, carry: 1, equip: true },
+        { item: 'Chaos rune', count: 8, carry: 8, minimum: 1 },
+        { item: 'Air rune', count: 24, carry: 24, minimum: 3 }
+    ]);
+    const plan = method(s, 'magic');
+    s.stock['air rune'] = 0;
+    const refreshed = refreshConsumables(s, plan);
+    expect(refreshed.needs.filter(need => need.item.startsWith('Staff of'))).toEqual([
+        { item: 'Staff of air', count: 1, carry: 1, equip: true }
+    ]);
+    expect(refreshed.settings.runesWithdraw).toBe(12);
+});
+
+test('buys a fire staff when affordable and falls back while its shelf is sold out', () => {
+    const s = snapshot({ coins: 500000, 'staff of air': 1, 'air rune': 90, 'fire rune': 120, 'chaos rune': 30 });
+    expect(magicEquipment(s).needs[0].item).toBe('Staff of fire');
+    s.unavailableItems = ['staff of fire'];
+    expect(magicEquipment(s).needs[0].item).toBe('Staff of air');
+});
+
+test.each([
+    { magic: 17, spell: 'Wind Bolt' }, { magic: 23, spell: 'Water Bolt' },
+    { magic: 29, spell: 'Earth Bolt' }, { magic: 35, spell: 'Fire Bolt' }
+])('$spell equips owned Chaos gauntlets after Family Crest and updates them on resupply', ({ magic, spell }) => {
+    const s = snapshot({ coins: 0, 'staff of air': 1, 'chaos rune': 40, 'mind rune': 40, 'chaos gauntlets': 1,
+        'water rune': 200, 'earth rune': 200, 'fire rune': 200 }, { magic });
+    const gloves = { item: 'Chaos gauntlets', count: 1, carry: 1, equip: true };
+    const initial = method(s, 'magic');
+    expect(initial.settings.spell).toBe(spell);
+    expect(initial.needs).not.toContainEqual(gloves);
+    s.quests['Family Crest'] = true;
+    expect(method(s, 'magic').needs).toContainEqual(gloves);
+    const upgraded = refreshConsumables(s, initial);
+    expect(refreshConsumables(s, upgraded).needs.filter(n => n.item === gloves.item)).toEqual([gloves]);
+    s.stock['chaos gauntlets'] = 0;
+    expect(refreshConsumables(s, upgraded).needs).not.toContainEqual(gloves);
+    s.stock['chaos gauntlets'] = 1;
+    s.stock['chaos rune'] = 0;
+    const strike = refreshConsumables(s, upgraded);
+    expect(strike.settings.spell).toBe('Fire Strike');
+    expect(strike.needs).toContainEqual(gloves);
+});
+
+test.each(['strength', 'ranged'])('%s equips a single pair of Chaos gauntlets on fresh and queued combat trips', skill => {
+    const s = snapshot({ coins: 0, '#1065': 1, 'bronze arrow': 100 });
+    s.allowQuests = false;
+    s.quests['Family Crest'] = true;
+    const hands = (plan: ReturnType<typeof method>) => plan.needs.filter(n => /vambraces|gauntlets/i.test(n.item));
+    const initial = method(s, skill);
+    if (skill === 'ranged') expect(hands(initial).map(n => n.item)).toEqual(['Dragon vambraces']);
+    else expect(hands(initial)).toEqual([]);
+    s.stock['chaos gauntlets'] = 1;
+    const expected = [{ item: 'Chaos gauntlets', count: 1, carry: 1, equip: true }];
+    expect(hands(method(s, skill))).toEqual(expected);
+    const refreshed = refreshConsumables(s, initial);
+    expect(hands(refreshed)).toEqual(expected);
+    expect(hands(refreshConsumables(s, refreshed))).toEqual(expected);
 });

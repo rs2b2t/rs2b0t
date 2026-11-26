@@ -1,3 +1,4 @@
+import { findSceneTarget } from '../../api/walking/Reach.js';
 import Tile from '../../geometry/Tile.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
@@ -74,15 +75,17 @@ export class Minigame {
             if (!(await this.safe()) || Inventory.isFull()) return false;
             if (await this.take(tier.remains)) { this.stats.kills++; continue; }
             let target = matches();
-            for (let wait = 0; !target && wait < 12; wait++) {
+            for (let wait = 0; !target && wait < 24; wait++) {
                 if (!(await this.safe())) return false;
-                if (wait === 6) {
+                if (wait === 12) {
                     const arrived = tierIndex === 0
                         ? await Traversal.walkResilient(CAMPS[0], { radius: 3, attempts: 1, timeoutMs: 30000, log: this.log })
                         : await this.route.local(CAMPS[tierIndex], 2);
                     if (!arrived) break;
+                    target = matches();
+                    if (target) break;
                 }
-                await Execution.delayTicks(2);
+                await Execution.delayTicks(1);
                 target = matches();
             }
             if (!target) return Inventory.countById(tier.remains) > before;
@@ -232,13 +235,12 @@ export class Minigame {
             const matching = chestForKey(key.id);
             const room = CHEST_ROOMS.get(key.id);
             if (!matching || !room || !(await this.route.area(room.area)) || !(await this.route.local(room.tile, 1))) return false;
-            const chest = locAt(matching.chestId, room.tile);
-            if (!chest) return false;
+            const chest = await findSceneTarget(() => locAt(matching.chestId, room.tile), 4);
+            if (!chest || EventSignal.pending()) return false;
             this.chest = { id: key.id, before: Inventory.countById(key.id), paste: Inventory.countById(ID.SWAMP_PASTE), started: Game.tick() };
             if (!(await chest.interact('Open'))) { this.chest = null; return false; }
             if (!(await this.finishChest())) return false;
             opened = true;
-            await Execution.delayTicks(4);
         }
         return opened;
     }

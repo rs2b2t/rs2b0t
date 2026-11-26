@@ -12,6 +12,15 @@ import { chebyshev } from '../../event/webwalk/geometry/followMath.js';
 import { CANT_REACH, GameMessages } from '../chatbox/gameMessages.js';
 import type { Interactable } from '../model/Interactable.js';
 
+export async function findSceneTarget<T>(read: () => T, maxTicks = 2): Promise<T> {
+    let target = read();
+    for (let tick = 0; target == null && tick < maxTicks; tick++) {
+        await Execution.delayTicks(1);
+        target = read();
+    }
+    return target;
+}
+
 type ReachStatus = 'done' | 'retry' | 'unreachable';
 
 interface ReachLocOpts {

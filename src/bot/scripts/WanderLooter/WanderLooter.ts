@@ -1,3 +1,4 @@
+import { configuredLootNames } from '../../api/bank/bankRules.js';
 import { TaskBot } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { Game } from '../../api/game/Game.js';
@@ -85,7 +86,7 @@ export default class WanderLooter extends TaskBot {
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
-        this.lootNamesValue = this.settings.list('loot', DEFAULT_LOOT).map(name => name.trim()).filter(Boolean);
+        this.lootNamesValue = configuredLootNames(this.settings.list('loot', DEFAULT_LOOT));
         if (this.lootNamesValue.length === 0) {
             throw new Error('WanderLooter: loot list is empty');
         }

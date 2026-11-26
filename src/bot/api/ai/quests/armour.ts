@@ -1,3 +1,4 @@
+import { selectRuneLegs } from '../../../data/runeLegs.js';
 import { ITEM_DB } from '../../../data/itemdb.js';
 import { Skills } from '../../skills/Skills.js';
 import type { QuestSnapshot } from './engine/types.js';
@@ -39,6 +40,15 @@ export function armourWorn(snap: QuestSnapshot, item: { readonly id: number; rea
 
 export function armourHeld(snap: QuestSnapshot, item: { readonly id: number; readonly name: string }): boolean {
     return (snap.invIds?.get(item.id) ?? snap.inv.get(item.name.toLowerCase()) ?? 0) > 0;
+}
+
+export function questRuneLegs(snap: QuestSnapshot, preferred: string) {
+    return selectRuneLegs(preferred, item => {
+        if (armourWorn(snap, item)) return 3;
+        if (armourHeld(snap, item)) return 2;
+        const banked = snap.bankIds?.get(item.id) ?? snap.bank?.get(item.name.toLowerCase()) ?? 0;
+        return snap.bankKnown && banked > 0 ? 1 : 0;
+    });
 }
 
 export function armourChoice(snap: QuestSnapshot, slot: ArmourSlot | 'front') {

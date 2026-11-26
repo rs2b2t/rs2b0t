@@ -272,7 +272,6 @@ class BankRun implements Task {
         // The pack goes in: cakes are the haul and everything else is random
         // event loot (death runes, arrows, coins) that would ride along forever.
         await Bank.depositInventory();
-        await Execution.delayTicks(1);
         const shed = before - carriedCakes();
         this.bot.countBanked(Math.max(0, shed));
         this.bot.log(`banked ${shed} cakes + ${Math.max(0, heldBefore - Inventory.used() - shed)} other item stack(s)${Inventory.used() > 0 ? ` (${Inventory.used()} slot(s) would not deposit)` : ''}`);

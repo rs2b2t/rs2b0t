@@ -119,6 +119,24 @@ describe('ProfileChooser', () => {
         expect(chooser.el.querySelector('#mbx-load-all')).toBeNull();
     });
 
+    test('loading a saved group passes only its members and their worlds as one batch', async () => {
+        await vault.upsert({ username: 'alice', password: 'a', world: 2 });
+        await vault.upsert({ username: 'bob', password: 'b' });
+        await vault.upsert({ username: 'carol', password: 'c' });
+        await vault.assignGroup(['alice', 'carol'], 'Mining');
+        const batches: unknown[] = [];
+        const { chooser, loaded } = make({ defaultWorld: 3, onLoadGroup: (members, tab) => {
+            batches.push([tab, members.map(p => [p.username, p.world])]);
+        } });
+        chooser.open();
+        const groups = Array.from(chooser.el.querySelectorAll<HTMLButtonElement>('.mbx-load-group'));
+        expect(groups.map(group => group.textContent)).toEqual(['Load group: Main (1)', 'Load group: Mining (2)']);
+        groups[1].click();
+        expect(batches).toEqual([['Mining', [['alice', 2], ['carol', 3]]]]);
+        expect(loaded).toEqual([]);
+        expect(chooser.el.hidden).toBe(true);
+    });
+
     test('create-new with an empty username does nothing', async () => {
         const { chooser, loaded } = make();
         chooser.open();

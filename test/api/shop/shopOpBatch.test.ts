@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import { SELL_STACK_STEP, shopOpBatch } from '#/bot/api/shop/Shop.js';
+import { Shop, SELL_STACK_STEP, shopOpBatch } from '#/bot/api/shop/Shop.js';
+
+import { Execution } from '#/bot/api/execution/Execution.js';
+import { Input } from '#/bot/input/Input.js';
+import { reader } from '#/bot/adapter/ClientAdapter.js';
+import { stubProps } from '../../lib/stubSingletons.js';
 
 const SELL_OPS = [null, 'Value', 'Sell 1', 'Sell 5', 'Sell 10'];
 const BUY_OPS = [null, 'Value', 'Buy 1', 'Buy 5', 'Buy 10'];
@@ -35,3 +40,44 @@ describe('selling a stack in tens', () => {
         expect(shopOpBatch(['Value', 'Sell 1'], 'sell', SELL_STACK_STEP).length).toBeGreaterThan(0);
     });
 });
+
+for (const kind of ['buy', 'buyById', 'sell', 'sellAll'] as const) {
+    for (const partial of [false, true]) {
+        test(`${kind} settles a ${partial ? 'split' : 'complete'} inventory update`, async () => {
+            const buying = kind.startsWith('buy');
+            const quantity = kind === 'sellAll' ? 10 : 25;
+            const direction = buying ? 1 : -1;
+            let held = buying ? 0 : quantity;
+            let clicks = 0;
+            let settleTicks = 0;
+            let pending = 0;
+            const restores = [
+                stubProps(Shop, { isOpen: () => true }),
+                stubProps(reader, {
+                    shopInv: comId => (!buying && held === 0) ? [] : [{ id: 333, slot: 0, comId, name: 'Trout',
+                        count: buying ? 50 : held, ops: buying ? BUY_OPS : SELL_OPS }],
+                    inventory: () => [{ id: 333, slot: 0, comId: 3214, name: 'Trout', count: held, ops: [] }]
+                }),
+                stubProps(Input, { invButton: () => { clicks++; return true; } }),
+                stubProps(Execution, {
+                    delayUntil: async cond => {
+                        pending = partial ? 1 : 0;
+                        held += direction * (quantity - pending);
+                        return cond();
+                    },
+                    delayTicks: async ticks => { settleTicks += ticks; held += direction * pending; pending = 0; }
+                })
+            ];
+            try {
+                const changed = kind === 'buyById' ? await Shop.buyById(333, quantity)
+                    : kind === 'sellAll' ? await Shop.sellAll('Trout')
+                        : await Shop[kind]('Trout', quantity);
+                expect(changed).toBe(quantity);
+                expect(clicks).toBe(kind === 'sellAll' ? 1 : 3);
+                expect(settleTicks).toBe(partial ? 1 : 0);
+            } finally {
+                for (const restore of restores.reverse()) restore();
+            }
+        });
+    }
+}

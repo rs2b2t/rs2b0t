@@ -8,7 +8,7 @@ import { Traversal } from '../../../../walking/Traversal.js';
 import Tile from '../../../../../geometry/Tile.js';
 import { formatTile } from '../../engine/trace.js';
 import { talkStrict } from '../../exec/primitives.js';
-import { driveUntil, heldId, settleScene } from '../../exec/prompts.js';
+import { findSceneTarget, driveUntil, heldId } from '../../exec/prompts.js';
 import { RG_ITEM, RG_LOC, RG_NPC, RG_TILE } from './areas.js';
 import { RG_STAGE } from './journal.js';
 import { walkTo } from './isafdar.js';
@@ -28,9 +28,8 @@ export async function feedLazyGuard(log: (m: string) => void): Promise<boolean> 
     if (!(await walkTo(RG_TILE.LAZY_GUARD, 3, RG_STAGE.SPOKEN_IORWERTH2, log))) {
         return false;
     }
-    await settleScene();
     // Why: 5 NPCs render as "Tyras guard", and only this one takes the rabbit.
-    const guard = Npcs.query().where(npc => npc.id === RG_NPC.LAZY_GUARD).within(10).nearest();
+    const guard = await findSceneTarget(() => Npcs.query().where(npc => npc.id === RG_NPC.LAZY_GUARD).within(10).nearest());
     const rabbit = Inventory.items().find(item => item.id === RG_ITEM.COOKED_RABBIT.id);
     if (!guard || !rabbit) {
         log(`missing ${guard ? 'the cooked rabbit' : 'the lazy guard'} at the catapult`);
@@ -49,8 +48,7 @@ export async function fireCatapult(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(RG_TILE.CATAPULT, 3, RG_STAGE.SPOKEN_IORWERTH2, log))) {
         return false;
     }
-    await settleScene();
-    const catapult = Locs.query().where(loc => loc.id === RG_LOC.CATAPULT).within(10).nearest();
+    const catapult = await findSceneTarget(() => Locs.query().where(loc => loc.id === RG_LOC.CATAPULT).within(10).nearest());
     const bomb = Inventory.items().find(item => item.id === RG_ITEM.BARREL_FUSED.id);
     if (!catapult || !bomb) {
         log(`missing ${catapult ? 'the fused barrel bomb' : 'the catapult'}`);
@@ -72,7 +70,6 @@ export async function reportToIorwerth(log: (m: string) => void): Promise<boolea
     if (!(await walkTo(RG_TILE.IORWERTH, 3, RG_STAGE.KILLED_TYRAS, log))) {
         return false;
     }
-    await settleScene();
     if (!(await talkStrict('Lord Iorwerth', [], log))) {
         return false;
     }
@@ -119,6 +116,5 @@ export async function reportToLathas(log: (m: string) => void): Promise<boolean>
     if (!(await Traversal.walkResilient(RG_TILE.LATHAS, { radius: 2, attempts: 3, timeoutMs: 300_000, log }))) {
         return false;
     }
-    await settleScene();
     return talkStrict('King Lathas', [], log);
 }

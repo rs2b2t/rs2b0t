@@ -1,6 +1,5 @@
 import type { WorldTile } from '../../adapter/ClientAdapter.js';
 import type { Task } from '../bot/Bot.js';
-import { Execution } from '../execution/Execution.js';
 import { Game } from '../game/Game.js';
 import { Banking, shouldBankNow, type BankDestination, type BankStrategy } from '../bank/Banking.js';
 
@@ -55,7 +54,6 @@ export class PeriodicBank implements Task {
         if (!ok) {
             this.suppressUntil = performance.now() + FAILURE_BACKOFF_MS;
             this.opts.log?.('periodic bank: no bank reachable — will retry later');
-            await Execution.delayTicks(3);
         } else {
             this.opts.log?.('periodic bank: completed');
         }

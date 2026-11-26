@@ -1,3 +1,4 @@
+import { findSceneTarget } from '../../exec/prompts.js';
 import { EventSignal } from '../../../../execution/EventSignal.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
@@ -13,14 +14,14 @@ import { bankedId, hasFlag, heldId } from '../../engine/types.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { QUESTS } from '../../data/quests.js';
 import { QuestFood } from '../../food.js';
-import { gotoNpc, openDialogue, talkThrough, type NpcStop } from '../../exec/primitives.js';
+import { afterDialogueAction, gotoNpc, openDialogue, talkThrough, type NpcStop } from '../../exec/primitives.js';
 import { DS_ID, DS_ITEM, DS_LOC, DS_NPC, SHIP_PRICE, SHIP_REPAIR, WORMBRAIN_PRICE } from './areas.js';
 import { DRAGON_STAGE, describeJournal, readDragonProgress } from './journal.js';
 import { MazeRun, heldById, inMaze, leaveMaze, lootChest, mazeSceneLoaded } from './maze.js';
 import { SUPPLY_GATHERS, SUPPLY_TOOLS, inPlankGraveyard, smithNails } from './supplies.js';
 
 const GUILDMASTER: NpcStop = {
-    npc: 'Guild master', anchor: DS_NPC.GUILDMASTER, leash: 8,
+    npc: 'Guild master', anchor: DS_NPC.GUILDMASTER.translate(0, -1), leash: 8,
     prefer: ['Do you know where I could get a Rune Plate mail body?']
 };
 /** Only the walk; talkOziach picks the questions. */
@@ -87,7 +88,7 @@ const optionFor = (options: string[], want: string): string | undefined =>
     options.find(o => o.toLowerCase().includes(want.toLowerCase()));
 
 /** Drives Oziach until every goal has been answered, then leaves. */
-async function talkOziach(log: (m: string) => void): Promise<boolean> {
+export async function talkOziach(log: (m: string) => void): Promise<boolean> {
     if (!(await gotoNpc(OZIACH, [], log))) {
         return false;
     }
@@ -110,8 +111,7 @@ async function talkOziach(log: (m: string) => void): Promise<boolean> {
             }
         }
         if (ChatDialog.canContinue()) {
-            await ChatDialog.continue();
-            await Execution.delayTicks(1);
+            await afterDialogueAction(await ChatDialog.continue(), 1);
             continue;
         }
         if (options.length > 0) {
@@ -125,8 +125,7 @@ async function talkOziach(log: (m: string) => void): Promise<boolean> {
                 log(`nothing useful in [${options.join(' | ')}]`);
                 return false;
             }
-            await ChatDialog.chooseOption(pick);
-            await Execution.delayTicks(2);
+            await afterDialogueAction(await ChatDialog.chooseOption(pick), 2);
             continue;
         }
         if (!ChatDialog.isOpen()) {
@@ -304,11 +303,7 @@ async function repairShip(log: (m: string) => void): Promise<boolean> {
     await mazeSceneLoaded();
     const findHole = () => Locs.query().name('Hole').within(8).nearest();
     // Why: locs read blank for about a tick after the teleport into the hold, and nothing on the ship is walkable, so wait the snapshot out.
-    let hole = findHole();
-    if (!hole) {
-        await Execution.delayTicks(2);
-        hole = findHole();
-    }
+    const hole = await findSceneTarget(findHole);
     const plank = Inventory.items().find(i => i.id === DS_ID.PLANK);
     if (!hole) {
         log('no hole in the hold yet');
@@ -526,10 +521,9 @@ async function killElvarg(log: (m: string) => void): Promise<boolean> {
         await Execution.delayTicks(2);
         return false;
     }
-    const elvarg = Npcs.query().name('Elvarg').action('Attack').within(16).nearest();
+    const elvarg = await findSceneTarget(() => Npcs.query().name('Elvarg').action('Attack').within(16).nearest(), 3);
     if (!elvarg) {
         log('no Elvarg in the lair yet');
-        await Execution.delayTicks(3);
         return false;
     }
     log('attacking Elvarg');

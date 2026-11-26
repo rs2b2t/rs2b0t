@@ -313,3 +313,23 @@ test.each([false, true])('AutoFighter retries and discards clues only when deleg
         fighter.disposeSubscriptions();
     }
 });
+
+test('retains prerequisite-blocked clues through gear restoration without spending an abandonment attempt', async () => {
+    pack = [{ ...clue, ops: ['Read', 'Drop'] }];
+    const statuses: string[] = [];
+    const policy = () => 'prepare' as const;
+    const solve = spyOn(ClueExecutor, 'solveHeldClue').mockResolvedValue('requirements-needed');
+    const drop = spyOn(Input, 'heldOp').mockReturnValue(false);
+    const task = new SolveClue({ ...host, retryAbandoned: true, discardAbandoned: true, beforeStep: policy, setStatus: status => statuses.push(status) });
+    await task.execute();
+    expect(solve.mock.calls[0][3]).toBe(policy);
+    expect(task.validate()).toBe(true);
+    expect(statuses).not.toContain('clue requirements needed');
+    await task.execute();
+    expect(statuses).toContain('clue requirements needed');
+    expect(pack.map(item => item.id)).toEqual([3490]);
+    expect(drop).not.toHaveBeenCalled();
+    expect(task['retriedAbandonment']).toBe(false);
+    expect(task.validate()).toBe(false);
+    expect(Sustain.hook).toBe(upkeep);
+});

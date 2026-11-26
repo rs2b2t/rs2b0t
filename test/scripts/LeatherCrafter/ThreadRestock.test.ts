@@ -35,6 +35,7 @@ function fixture(start: WorldTile) {
     spyOn(reader, 'countDialogOpen').mockImplementation(() => pending !== null);
     spyOn(Bank, 'items').mockImplementation(() => snaps(bank, 5382, ['Withdraw-X']));
     spyOn(Bank, 'loaded').mockReturnValue(true);
+    spyOn(Bank, 'backpackReady').mockImplementation(async () => bankOpen);
     spyOn(Bank, 'isOpen').mockImplementation(() => bankOpen);
     spyOn(Bank, 'openNearestAccess').mockImplementation(async () => { bankOpen = true; state.bankVisits.push(here); return true; });
     spyOn(Input, 'invButton').mockImplementation((id, _slot, comId) => {

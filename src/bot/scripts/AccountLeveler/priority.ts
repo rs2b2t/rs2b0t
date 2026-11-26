@@ -1,15 +1,24 @@
-const MELEE = ['attack', 'strength', 'defence'];
-const COMBAT = [...MELEE, 'hitpoints', 'ranged', 'magic', 'prayer'];
+import type { ActivityPlan } from './types.js';
 
-export function trainingPriority(levels: Record<string, number>, target: number): { label: string; skills: string[]; balance: boolean } {
-    const melee = MELEE.filter(skill => levels[skill] < target);
-    if (melee.length) return { label: `Build melee stats to ${target}`, skills: melee, balance: true };
-    const combat = COMBAT.filter(skill => levels[skill] < target);
-    if (combat.length) return { label: `Finish combat stats to ${target}`, skills: combat, balance: false };
-    return { label: `Train remaining skills to ${target}`, skills: Object.keys(levels).filter(skill => levels[skill] < target), balance: false };
+export function isMeleeSkill(skill: string): boolean {
+    return skill === 'strength' || skill === 'attack' || skill === 'defence';
+}
+
+export function earlyMeleeStep(levels: Record<string, number>, target: number) {
+    const cap = Math.min(40, target);
+    const lower = Math.min(levels.attack, levels.strength);
+    if (lower < cap) {
+        const level = Math.min(cap, (Math.floor(lower / 5) + 1) * 5);
+        const skill = levels.strength < level ? 'strength' : 'attack';
+        return { skill, level };
+    }
+    if (levels.defence < cap) return { skill: 'defence', level: cap };
+}
+
+export function meleeStepMet(plan: ActivityPlan, levels: Record<string, number>): boolean {
+    return plan.meleeMilestone !== undefined && levels[String(plan.settings.meleeStyle)] >= plan.meleeMilestone;
 }
 
 export function canResumeObjective(levels: Record<string, number>, target: number, objective: string): boolean {
-    const priority = trainingPriority(levels, target);
-    return priority.skills.includes(objective) && (!priority.balance || levels[objective] === Math.min(...priority.skills.map(skill => levels[skill])));
+    return levels[objective] > 0 && levels[objective] < target;
 }

@@ -13,7 +13,7 @@ import {
     tileKey,
     type FirePlot
 } from '../../api/firemaking/Firemaking.js';
-import { lightFire } from '../../api/firemaking/LightFire.js';
+import { lightFire, waitForFireSpace } from '../../api/firemaking/LightFire.js';
 import { Game } from '../../api/game/Game.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Locs } from '../../api/locs/Locs.js';
@@ -266,7 +266,6 @@ class BankTrip implements Task {
         await Bank.depositAllMatching(
             depositAllExcept(cookKeepNames(this.bot.surfaceMode(), TINDERBOX, this.bot.logLocName()))
         );
-        await Execution.delayTicks(1);
         this.bot.countTrip();
         if (fire && !(await this.stockFire())) {
             return;
@@ -342,7 +341,7 @@ class LightTrip implements Task {
             const ruled = refused.size > 0 ? ` (${refused.size} tiles refused a light)` : '';
             this.bot.log(`no free ground left in the ${this.bot.whereLabel()} burn plot${ruled} — waiting for fires to burn out`);
             this.bot.setStatus('waiting for clear ground');
-            await Execution.delayTicks(25);
+            await waitForFireSpace(plot, 25);
             return;
         }
 

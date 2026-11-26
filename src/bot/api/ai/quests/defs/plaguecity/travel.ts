@@ -5,7 +5,7 @@ import { Inventory } from '../../../../inventory/Inventory.js';
 import { Locs, type Loc } from '../../../../locs/Locs.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import type Tile from '../../../../../geometry/Tile.js';
-import { driveUntil, settleScene } from '../../exec/prompts.js';
+import { findSceneTarget, driveUntil, settleScene } from '../../exec/prompts.js';
 import { PC_ITEM, PC_LOC, PC_TILE, plagueArea, type PlagueArea } from './areas.js';
 
 export function area(): PlagueArea {
@@ -62,8 +62,7 @@ async function climbMudPile(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(PC_TILE.MUD_PILE, 1, log))) {
         return false;
     }
-    await settleScene();
-    const pile = locById(PC_LOC.MUD_PILE, 'Climb', 8);
+    const pile = await findSceneTarget(() => locById(PC_LOC.MUD_PILE, 'Climb', 8));
     if (!pile || !(await pile.interact('Climb'))) {
         log('no Mud pile offering Climb in the sewer');
         return false;
@@ -82,8 +81,7 @@ async function squeezePipe(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(PC_TILE.SEWER_PIPE, 1, log))) {
         return false;
     }
-    await settleScene();
-    const pipe = locById(PC_LOC.SEWER_PIPE, 'Search', 8);
+    const pipe = await findSceneTarget(() => locById(PC_LOC.SEWER_PIPE, 'Search', 8));
     if (!pipe || !(await pipe.interact('Search'))) {
         log('no Sewer pipe offering Search at the west end of the sewer');
         return false;
@@ -99,8 +97,7 @@ async function dropManhole(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(PC_TILE.MANHOLE, 1, log))) {
         return false;
     }
-    await settleScene();
-    const shut = locById(PC_LOC.MANHOLE_SHUT, 'Open', 8);
+    const shut = await findSceneTarget(() => locById(PC_LOC.MANHOLE_SHUT, 'Open', 8));
     if (shut) {
         if (!(await shut.interact('Open'))) {
             return false;
@@ -146,8 +143,7 @@ export async function goUpstairs(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(PC_TILE.REHNISON_STAIRS, 1, log))) {
         return false;
     }
-    await settleScene();
-    const stairs = locById(PC_LOC.REHNISON_STAIRS_UP, 'Walk-up', 8);
+    const stairs = await findSceneTarget(() => locById(PC_LOC.REHNISON_STAIRS_UP, 'Walk-up', 8));
     if (!stairs || !(await stairs.interact('Walk-up'))) {
         log('no Rehnison stairs up in range');
         return false;
@@ -162,8 +158,7 @@ export async function goCellar(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(PC_TILE.HOUSE_STAIRS_DOWN, 2, log))) {
         return false;
     }
-    await settleScene();
-    const stairs = locById(PC_LOC.HOUSE_STAIRS_DOWN, 'Walk-Down', 8);
+    const stairs = await findSceneTarget(() => locById(PC_LOC.HOUSE_STAIRS_DOWN, 'Walk-Down', 8));
     if (!stairs || !(await stairs.interact('Walk-Down'))) {
         log('no plague house stairs down in range');
         return false;

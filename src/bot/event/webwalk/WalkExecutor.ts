@@ -584,7 +584,6 @@ class WalkExecutorImpl {
         if (Bank.isOpen()) {
             await Bank.close().catch(() => undefined);
         }
-        await Execution.delayTicks(1);
         // Why: the avoid list was built pre-bank, so recompute the item/skill gates before the repath can use the new tolls (#338).
         this.refreshSpecialCrossingAvoids();
         return true;
@@ -1217,7 +1216,18 @@ class WalkExecutorImpl {
                 }
             }
 
-            await Execution.delayTicks(2);
+            const boundary = nextCrossingIdx > 0 ? tiles[nextCrossingIdx - 1] : terminal;
+            if ((me.level === dest.level && chebyshev(me, dest) <= radius + 2)
+                || (boundary && me.level === boundary.level && chebyshev(me, boundary) <= 2)) {
+                await Execution.delayTicks(1);
+                const now = reader.worldTile();
+                if (now && (now.x !== me.x || now.z !== me.z || now.level !== me.level)
+                    && (isArrived(now, dest, radius, Reachability.arrivalProbe())
+                        || (boundary && now.level === boundary.level && chebyshev(now, boundary) === 0))) continue;
+                await Execution.delayTicks(1);
+            } else {
+                await Execution.delayTicks(2);
+            }
         }
 
         log(

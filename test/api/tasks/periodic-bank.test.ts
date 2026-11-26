@@ -78,12 +78,14 @@ test('execute logs a durable completion marker after successful banking', async 
 test('backs off ALL strategies after a failed (unreachable-bank) attempt', async () => {
     const bspy = Banking.bankNearest; (Banking as any).bankNearest = async () => false;
     const gspy = (Game as any).inCombat; (Game as any).inCombat = () => false;
-    const dspy = Execution.delayTicks; (Execution as any).delayTicks = async () => {};
+    let ticks = 0;
+    const dspy = Execution.delayTicks; Execution.delayTicks = async n => { ticks += n; };
     const task = make();
     expect(task.validate()).toBe(true);
     await task.execute();
     expect(task.validate()).toBe(false);
     (Banking as any).bankNearest = bspy; (Game as any).inCombat = gspy; (Execution as any).delayTicks = dspy;
+    expect(ticks).toBe(0);
 });
 
 test('PeriodicBankOptions accepts a commonJunk getter (type-level + default include)', () => {

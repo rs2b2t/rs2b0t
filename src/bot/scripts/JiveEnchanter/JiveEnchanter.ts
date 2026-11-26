@@ -225,7 +225,7 @@ class WieldStaff implements Task {
         if (!(await bot.openBank())) {
             return;
         }
-        if (!(await Execution.delayUntil(() => Bank.isOpen() && Bank.loaded(), 5000))) {
+        if (!(await Bank.waitReady(5000))) {
             bot.log('[enchanter] the bank list has not filled in, retrying');
             return;
         }
@@ -237,7 +237,6 @@ class WieldStaff implements Task {
         }
         if (Inventory.used() > 0) {
             await Bank.depositAllMatching(() => true);
-            await Execution.delayTicks(1);
         }
         if (!(await Bank.withdrawX(staff, 1))) {
             bot.log(`[enchanter] could not withdraw the ${staff}, retrying`);
@@ -276,7 +275,7 @@ class Restock implements Task {
         const keep = new Set(runesPerCast(jewel, wielded).map(r => r.rune.toLowerCase()));
         const keepJewels = bot.jewelsHeld() <= jewelSlots(jewel, wielded);
         await Bank.depositAllMatching((name, id) => (!keepJewels || id !== jewel.id) && !keep.has(name.toLowerCase()));
-        if (!(await Execution.delayUntil(() => Bank.isOpen() && Bank.loaded(), 5000))) {
+        if (!(await Bank.waitReady(5000))) {
             bot.log(Bank.isOpen() ? '[enchanter] the bank list has not filled in, retrying this trip' : '[enchanter] the bank window closed, retrying this trip');
             return;
         }
@@ -301,7 +300,7 @@ class Restock implements Task {
             }
         }
         for (const r of plan.runes) {
-            if (!Bank.isOpen() || !Bank.loaded()) {
+            if (!Bank.ready()) {
                 bot.log('[enchanter] the bank window closed mid-withdrawal, retrying this trip');
                 return;
             }

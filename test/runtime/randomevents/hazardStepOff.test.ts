@@ -44,7 +44,7 @@ beforeEach(() => {
         selfFaceEntity: () => -1,
         takingDamage: () => false
     }));
-    restores.push(stubProps(Game, { tile: () => ME, animating: () => false }));
+    restores.push(stubProps(Game, { tile: () => ME, sceneReady: () => true, animating: () => false }));
     restores.push(stubProps(Inventory, { items: () => [], contains: () => false }));
     restores.push(stubProps(Execution, {
         delayUntil: async condition => condition(),
@@ -92,4 +92,24 @@ describe('stepping off a hazard', () => {
         npcs = [whirlpool()];
         expect(RandomEvents.detect()?.tile).toEqual({ x: 3203, z: 3200, level: 0 });
     });
+});
+
+test('the handler resumes when the original gas clears, even outside detection range', async () => {
+    let waited = 0;
+    locs = [gasChest()];
+    restores.push(stubProps(Traversal, { walkTo: async () => {
+        locs[0].distance = 5;
+        return true;
+    } }));
+    restores.push(stubProps(Execution, {
+        delayTicks: async ticks => { waited += ticks; },
+        delayUntilTicks: async (ready, limit) => {
+            while (!ready() && waited < limit) {
+                if (++waited === 3) locs = [];
+            }
+            return ready();
+        }
+    }));
+    expect(await RandomEvents.handle(() => {})).toBe(true);
+    expect(waited).toBe(3);
 });

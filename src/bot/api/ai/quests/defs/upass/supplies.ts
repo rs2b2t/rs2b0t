@@ -1,6 +1,5 @@
 import { Equipment } from '../../../../equipment/Equipment.js';
-import { gearOf } from '../../../../loadout/loadoutPlan.js';
-import { QuestLoadout } from '../../gear.js';
+import { QuestLoadout, questWornGear } from '../../gear.js';
 import Tile from '../../../../../geometry/Tile.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { ITEM_DB } from '../../../../../data/itemdb.js';
@@ -230,7 +229,7 @@ function bestInBank(snap: QuestSnapshot, kinds: readonly string[]): string | nul
 export function plannedGear(snap: QuestSnapshot, slots: 'all' | 'weapon' = 'all'): string[] {
     if (slots === 'weapon' && meleeArmed(snap)) return [];
     const weapon = QuestLoadout.current?.worn.righthand;
-    const declared = slots === 'weapon' ? (weapon ? [weapon] : []) : gearOf(QuestLoadout.current);
+    const declared = slots === 'weapon' ? (weapon ? [weapon] : []) : Object.values(questWornGear(snap));
     if (declared.length > 0) {
         return declared.filter(name => !unwearable.has(name.toLowerCase()) && !snap.worn.has(name.toLowerCase()));
     }

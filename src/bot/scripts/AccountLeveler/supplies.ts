@@ -1,4 +1,6 @@
+import { selectRuneLegs } from '../../data/runeLegs.js';
 import { reader, type WorldTile } from '../../adapter/ClientAdapter.js';
+import { BankTeleport } from '../../api/bank/BankTeleport.js';
 import { Bank } from '../../api/bank/Bank.js';
 import { Banking } from '../../api/bank/Banking.js';
 import { Equipment } from '../../api/equipment/Equipment.js';
@@ -8,10 +10,14 @@ import { Shop } from '../../api/shop/Shop.js';
 import { unitPrice } from '../../api/shop/StockModel.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { Quests } from '../../api/ui/questlog/Quests.js';
+import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
+import { Npcs } from '../../api/npcs/Npcs.js';
+import { Reach } from '../../api/walking/Reach.js';
+import { driveUntil } from '../../api/ai/quests/exec/prompts.js';
 import { Skills } from '../../api/skills/Skills.js';
 import Tile from '../../geometry/Tile.js';
 import { levelerTravelZones } from './travel.js';
-import { purchaseBudget, supplyOffer, supplyOffers } from './offers.js';
+import { isRuneGearShop, purchaseBudget, shopStockKey, supplyOffer, supplyOffers, type SupplyOffer } from './offers.js';
 import { SHOPPING_RESERVE, shoppingStops } from './shopping.js';
 import { requirementKey, type ActivityPlan, type Requirement } from './types.js';
 import { fillSupplyVials, VIAL_FOUNTAIN } from './vials.js';
@@ -54,10 +60,10 @@ export interface SupplyPort {
     equipment(): string[];
     unequip(name: string): Promise<boolean>;
     withdraw(name: string, count: number): Promise<boolean>;
-    closeBank(): Promise<boolean>;
+    closeBank(destination?: WorldTile, keep?: readonly Requirement[], wilderness?: boolean): Promise<boolean>;
     walk(tile: WorldTile): Promise<boolean>;
     shop(keeper: string): Promise<boolean>;
-    shopStock(name: string): number;
+    shopStock(name: string): number | Promise<number>;
     buy(name: string, count: number): Promise<number>;
     closeShop(): Promise<void>;
     fillVials?(count: number): Promise<boolean>;
@@ -94,13 +100,28 @@ export function gameSupplyPort(log: (message: string) => void): SupplyPort {
         equipment: () => Equipment.items().flatMap(i => i.name ? [i.name] : []),
         unequip: name => Equipment.unequip(name),
         withdraw: (name, count) => name.startsWith('#') ? Bank.withdrawXById(Number(name.slice(1)), count) : Bank.withdrawX(name, count),
-        closeBank: () => Bank.close(),
+        closeBank: (to, keep = [], wilderness = false) => to ? BankTeleport.depart(to, keep, levelerTravelZones(to, wilderness), log) : Bank.close(),
         walk: async tile => (inZanaris(tile) || await leaveZanaris(gameZanarisPort(log)))
             && await Traversal.walkResilient(new Tile(tile.x, tile.z, tile.level), { radius: 3, timeoutMs: 120000, avoidZones: levelerTravelZones(), log }),
-        shop: keeper => Shop.open(keeper),
-        shopStock: name => name.startsWith('#')
-            ? reader.shopInv(3900).find(i => i.id === Number(name.slice(1)))?.count ?? 0
-            : Shop.stock().find(i => i.name.toLowerCase() === name.toLowerCase())?.count ?? 0,
+        shop: async keeper => {
+            if (isRuneGearShop(keeper) && Quests.status('Dragon Slayer') !== 'complete') return false;
+            if (keeper !== 'Oziach') return Shop.open(keeper);
+            const opened = await Reach.entityOp({
+                find: () => Npcs.query().name(keeper).action('Trade').nearest(),
+                op: 'Trade', what: keeper, openWhenUnreachable: true, log,
+                expect: () => Shop.isOpen() || ChatDialog.isOpen()
+            });
+            return opened === 'done' && driveUntil(Shop.isOpen, ['Can I buy a rune plate mail body now please?'], log, 15_000);
+        },
+        shopStock: async name => {
+            if (Shop.isOpen() && !reader.shopStockReady()) {
+                await Execution.delayUntil(() => reader.shopStockReady() || !Shop.isOpen(), 3000);
+            }
+            if (!reader.shopStockReady()) throw new SupplyStockError('Shop stock did not load', [name]);
+            return name.startsWith('#')
+                ? reader.shopInv(3900).find(i => i.id === Number(name.slice(1)))?.count ?? 0
+                : Shop.stock().find(i => i.name.toLowerCase() === name.toLowerCase())?.count ?? 0;
+        },
         buy: (name, count) => name.startsWith('#') ? Shop.buyById(Number(name.slice(1)), count) : Shop.buy(name, count),
         closeShop: () => Shop.close(),
         fillVials: count => fillSupplyVials(count, log),
@@ -154,6 +175,7 @@ function rebaseConsumables(plan: ActivityPlan, stock: Record<string, number>): v
 
 export interface ProvisionOptions {
     bestEffort?: boolean;
+    shopCooldowns?: Record<string, number>;
 }
 
 export async function provision(plan: ActivityPlan, port: SupplyPort, onProgress?: (progress: ProvisionProgress) => void, options: ProvisionOptions = {}): Promise<void> {
@@ -161,8 +183,29 @@ export async function provision(plan: ActivityPlan, port: SupplyPort, onProgress
         if (onProgress) onProgress({ id, message, destination, state });
         else port.log(message);
     };
+    const cooldowns = options.shopCooldowns ?? {};
+    const markSoldOut = (offer: SupplyOffer) => {
+        const key = shopStockKey(offer);
+        const now = Date.now();
+        if (cooldowns[key] > now) return;
+        const delay = Math.round((20 + 10 * Math.random()) * 60_000);
+        cooldowns[key] = now + delay;
+        report(`shop:${offer.keeper}`, `${offer.keeper} is out of ${offer.item.name}; retry in ${Math.ceil(delay / 60_000)} minutes`, offer.tile);
+    };
     report('bank:start', 'Opening bank to prepare supplies');
     await bank(port);
+    for (const need of plan.needs) {
+        if (!need.equip || need.count !== 1) continue;
+        const piece = selectRuneLegs(need.item, ({ name }) => {
+            if (port.worn(name)) return 3;
+            if (port.held(name)) return 2;
+            return port.stock()[name.toLowerCase()] > 0 ? 1 : 0;
+        });
+        if (piece) {
+            need.item = piece.name;
+            if (need.id !== undefined) need.id = piece.id;
+        }
+    }
     report('bank:start', 'Depositing inventory before checking supplies');
     await port.deposit();
     if (!(await port.closeBank())) throw new Error('Could not close bank to remove equipment');
@@ -209,7 +252,6 @@ export async function provision(plan: ActivityPlan, port: SupplyPort, onProgress
     for (const stop of shoppingStops(plan.needs, port.stock())) {
         const id = `shop:${stop.keeper}`;
         const dragonShop = stop.keeper === 'Jakut' ? port.dragonShop : undefined;
-        if (stop.keeper === 'Jakut' && !dragonShop?.ready()) throw new SupplyUnavailableError('Dragon weapons require Attack 60 and completed Lost City', stop.needs.map(need => need.item));
         const missing = (need: Requirement) => Math.max(0, need.count - (port.stock()[requirementKey(need).toLowerCase()] ?? 0));
         const allowance = new Map<string, number>();
         const remaining = (need: Requirement) => Math.min(missing(need), allowance.get(requirementKey(need)) ?? Infinity);
@@ -223,6 +265,7 @@ export async function provision(plan: ActivityPlan, port: SupplyPort, onProgress
             let slots = travelFood ? 24 : 27;
             const batch = stop.needs.flatMap(need => {
                 const offer = supplyOffers(need.item).find(offer => offer.keeper === stop.keeper)!;
+                if (cooldowns[shopStockKey(offer)] > Date.now()) return [];
                 if (offer.fillVials && !port.fillVials) { allowance.set(requirementKey(need), 0); return []; }
                 const count = Math.min(remaining(need), slots > 0 ? offer.item.stackable ? 1000 : slots : 0);
                 if (!count) return [];
@@ -230,6 +273,7 @@ export async function provision(plan: ActivityPlan, port: SupplyPort, onProgress
                 return [{ need, offer, count, banked: need.count - missing(need) }];
             });
             if (!batch.length) break;
+            if (stop.keeper === 'Jakut' && !dragonShop?.ready()) throw new SupplyUnavailableError('Dragon weapons require Attack 60 and completed Lost City', batch.map(entry => entry.need.item));
             let toFill = 0;
             const budget = batch.reduce((sum, entry) => sum + purchaseBudget(entry.offer, entry.count), 0);
             const coins = budget + SHOPPING_RESERVE;
@@ -248,7 +292,7 @@ export async function provision(plan: ActivityPlan, port: SupplyPort, onProgress
             }
             if (travelFood && !(await port.withdraw(travelFood, 3))) throw new Error('Could not withdraw food for shopping');
             if (!(await port.withdraw('Coins', coins)) || port.held('Coins') < coins) throw new Error('Coin withdrawal did not land');
-            if (!(await port.closeBank())) throw new Error('Bank did not close before shopping');
+            if (!(await port.closeBank(dragonShop ? undefined : stop.tile, plan.needs))) throw new Error('Bank did not close before shopping');
             report(id, `Travelling to ${stop.keeper} for ${batch.map(entry => `${entry.count} ${entry.need.item}`).join(', ')}`, stop.tile);
             let returned = true;
             try {
@@ -264,11 +308,12 @@ export async function provision(plan: ActivityPlan, port: SupplyPort, onProgress
                     for (const { need, offer, count, banked } of batch) {
                         const key = requirementKey(need);
                         const purchaseKey = offer.fillVials ? offer.item.name : key;
-                        const available = port.shopStock(purchaseKey);
+                        if (cooldowns[shopStockKey(offer)] > Date.now()) continue;
+                        const available = await port.shopStock(purchaseKey);
                         const limited = options.bestEffort || need.minimum || hasAlternatives(need);
                         if (limited && !allowance.has(key)) allowance.set(key, available);
                         if (available <= 0) {
-                            if (!limited) throw new SupplyStockError(`${stop.keeper} has no stock of ${need.item}`, [need.item]);
+                            markSoldOut(offer);
                             allowance.set(key, 0);
                             report(id, `Skipping ${need.item}: ${stop.keeper} has no stock`, stop.tile);
                             continue;
@@ -287,8 +332,10 @@ export async function provision(plan: ActivityPlan, port: SupplyPort, onProgress
                         const beforeCoins = port.held('Coins');
                         await port.buy(purchaseKey, amount);
                         const bought = Math.max(0, port.held(purchaseKey) - before);
+                        const soldOut = bought >= available || await port.shopStock(purchaseKey) === 0;
+                        if (soldOut) markSoldOut(offer);
                         if (offer.fillVials) toFill += bought;
-                        if (!limited && bought === 0) throw new SupplyStockError(`Purchase of ${need.item} did not arrive`, [need.item]);
+                        if (!limited && bought === 0 && !soldOut) throw new SupplyStockError(`Purchase of ${need.item} did not arrive`, [need.item]);
                         if (limited) {
                             allowance.set(key, bought < amount ? 0 : Math.max(0, allowance.get(key)! - bought));
                             if (bought < amount) report(id, `Skipping the remaining ${need.item}: only ${bought}/${amount} purchased`, stop.tile);
@@ -344,8 +391,8 @@ export async function provision(plan: ActivityPlan, port: SupplyPort, onProgress
         if (!(await port.closeBank())) throw new Error('Bank did not close after shopping');
         return;
     }
-    const shortages = plan.needs.filter(need => hasAlternatives(need) && (port.stock()[requirementKey(need).toLowerCase()] ?? 0) < (need.minimum ?? need.count));
-    if (shortages.length) throw new SupplyStockError(`Suppliers exhausted: ${shortages.map(need => need.item).join(', ')}`, shortages.map(need => need.item));
+    const shortages = plan.needs.filter(need => supplyOffer(need.item) && (port.stock()[requirementKey(need).toLowerCase()] ?? 0) < (need.minimum ?? need.count));
+    if (shortages.length) throw new SupplyStockError(`Insufficient shop stock: ${shortages.map(need => need.item).join(', ')}`, shortages.map(need => need.item));
     rebaseConsumables(plan, port.stock());
     report('loadout', `Packing supplies for ${plan.label}`);
     for (const need of plan.needs) {
@@ -354,7 +401,7 @@ export async function provision(plan: ActivityPlan, port: SupplyPort, onProgress
         if (count > 0) report('loadout', `Withdrawing ${count} ${need.item} for ${plan.label}`);
         if (count > 0 && (!(await port.withdraw(key, count)) || port.held(key) < count)) throw new Error(`Could not withdraw ${count} usable ${need.item}`);
     }
-    if (!(await port.closeBank())) throw new Error('Bank did not close after provisioning');
+    if (!(await port.closeBank(plan.travel, plan.needs, plan.wilderness))) throw new Error('Bank did not close after provisioning');
     report('loadout', `Supplies packed for ${plan.label}`, undefined, 'done');
     report('equip', `Preparing equipment for ${plan.label}`);
     for (const need of plan.needs.filter(n => n.equip)) {

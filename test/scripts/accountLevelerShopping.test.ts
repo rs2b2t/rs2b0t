@@ -13,7 +13,7 @@ test('a wealthy bare bank gets a current usable kit and useful consumable batche
     const audit = auditSupplies(snapshot());
     const needs = Object.fromEntries(audit.needs.map(need => [need.item, need.count]));
     expect(needs).toMatchObject({ 'Mithril scimitar': 1, 'Mithril platebody': 1, 'Mithril platelegs': 1, 'Mithril full helm': 1,
-        'Oak shortbow': 1, 'Staff of air': 1, 'Mind rune': 200, 'Bronze arrow': 1000, Feather: 1000,
+        'Oak shortbow': 1, 'Staff of fire': 1, 'Air rune': 200, 'Mind rune': 200, 'Bronze arrow': 1000, Feather: 1000,
         'Fly fishing rod': 1, 'Steel axe': 1, 'Iron pickaxe': 1, Tinderbox: 1, Knife: 1,
         Hammer: 1, Needle: 1, Thread: 100, 'Vial of water': 27, 'Eye of newt': 27 });
     expect(audit.needs.every(need => !need.carry && !need.equip)).toBe(true);
@@ -81,7 +81,8 @@ test('startup rune shopping matches the strongest affordable current spell', () 
     const s = snapshot({ magic: 35 }, { coins: 1000000 }); s.target = 40;
     const audit = auditSupplies(s);
     expect(audit.needs).toContainEqual({ item: 'Chaos rune', count: 200 });
-    expect(audit.needs).toContainEqual({ item: 'Fire rune', count: 800 });
+    expect(audit.needs).toContainEqual({ item: 'Air rune', count: 600 });
+    expect(shoppingStops(audit.needs, s.stock).find(stop => stop.keeper === 'Zaff')?.needs).toEqual([{ item: 'Staff of fire', count: 1 }]);
     expect(audit.needs.some(need => need.item === 'Mind rune')).toBe(false);
 });
 
@@ -100,4 +101,16 @@ test('a fresh account defers the underground pickaxe shop until combat is establ
     const audit = auditSupplies(s);
     expect(audit.needs.some(need => /pickaxe$/i.test(need.item))).toBe(false);
     expect(audit.skipped.some(message => message.includes('Nurmof'))).toBe(true);
+});
+
+test('the unlock audit buys only missing eligible rune gear and preserves the shopping reserve', () => {
+    const s = snapshot({ attack: 40, defence: 40 }, { coins: 180000, 'rune plateskirt': 1 });
+    expect(auditSupplies(s, true).needs).toEqual([]);
+    s.quests['Dragon Slayer'] = true;
+    const audit = auditSupplies(s, true);
+    expect(audit.needs.map(n => n.item)).toEqual(['Rune longsword', 'Rune platebody']);
+    expect(audit.budget + audit.reserve).toBeLessThanOrEqual(s.stock.coins);
+    s.stock['rune longsword'] = 1;
+    s.stock['rune platebody'] = 1;
+    expect(auditSupplies(s, true).needs).toEqual([]);
 });

@@ -55,6 +55,13 @@ try {
         await page.click('#mbx-new-go');
     }
     await page.waitForFunction(n => (globalThis as never as Mbx).multibox.slots().length === n, users.length, { timeout: 15000 });
+    await page.waitForFunction(n => {
+        const frames = Array.from(document.querySelectorAll('iframe'));
+        return frames.length === n && frames.every(f => f.contentWindow && 'rs2b0t' in f.contentWindow);
+    }, users.length);
+    want(await page.evaluate(() => Array.from(document.querySelectorAll('iframe')).filter(f =>
+        'audioContext' in f.contentWindow! || '_tinyMidiPlay' in f.contentWindow!
+    ).length), 0, 'slots with audio initialized');
     console.log('three profiles created and loaded');
 
     // visible tile order = flex order; harness drags by that order, like a user

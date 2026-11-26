@@ -1,4 +1,5 @@
 // docs/QUESTS.md
+import { findSceneTarget } from '../../exec/prompts.js';
 import { DirectNavigator } from '../../../../../event/webwalk/DirectNavigator.js';
 import { Reachability } from '../../../../../event/webwalk/geometry/Reachability.js';
 import Tile from '../../../../../geometry/Tile.js';
@@ -105,12 +106,10 @@ async function findSheep(n: SheepIndex, log: (m: string) => void): Promise<Npc |
     if (!(await Traversal.walkResilient(SHEEP_SPAWN[n], { radius: 4, attempts: 3, timeoutMs: 180_000, log }))) {
         return null;
     }
-    await Execution.delayTicks(2);
-    const found = pickSheep(n);
+    const found = await findSceneTarget(() => pickSheep(n), 10);
     if (!found) {
         // Why: `npc_del` on the map spawn queues a respawn, so an empty field means wait.
         log(`sheepherder: ${sheepName(n)} not at its field — waiting out the respawn`);
-        await Execution.delayTicks(8);
     }
     return found;
 }

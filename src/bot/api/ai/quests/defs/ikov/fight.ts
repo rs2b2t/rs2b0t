@@ -1,5 +1,5 @@
 // docs/QUESTS.md
-import { actions } from '../../../../../adapter/ClientAdapter.js';
+import { afterDialogueAction } from '../../exec/primitives.js';
 import { DirectNavigator } from '../../../../../event/webwalk/DirectNavigator.js';
 import { Equipment } from '../../../../equipment/Equipment.js';
 import { EventSignal } from '../../../../execution/EventSignal.js';
@@ -14,7 +14,7 @@ import { Sustain } from '../../../../sustain/Sustain.js';
 import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
 import { Modals } from '../../../../ui/widgets/Modals.js';
 import { Traversal } from '../../../../walking/Traversal.js';
-import { IKOV_FOODS, IKOV_LOC, IKOV_NAME, IKOV_NPC, IKOV_TILE, LAVA_BRIDGE_ZONE } from './areas.js';
+import { IKOV_BOWS, IKOV_FOODS, IKOV_LOC, IKOV_NAME, IKOV_NPC, IKOV_TILE, LAVA_BRIDGE_ZONE } from './areas.js';
 import { escapePocket, pullTrapLever, wearFearPendant } from './dungeon.js';
 
 /** Ticks the Fire Warrior is given before the leg hands the tick back to the engine. */
@@ -80,9 +80,9 @@ async function nockArrows(): Promise<boolean> {
 }
 
 /** The Fire Warrior refuses anything but ranged, and only with ice arrows in the quiver. */
-async function armForTheWarrior(log: (m: string) => void): Promise<boolean> {
-    if (!Equipment.contains(IKOV_NAME.YEW_SHORTBOW) && !(await Equipment.equip(IKOV_NAME.YEW_SHORTBOW))) {
-        log('ikov: no yew shortbow to wield');
+async function armForTheWarrior(log: (m: string) => void, bowId: number): Promise<boolean> {
+    if (!(await Equipment.equipById(bowId))) {
+        log('ikov: could not wield the bow for the Fire Warrior');
         return false;
     }
     if (!(await nockArrows())) {
@@ -124,11 +124,12 @@ async function pickUpArrows(log: (m: string) => void): Promise<void> {
 // Why: an empty bow answers every later Attack click with "There is no ammo left in your quiver", which the hobgoblin farm 2 legs on pays for.
 /** Take the bow off once the quiver behind it is empty. */
 async function stowSpentBow(log: (m: string) => void): Promise<void> {
-    if (!Equipment.contains(IKOV_NAME.YEW_SHORTBOW) || iceArrowsHeld() > 0) {
+    const bow = IKOV_BOWS.find(bow => Equipment.contains(bow.name));
+    if (!bow || iceArrowsHeld() > 0) {
         return;
     }
-    log('ikov: the quiver is spent — stowing the yew shortbow');
-    await Equipment.unequip(IKOV_NAME.YEW_SHORTBOW);
+    log(`ikov: stowing ${bow.name} with the quiver empty`);
+    await Equipment.unequip(bow.name);
 }
 
 function walkToFireDoor(log: (m: string) => void): Promise<boolean> {
@@ -179,8 +180,7 @@ function tallyNearby(): string {
 async function drainDialogue(log?: (m: string) => void): Promise<void> {
     for (let i = 0; i < 20; i++) {
         if (ChatDialog.canContinue()) {
-            await ChatDialog.continue();
-            await Execution.delayTicks(1);
+            await afterDialogueAction(await ChatDialog.continue(), 1);
             continue;
         }
         if (!ChatDialog.isOpen()) {
@@ -190,20 +190,19 @@ async function drainDialogue(log?: (m: string) => void): Promise<void> {
     }
     if (ChatDialog.isOpen()) {
         log?.('ikov: a chat modal would not drain — closing it and fighting on');
-        actions.closeModal();
-        await Execution.delayTicks(2);
+        await Modals.closeIfOpen();
     }
 }
 
 /** Shoot the Fire Warrior down with ice arrows and sweep the spent ones up. */
-export async function fightFireWarrior(log: (m: string) => void): Promise<boolean> {
+export async function fightFireWarrior(log: (m: string) => void, bowId: number): Promise<boolean> {
     if (!(await escapePocket(log))) {
         return false;
     }
     if (!(await wearFearPendant(log))) {
         return false;
     }
-    if (!(await armForTheWarrior(log))) {
+    if (!(await armForTheWarrior(log, bowId))) {
         return false;
     }
     // Why: the journal renders stages 20 and 30 alike, so a run interrupted between the search and the pull reads as pulled and finds the door shut.

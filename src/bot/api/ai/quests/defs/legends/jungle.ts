@@ -10,7 +10,7 @@ import { Reach } from '../../../../walking/Reach.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import type Tile from '../../../../../geometry/Tile.js';
 import { JUNGLE_BAND, LQ_ID, LQ_LOC, LQ_NPC, LQ_TILE, inJungleBand, jungleSection, legendsArea } from './areas.js';
-import { clearBoxes, driveBoxes, driveToEnd, driveUntil, heldId, here, modalText, offerTo, settleScene } from './scene.js';
+import { findSceneTarget, clearBoxes, driveBoxes, driveToEnd, driveUntil, heldId, here, modalText, offerTo, settleScene } from './scene.js';
 import { leaveCaves } from './viyeldi.js';
 
 const CHOP_ATTEMPTS = 14;
@@ -63,10 +63,9 @@ async function chopThroughBand(dz: number, done: () => boolean, log: (m: string)
     const deadline = performance.now() + CHOP_MS;
     // Why: the crossing that succeeds leaves through this condition, so the drop below has to be on its way out too.
     for (let i = 0; i < CHOP_ATTEMPTS && performance.now() < deadline && !done(); i++) {
-        const plant = pickPlant(dz);
+        const plant = await findSceneTarget(() => pickPlant(dz), 6);
         if (!plant) {
             log(`no choppable jungle plant ${dz > 0 ? 'north' : 'south'} of (${Game.tile()?.x},${Game.tile()?.z}) — waiting for a respawn`);
-            await Execution.delayTicks(6);
             continue;
         }
         const before = Game.tile();
@@ -223,8 +222,7 @@ export async function getBullroarer(log: (m: string) => void): Promise<boolean> 
     if (!(await Traversal.walkResilient(LQ_TILE.FORESTER, { radius: 4, attempts: 3, timeoutMs: 180_000, log }))) {
         return false;
     }
-    await settleScene();
-    const forester = Npcs.query().name(LQ_NPC.FORESTER).within(12).nearest();
+    const forester = await findSceneTarget(() => Npcs.query().name(LQ_NPC.FORESTER).within(12).nearest());
     if (!forester) {
         log('no forester in range for the map');
         return false;
@@ -273,7 +271,7 @@ export async function summonGujuo(log: (m: string) => void): Promise<boolean> {
         if (await roarer.interact('Swing')) {
             await Execution.delayUntil(() => findGujuo() !== null, 12_000);
         }
-        await Execution.delayTicks(4);
+        if (await findSceneTarget(findGujuo, 4)) return true;
     }
     log('twelve swings and no native answered');
     return false;

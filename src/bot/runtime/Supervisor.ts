@@ -98,7 +98,10 @@ class SupervisorImpl {
                 run: async () => {
                     const anchor = bot.recoveryAnchor?.() ?? null;
                     const me = reader.worldTile();
-                    ctx.addLog('warn', `watchdog: no progress for ${Math.round(WEDGE_MS / 60000)}min at (${me?.x},${me?.z},${me?.level})`);
+                    const where = me ? `(${me.x},${me.z},${me.level})` : 'unknown tile';
+                    const details = bot.stallDetails?.();
+                    const reason = `watchdog: no progress for ${Math.floor((now - this.lastProgressAt) / 60000)}min at ${where}${details ? `, ${details}` : ''}`;
+                    ctx.addLog('warn', reason);
                     if (anchor && me && Math.max(Math.abs(anchor.x - me.x), Math.abs(anchor.z - me.z)) > 8) {
                         ctx.addLog('info', 'watchdog: walking back to the anchor');
                         const ok = await Traversal.walkResilient(anchor, { radius: 3, attempts: 3, log: msg => ctx.addLog('info', msg) });
@@ -114,7 +117,7 @@ class SupervisorImpl {
                     } else {
                         ctx.addLog('warn', 'watchdog: wedged near anchor (or no anchor) — requesting script restart');
                     }
-                    StallGuard.requestRestart('watchdog: no progress');
+                    StallGuard.requestRestart(reason);
                 }
             };
         }

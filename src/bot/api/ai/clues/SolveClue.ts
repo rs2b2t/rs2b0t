@@ -91,6 +91,7 @@ export interface SolveClueHost {
     enabled?(): boolean;
     retryAbandoned?: boolean;
     discardAbandoned?: boolean;
+    beforeStep?(id: number): 'prepare' | 'abandon' | undefined;
     /** Travel to the initial bank with host upkeep intact; false blocks the trail. */
     prepareInitialBank?(): Promise<boolean>;
     /** Hard-clue dig guardians are fought under Protect from Magic. */
@@ -125,6 +126,7 @@ export class SolveClue implements Task {
     private trailWeapon: string | null = null;
     private retriedAbandonment = false;
     private discardPending = false;
+    private requirementsPending = false;
     private discarded = new Map<string, number>();
 
     private async retreatFromGuardian(): Promise<boolean> {
@@ -232,7 +234,7 @@ export class SolveClue implements Task {
     }
 
     validate(): boolean {
-        if (this.discardPending) return true;
+        if (this.discardPending || this.requirementsPending) return true;
         if (this.collectingRewards) return true;
         if (this.completionPending) return true;
         if (this.retreatPending) return true;
@@ -285,7 +287,7 @@ export class SolveClue implements Task {
     }
 
     async execute(): Promise<void> {
-        if (!this.collectingRewards && (!this.recoveryPending || this.restoring) && (this.discardPending || this.completionPending || this.retreatPending || (this.strippedGear.length > 0 && (this.restoring || heldClueLikeId() === null)))) {
+        if (!this.collectingRewards && (!this.recoveryPending || this.restoring) && (this.discardPending || this.requirementsPending || this.completionPending || this.retreatPending || (this.strippedGear.length > 0 && (this.restoring || heldClueLikeId() === null)))) {
             const upkeep = Sustain.hook;
             Sustain.set(() => this.upkeep());
             try {
@@ -294,6 +296,11 @@ export class SolveClue implements Task {
                 if (this.blockedKit !== null) this.blockHardKit();
                 if (this.discardPending && !this.restoring) await this.discardClue();
                 if (this.completionPending && !this.restoring) this.finishTrail();
+                if (this.requirementsPending && !this.restoring) {
+                    this.requirementsPending = false;
+                    this.status = 'requirements needed';
+                    this.host.setStatus('clue requirements needed');
+                }
             } finally {
                 Sustain.set(upkeep);
             }
@@ -378,7 +385,7 @@ export class SolveClue implements Task {
         this.status = 'solving';
         this.host.setStatus('solving clue trail');
         let outcome = await ClueExecutor.solveHeldClue(m => this.host.log(`[clue] ${m}`),
-            () => this.entranaStripped && heldClueScrollId() !== null && !heldClueNeedsEntranaStrip(), this.host.rangedLoadout?.());
+            () => this.entranaStripped && heldClueScrollId() !== null && !heldClueNeedsEntranaStrip(), this.host.rangedLoadout?.(), this.host.beforeStep);
         if (outcome === 'supplies-needed') {
             this.bankedThisSolve = false;
             this.retreatPending = Game.inCombat();
@@ -387,7 +394,7 @@ export class SolveClue implements Task {
                 this.retreatPending = false;
                 this.bankedThisSolve = true;
                 outcome = await ClueExecutor.solveHeldClue(m => this.host.log(`[clue] ${m}`),
-                    () => this.entranaStripped && heldClueScrollId() !== null && !heldClueNeedsEntranaStrip(), this.host.rangedLoadout?.());
+                    () => this.entranaStripped && heldClueScrollId() !== null && !heldClueNeedsEntranaStrip(), this.host.rangedLoadout?.(), this.host.beforeStep);
             } else if (this.blockedKit === null) {
                 this.status = 'waiting for hard kit bank';
                 return;
@@ -406,6 +413,15 @@ export class SolveClue implements Task {
                 this.status = 'hard kit blocked';
                 return;
             }
+        }
+        if (outcome === 'requirements-needed') {
+            this.abandonedClueId = heldClueLikeId();
+            this.bankedThisSolve = false;
+            this.initialBankVisited = false;
+            this.restoring = true;
+            this.requirementsPending = true;
+            this.retreatPending = Game.inCombat();
+            return;
         }
         if (outcome === 'reset-needed') {
             this.recoveryPending = true;

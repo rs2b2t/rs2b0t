@@ -4,6 +4,9 @@ import { Bank } from '#/bot/api/bank/Bank.js';
 import type { Task } from '#/bot/api/bot/Bot.js';
 import { bus } from '#/bot/api/events/EventBus.js';
 import { Execution } from '#/bot/api/execution/Execution.js';
+import { Equipment } from '#/bot/api/equipment/Equipment.js';
+import { Shop } from '#/bot/api/shop/Shop.js';
+import { ScriptRunner } from '#/bot/runtime/ScriptRunner.js';
 import { Game } from '#/bot/api/game/Game.js';
 import { Inventory } from '#/bot/api/inventory/Inventory.js';
 import { Skills } from '#/bot/api/skills/Skills.js';
@@ -51,6 +54,8 @@ beforeEach(() => {
     spyOn(Skills, 'xp').mockReturnValue(0);
     spyOn(Skills, 'level').mockReturnValue(99);
     spyOn(reader, 'inventory').mockImplementation(() => pack);
+    spyOn(reader, 'inventorySize').mockReturnValue(28);
+    spyOn(reader, 'equipment').mockReturnValue([]);
     spyOn(reader, 'bankComId').mockReturnValue(-1);
     spyOn(reader, 'players').mockReturnValue([]);
     spyOn(reader, 'toLocal').mockImplementation((x, z) => ({ lx: x, lz: z }));
@@ -125,6 +130,33 @@ async function start(mode = 'Master', stayInAltar = false, rune = 'Cosmic runes'
     bot.settings = new SettingsBag({ mode, stayInAltar, rune, partner: 'partner', bankEvery: 1 });
     await bot.onStart();
 }
+
+test.each([
+    ['Solo', 'Nature runes'], ['Solo', 'Law runes'], ['Master', 'Law runes'], ['Runner', 'Law runes']
+])('%s on %s clears random-event junk from a full pack before resuming', async (mode, rune) => {
+    await start(mode, false, rune);
+    const keep = [
+        item(1437, 'Rune essence', 1000), item(995, 'Coins', 5000), item(1436, 'Rune essence'),
+        item(1, bot.cfg().talisman), item(2, bot.cfg().rune, 500), item(772, 'Dramen staff'),
+        item(6199, 'Strange box'), item(2528, 'Lamp'), item(2714, 'Casket'), item(1617, 'Uncut diamond')
+    ];
+    const junk = [item(1971, 'Kebab'), item(1917, 'Beer'), item(1969, 'Spinach roll'), item(464, 'Strange fruit'), item(405, 'Casket')];
+    pack = [...keep, ...Array.from({ length: 28 - keep.length }, (_, i) => junk[i % junk.length])].map((i, slot) => ({ ...i, slot }));
+    const drop = spyOn(Input, 'heldOp').mockImplementation((id, slot) => {
+        pack = pack.filter(i => i.slot !== slot || i.id !== id);
+        return true;
+    });
+    const cleanup = task('DropLitter');
+    expect(cleanup).toBeDefined();
+    const shop = spyOn(Shop, 'isOpen').mockReturnValue(true);
+    expect(cleanup.validate()).toBe(false);
+    shop.mockReturnValue(false);
+    expect(Inventory.free()).toBe(0);
+    for (let i = 0; i < 28 && cleanup.validate(); i++) await cleanup.execute();
+    expect(drop).toHaveBeenCalledTimes(28 - keep.length);
+    expect(pack.map(i => i.id)).toEqual(keep.map(i => i.id));
+    expect(Inventory.free()).toBe(28 - keep.length);
+});
 
 test('a cosmic master starts at Runecrafting 27 and keeps its talisman and entry staff', async () => {
     spyOn(Skills, 'level').mockReturnValue(27);
@@ -278,4 +310,228 @@ test.each([
     expect(task('ExitTemple').validate()).toBe(false);
     tile = new Tile(Number(x), Number(z), 1);
     expect(task('ExitTemple').validate()).toBe(false);
+});
+
+async function startSolo(rune = 'Cosmic runes', extra: Record<string, unknown> = {}): Promise<void> {
+    bot.settings = new SettingsBag({ mode: 'Solo', rune, partner: '', stayInAltar: true, ...extra });
+    await bot.onStart();
+}
+
+async function step(): Promise<string> {
+    const next = bot.registered.find(t => t.validate());
+    expect(next).toBeDefined();
+    await next!.execute();
+    return next!.constructor.name;
+}
+
+test('solo crafts two full loads without partners and banks the product between loads', async () => {
+    pack = [item(1454, 'Cosmic talisman')];
+    await startSolo();
+    expect(await step()).toBe('BankRestock');
+    expect(Inventory.countById(1436)).toBe(27);
+    expect(await step()).toBe('EnterAltar');
+    expect(await step()).toBe('CraftRunes');
+    expect(bot.inTemple()).toBe(false);
+    expect(Inventory.count('Cosmic rune')).toBe(27);
+    expect(await step()).toBe('BankRestock');
+    expect(deposits).toContain('Cosmic rune');
+    expect(Inventory.countById(1436)).toBe(27);
+    await step();
+    await step();
+    expect(Inventory.count('Cosmic rune')).toBe(27);
+});
+
+test('solo withdraws a missing talisman before filling its inventory', async () => {
+    spyOn(Bank, 'count').mockImplementation(name => name === 'Cosmic talisman' ? 1 : name === 'Rune essence' ? 1000 : 0);
+    spyOn(Bank, 'withdrawX').mockImplementation(async (name, count) => {
+        if (name === 'Cosmic talisman') { pack.push(item(1454, name)); return true; }
+        if (name === 'Rune essence') { pack.push(...essence(count)); return true; }
+        return false;
+    });
+    await startSolo();
+    await step();
+    expect(Inventory.contains('Cosmic talisman')).toBe(true);
+    expect(Inventory.countById(1436)).toBe(27);
+});
+
+test('solo converts bank notes into a full unnoted load on bank routes', async () => {
+    pack = [item(1454, 'Cosmic talisman'), item(1437, 'Rune essence', 100)];
+    await startSolo();
+    expect(await step()).toBe('BankRestock');
+    expect(Inventory.countById(1437)).toBe(0);
+    expect(Inventory.countById(1436)).toBe(27);
+});
+
+test('solo honors smaller essence loads', async () => {
+    pack = [item(1454, 'Cosmic talisman')];
+    await startSolo('Cosmic runes', { withdrawEss: 12 });
+    await step();
+    expect(Inventory.countById(1436)).toBe(12);
+});
+
+test('solo leaves the altar with notes remaining instead of attempting to craft notes', async () => {
+    tile = MEET;
+    pack = [item(1454, 'Cosmic talisman'), item(1437, 'Rune essence', 500), ...essence(24)];
+    await startSolo();
+    await task('CraftRunes').execute();
+    expect(Inventory.countById(1437)).toBe(500);
+    expect(Inventory.countById(1436)).toBe(0);
+    expect(bot.inTemple()).toBe(false);
+    tile = MEET;
+    expect(task('CraftRunes').validate()).toBe(false);
+    expect(task('ExitTemple').validate()).toBe(true);
+});
+
+test('solo Nature unnotes locally and does not walk to the bank with usable notes and coins', async () => {
+    tile = new Tile(2767, 3122, 0);
+    pack = [item(1462, 'Nature talisman'), item(1437, 'Rune essence', 1000), item(995, 'Coins', 10000)];
+    await startSolo('Nature runes');
+    expect(task('BankRestock').validate()).toBe(false);
+    expect(task('UnNoteEssence').validate()).toBe(true);
+    expect(task('EnterAltar').validate()).toBe(false);
+});
+
+test('Law is craftable at 54 and uses Draynor for supplies', async () => {
+    tile = new Tile(3093, 3243, 0);
+    spyOn(Skills, 'level').mockReturnValue(54);
+    spyOn(reader, 'equipment').mockReturnValue([]);
+    spyOn(Bank, 'openBooth').mockImplementation(async () => { bankOpen = true; return true; });
+    pack = [item(1458, 'Law talisman')];
+    await startSolo('Law runes');
+    expect(bot.cfg().rune).toBe('Law rune');
+    expect(bot.cfg().runnerBank).toEqual(tile);
+    await step();
+    expect(Inventory.countById(1436)).toBe(27);
+    expect(bot.cfg().ruins).toEqual(new Tile(2858, 3378, 0));
+    tile = new Tile(2464, 4819, 0);
+    expect(bot.inTemple()).toBe(true);
+});
+
+test('Law solo rejects insufficient Runecrafting', async () => {
+    tile = new Tile(3093, 3243, 0);
+    spyOn(Skills, 'level').mockReturnValue(53);
+    await expect(startSolo('Law runes')).rejects.toThrow('runecrafting level too low');
+});
+
+
+test('Law banks carried and worn combat gear before attempting the ferry', async () => {
+    tile = new Tile(3093, 3243, 0);
+    pack = [item(1458, 'Law talisman'), item(1305, 'Dragon longsword'), ...essence(26)];
+    let worn = [item(1127, 'Rune platebody'), item(1079, 'Rune platelegs')];
+    spyOn(reader, 'equipment').mockImplementation(() => worn);
+    spyOn(Bank, 'openBooth').mockImplementation(async () => { bankOpen = true; return true; });
+    spyOn(Bank, 'close').mockImplementation(async () => { bankOpen = false; return true; });
+    spyOn(Equipment, 'unequip').mockImplementation(async name => {
+        expect(bankOpen).toBe(false);
+        expect(Inventory.free()).toBeGreaterThan(0);
+        pack.push(worn.find(i => i.name === name)!);
+        worn = worn.filter(i => i.name !== name);
+        return true;
+    });
+    await startSolo('Law runes');
+    expect(await step()).toBe('PrepareLawTravel');
+    expect(deposits).toEqual(expect.arrayContaining(['Dragon longsword', 'Rune platebody', 'Rune platelegs']));
+    expect(worn).toEqual([]);
+    expect(pack.map(i => i.name)).toEqual(['Law talisman']);
+    expect(await step()).toBe('BankRestock');
+    expect(Inventory.countById(1436)).toBe(27);
+    expect(task('PrepareLawTravel').validate()).toBe(false);
+});
+
+test('solo Nature buys back only the essence that fits alongside its runes and supplies', async () => {
+    tile = new Tile(2767, 3122, 0);
+    pack = [item(1462, 'Nature talisman'), item(1437, 'Rune essence', 1000), item(995, 'Coins', 10000), item(561, 'Nature rune', 25)];
+    let stock = 0;
+    spyOn(Shop, 'isOpen').mockReturnValue(true);
+    spyOn(Shop, 'close').mockResolvedValue(undefined);
+    spyOn(Shop, 'stock').mockImplementation(() => [{ name: 'Rune essence', count: stock, slot: 0 }]);
+    const sell = spyOn(Shop, 'sell').mockImplementation(async (_name, count) => {
+        pack.find(i => i.id === 1437)!.count -= count;
+        stock += count;
+        return count;
+    });
+    spyOn(Shop, 'buy').mockImplementation(async (_name, count) => {
+        expect(count).toBeLessThanOrEqual(Inventory.free());
+        pack.push(...essence(count));
+        stock -= count;
+        return count;
+    });
+    await startSolo('Nature runes');
+    await step();
+    expect(sell).toHaveBeenCalledWith('Rune essence', 24, expect.any(Function));
+    expect(Inventory.countById(1436)).toBe(24);
+    expect(Inventory.count('Nature rune')).toBe(25);
+});
+
+test('solo stops with a clear reason when the talisman is unavailable', async () => {
+    const stop = spyOn(ScriptRunner, 'stop').mockImplementation(() => {});
+    await startSolo();
+    await step();
+    expect(stop).toHaveBeenCalledWith('JiveRC: missing Cosmic talisman in inventory and bank');
+    expect(Inventory.countById(1436)).toBe(0);
+});
+
+test.each(['talisman', 'essence', 'altar'])('delegated Law returns %s failure to its parent without stopping the runner', async failure => {
+    tile = new Tile(3093, 3243, 0);
+    const stop = spyOn(ScriptRunner, 'stop').mockImplementation(() => {});
+    spyOn(Bank, 'openBooth').mockImplementation(async () => { bankOpen = true; return true; });
+    spyOn(Bank, 'count').mockReturnValue(0);
+    pack = failure === 'talisman' ? [] : [item(1458, 'Law talisman')];
+    if (failure === 'altar') pack.push(...essence(27));
+    const reasons: string[] = [];
+    bot.bindFinish(reason => { reasons.push(reason); });
+    await startSolo('Law runes');
+    const action = task(failure === 'altar' ? 'EnterAltar' : 'BankRestock');
+    for (let i = 0; i < (failure === 'talisman' ? 1 : 3); i++) await action.execute();
+    expect(reasons).toEqual([failure === 'talisman' ? 'JiveRC: missing Law talisman in inventory and bank'
+        : failure === 'essence' ? 'JiveRC: out of Rune essence in the bank (three reads)'
+            : 'JiveRC: the talisman didn\'t teleport into the altar']);
+    expect(stop).not.toHaveBeenCalled();
+});
+
+test('solo Nature tops up coins without withdrawing a second stack of notes', async () => {
+    tile = new Tile(2655, 3283, 0);
+    pack = [item(1462, 'Nature talisman'), item(1437, 'Rune essence', 1000), item(995, 'Coins', 500)];
+    spyOn(Bank, 'openBooth').mockImplementation(async () => { bankOpen = true; return true; });
+    spyOn(Bank, 'count').mockImplementation(name => name === 'Coins' ? 20000 : 1000);
+    const withdraw = spyOn(Bank, 'withdrawX').mockImplementation(async (name, count) => {
+        if (name !== 'Coins') return false;
+        pack.find(i => i.name === 'Coins')!.count += count;
+        return true;
+    });
+    await startSolo('Nature runes');
+    await step();
+    expect(Inventory.count('Coins')).toBe(10000);
+    expect(withdraw).toHaveBeenCalledTimes(1);
+    expect(Inventory.countById(1437)).toBe(1000);
+});
+
+test('Law banks carried robes and weapons even when their names miss the travel gear heuristic', async () => {
+    tile = new Tile(3093, 3243, 0);
+    pack = [item(1458, 'Law talisman'), { ...item(581, 'Black robe'), ops: ['Wear', 'Drop'] }, { ...item(1419, 'Scythe'), ops: ['Wield', 'Drop'] }, ...essence(20)];
+    spyOn(Bank, 'openBooth').mockImplementation(async () => { bankOpen = true; return true; });
+    await startSolo('Law runes');
+    expect(await step()).toBe('PrepareLawTravel');
+    expect(deposits).toEqual(expect.arrayContaining(['Black robe', 'Scythe']));
+});
+
+test('solo Nature frees a slot for its banked talisman when started with a full essence inventory', async () => {
+    tile = new Tile(2655, 3283, 0);
+    pack = essence(28);
+    spyOn(Bank, 'openBooth').mockImplementation(async () => { bankOpen = true; return true; });
+    spyOn(Bank, 'count').mockImplementation(name => name === 'Nature talisman' ? 1 : 10000);
+    spyOn(Bank, 'withdrawX').mockImplementation(async (name, count) => {
+        if (Inventory.free() === 0) return false;
+        if (name === 'Nature talisman') pack.push(item(1462, name));
+        else if (name === 'Coins') pack.push(item(995, name, count));
+        else if (name === 'Rune essence') pack.push(...(noted ? [item(1437, name, count)] : essence(count)));
+        else return false;
+        return true;
+    });
+    await startSolo('Nature runes');
+    await step();
+    expect(Inventory.contains('Nature talisman')).toBe(true);
+    expect(Inventory.countById(1436)).toBe(0);
+    expect(Inventory.countById(1437)).toBe(10000);
+    expect(task('UnNoteEssence').validate()).toBe(true);
 });

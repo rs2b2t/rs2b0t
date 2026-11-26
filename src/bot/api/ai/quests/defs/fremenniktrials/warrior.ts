@@ -5,7 +5,6 @@ import { Prayer } from '../../../../prayer/Prayer.js';
 import { Skills } from '../../../../skills/Skills.js';
 import { Reach } from '../../../../walking/Reach.js';
 import { hasFlag, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
-import { settleScene } from '../../exec/prompts.js';
 import { attackable } from '../trollstronghold/combat.js';
 import { FT_LOC, FT_TILE, PEER, THORVALD, inBattleground } from './areas.js';
 import { PEER_BANK } from './seer.js';
@@ -127,7 +126,6 @@ async function leaveLoft(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(FT_TILE.WARRIOR_LOFT_LADDER, 1, log))) {
         return false;
     }
-    await settleScene();
     const status = await Reach.locOp({
         name: 'Ladder',
         op: 'Climb-down',

@@ -2,7 +2,7 @@ import { Execution } from '../../../../execution/Execution.js';
 import { Game } from '../../../../game/Game.js';
 import { Shop } from '../../../../shop/Shop.js';
 import type Tile from '../../../../../geometry/Tile.js';
-import { driveUntil, settleScene } from '../../exec/prompts.js';
+import { driveUntil, findSceneTarget } from '../../exec/prompts.js';
 import { BIO_ITEM, BIO_LOC, BIO_NPC, BIO_TILE, VIALS, inGuidorQuarter, type BioItem } from './areas.js';
 import { heldId, wear } from './gear.js';
 import { locById, talkAt, walkTo } from './travel.js';
@@ -111,8 +111,7 @@ export async function visitGuidor(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(BIO_TILE.GUIDOR_DOOR, 0, log))) {
         return false;
     }
-    await settleScene();
-    const door = locById(BIO_LOC.GUIDOR_DOOR, 'Open', 6);
+    const door = await findSceneTarget(() => locById(BIO_LOC.GUIDOR_DOOR, 'Open', 6));
     if (door && !(await door.interact('Open'))) {
         return false;
     }
@@ -133,8 +132,7 @@ async function passVarrockGate(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(stand, 0, log))) {
         return false;
     }
-    await settleScene();
-    const gate = locById(BIO_LOC.VARROCK_GATE, 'Open', 6);
+    const gate = await findSceneTarget(() => locById(BIO_LOC.VARROCK_GATE, 'Open', 6));
     if (!gate) {
         log(`no Varrock east gate at (${BIO_TILE.GATE_OUTSIDE.x},${BIO_TILE.GATE_OUTSIDE.z})`);
         return false;

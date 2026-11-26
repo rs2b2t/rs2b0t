@@ -8,8 +8,8 @@ import { Npcs } from '../../../../npcs/Npcs.js';
 import type Tile from '../../../../../geometry/Tile.js';
 import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
 import { Traversal } from '../../../../walking/Traversal.js';
-import { driveDialog, openDialogue, pickPreferred } from '../../exec/primitives.js';
-import { driveUntil, heldId, promptLoc, settleScene } from '../../exec/prompts.js';
+import { afterDialogueAction, driveDialog, openDialogue, pickPreferred } from '../../exec/primitives.js';
+import { findSceneTarget, driveUntil, heldId, promptLoc, settleScene } from '../../exec/prompts.js';
 import { FILLIMAN, inSwamp, NS_ID, NS_LOC, NS_NAME, NS_TILE } from './areas.js';
 import { NS_FLAG } from './journal.js';
 
@@ -28,8 +28,7 @@ async function driveOnce(topic: string, log: (m: string) => void): Promise<boole
     let taken = false;
     for (let i = 0; i < 40; i++) {
         if (ChatDialog.canContinue()) {
-            await ChatDialog.continue();
-            await Execution.delayTicks(1);
+            await afterDialogueAction(await ChatDialog.continue(), 1);
             continue;
         }
         const options = ChatDialog.options();
@@ -43,8 +42,7 @@ async function driveOnce(topic: string, log: (m: string) => void): Promise<boole
             if (pick !== leave) {
                 taken = true;
             }
-            await ChatDialog.chooseOption(pick);
-            await Execution.delayTicks(2);
+            await afterDialogueAction(await ChatDialog.chooseOption(pick), 2);
             continue;
         }
         if (!ChatDialog.isOpen()) {
@@ -103,8 +101,7 @@ export async function mirrorLeg(log: (m: string) => void): Promise<boolean> {
         if (!(await Traversal.walkResilient(NS_TILE.BOWL, { radius: 1, attempts: 3, timeoutMs: 180_000, log }))) {
             return false;
         }
-        await settleScene();
-        const mirror = GroundItems.query().name(NS_NAME.MIRROR).within(4).nearest();
+        const mirror = await findSceneTarget(() => GroundItems.query().name(NS_NAME.MIRROR).within(4).nearest());
         if (mirror) {
             await mirror.interact('Take');
             return Execution.delayUntil(() => heldId(NS_ID.MIRROR) > 0, 6000);
@@ -274,8 +271,7 @@ async function useOnStone(itemId: number, at: Tile, expect: () => boolean, log: 
     if (!(await Traversal.walkResilient(at, { radius: 2, attempts: 3, timeoutMs: 180_000, log }))) {
         return false;
     }
-    await settleScene();
-    const stone = Locs.query().name(NS_LOC.STONE).where(l => l.tile().distanceTo(at) === 0).nearest();
+    const stone = await findSceneTarget(() => Locs.query().name(NS_LOC.STONE).where(l => l.tile().distanceTo(at) === 0).nearest());
     const item = Inventory.items().find(i => i.id === itemId);
     if (!stone || !item) {
         log(`no stone at (${at.x},${at.z}) or no item ${itemId} to place on it`);

@@ -4,7 +4,7 @@ import { Locs } from '../../../../locs/Locs.js';
 import { reader } from '../../../../../adapter/ClientAdapter.js';
 import type Tile from '../../../../../geometry/Tile.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
-import { settleScene } from '../../exec/prompts.js';
+import { findSceneTarget, settleScene } from '../../exec/prompts.js';
 import { CB_ID, CB_LOC_ID, CB_NAME, CB_NPC, CB_TILE } from './areas.js';
 import { walkTo } from './arrows.js';
 import { boxText, clearBox, talkBoxes } from './dialogue.js';
@@ -34,8 +34,7 @@ function pickPatch(locId: number, name: string, itemId: number, tile: Tile): (lo
         if (!(await walkTo(tile, 4, log))) {
             return false;
         }
-        await settleScene();
-        const patch = Locs.query().where(l => l.id === locId).action('Pick').within(10).nearest();
+        const patch = await findSceneTarget(() => Locs.query().where(l => l.id === locId).action('Pick').within(10).nearest());
         if (!patch) {
             log(`no ${name} patch in reach of (${tile.x},${tile.z})`);
             return false;

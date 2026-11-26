@@ -1,6 +1,5 @@
+import { Modals } from '../../../../ui/widgets/Modals.js';
 import { normalizeJournal as normalize } from '../../journalText.js';
-import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
-import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
 import { OBS_QUEST, OBS_STAGE } from './areas.js';
 
@@ -35,9 +34,6 @@ export async function readObservatoryStage(): Promise<number | undefined> {
         return undefined;
     }
     const stage = parseObservatoryJournal(await Quests.journal(OBS_QUEST));
-    if (reader.modals().main !== -1) {
-        actions.closeModal();
-        await Execution.delayTicks(1);
-    }
+    await Modals.closeIfOpen();
     return stage;
 }

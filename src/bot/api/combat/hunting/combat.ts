@@ -31,6 +31,7 @@ export interface CombatHost extends JiveHost {
     needEat(): boolean;
     eatOnce(): Promise<boolean>;
     shieldReady?(): boolean;
+    ensureMeleeStyle?(target: Npc): Promise<boolean>;
     buryBones(): boolean;
     boneName(): string;
     safespotIndex(): number;
@@ -405,6 +406,10 @@ export class Fight implements Task {
             }
             // Why: Game.inCombat() reads our own combat bar, which never lights up while safespotting, so a changing target health is the only proof the attack landed.
             if (live) {
+                if (style === 'melee' && await this.host.ensureMeleeStyle?.(live) === false) {
+                    await this.idle();
+                    continue;
+                }
                 if (live.health !== this.engagedHealth) {
                     // Why: a re-issue clears the health it knew and restarts the engage clock, so a fight landing nothing looked fresh every few seconds; only a drop the loop watched counts as damage.
                     if (this.engagedHealth !== -1 && live.health < this.engagedHealth) {
@@ -674,6 +679,7 @@ export class Fight implements Task {
             if (!current || current.targetsAnotherPlayer() || !Reachability.canReach(current.tile()) || EventSignal.pending() || this.host.died || !this.host.hasFood()) return false;
             target = current;
         }
+        if (style === 'melee' && await this.host.ensureMeleeStyle?.(target) === false) return false;
         await this.host.armSpecial?.();
         if (this.host.shieldReady?.() === false) {
             return false;

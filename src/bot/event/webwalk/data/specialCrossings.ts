@@ -12,6 +12,7 @@ export interface SpecialCrossing {
 
     /** Quest (journal name) whose completion waives `requires` for this crossing. */
     questWaivesItems?: string;
+    minQuestPoints?: number;
     requiresSkill?: { name: string; level: number };
     dialogue?: { choose: string[] };
     npc?: string;
@@ -27,7 +28,7 @@ export interface SpecialCrossing {
     /** Scripted movement can arrive before its queued `mes` pages close. */
     settleDialogueAfterArrival?: boolean;
     /** Source-authored random failure that permits a bounded retry of the same crossing. */
-    retryOnGameMessage?: { message: RegExp; attempts: number; reason: string };
+    retryOnGameMessage?: { message: RegExp; attempts: number; reason: string; landingTile?: { x: number; z: number; level: number } };
     /** A dispatched action that produced neither dialogue nor arrival may have been interrupted. */
     retryIfUnacknowledged?: { attempts: number; reason: string };
     reopenAfterDialogue?: boolean;
@@ -51,6 +52,13 @@ export interface SpecialCrossing {
 }
 
 export const SPECIAL_CROSSINGS: SpecialCrossing[] = [
+    ...[true, false].map(entering => ({
+        x: 3191, z: 3363, level: 0, locName: 'Door', action: 'Open',
+        toTile: { x: 3191, z: entering ? 3362 : 3363, level: 0 },
+        arrivalRadius: 0, exactApproach: true, minQuestPoints: 32,
+        settleDialogueAfterArrival: entering,
+        label: entering ? "Champions' Guild entrance" : "Champions' Guild exit"
+    })),
     {
         x: 2924, z: 9803, level: 0, locName: 'Gate', action: 'Open',
         useItem: { id: 1590, name: 'Dusty key' }, exactApproach: true,
@@ -1017,7 +1025,7 @@ export const SPECIAL_CROSSINGS: SpecialCrossing[] = [
         toTile: { x: 2647, z: 9557, level: 0 },
         arrivalRadius: 1,
         exactApproach: true,
-        retryOnGameMessage: { message: /lose your footing/i, attempts: 4, reason: 'Agility roll failed' },
+        retryOnGameMessage: { message: /lose your footing/i, attempts: 4, reason: 'Agility roll failed', landingTile: { x: 2648, z: 9562, level: 0 } },
         label: 'Brimhaven Dungeon stepping stones south'
     },
     {
@@ -1029,7 +1037,7 @@ export const SPECIAL_CROSSINGS: SpecialCrossing[] = [
         toTile: { x: 2649, z: 9562, level: 0 },
         arrivalRadius: 1,
         exactApproach: true,
-        retryOnGameMessage: { message: /lose your footing/i, attempts: 4, reason: 'Agility roll failed' },
+        retryOnGameMessage: { message: /lose your footing/i, attempts: 4, reason: 'Agility roll failed', landingTile: { x: 2648, z: 9557, level: 0 } },
         label: 'Brimhaven Dungeon stepping stones north'
     },
     {
@@ -1041,7 +1049,7 @@ export const SPECIAL_CROSSINGS: SpecialCrossing[] = [
         requiresSkill: { name: 'agility', level: 30 },
         toTile: { x: 2687, z: 9506, level: 0 },
         arrivalRadius: 0,
-        retryOnGameMessage: { message: /lose your footing/i, attempts: 4, reason: 'Agility roll failed' },
+        retryOnGameMessage: { message: /lose your footing/i, attempts: 4, reason: 'Agility roll failed', landingTile: { x: 2681, z: 9507, level: 0 } },
         label: 'Brimhaven Dungeon log balance east'
     },
     {
@@ -1052,7 +1060,7 @@ export const SPECIAL_CROSSINGS: SpecialCrossing[] = [
         action: 'Walk-across',
         toTile: { x: 2682, z: 9506, level: 0 },
         arrivalRadius: 0,
-        retryOnGameMessage: { message: /lose your footing/i, attempts: 4, reason: 'Agility roll failed' },
+        retryOnGameMessage: { message: /lose your footing/i, attempts: 4, reason: 'Agility roll failed', landingTile: { x: 2688, z: 9508, level: 0 } },
         label: 'Brimhaven Dungeon log balance west'
     }
 ];

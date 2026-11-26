@@ -32,7 +32,7 @@ test.each([1, 10])('melee level %i starts varied death walks without fishing or 
     let seed = level;
     const random = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
     const selected = new Set<string>();
-    for (let i = 0; i < 200; i++) {
+    for (let i = 0; i < 800; i++) {
         const decision = planNext(s, { ...emptyMemory(), objective: 'attack' }, random);
         expect(decision.kind).toBe('activity');
         if (decision.kind !== 'activity') continue;

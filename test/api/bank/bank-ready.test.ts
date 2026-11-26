@@ -4,6 +4,7 @@ import { afterEach, expect, test } from 'bun:test';
 
 import { reader, type InvItemSnapshot } from '#/bot/adapter/ClientAdapter.js';
 import { Bank } from '#/bot/api/bank/Bank.js';
+import { waitBankReady } from '#/bot/api/bank/Banking.js';
 import { Execution } from '#/bot/api/execution/Execution.js';
 import { Locs } from '#/bot/api/locs/Locs.js';
 import { ChatDialog } from '#/bot/api/ui/dialogue/ChatDialog.js';
@@ -114,4 +115,12 @@ test('openNearest does not return until the item list has arrived', async () => 
     expect(await Bank.openNearest('Bank booth', 'Use-quickly')).toBe(true);
     expect(Bank.ready()).toBe(true);
     expect(Bank.count('Logs')).toBe(40);
+});
+
+test('gathering can use a synchronized empty bank without sleeping', async () => {
+    install({ open: true, snapshot: true, items: [] });
+    let ticks = 0;
+    Execution.delayTicks = async n => { ticks += n; };
+    expect(await waitBankReady()).toBe(true);
+    expect(ticks).toBe(0);
 });

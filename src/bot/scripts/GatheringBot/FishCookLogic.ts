@@ -176,16 +176,6 @@ export function cookBatchAfterLoad(
     return afterCook === 'continue' ? 'fish-again' : 'stop';
 }
 
-/** 1 tick between single-fish cook actions (this revision has no Make-X). */
-export function cookPaceTicks(_rand: () => number = Math.random): number {
-    return 1;
-}
-
-/** 1–2 ticks between bank UI steps (aligned with api/bank/Banking bankPaceTicks). */
-export function bankPaceTicks(rand: () => number = Math.random): number {
-    return rand() < 0.35 ? 2 : 1;
-}
-
 export function cookedNameFromRaw(rawName: string): string {
     const n = rawName.trim();
     if (/^raw\s+/i.test(n)) {

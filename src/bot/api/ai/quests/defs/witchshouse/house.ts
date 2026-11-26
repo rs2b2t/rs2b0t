@@ -8,7 +8,7 @@ import { Npcs, type Npc } from '../../../../npcs/Npcs.js';
 import { Modals } from '../../../../ui/widgets/Modals.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import { openContainer } from '../../exec/legs.js';
-import { clearBoxes, driveBoxes, promptLoc, settleScene } from '../../exec/prompts.js';
+import { findSceneTarget, clearBoxes, driveBoxes, promptLoc, settleScene } from '../../exec/prompts.js';
 import { WH_LOC, WH_NPC, WH_OBJ, WH_TILE, inPorch } from './areas.js';
 
 const WALK_MS = 180_000;
@@ -186,8 +186,7 @@ export async function fetchDiary(log: (m: string) => void): Promise<boolean> {
         log(`the upstairs bedroom is unreachable (try ${DiaryState.tries} of ${MAX_DIARY_TRIES})`);
         return false;
     }
-    await settleScene();
-    const drop = GroundItems.query().where(g => g.id === WH_OBJ.DIARY).within(6).nearest();
+    const drop = await findSceneTarget(() => GroundItems.query().where(g => g.id === WH_OBJ.DIARY).within(6).nearest());
     if (!drop) {
         DiaryState.tries++;
         log(`no diary on the bedroom floor (try ${DiaryState.tries} of ${MAX_DIARY_TRIES}); it respawns in 30 ticks`);

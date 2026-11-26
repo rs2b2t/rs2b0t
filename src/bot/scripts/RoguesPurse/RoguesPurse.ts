@@ -279,7 +279,7 @@ export default class RoguesPurse extends LoopingBot {
         }
         // An open bank modal would block the walk that follows, on every exit from here.
         try {
-            if (!(await Execution.delayUntil(() => Bank.loaded(), 4000))) {
+            if (!(await Bank.waitReady(4000))) {
                 this.log('bank contents never loaded — retrying');
                 return false;
             }

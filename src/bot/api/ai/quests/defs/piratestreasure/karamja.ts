@@ -4,7 +4,7 @@ import { Traversal } from '../../../../walking/Traversal.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
 import { Locs } from '../../../../locs/Locs.js';
 import { talkStrict } from '../../exec/primitives.js';
-import { settleScene, useOnLoc } from '../../exec/prompts.js';
+import { findSceneTarget, settleScene, useOnLoc } from '../../exec/prompts.js';
 import { BANANA_TREE_IDS, LUTHAS, PT_ID, PT_LOC, PT_TILE } from './areas.js';
 import { CRATE_FULL, searchBananaCrate } from './crate.js';
 
@@ -53,12 +53,11 @@ async function pickBananas(want: number, log: (m: string) => void): Promise<numb
     }
     for (let attempt = 0; attempt < 40 && held(PT_ID.BANANA) < want && !Inventory.isFull(); attempt++) {
         await Sustain.run();
-        await settleScene();
-        const tree = Locs.query()
+        const tree = await findSceneTarget(() => Locs.query()
             .action('Search')
             .where(l => BANANA_TREE_IDS.includes(l.id))
             .within(20)
-            .nearest();
+            .nearest());
         if (!tree) {
             log('no bearing Banana Tree in range of the grove anchor');
             break;

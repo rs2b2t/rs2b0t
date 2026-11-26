@@ -5,6 +5,8 @@ import { STAFF_RUNES } from '../../data/spelldb.js';
 export const HIGH_ALCH_RATE = 0.6;
 export const LOW_ALCH_RATE = 0.4;
 export const HIGH_ALCH_LEVEL = 55;
+export const HIGH_ALCH_FIRES = 5;
+export const LOW_ALCH_FIRES = 3;
 export const LOW_ALCH_LEVEL = 21;
 export const HIGH_ALCH_SPELL = 'High Level Alchemy';
 export const LOW_ALCH_SPELL = 'Low Level Alchemy';
@@ -92,6 +94,7 @@ const FODDER: { obj: string; label?: string }[] = [
     { obj: 'adamant_2h_sword' },
     { obj: 'rune_platebody' },
     { obj: 'rune_platelegs' },
+    { obj: 'rune_plateskirt' },
     { obj: 'rune_kiteshield' },
     { obj: 'rune_chainbody' },
     { obj: 'rune_full_helm' },

@@ -12,7 +12,7 @@ import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import type Tile from '../../../../../geometry/Tile.js';
 import { driveDialog } from '../../exec/primitives.js';
-import { driveUntil, heldId, settleScene } from '../../exec/prompts.js';
+import { findSceneTarget, driveUntil, heldId, settleScene } from '../../exec/prompts.js';
 import { JAILER_NPC, SC_ID, SC_TILE, VELRAK } from './areas.js';
 
 const WALK_MS = 300_000;
@@ -85,8 +85,7 @@ async function unlockWithKey(keyId: number, locId: number, expect: () => boolean
     if (expect()) {
         return true;
     }
-    await settleScene();
-    const door = locById(locId, 5);
+    const door = await findSceneTarget(() => locById(locId, 5));
     const key = Inventory.items().find(item => item.id === keyId);
     if (!door || !key) {
         log(`scorpcatcher: no ${what} in reach or no key ${keyId} to unlock it with`);
@@ -102,8 +101,7 @@ async function openLoc(locId: number, op: string, expect: () => boolean, what: s
     if (expect()) {
         return true;
     }
-    await settleScene();
-    const loc = locById(locId, 5);
+    const loc = await findSceneTarget(() => locById(locId, 5));
     if (!loc || !(await loc.interact(op))) {
         log(`scorpcatcher: no ${what} to ${op.toLowerCase()} here`);
         return false;
@@ -144,7 +142,7 @@ async function talkInCell(log: (m: string) => void): Promise<boolean> {
 }
 
 /** Velrak's cell: kill the Jailer for his key, unlock the door, and take the dusty key off him. */
-async function fetchDustyKey(log: (m: string) => void): Promise<boolean> {
+export async function fetchDustyKey(log: (m: string) => void): Promise<boolean> {
     if (heldId(SC_ID.DUSTY_KEY) > 0) {
         return true;
     }

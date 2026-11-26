@@ -1,5 +1,6 @@
 import { playWave, setWaveVolume } from '#/client/3rdparty/audio.js';
 import { stopMidi, setMidiVolume, playMidi } from '#/client/3rdparty/tinymidipcm.js';
+import { audioEnabled } from '#/client/config/audio.js';
 
 import ClientBuild from '#/client/shell/ClientBuild.js';
 import { ClientCode } from '#/client/shell/ClientCode.js';
@@ -542,14 +543,14 @@ export class Client extends GameShell {
     private minimapFlagX: number = 0;
     private minimapFlagZ: number = 0;
 
-    private midiActive: boolean = true;
+    private midiActive: boolean = audioEnabled;
     private midiVolume: number = 0;
     private midiSong: number = -1;
     private nextMidiSong: number = -1;
     private nextMusicDelay: number = 0;
     private midiFading: boolean = true;
 
-    private waveEnabled: boolean = true;
+    private waveEnabled: boolean = audioEnabled;
     private waveVolume: number = 0;
     private waveCount: number = 0;
     private waveIds: Int32Array = new Int32Array(50);
@@ -878,7 +879,7 @@ export class Client extends GameShell {
             const media: JagFile = await this.getJagFile('2d graphics', 40, 'media', 4);
             const textures: JagFile = await this.getJagFile('textures', 45, 'textures', 6);
             const wordenc: JagFile = await this.getJagFile('chat system', 50, 'wordenc', 7);
-            const sounds: JagFile = await this.getJagFile('sound effects', 55, 'sounds', 8);
+            const sounds = audioEnabled ? await this.getJagFile('sound effects', 55, 'sounds', 8) : null;
 
             this.mapl = new Uint8Array3d(BuildArea.LEVELS, BuildArea.SIZE, BuildArea.SIZE);
             this.groundh = new Int32Array3d(BuildArea.LEVELS, BuildArea.SIZE + 1, BuildArea.SIZE + 1);
@@ -896,7 +897,7 @@ export class Client extends GameShell {
             AnimFrame.init(this.onDemand.getAnimFrameCount());
             Model.init(this.onDemand.getFileCount(0), this.onDemand);
 
-            if (!Client.lowMem) {
+            if (this.midiActive && !Client.lowMem) {
                 this.midiSong = 0;
                 this.midiSong = this.getIntParam('music', this.midiSong);
                 this.midiFading = true;
@@ -946,7 +947,8 @@ export class Client extends GameShell {
                 await sleep(100);
             }
 
-            if (this.db) {
+            const prefetchAssets = !this.searchParams.has('box');
+            if (prefetchAssets && this.db) {
                 await this.drawProgress('Requesting maps', 75);
 
                 this.onDemand.request(3, this.onDemand.getMapFile(48, 47, 0));
@@ -979,7 +981,7 @@ export class Client extends GameShell {
                 }
             }
 
-            const modelCount2 = this.onDemand.getFileCount(0);
+            const modelCount2 = prefetchAssets ? this.onDemand.getFileCount(0) : 0;
             for (let i = 0; i < modelCount2; i++) {
                 const flags = this.onDemand.getModelUse(i);
 
@@ -1009,9 +1011,9 @@ export class Client extends GameShell {
                 }
             }
 
-            await this.onDemand.prefetchMaps(Client.memServer);
+            if (prefetchAssets) await this.onDemand.prefetchMaps(Client.memServer);
 
-            if (!Client.lowMem) {
+            if (this.midiActive && !Client.lowMem) {
                 const midiCount = this.onDemand.getFileCount(2);
                 for (let i = 1; i < midiCount; i++) {
                     if (this.onDemand.isMidiJingle(i)) {
@@ -1183,7 +1185,7 @@ export class Client extends GameShell {
             VarBitType.init(config);
             ClientLocAnim.app = this;
 
-            if (!Client.lowMem) {
+            if (sounds && !Client.lowMem) {
                 await this.drawProgress('Unpacking sounds', 90);
                 const soundsDat = sounds.read('sounds.dat');
                 JagFX.init(new Packet(soundsDat));
@@ -3249,7 +3251,7 @@ export class Client extends GameShell {
                                 if (this.chatInput === '::clientdrop') {
                                     await this.lostCon();
                                 } else if (this.chatInput === '::prefetchmusic') {
-                                    if (this.onDemand) {
+                                    if (audioEnabled && this.onDemand) {
                                         for (let i = 0; i < this.onDemand.getFileCount(2); i++) {
                                             await this.onDemand.prefetchPriority(2, i, 1);
                                         }
@@ -10838,7 +10840,7 @@ export class Client extends GameShell {
 
             ObjType.spriteCache?.clear();
             this.redrawFrame = true;
-        } else if (clientcode === 3) {
+        } else if (clientcode === 3 && audioEnabled) {
             const lastMidiActive: boolean = this.midiActive;
 
             if (value === 0) {
@@ -10872,7 +10874,7 @@ export class Client extends GameShell {
 
                 this.nextMusicDelay = 0;
             }
-        } else if (clientcode === 4) {
+        } else if (clientcode === 4 && audioEnabled) {
             if (value === 0) {
                 this.waveVolume = 0;
                 this.waveEnabled = true;

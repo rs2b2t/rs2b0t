@@ -32,6 +32,7 @@ let upkeep: number;
 let edgePassAfterChecks: number;
 let edgePassChecks: number;
 let sceneWalks: number;
+let waits: number[];
 
 const loc = {
     get id(): number {
@@ -92,7 +93,7 @@ const restoreReader = stubProps(reader, {
     modals: () => ({ main: -1, side: -1, chat: dialogue === 'closed' ? -1 : 5 })
 });
 const restoreExecution = stubProps(Execution, {
-    delayTicks: async () => {},
+    delayTicks: async (ticks: number) => { waits.push(ticks); },
     delayUntil: async (condition: () => boolean) => condition()
 });
 const restoreLocs = stubProps(Locs, { query: () => locQuery() as never });
@@ -163,6 +164,7 @@ beforeEach(() => {
     edgePassAfterChecks = Number.POSITIVE_INFINITY;
     edgePassChecks = 0;
     sceneWalks = 0;
+    waits = [];
     GameMessages.reset();
     Sustain.set(async () => {
         upkeep++;
@@ -264,6 +266,7 @@ describe('source-authored cart failure retry', () => {
         expect(interactions).toBe(2);
         expect(continues).toBe(3);
         expect(upkeep).toBe(1);
+        expect(waits).not.toContain(3);
         expect(logs).toContainEqual(expect.stringContaining('Agility roll failed; attempt 1/6'));
         expect(logs).toContainEqual(expect.stringContaining('mine cart in: crossed'));
     });

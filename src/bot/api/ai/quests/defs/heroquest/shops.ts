@@ -15,6 +15,7 @@ export interface Purchasable {
     id: number;
     name: string;
     qty: number;
+    alternative?: string;
     /** Stockists in order of preference; the first with stock wins. */
     sources: readonly ShopSource[];
 }
@@ -31,6 +32,7 @@ export async function buyFromAny(item: Purchasable, log: (m: string) => void): P
         const bought = await executeStep({
             kind: 'buy',
             item: item.name,
+            alternative: item.alternative,
             qty: item.qty,
             shop: { npc: source.npc, anchor: source.anchor },
             estGp: source.gp

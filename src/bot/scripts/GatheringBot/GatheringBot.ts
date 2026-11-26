@@ -1409,11 +1409,6 @@ export default class GatheringBot extends TaskBot {
         return walkToToolVendor(vendor, log);
     }
 
-    /** @see bankPace in api/bank/Banking */
-    async bankPace(log?: (m: string) => void): Promise<void> {
-        return bankPace(log);
-    }
-
     /** @see waitBankReady in api/bank/Banking */
     async waitBankReady(log: (m: string) => void = m => this.log(`  ${m}`)): Promise<boolean> {
         const open = await waitBankReady(log);
@@ -1494,7 +1489,7 @@ export default class GatheringBot extends TaskBot {
         } else {
             log(`bank: depositing surplus tools (${toBank.join(', ')})`);
         }
-        await this.bankPace();
+
         await Bank.depositAllMatching(name => {
             if (!name) {
                 return false;
@@ -1508,8 +1503,6 @@ export default class GatheringBot extends TaskBot {
                 r => r.kind === 'tiered' && r.tiers.some(t => t.name.toLowerCase() === key)
             );
         });
-        await Execution.delayUntilTicks(() => Bank.loaded() || !Bank.isOpen(), 5);
-        await this.bankPace();
     }
 
     // Why: wielding a tool can shove whatever was equipped, whether an old axe or pick, a weapon or a shield, into the inventory, and it must be deposited so users do not lose gear mid-run.
@@ -1538,15 +1531,11 @@ export default class GatheringBot extends TaskBot {
             if (!(await this.waitBankReady(log))) {
                 return;
             }
-        } else {
-            await this.bankPace();
         }
 
         const want = new Set(depositNames.map(n => n.toLowerCase()));
         log(`bank: depositing displaced (${depositNames.join(', ')})`);
         await Bank.depositAllMatching(name => want.has((name ?? '').toLowerCase()));
-        await Execution.delayUntilTicks(() => Bank.loaded() || !Bank.isOpen(), 5);
-        await this.bankPace();
     }
 
     // Why: Equipment.unequip does not require the bank to be closed, so the surplus can be deposited in the same session.
@@ -1591,8 +1580,7 @@ export default class GatheringBot extends TaskBot {
             }
             log(`bank: unequip surplus ${name} for deposit`);
             await Equipment.unequip(name);
-            await Execution.delayUntilTicks(() => !Equipment.contains(name) || Inventory.first(name) !== null, 5);
-            await this.bankPace();
+            await Execution.delayUntilTicks(() => Inventory.first(name) !== null, 5);
         }
     }
 
@@ -1607,12 +1595,11 @@ export default class GatheringBot extends TaskBot {
         if (!Bank.isOpen()) {
             return true;
         }
-        await this.bankPace();
+
         if (!(await Bank.close())) {
             log('bank: close did not dismiss the bank modal');
             return false;
         }
-        await Execution.delayTicks(1);
 
         const allowForgetful = opts.allowForgetful !== false;
         if (!allowForgetful || !this.forgetfulBank) {
@@ -1636,7 +1623,7 @@ export default class GatheringBot extends TaskBot {
         if (await this.openScriptBank(log)) {
             await this.waitBankReady(log);
             // Glance only, no withdraw; the double-take.
-            await this.bankPace();
+            await bankPace();
             if (Bank.isOpen() && !(await Bank.close())) {
                 log('bank: forgetful close did not dismiss the bank modal');
                 return false;
@@ -1656,7 +1643,6 @@ export default class GatheringBot extends TaskBot {
             log: m => this.log(m),
             openBankAt: (stand, log) => this.openBankAt(stand, log),
             waitBankReady: log => this.waitBankReady(log),
-            bankPace: log => this.bankPace(log),
             closeScriptBank: (log, opts) => this.closeScriptBank(log, opts),
             walkToToolVendor: (vendor, log) => this.walkToToolVendor(vendor, log),
             heldCount: name => this.heldCount(name),
@@ -2848,8 +2834,7 @@ export default class GatheringBot extends TaskBot {
         if (!config) {
             return true;
         }
-        await Execution.delayUntilTicks(() => (this.desertCampRoute ? Bank.snapshotReady() : Bank.loaded()), 6);
-        await Execution.delayTicks(1);
+        if (!(await this.waitBankReady(log))) return false;
 
         const held = this.minerFoodCount();
         const bankForms = this.desertCampRoute ? foodForms(config.name) : [config.name];
@@ -3130,8 +3115,7 @@ export default class GatheringBot extends TaskBot {
             log(`bank: withdraw better ${step.name}`);
             const one = withdrawOp(item.ops, '1') ?? 'Withdraw-1';
             await Bank.withdraw(step.name, one);
-            await Execution.delayUntilTicks(() => this.heldCount(step.name) > before || Bank.count(step.name) === 0, 7);
-            await this.bankPace();
+            await Execution.delayUntilTicks(() => this.heldCount(step.name) > before, 7);
         }
 
         // Unequip bronze (etc.) into pack while bank stays open, then deposit.
@@ -3277,8 +3261,7 @@ export default class GatheringBot extends TaskBot {
         if (!method || !Bank.isOpen()) {
             return false;
         }
-        await Execution.delayUntilTicks(() => Bank.loaded() || !Bank.isOpen(), 5);
-        if (!Bank.isOpen()) {
+        if (!(await this.waitBankReady(log))) {
             return false;
         }
 
@@ -3304,8 +3287,7 @@ export default class GatheringBot extends TaskBot {
             } else {
                 await Bank.withdrawX(step.name, step.qty);
             }
-            await Execution.delayUntilTicks(() => Inventory.count(step.name) > before || Bank.count(step.name) === 0, 7);
-            await this.bankPace();
+            await Execution.delayUntilTicks(() => Inventory.count(step.name) > before, 7);
         }
 
         // Shop buy when still under target and acquire is enabled.
@@ -3541,21 +3523,14 @@ export default class GatheringBot extends TaskBot {
             return true;
         }
         const bankDisplaced = opts.bankDisplaced !== false && this.desertCampRoute === null;
-        if (Bank.isOpen()) {
-            if (!(await Bank.close())) {
-                log('equip: could not close bank');
-                return false;
-            }
-            await Execution.delayTicks(1);
+        if (Bank.isOpen() && !(await Bank.close())) {
+            log('equip: could not close bank');
+            return false;
         }
-        // Make-X / shop / dialog can leave the main modal open, Wield ops fail until clear.
         if (ChatDialog.isMainMakePanel() || ChatDialog.isOpen()) {
-            await Execution.delayUntilTicks(() => !ChatDialog.isMainMakePanel() && !ChatDialog.isOpen(), 5);
-            await Execution.delayTicks(1);
+            if (!(await Execution.delayUntilTicks(() => !ChatDialog.isMainMakePanel() && !ChatDialog.isOpen(), 5))) return false;
         }
-        // Backpack side-tab (3) so inv ops are live after anvil/shop main modal.
-        await Game.openSideTab(3);
-        await Execution.delayTicks(1);
+        if (!(await Game.openSideTab(3))) return false;
 
         // Snapshot worn gear before wield, equipping an axe/pick can shove the
         // previous weapon (or worse axe) into the inventory.
@@ -3571,8 +3546,8 @@ export default class GatheringBot extends TaskBot {
             if (Equipment.contains(name)) {
                 continue;
             }
-            if (Inventory.first(name) === null) {
-                log(`equip: ${name} not in inventory`);
+            if (!(await Execution.delayUntilTicks(() => Inventory.first(name)?.actions().some(op => /wield|wear|equip/i.test(op)) === true, 5))) {
+                log(`equip: ${name} has no equip action in the backpack`);
                 ok = false;
                 continue;
             }
@@ -3591,13 +3566,14 @@ export default class GatheringBot extends TaskBot {
             } else {
                 log(`equipped ${name}`);
             }
-            await Execution.delayTicks(1);
         }
 
         if (!bankDisplaced) {
             return ok;
         }
 
+        const removed = [...wornBefore].filter(name => !Equipment.contains(name));
+        if (removed.length) await Execution.delayUntilTicks(() => removed.every(name => Inventory.contains(name)), 5);
         const keepWorn = new Set(unique.map(n => n.toLowerCase()));
         const displaced: string[] = [];
         for (const item of Inventory.items()) {

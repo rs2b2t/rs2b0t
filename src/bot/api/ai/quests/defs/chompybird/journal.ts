@@ -1,6 +1,5 @@
+import { Modals } from '../../../../ui/widgets/Modals.js';
 import { normalizeJournal as normalize } from '../../journalText.js';
-import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
-import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 import { CB_QUEST, CB_STAGE } from './areas.js';
@@ -44,10 +43,7 @@ export async function readChompyProgress(): Promise<QuestProgress | undefined> {
     }
     const progress = parseChompyJournal(await Quests.journal(CB_QUEST));
     // Why: the ogre chest, the bait refusal and every objbox in Rantz's chain sit on main, and while one is up the journal read comes back empty.
-    if (reader.modals().main !== -1) {
-        actions.closeModal();
-        await Execution.delayTicks(1);
-    }
+    await Modals.closeIfOpen();
     if (progress) {
         lastGood = progress;
     }

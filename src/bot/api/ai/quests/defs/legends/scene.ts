@@ -6,11 +6,11 @@ import { Modals } from '../../../../ui/widgets/Modals.js';
 import type { Npc } from '../../../../model/Npc.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
-import { pickPreferred } from '../../exec/primitives.js';
+import { afterDialogueAction, pickPreferred } from '../../exec/primitives.js';
 import { settleScene } from '../../exec/prompts.js';
 import { legendsArea, type LegendsArea } from './areas.js';
 
-export { clearBoxes, driveBoxes, driveChoice, driveUntil, heldId, locNear, promptLoc, settleScene, useOnLoc } from '../../exec/prompts.js';
+export { findSceneTarget, clearBoxes, driveBoxes, driveChoice, driveUntil, heldId, locNear, promptLoc, settleScene, useOnLoc } from '../../exec/prompts.js';
 
 // Why: Use-on does not approach the target, so move next to the NPC before sending it.
 
@@ -55,8 +55,7 @@ export async function driveToEnd(prefer: string[], log: (m: string) => void, ms 
     while (performance.now() < deadline) {
         if (ChatDialog.canContinue()) {
             spoke = true;
-            await ChatDialog.continue();
-            await Execution.delayTicks(1);
+            await afterDialogueAction(await ChatDialog.continue(), 1);
             quiet = 0;
             continue;
         }
@@ -71,8 +70,7 @@ export async function driveToEnd(prefer: string[], log: (m: string) => void, ms 
             // Why: a chain that ends without moving the quest on is invisible otherwise, the driver reports the same success either way.
             log(`chose "${pick}" from [${options.join(' | ')}]`);
             took = took || pick === required;
-            await ChatDialog.chooseOption(pick);
-            await Execution.delayTicks(2);
+            await afterDialogueAction(await ChatDialog.chooseOption(pick), 2);
             quiet = 0;
             continue;
         }

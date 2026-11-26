@@ -1,3 +1,7 @@
+import { RUNES } from '../../data/runeCraftLocations.js';
+import { bankTile } from '../MuleCrafter/MuleCrafterLogic.js';
+import { FISH_RECIPES } from '../../data/fishingMethods.js';
+import { crowdBlocked } from './crowding.js';
 import { canStealChaos } from './runes.js';
 import { cookLocation } from '../../api/cooking/CookLocations.js';
 import { FIRE_SPOTS } from '../../api/firemaking/Firemaking.js';
@@ -11,10 +15,10 @@ import { stockOf, type ActivityPlan, type LevelerSnapshot, type SessionMemory } 
 interface Site { name: string; settings: Record<string, unknown>; travel: Tile; members?: boolean }
 
 function travelFood(s: LevelerSnapshot): string | undefined {
-    return ['Lobster', 'Salmon', 'Trout', 'Shrimps'].find(food => stockOf(s, food) >= 12);
+    return ['Shark', 'Swordfish', 'Lobster', 'Salmon', 'Trout', 'Shrimps'].find(food => stockOf(s, food) >= 12);
 }
 
-function membersTravelReady(s: LevelerSnapshot): boolean {
+export function membersTravelReady(s: LevelerSnapshot): boolean {
     return ['attack', 'strength', 'defence'].every(skill => s.levels[skill] >= 20)
         && s.levels.hitpoints >= 25 && stockOf(s, 'Coins') >= 200;
 }
@@ -28,17 +32,26 @@ function gather(name: string, locations: readonly GatheringLocation[], members =
     return { name, settings: { location: name }, travel: location.bankStand, members };
 }
 
-function sites(plan: ActivityPlan): Site[] {
+function sites(plan: ActivityPlan, s: LevelerSnapshot): Site[] {
     switch (plan.script) {
         case 'Woodcutter': {
+            if (plan.settings.treeName === 'Maple tree') return [gather('Seers Maples', WOODCUTTING_LOCATIONS, true)];
+            if (plan.settings.treeName === 'Yew') return [gather('Edgeville Yews', WOODCUTTING_LOCATIONS)];
             const suffix = ({ Tree: '(trees)', Oak: 'Oaks', Willow: 'Willows' } as Record<string, string>)[String(plan.settings.treeName)];
             return suffix ? [gather(`Seers ${suffix}`, WOODCUTTING_LOCATIONS, true), gather(`Draynor ${suffix}`, WOODCUTTING_LOCATIONS)] : [];
         }
-        case 'Fisher':
+        case 'Fisher': {
             if (String(plan.settings.fishMethod).startsWith('Fly fishing')) return [gather('Seers (fly fishing)', FISHING_LOCATIONS, true), gather('Barbarian Village', FISHING_LOCATIONS)];
-            if (String(plan.settings.fishMethod).startsWith('Lobster cage') || plan.settings.fishMethod === 'Harpoon — sharks') return [gather('Catherby', FISHING_LOCATIONS, true)];
+            const fish = FISH_RECIPES.find(f => f.method === plan.settings.fishMethod);
+            if (fish?.location === 'Catherby') {
+                return FISHING_LOCATIONS.filter(site => site.verified && site.resources?.includes(fish.food.toLowerCase())
+                    && (site.name === 'Catherby' || site.name === 'Fishing Guild' && s.levels.fishing >= 68))
+                    .map(site => gather(site.name, FISHING_LOCATIONS, true));
+            }
             return [gather('Draynor Village', FISHING_LOCATIONS)];
+        }
         case 'Miner':
+            if (Array.isArray(plan.settings.rocks) && plan.settings.rocks.includes('Coal')) return [gather(String(plan.settings.location), MINING_LOCATIONS)];
             return [...(Array.isArray(plan.settings.rocks) && plan.settings.rocks.includes('Iron') ? [gather('Fight Arena Mine', MINING_LOCATIONS, true)] : []),
                 gather('Southeast Varrock Mine', MINING_LOCATIONS), gather('Rimmington Mine', MINING_LOCATIONS)];
         case 'CookBot':
@@ -61,7 +74,10 @@ function sites(plan: ActivityPlan): Site[] {
                 { name: 'Lumbridge', settings: {}, travel: new Tile(3221, 3219, 0) }];
         case 'SmithingBot': return [{ name: 'Varrock West', settings: {}, travel: new Tile(3185, 3440, 0) }];
         case 'TannerBot': return [{ name: 'Al Kharid', settings: {}, travel: new Tile(3269, 3167, 0) }];
-        case 'RuneCrafter': return [{ name: 'Falador East', settings: {}, travel: new Tile(3013, 3355, 0) }];
+        case 'RuneCrafter': {
+            const name = RUNES[String(plan.settings.rune).replace(/s$/, '')].bank;
+            return [{ name, settings: {}, travel: bankTile(name) }];
+        }
         case 'EssMiner': return [{ name: 'Varrock East', settings: {}, travel: new Tile(3251, 3420, 0) }];
         case 'EdgevilleMonkeyBars': return [{ name: 'Edgeville', settings: {}, travel: new Tile(3094, 3493, 0) }];
         case 'AIOQuester': return [{ name: 'Varrock East', settings: {}, travel: new Tile(3253, 3420, 0) }];
@@ -79,23 +95,26 @@ function transit(plan: ActivityPlan, food?: string): ActivityPlan {
         settings: { ...plan.settings, ...(food && typeof plan.settings.food === 'string' ? { food } : {}) } };
 }
 
-export function locateMethod(s: LevelerSnapshot, input: ActivityPlan, memory: SessionMemory, random: () => number): ActivityPlan | null {
+export function locateMethod(s: LevelerSnapshot, input: ActivityPlan, memory: SessionMemory, random: () => number, onBlocked?: (reason: string) => void): ActivityPlan | null {
     if (input.script === 'GnomeCourse' || input.script === 'FlaxAIO') return {
         ...input, travel: input.script === 'GnomeCourse' ? new Tile(2474, 3436, 0) : new Tile(2725, 3493, 0),
         needs: [...input.needs, { item: 'Coins', count: 200, carry: 200 }]
     };
-    const prepareFood = input.script === 'Fisher'
-        && ['Lobster cage — lobster', 'Harpoon — sharks'].includes(String(input.settings.fishMethod)) && membersTravelReady(s);
-    const ready = input.settings.target === 'Paladin' ? canStealChaos(s) : membersReady(s) || prepareFood;
+    const coastalFishing = input.script === 'Fisher' && FISH_RECIPES.some(f => f.location === 'Catherby' && f.method === input.settings.fishMethod) && membersTravelReady(s);
+    const ready = input.settings.target === 'Paladin' ? canStealChaos(s) : membersReady(s) || coastalFishing;
     const plan = input.script === 'Thiever' && input.settings.target !== 'Paladin' && s.levels.thieving >= 25 && ready
         ? { ...input, id: 'pickpocket-warrior-women', label: 'pickpocket warrior women', settings: { ...input.settings, target: 'Warrior woman' } } : input;
-    const options = sites(plan);
+    const options = sites(plan, s);
     if (!options.length) return plan;
-    const candidates = options.filter(site => !site.members || ready).map(site => {
+    const eligible = options.filter(site => !site.members || ready);
+    const candidates = eligible.map(site => {
         const original = !site.members && (site.settings.location === plan.settings.location || plan.script === 'SmelterBot');
         return { site, id: original ? plan.id : `${plan.id}-${site.name.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-').replace(/-$/, '')}` };
-    });
-    if (!candidates.length) return null;
+    }).filter(({ site }) => !crowdBlocked({ ...plan, travel: site.travel, settings: { ...plan.settings, ...site.settings } }, memory, s.now));
+    if (!candidates.length) {
+        if (eligible.length) onBlocked?.(`crowd cooldown at ${eligible.map(site => site.name).join(', ')}`);
+        return null;
+    }
     const active = candidates.filter(candidate => (memory.cooldowns[candidate.id] ?? 0) <= s.now);
     const available = active.length ? active : candidates;
     const fresh = available.filter(candidate => !memory.recent.slice(-3).includes(candidate.id));
@@ -103,5 +122,5 @@ export function locateMethod(s: LevelerSnapshot, input: ActivityPlan, memory: Se
     const chosen = choices[Math.min(choices.length - 1, Math.floor(Math.max(0, random()) * choices.length))];
     const located = { ...plan, id: chosen.id, label: `${plan.label} at ${chosen.site.name}`, travel: chosen.site.travel,
         settings: { ...plan.settings, ...chosen.site.settings } };
-    return stockOf(s, 'Coins') >= 200 ? transit(located, plan.food ?? travelFood(s) ?? (prepareFood ? 'Shrimps' : undefined)) : located;
+    return stockOf(s, 'Coins') >= 200 ? transit(located, plan.food ?? travelFood(s)) : located;
 }

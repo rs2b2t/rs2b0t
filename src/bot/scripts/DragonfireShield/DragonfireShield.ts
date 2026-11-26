@@ -499,7 +499,6 @@ class BankTrip implements Task {
             }
         }
         await Bank.close();
-        await Execution.delayTicks(1);
         bot.trips++;
         bot.log(`trip ${bot.trips}: total ${bot.farmed} shield(s) farmed`);
     }

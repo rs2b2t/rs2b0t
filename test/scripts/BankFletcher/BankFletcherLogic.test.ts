@@ -274,19 +274,13 @@ describe('bank snapshot — a missing name is not an empty bank', () => {
     });
 
     test('an unready snapshot with no item is a retry, not a stop', () => {
-        expect(stockAction({ state: 'unready', hasItem: false, waitTimedOut: false })).toBe('retry-unready');
-        expect(stockAction({ state: 'closed', hasItem: false, waitTimedOut: false })).toBe('retry-closed');
+        expect(stockAction({ state: 'unready', hasItem: false })).toBe('retry-unready');
+        expect(stockAction({ state: 'closed', hasItem: false })).toBe('retry-closed');
+        expect(stockAction({ state: 'closed', hasItem: true })).toBe('retry-closed');
     });
 
     test('a ready snapshot with no item is a confirmed empty', () => {
-        expect(stockAction({ state: 'ready', hasItem: false, waitTimedOut: false })).toBe('empty-confirmed');
-    });
-
-    test('a timed-out unready snapshot counts toward empty, not an instant stop', () => {
-        expect(stockAction({ state: 'unready', hasItem: false, waitTimedOut: true })).toBe('empty-unready');
-        expect(nextEmptyReads(0, 'empty-unready')).toBe(1);
-        expect(shouldStopEmpty(1)).toBe(false);
-        expect(shouldStopEmpty(EMPTY_READ_LIMIT)).toBe(true);
+        expect(stockAction({ state: 'ready', hasItem: false })).toBe('empty-confirmed');
     });
 
     test('a confirmed empty increments once — the first miss is not a stop', () => {
@@ -296,7 +290,7 @@ describe('bank snapshot — a missing name is not an empty bank', () => {
     });
 
     test('finding the item resets the empty counter', () => {
-        expect(stockAction({ state: 'ready', hasItem: true, waitTimedOut: false })).toBe('ok');
+        expect(stockAction({ state: 'ready', hasItem: true })).toBe('ok');
         expect(nextEmptyReads(2, 'ok')).toBe(0);
     });
 

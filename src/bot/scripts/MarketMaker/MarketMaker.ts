@@ -632,7 +632,9 @@ export default class MarketMaker extends TaskBot {
 
     private wantToBuy(from: string, want: number | 'all', query: string, qtyImplied: boolean): void {
         const book = this.activeBook();
-        const target = resolveQuote({ cat: this.cat, book, query, side: 'selling', qtyImplied });
+        const { held } = this.deskState();
+        const target = resolveQuote({ cat: this.cat, book, query, side: 'selling', qtyImplied, held,
+            requested: want === 'all' ? Infinity : want });
         if (target.kind === 'miss') {
             if (target.answer) {
                 this.say(`I don't sell '${query}'.`);
@@ -649,7 +651,7 @@ export default class MarketMaker extends TaskBot {
         const sell = salePrice(book, order)!;
         const asked = want === 'all' ? Math.floor(book.maxTradeValue / sell) : want;
         // Why: the bank is the shop's stock and the pack is only what it happens to be carrying, so the quote is sized against both and the difference is a bank trip, not a refusal.
-        const maxQty = Math.min(asked, saleStock(order, this.deskState().held), Math.floor(book.maxTradeValue / sell));
+        const maxQty = Math.min(asked, saleStock(order, held), Math.floor(book.maxTradeValue / sell));
         if (maxQty <= 0) {
             this.say(`I have no ${name} right now.`);
             return;

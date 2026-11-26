@@ -62,7 +62,7 @@ export const TILE = {
     SABA_ENTRANCE: new Tile(2858, 3577, 0),
     SABA_INSIDE: new Tile(2270, 4759, 0),
     SABA_EXIT: new Tile(2269, 4752, 0),
-    STONE_STAND: new Tile(2894, 3563, 0),
+    STONE_STAND: new Tile(2893, 3563, 0),
     SCOUT: new Tile(2864, 3609, 0),
     /** Castle large door to the courtyard (level 0). */
     CASTLE_DOOR: new Tile(2899, 3558, 0),
@@ -73,8 +73,6 @@ export const TILE = {
     INN_STAIRS_BOTTOM: new Tile(2914, 3538, 0),
     INN_STAIRS_TOP: new Tile(2914, 3542, 1)
 } as const;
-
-export const BLURBERRY_SHOP = { npc: 'Barman', anchor: new Tile(2482, 3488, 1) };
 
 export const TOSTIG_SHOP = { npc: 'Tostig', anchor: TILE.TOSTIG };
 

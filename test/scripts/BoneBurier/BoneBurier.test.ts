@@ -14,6 +14,7 @@ const original = {
     delayUntil: Execution.delayUntil,
     bankIsOpen: Bank.isOpen,
     bankLoaded: Bank.loaded,
+    bankSnapshotReady: Bank.snapshotReady,
     bankItems: Bank.items,
     bankCount: Bank.count,
     bankSetNoteMode: Bank.setNoteMode,
@@ -67,6 +68,7 @@ beforeEach(() => {
     Execution.delayUntil = async condition => condition();
     Bank.isOpen = () => bankOpen;
     Bank.loaded = () => bankItems.length > 0;
+    Bank.snapshotReady = () => false;
     Bank.items = () => bankItems;
     Bank.count = name => bankItems.find(item => item.name?.toLowerCase() === name.toLowerCase())?.count ?? 0;
     Bank.setNoteMode = async () => {};
@@ -89,6 +91,7 @@ afterEach(() => {
     Execution.delayUntil = original.delayUntil;
     Bank.isOpen = original.bankIsOpen;
     Bank.loaded = original.bankLoaded;
+    Bank.snapshotReady = original.bankSnapshotReady;
     Bank.items = original.bankItems;
     Bank.count = original.bankCount;
     Bank.setNoteMode = original.bankSetNoteMode;
@@ -122,6 +125,21 @@ test('closes the bank and stops when the configured bones run out', async () => 
     expect(bankOpen).toBe(false);
     expect(withdrawals).toEqual([]);
     expect(stops).toBe(1);
+});
+
+test('finishing a single delegated baby bone returns to the leveler without stopping it', async () => {
+    const instance = bot('Babydragon bones');
+    const finished: string[] = [];
+    instance.bindFinish(reason => finished.push(reason));
+    boneCount = 1;
+    bankItems = [{ id: 995, count: 100, slot: 0, name: 'Coins', comId: 5382, ops: ['Withdraw-All'] }];
+    Inventory.first = () => ({ interact: async () => { boneCount--; return true; } }) as unknown as InvItem;
+    await instance.loop();
+    await instance.loop();
+    expect(boneCount).toBe(0);
+    expect(finished).toHaveLength(1);
+    expect(finished[0]).toContain('Babydragon bones');
+    expect(stops).toBe(0);
 });
 
 test('deposits the whole pack on restock, even when it is already full', async () => {
@@ -158,4 +176,18 @@ test('closes the bank before burying and records progress', async () => {
     expect(boneCount).toBe(2);
     expect((instance as unknown as { burials: number }).burials).toBe(1);
     expect(stops).toBe(0);
+});
+
+test('finishes immediately on a synchronized empty bank', async () => {
+    Bank.snapshotReady = () => true;
+    await restock(bot());
+    expect(stops).toBe(1);
+    expect(withdrawals).toEqual([]);
+});
+
+test('missing snapshots do not count as exhausted stock', async () => {
+    const instance = bot();
+    for (let i = 0; i < 4; i++) await restock(instance);
+    expect(stops).toBe(0);
+    expect(withdrawals).toEqual([]);
 });

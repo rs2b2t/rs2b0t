@@ -5,6 +5,7 @@ import { reader, type NpcSnapshot } from '#/bot/adapter/ClientAdapter.js';
 import { Game } from '#/bot/api/game/Game.js';
 import { Skills } from '#/bot/api/skills/Skills.js';
 import { Sustain } from '#/bot/api/sustain/Sustain.js';
+import { Inventory } from '#/bot/api/inventory/Inventory.js';
 import { Execution } from '#/bot/api/execution/Execution.js';
 import { EventSignal } from '#/bot/api/execution/EventSignal.js';
 import { ChatDialog } from '#/bot/api/ui/dialogue/ChatDialog.js';
@@ -31,6 +32,7 @@ beforeEach(async () => {
     npcs = []; blocked = new Set(); attacks = []; walks = []; onWalk = () => {}; walkOK = true; interrupted = false; now = 1000; sight = false;
     restores = [
         stubProps(reader, { npcs: () => npcs, selfSlot: () => 1, inventory: () => [], equipment: () => [] }),
+        stubProps(Inventory, { count: name => ['Air rune', 'Mind rune', 'Fire rune'].includes(name) ? 100 : 0 }),
         stubProps(Game, { tile: () => anchor, ingame: () => true, inCombat: () => false }),
         stubProps(Skills, { xp: () => 0, level: () => 10, effective: () => 10, hpFraction: () => 1 }),
         stubProps(Sustain, { set: () => {} }),

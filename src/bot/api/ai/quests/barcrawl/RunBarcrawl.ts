@@ -8,7 +8,7 @@ import { Inventory } from '../../../inventory/Inventory.js';
 import { Modals } from '../../../ui/widgets/Modals.js';
 import { Npcs, type Npc } from '../../../npcs/Npcs.js';
 import { GameMessages } from '../../../chatbox/gameMessages.js';
-import { driveUntil } from '../exec/prompts.js';
+import { driveUntil, findSceneTarget } from '../exec/prompts.js';
 import {
     BARBARIAN_GUARD_ID,
     BARCRAWL_CARD,
@@ -42,11 +42,15 @@ export async function readCard(log?: (m: string) => void): Promise<BarcrawlProgr
     const mark = GameMessages.mark();
     // Why: the client clears the modal on close but the server clears it a tick or more later and drops an `opheld` that arrives in between, so the first Read after a read opens nothing.
     // Why: `drinkAt` survived that by reading 3 times; every other caller read once and called the card unreadable.
-    let idChanged = false;
+    const scrollOpened = (): boolean => {
+        const main = reader.modals().main;
+        return main !== -1 && main !== before;
+    };
+    const answered = (): boolean => scrollOpened() || GameMessages.sawSince(mark, TOO_DRUNK);
     let parsed: BarcrawlProgress | null = null;
-    for (let attempt = 0; attempt < READ_TRIES && !idChanged; attempt++) {
-        if (attempt > 0) {
-            await Execution.delayTicks(3);
+    for (let attempt = 0; attempt < READ_TRIES; attempt++) {
+        if (attempt > 0 && await Execution.delayUntilTicks(answered, 3)) {
+            break;
         }
         const card = Inventory.first(BARCRAWL_CARD);
         if (!card) {
@@ -56,14 +60,12 @@ export async function readCard(log?: (m: string) => void): Promise<BarcrawlProgr
             log?.('the card refused its Read op');
             return null;
         }
-        // Why: the modal id arrives in `if_openmain`, each line of the scroll arrives in its own `if_settext`, and component text persists in the interface list between modals.
-        // Why: sampling on the tick the id changes therefore reads an empty scroll, or the previous read's.
-        // Why: settle a tick and wait for text that parses as the card; the id alone proves nothing.
-        idChanged = await Execution.delayUntil(() => {
-            const main = reader.modals().main;
-            return main !== -1 && main !== before;
-        }, 5000);
+        if (await Execution.delayUntil(answered, 5000)) {
+            break;
+        }
     }
+    const idChanged = scrollOpened();
+    // Why: interface text persists between reads and the new lines arrive after the scroll id.
     if (idChanged) {
         await Execution.delayTicks(1);
         await Execution.delayUntil(() => parseCard(reader.mainModalTexts()) !== null, 5000);
@@ -95,8 +97,7 @@ async function drinkAt(bar: Bar, log: (m: string) => void): Promise<boolean> {
         log(`could not reach the ${bar.line} bartender`);
         return false;
     }
-    await Execution.delayTicks(2);
-    const npc = byId(bar.id);
+    const npc = await findSceneTarget(() => byId(bar.id));
     const card = Inventory.first(BARCRAWL_CARD);
     if (!npc || !card) {
         log(`no bartender ${bar.id} or no card at the ${bar.line}`);
@@ -167,9 +168,8 @@ async function talkToGuard(log: (m: string) => void): Promise<boolean> {
         log('could not reach the outpost gate guard');
         return false;
     }
-    await Execution.delayTicks(2);
     // Why: the outpost's other "Barbarian guard" is the attackable one and the gate loc runs the same conversation, so a talk aimed by display name can land on either, hence the id.
-    if (!byId(BARBARIAN_GUARD_ID)) {
+    if (!(await findSceneTarget(() => byId(BARBARIAN_GUARD_ID)))) {
         log('no barbarian guard at the outpost gate');
         return false;
     }

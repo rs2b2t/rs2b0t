@@ -191,3 +191,13 @@ test('does not reclick an idle trap trigger within the dispatch tick', async () 
     expect(walks).toHaveLength(2);
     expect(walks[1].tick).toBe(101);
 });
+
+test('tags a newly assigned pillar on the first tick after idling', async () => {
+    agility = 19;
+    await start();
+    expect(tags).toBe(0);
+    tagged = false;
+    BotHost.tickCount = 101;
+    for (let i = 0; i < 4; i++) await frame();
+    expect(tags).toBe(1);
+});

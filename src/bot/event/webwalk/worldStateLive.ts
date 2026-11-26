@@ -100,6 +100,7 @@ export function snapshotWorldStateData(): WorldStateData {
     return {
         // Client.memServer is set at boot from world config; a free-world snapshot must fail members-gated edges.
         members: Client.memServer === true,
+        questPoints: Quests.points(),
         skills,
         quests,
         items,

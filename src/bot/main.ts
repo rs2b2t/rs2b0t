@@ -11,6 +11,7 @@ import { readTraceRing } from './api/ai/clues/ClueTrace.js';
 import { BotDiag } from './runtime/diag/BotDiag.js';
 import { Input } from './input/Input.js';
 import { Navigator } from './event/webwalk/Navigator.js';
+import type { NavPoolHost } from './event/webwalk/NavWorkerClient.js';
 import { setNavPackHost } from './event/webwalk/navPack.js';
 import { installAbi } from './runtime/abi.js';
 import { AutoRelogin } from './runtime/AutoRelogin.js';
@@ -36,7 +37,9 @@ export { BotClient, BotHost };
 
 if (typeof document !== 'undefined' && document.getElementById('canvas')) {
     // Bots on a wall are same-origin iframes, so the shared collision pack lives on the top window; a standalone bot is its own top.
-    setNavPackHost(window.top ?? window);
+    const navHost = (window.top ?? window) as Window & NavPoolHost;
+    setNavPackHost(navHost);
+    Navigator.useWorkerPool(navHost);
 
     const params = new URLSearchParams(window.location.search);
     const world = TARGET.world ?? hostedWorld(TARGET.wsHost)?.number ?? null;
@@ -46,7 +49,9 @@ if (typeof document !== 'undefined' && document.getElementById('canvas')) {
     const lowmem = params.get('lowmem') !== '0';
     const members = params.get('members') !== '0';
 
-    const client = new BotClient(nodeid, lowmem, members);
+    const client = new BotClient(nodeid, lowmem, members, () => {
+        window.frameElement?.dispatchEvent(new Event('mbx-client-initialized'));
+    });
     let reconnectAfterSwitch = false;
     const prepareWorldSwitch = (): boolean => {
         reconnectAfterSwitch ||= client.ingame;

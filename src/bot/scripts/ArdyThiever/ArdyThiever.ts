@@ -422,7 +422,6 @@ class BankRun implements Task {
         }
         const before = lootSlots();
         await Bank.depositAllMatching(depositMatcher(name => matchesAny(name, LOOT), BANK_COMMON), m => this.bot.log(`  ${m}`));
-        await Execution.delayTicks(1);
         const after = lootSlots();
         this.bot.log(`banked: loot slots ${before}->${after}${after >= before ? ' (nothing deposited!)' : ''}`);
         this.bot.countTrip();

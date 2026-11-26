@@ -457,6 +457,14 @@ export const CASES: readonly Case[] = [
         note: 'empty pack plus banked trout forces the out-of-food trip; the run fails if the booth stays open or combat never resumes'
     },
     {
+        id: 'autofighter-transitions-live',
+        harness: 'autofighter-transitions-live.ts',
+        covers: { scripts: ['AutoFighter'] },
+        status: 'unvetted',
+        budgetMin: 10,
+        note: 'checks four Shadow warrior kills for a new attack within two server ticks'
+    },
+    {
         id: 'autofighter-special-live',
         harness: 'autofighter-special-live.ts',
         covers: { scripts: ['AutoFighter'] },

@@ -25,3 +25,7 @@ export function resolveSet(query: string): MarketSet | null {
     const match = /^(.+) sets?$/.exec(key);
     return match && Object.hasOwn(SETS, match[1]) ? SETS[match[1]] : null;
 }
+
+export function setVariants(set: MarketSet): readonly MarketSet[] {
+    return set === SETS.rune ? [set, { name: 'Rune set (plateskirt)', itemIds: [1163, 1127, 1093] }] : [set];
+}

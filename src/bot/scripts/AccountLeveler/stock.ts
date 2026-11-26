@@ -4,6 +4,8 @@ export class LevelerStock {
     ready = false;
     private bank: Record<string, number> = {};
 
+    get banked(): Readonly<Record<string, number>> { return this.bank; }
+
     observe(items: readonly CountedItem[], ready: boolean): void {
         if (!ready) return;
         this.bank = stockCounts(items);

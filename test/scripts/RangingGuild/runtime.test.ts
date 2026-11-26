@@ -250,3 +250,21 @@ test('a delegated child throws when its bow is missing instead of requesting a r
     expect(run.finished()).toBe('');
     expect(stopped).toBe('');
 });
+
+test('a confirmed entry releases the next archery task without an extra tick', async () => {
+    const run = delegated();
+    const ticks = spyOn(Execution, 'delayTicks').mockResolvedValue();
+    await run.bot.loop();
+    expect(count).toBe(1);
+    expect(ticks).not.toHaveBeenCalled();
+});
+
+test('opens the next round as soon as a confirmed withdrawal covers the fee', async () => {
+    coins = 0;
+    bankCoins(450);
+    const run = delegated();
+    const waits = spyOn(Execution, 'delayTicks').mockResolvedValue();
+    await run.bot.loop();
+    expect(coins).toBe(250);
+    expect(waits).not.toHaveBeenCalled();
+});

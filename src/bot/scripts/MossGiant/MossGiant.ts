@@ -1,3 +1,4 @@
+import { configuredLootNames } from '../../api/bank/bankRules.js';
 import { CUSTOM_RANGED_SETTINGS, rangedItem } from '../../api/combat/rangedSettings.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
@@ -367,7 +368,6 @@ class ArmAutocast implements Task {
     }
     async execute(): Promise<void> {
         this.bot.setStatus(`arming autocast: ${SPELL}`);
-        await Execution.delayTicks(3);
         if (await Autocast.arm(SPELL, m => this.bot.log(m))) {
             this.fails = 0;
         } else if (++this.fails >= ASSERT_BATCH) {
@@ -620,7 +620,7 @@ class Fight implements Task {
                 this.bot.countBurial();
             }
             if (Game.inCombat()) {
-                await Execution.delayTicks(2);
+                await Execution.delayTicks(1);
                 continue;
             }
 
@@ -628,10 +628,7 @@ class Fight implements Task {
             const target = giants
                 .filter(g => !usesSafespot() || (this.skip.get(g.index) ?? 0) < now)
                 .sort((a, b) => a.distance() - b.distance())[0];
-            if (!target) {
-                await Execution.delayTicks(2);
-                return;
-            }
+            if (!target) return;
 
             await target.interact('Attack');
             this.targetIdx = target.index;
@@ -677,7 +674,7 @@ export default class MossGiant extends TaskBot {
         RUNES_WITHDRAW = this.settings.num('runesWithdraw', 150);
         AMMO_WITHDRAW = this.settings.num('ammoWithdraw', 500);
         FOOD_WITHDRAW = this.settings.num('foodWithdraw', 20);
-        LOOT_SET = new Set(this.settings.list('loot', DEFAULT_LOOT).map(s => s.toLowerCase()));
+        LOOT_SET = new Set(configuredLootNames(this.settings.list('loot', DEFAULT_LOOT)));
         BANK_COMMON = this.settings.bool('bankCommonJunk', true);
         BURY_BONES = this.settings.bool('buryBones', false);
         if (BURY_BONES) {

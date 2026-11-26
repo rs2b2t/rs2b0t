@@ -15,15 +15,8 @@ import { Traversal } from '../../../../walking/Traversal.js';
 import { Reachability } from '../../../../../event/webwalk/geometry/Reachability.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { heldId } from '../../exec/prompts.js';
-import { IKOV_FOODS, IKOV_LOC, IKOV_NAME, IKOV_NPC, IKOV_OBJ, IKOV_TILE, ROOTS_WANTED } from './areas.js';
+import { IKOV_BOWS, IKOV_FOODS, IKOV_LOC, IKOV_NAME, IKOV_NPC, IKOV_OBJ, IKOV_TILE, ROOTS_WANTED } from './areas.js';
 import { meleeWeaponStep, rangedArmourStep } from './gear.js';
-
-/** Levels the sourcing route needs but the server never gates on the quest. */
-const IKOV_SOURCING_SKILLS: readonly { skill: string; level: number }[] = [
-    { skill: 'woodcutting', level: 60 },
-    { skill: 'fletching', level: 65 },
-    { skill: 'crafting', level: 10 }
-];
 
 /** Worn right hand: the slot a weapon occupies. */
 const WEAPON_SLOT = 3;
@@ -266,17 +259,12 @@ function armedForMelee(): boolean {
     return worn.some(item => item.slot === AMMO_SLOT && item.count >= FARM_ARROWS);
 }
 
-/** Take the spent bow off; fists beat a bow with no arrows. */
-async function stowEmptyBow(log: (m: string) => void): Promise<boolean> {
-    log('ikov: stowing the empty yew shortbow — it cannot swing at a hobgoblin');
-    return Equipment.unequip(IKOV_NAME.YEW_SHORTBOW);
-}
-
 // Why: the crossing kit leaves the bot bare-handed against level-42 hobgoblins, and the axe the yew was cut with is banked and is a weapon.
 function armForTheFarm(snap: QuestSnapshot): QuestStep | null {
     // Why: a spent bow still fills the weapon slot, so it comes off before anything is picked to replace it.
-    if (!armedForMelee() && Equipment.contains(IKOV_NAME.YEW_SHORTBOW)) {
-        return { kind: 'custom', name: 'stow the empty bow', run: stowEmptyBow };
+    const bow = IKOV_BOWS.find(bow => snap.wornIds?.has(bow.id));
+    if (bow && !armedForMelee()) {
+        return { kind: 'custom', name: 'stow the empty bow', run: () => Equipment.unequip(bow.name) };
     }
     // Why: the best weapon in the bank beats the axe the yew was cut with.
     const better = meleeWeaponStep(snap);
@@ -357,9 +345,9 @@ interface SupplyWants {
  * @see docs/decisions/quest-pitfalls-26.md
  */
 export function suppliesStep(snap: QuestSnapshot, wants: SupplyWants, fletchingLevel?: number): QuestStep | null {
-    const needBow = wants.bow && heldOrBanked(snap, IKOV_OBJ.YEW_SHORTBOW) === 0;
+    const needBow = wants.bow && !IKOV_BOWS.some(bow => heldOrBanked(snap, bow.id) > 0);
     if (needBow && fletchingLevel !== undefined && fletchingLevel < 65) {
-        return { kind: 'wait', reason: 'need Fletching 65 to make a Yew shortbow, or a banked Yew shortbow' };
+        return { kind: 'wait', reason: 'need Fletching 65 to make a Yew shortbow, or a strung yew or magic bow' };
     }
     // Why: Aemad's is in East Ardougne and the rest of the kit is a Catherby-Seers loop, so the axe is bought on the way out.
     if (needBow && axeOutstanding(snap)) {
@@ -451,14 +439,6 @@ function bowChainStep(snap: QuestSnapshot): QuestStep | null {
         return kit ?? { kind: 'custom', name: 'fletch a yew shortbow', run: fletchBow };
     }
     return null;
-}
-
-export function sourcingShortfall(): string | null {
-    const short = IKOV_SOURCING_SKILLS.filter(req => Skills.level(req.skill) < req.level);
-    if (short.length === 0) {
-        return null;
-    }
-    return `Temple of Ikov sources its own yew shortbow — needs ${short.map(s => `${s.skill} ${s.level}`).join(', ')}`;
 }
 
 export { lightCandle };

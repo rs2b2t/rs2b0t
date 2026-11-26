@@ -13,6 +13,8 @@ Each slot is an iframe running the ordinary single-instance `bot.html`, unmodifi
 
 | Fact | Detail |
 |---|---|
+| Startup | Tiles appear immediately. Four clients initialize at a time. The rest show `Queued to load`. A startup that takes over three minutes releases its place so the queue can continue. |
+| Asset loading | Multibox clients request maps and optional models as needed during play and share the on-disk asset cache. |
 | Paint rate | Rail slots ~1 fps, focused slot every frame; the logical game loop stays full speed |
 | Click handling | A `.mbx-hit` overlay sits above each iframe, because a click landing in the iframe goes to the game |
 | Storage | Boxed per account via `?box=<account>`; same-origin iframes share one `sessionStorage` |

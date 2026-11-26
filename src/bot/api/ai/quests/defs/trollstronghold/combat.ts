@@ -7,7 +7,7 @@ import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
 import { Skills } from '../../../../skills/Skills.js';
 import { Npcs, type Npc } from '../../../../npcs/Npcs.js';
-import { pickPreferred } from '../../exec/primitives.js';
+import { afterDialogueAction, pickPreferred } from '../../exec/primitives.js';
 import { PRAYER_SIP_AT } from './areas.js';
 
 export const PROTECT = {
@@ -231,8 +231,7 @@ async function drainDialogue(
 ): Promise<void> {
     for (let i = 0; i < 20; i++) {
         if (ChatDialog.canContinue()) {
-            await ChatDialog.continue();
-            await Execution.delayTicks(1);
+            await afterDialogueAction(await ChatDialog.continue(), 1);
             continue;
         }
         const opts = ChatDialog.options();
@@ -244,9 +243,8 @@ async function drainDialogue(
             log(`WARN: mid-fight dialogue had no preferred option in [${opts.join(' | ')}]`);
             return;
         }
-        await ChatDialog.chooseOption(pick);
+        await afterDialogueAction(await ChatDialog.chooseOption(pick), 2);
         onChosen?.(pick);
-        await Execution.delayTicks(2);
     }
 }
 

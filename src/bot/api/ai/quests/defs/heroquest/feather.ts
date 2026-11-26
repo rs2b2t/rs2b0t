@@ -1,3 +1,5 @@
+import { RUNE_LEGS } from '../../../../../data/runeLegs.js';
+import { questRuneLegs } from '../../armour.js';
 import { Skills } from '../../../../skills/Skills.js';
 import { pickaxeAt } from '../knightssword/supplies.js';
 import { Equipment } from '../../../../equipment/Equipment.js';
@@ -12,19 +14,16 @@ import { Traversal } from '../../../../walking/Traversal.js';
 import Tile from '../../../../../geometry/Tile.js';
 import { fight } from '../trollstronghold/combat.js';
 import { talkThrough } from '../../exec/primitives.js';
-import { settleScene } from '../../exec/prompts.js';
+import { findSceneTarget } from '../../exec/prompts.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { HERO_ID, HERO_NAMED, HERO_NPC, HERO_SHOP, HERO_TILE, onEntrana } from './areas.js';
-import { kitStep, type Purchasable } from './shops.js';
+import { purchaseStep, type Purchasable } from './shops.js';
 import { anywhere, bankedId, foodName, heldFood, heldId, wornId } from './state.js';
 import { FOOD_FLOAT } from '../../food.js';
 
 // Why: the Ice Queen is level 111 with 104 hitpoints and the kit is Scavvo's on the Champions' Guild upper floor. Each float clears the asking price of a shop below base stock, which buys at more.
-const COMBAT_KIT: readonly Purchasable[] = [
-    { id: 1113, name: 'Rune chainbody', qty: 1, sources: [{ ...HERO_SHOP.SCAVVO, gp: 80_000 }] },
-    { id: 1079, name: 'Rune platelegs', qty: 1, sources: [{ ...HERO_SHOP.SCAVVO, gp: 100_000 }] },
-    { id: 1303, name: 'Rune longsword', qty: 1, sources: [{ ...HERO_SHOP.SCAVVO, gp: 55_000 }] }
-];
+const BODY: Purchasable = { id: 1113, name: 'Rune chainbody', qty: 1, sources: [{ ...HERO_SHOP.SCAVVO, gp: 80_000 }] };
+const WEAPON: Purchasable = { id: 1303, name: 'Rune longsword', qty: 1, sources: [{ ...HERO_SHOP.SCAVVO, gp: 55_000 }] };
 
 const FOOD_TARGET = FOOD_FLOAT;
 const FIREBIRD_MS = 90_000;
@@ -60,7 +59,10 @@ async function unequipAll(_log: (m: string) => void): Promise<boolean> {
 }
 
 export function combatKitStep(snap: QuestSnapshot): QuestStep | null {
-    return kitStep(snap, COMBAT_KIT);
+    const legs = questRuneLegs(snap, RUNE_LEGS[0].name) ?? RUNE_LEGS[0];
+    return purchaseStep(snap, BODY)
+        ?? purchaseStep(snap, { ...legs, qty: 1, sources: [{ ...HERO_SHOP.SCAVVO, gp: 100_000 }], alternative: RUNE_LEGS[1].name })
+        ?? purchaseStep(snap, WEAPON);
 }
 
 function iceQueen(): Npc | null {
@@ -109,8 +111,7 @@ async function stepOffShip(log: (m: string) => void): Promise<boolean> {
         return true;
     }
     for (let attempt = 0; attempt < PLANK_TRIES; attempt++) {
-        await settleScene();
-        const plank = Locs.query().name('Gangplank').action('Cross').within(12).nearest();
+        const plank = await findSceneTarget(() => Locs.query().name('Gangplank').action('Cross').within(12).nearest());
         if (plank && (await plank.interact('Cross'))
             && (await Execution.delayUntil(() => Game.tile()?.level === 0, 10_000))) {
             return true;

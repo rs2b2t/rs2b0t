@@ -95,7 +95,6 @@ export class ArmAutocast implements Task {
     }
     async execute(): Promise<void> {
         this.bot.setStatus(`arming autocast: ${cfg.spell}`);
-        await Execution.delayTicks(3);
         if (await Autocast.arm(cfg.spell, m => this.bot.log(m))) {
             this.fails = 0;
         } else if (++this.fails >= ASSERT_BATCH) {

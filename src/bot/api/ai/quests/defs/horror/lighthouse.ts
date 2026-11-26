@@ -6,7 +6,7 @@ import { Traversal } from '../../../../walking/Traversal.js';
 import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
 import { Locs } from '../../../../locs/Locs.js';
-import { settleScene } from '../../exec/prompts.js';
+import { findSceneTarget, settleScene } from '../../exec/prompts.js';
 import { HD_ID, HD_ITEM, HD_LOC, HD_TILE } from './areas.js';
 import { HD_FLAG } from './journal.js';
 
@@ -38,8 +38,7 @@ export async function repairBridge(log: (m: string) => void): Promise<boolean> {
             log(`could not stand on the ${side} bridge spot`);
             return false;
         }
-        await settleScene();
-        const spot = Locs.query().name(HD_LOC.BRIDGE).where(l => l.tile().equals(stand)).nearest();
+        const spot = await findSceneTarget(() => Locs.query().name(HD_LOC.BRIDGE).where(l => l.tile().equals(stand)).nearest());
         if (!spot) {
             log(`no bridge spot at (${stand.x},${stand.z})`);
             return false;
@@ -163,8 +162,7 @@ export async function repairLight(flags: ReadonlySet<string>, log: (m: string) =
             return true;
         }
     }
-    await Execution.delayTicks(3);
-    return !inQuestLighthouse(Game.tile());
+    return Execution.delayUntilTicks(() => !inQuestLighthouse(Game.tile()), 3);
 }
 
 // Why: repairing teleports into the live lighthouse's lamp room, its staircase routes back into the copy at level 1, and only the copy's ground floor has the iron ladder down.

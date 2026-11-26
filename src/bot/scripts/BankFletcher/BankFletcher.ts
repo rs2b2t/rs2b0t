@@ -55,7 +55,6 @@ import { fmtDuration } from '../../paint/paintLogic.js';
 const DEFAULT_BANK_STAND = new Tile(3185, 3440, 0);
 const FLETCHING_KNIFE = 'Knife';
 const BOOTH = { op: 'Use-quickly' };
-const LIST_WAIT_TICKS = 7;
 const WITHDRAW_CONFIRM_TICKS = 4;
 const BATCH_IDLE_TICKS = 12;
 
@@ -533,24 +532,16 @@ class BankTrip implements Task {
             await Bank.depositAllMatching(depositAllExcept(keep), m => this.bot.log(`  ${m}`));
             this.bot.countTrip();
 
-            const arrived = await Execution.delayUntilTicks(
-                () => Bank.loaded() || !Bank.isOpen(),
-                LIST_WAIT_TICKS
-            );
-            const state = bankListState(Bank.isOpen(), Bank.loaded());
-            if (state === 'closed') {
-                this.bot.log('bank window closed — will retry');
-                return;
-            }
+            if (!(await Bank.waitReady(4200, message => this.bot.log(message)))) return;
 
             if (this.bot.fletchMode() === 'cut+string' && stringingEarly) {
-                await this.withdrawCutString(stringingEarly, !arrived);
+                await this.withdrawCutString(stringingEarly);
                 return;
             }
 
             const stringing = this.bot.stringPlan();
             if (stringing) {
-                await this.withdrawStringing(stringing, !arrived);
+                await this.withdrawStringing(stringing);
                 return;
             }
 
@@ -560,9 +551,8 @@ class BankTrip implements Task {
                     const pat = input.toLowerCase();
                     const bankItem = Bank.items().find(i => i.name !== null && i.name.toLowerCase().includes(pat));
                     const action = stockAction({
-                        state: bankListState(Bank.isOpen(), Bank.loaded()),
-                        hasItem: Boolean(bankItem?.name),
-                        waitTimedOut: !arrived
+                        state: bankListState(Bank.isOpen(), Bank.ready()),
+                        hasItem: Boolean(bankItem?.name)
                     });
                     this.bot.noteEmpty(input, action);
                     if (action === 'ok' && bankItem?.name) {
@@ -592,9 +582,8 @@ class BankTrip implements Task {
 
             const logItem = Bank.items().find(i => logNameMatches(i.name, this.bot.materialName()));
             const logAction = stockAction({
-                state: bankListState(Bank.isOpen(), Bank.loaded()),
-                hasItem: Boolean(logItem?.name),
-                waitTimedOut: !arrived
+                state: bankListState(Bank.isOpen(), Bank.ready()),
+                hasItem: Boolean(logItem?.name)
             });
             const logKey = this.bot.materialName();
             this.bot.noteEmpty(logKey, logAction);
@@ -618,9 +607,8 @@ class BankTrip implements Task {
             if (this.bot.knifeCount() === 0) {
                 const knifeBank = exactName(Bank.items(), this.bot.knifeName());
                 const knifeAction = stockAction({
-                    state: bankListState(Bank.isOpen(), Bank.loaded()),
-                    hasItem: Boolean(knifeBank?.name),
-                    waitTimedOut: !arrived
+                    state: bankListState(Bank.isOpen(), Bank.ready()),
+                    hasItem: Boolean(knifeBank?.name)
                 });
                 if (knifeAction !== 'ok' || !knifeBank?.name) {
                     if (knifeAction.startsWith('retry')) {
@@ -655,8 +643,8 @@ class BankTrip implements Task {
         }
     }
 
-    private async withdrawStringing(plan: StringPlan, waitTimedOut: boolean): Promise<void> {
-        const listState = () => bankListState(Bank.isOpen(), Bank.loaded());
+    private async withdrawStringing(plan: StringPlan): Promise<void> {
+        const listState = () => bankListState(Bank.isOpen(), Bank.ready());
         const stringSlots = (): number => Inventory.items().filter(i => i.id === plan.stringId).length;
         const stacked = stringIsStacked(this.bot.packCountById(plan.stringId), stringSlots());
         const load = stringWithdrawPlan(stringSlots(), stacked);
@@ -665,8 +653,7 @@ class BankTrip implements Task {
                 ?? exactName(Bank.items(), BOW_STRING);
             const action = stockAction({
                 state: listState(),
-                hasItem: Boolean(stringItem),
-                waitTimedOut
+                hasItem: Boolean(stringItem)
             });
             this.bot.noteEmpty(BOW_STRING, action);
             if (action === 'ok' && stringItem) {
@@ -688,8 +675,7 @@ class BankTrip implements Task {
         const unstrung = Bank.items().find(i => i.id === plan.unstrungId);
         const unstrungAction = stockAction({
             state: listState(),
-            hasItem: Boolean(unstrung),
-            waitTimedOut
+            hasItem: Boolean(unstrung)
         });
         const unstrungKey = `unstrung:${plan.unstrungId}`;
         this.bot.noteEmpty(unstrungKey, unstrungAction);
@@ -724,14 +710,13 @@ class BankTrip implements Task {
         }
     }
 
-    private async withdrawCutString(plan: StringPlan, waitTimedOut: boolean): Promise<void> {
-        const listState = () => bankListState(Bank.isOpen(), Bank.loaded());
+    private async withdrawCutString(plan: StringPlan): Promise<void> {
+        const listState = () => bankListState(Bank.isOpen(), Bank.ready());
         // Why: cut-first like FlaxAIO pick before spin, so logs run out before a single bow is strung.
         const logItem = Bank.items().find(i => logNameMatches(i.name, this.bot.materialName()));
         const logAction = stockAction({
             state: listState(),
-            hasItem: Boolean(logItem?.name),
-            waitTimedOut
+            hasItem: Boolean(logItem?.name)
         });
         const logKey = this.bot.materialName();
         this.bot.noteEmpty(logKey, logAction);
@@ -740,8 +725,7 @@ class BankTrip implements Task {
                 const knifeBank = exactName(Bank.items(), this.bot.knifeName());
                 const knifeAction = stockAction({
                     state: listState(),
-                    hasItem: Boolean(knifeBank?.name),
-                    waitTimedOut
+                    hasItem: Boolean(knifeBank?.name)
                 });
                 const knifeKey = this.bot.knifeName();
                 this.bot.noteEmpty(knifeKey, knifeAction);
@@ -775,7 +759,7 @@ class BankTrip implements Task {
             return;
         }
         // Why: an empty log bin ends the cut phase, not the run; the string phase owns the stop.
-        if (logAction === 'empty-confirmed' || logAction === 'empty-unready') {
+        if (logAction === 'empty-confirmed') {
             this.bot.log(`no '${logKey}' left for cutting — switching to stringing phase`);
         }
 
@@ -784,7 +768,6 @@ class BankTrip implements Task {
             const knifeName = this.bot.knifeName();
             this.bot.log(`cut+string string phase — depositing ${knifeName} to free a slot`);
             await Bank.depositAllMatching((name) => name.trim().toLowerCase() === knifeName.trim().toLowerCase(), m => this.bot.log(`  ${m}`));
-            await Execution.delayTicks(1);
         }
 
         // String phase: withdraw bow string + unstrung (like withdrawStringing but without re-checking logs).
@@ -795,8 +778,7 @@ class BankTrip implements Task {
             const stringItem = Bank.items().find(i => i.id === plan.stringId) ?? exactName(Bank.items(), BOW_STRING);
             const action = stockAction({
                 state: listState(),
-                hasItem: Boolean(stringItem),
-                waitTimedOut
+                hasItem: Boolean(stringItem)
             });
             this.bot.noteEmpty(BOW_STRING, action);
             if (action === 'ok' && stringItem) {
@@ -818,8 +800,7 @@ class BankTrip implements Task {
         const unstrung = Bank.items().find(i => i.id === plan.unstrungId);
         const unstrungAction = stockAction({
             state: listState(),
-            hasItem: Boolean(unstrung),
-            waitTimedOut
+            hasItem: Boolean(unstrung)
         });
         const unstrungKey = `unstrung:${plan.unstrungId}`;
         this.bot.noteEmpty(unstrungKey, unstrungAction);

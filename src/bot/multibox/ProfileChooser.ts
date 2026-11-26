@@ -3,6 +3,7 @@ import { resolveWorldNumber, type WorldNumber } from '../../client/config/worlds
 import { supportsWorldRouting } from '../../client/config/target.js';
 
 export interface ProfileChooserOptions {
+    onLoadGroup?: (profiles: Profile[], tab?: string) => void;
     worldRouting?: boolean;
     defaultWorld?: WorldNumber;
     onWorldChange?: (profile: Profile, world: WorldNumber) => Promise<boolean>;
@@ -20,7 +21,7 @@ export class ProfileChooser {
     private worldRouting: boolean;
     private pending = false;
 
-    constructor(private onLoad: (p: Profile) => void, private options: ProfileChooserOptions = {}) {
+    constructor(private onLoad: (p: Profile, focus: boolean) => void, private options: ProfileChooserOptions = {}) {
         this.worldRouting = options.worldRouting ?? supportsWorldRouting();
         this.defaultWorld = options.defaultWorld ?? (this.worldRouting ? resolveWorldNumber(location.host, new URLSearchParams(location.search)) : 1);
         if (this.defaultWorld !== 1 && this.defaultWorld !== 2 && this.defaultWorld !== 3) throw new Error('profile world must be 1, 2 or 3');
@@ -85,7 +86,7 @@ export class ProfileChooser {
     open(): void {
         this.render();
         this.el.hidden = false;
-        this.user.focus();
+        (this.list.querySelector<HTMLButtonElement>('.mbx-load-group') ?? this.user).focus();
     }
 
     close(): void {
@@ -136,7 +137,7 @@ export class ProfileChooser {
             this.pass.value = '';
             this.status.textContent = '';
             this.close();
-            this.onLoad(this.withWorld(saved));
+            this.onLoad(this.withWorld(saved), true);
         } catch (error) {
             this.status.textContent = error instanceof Error ? error.message : 'Could not save the profile';
         } finally {
@@ -170,6 +171,23 @@ export class ProfileChooser {
             this.list.appendChild(none);
             return;
         }
+        const load = (members: Profile[], tab?: string) => {
+            if (this.pending) return;
+            this.close();
+            const accounts = members.map(p => this.withWorld(p));
+            if (this.options.onLoadGroup) this.options.onLoadGroup(accounts, tab);
+            else for (const p of accounts) this.onLoad(p, false);
+        };
+        for (const tab of ['Main', ...vault.tabState().tabs]) {
+            const members = profiles.filter(p => p.tab === tab);
+            if (!members.length) continue;
+            const group = document.createElement('button');
+            group.className = 'mbx-load-group';
+            group.type = 'button';
+            group.textContent = `Load group: ${tab} (${members.length})`;
+            group.onclick = () => load(members, tab);
+            this.list.appendChild(group);
+        }
         for (const p of profiles) {
             const row = document.createElement('div');
             row.className = 'mbx-profile-row';
@@ -198,7 +216,7 @@ export class ProfileChooser {
             row.addEventListener('click', () => {
                 if (this.pending) return;
                 this.close();
-                this.onLoad(this.withWorld(p));
+                this.onLoad(this.withWorld(p), true);
             });
             this.list.appendChild(row);
         }
@@ -207,13 +225,7 @@ export class ProfileChooser {
         all.type = 'button';
         all.disabled = this.pending;
         all.textContent = 'load all profiles';
-        all.addEventListener('click', () => {
-            if (this.pending) return;
-            this.close();
-            for (const p of vault.list()) {
-                this.onLoad(this.withWorld(p));
-            }
-        });
+        all.addEventListener('click', () => load(vault.list()));
         this.list.appendChild(all);
     }
 }

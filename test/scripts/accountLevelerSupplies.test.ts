@@ -4,11 +4,17 @@ import { expect, spyOn, test } from 'bun:test';
 import { reader, type InvItemSnapshot } from '#/bot/adapter/ClientAdapter.js';
 import { InvItem } from '#/bot/api/inventory/Inventory.js';
 import { Execution } from '#/bot/api/execution/Execution.js';
+import { Quests } from '#/bot/api/ui/questlog/Quests.js';
+import { Shop } from '#/bot/api/shop/Shop.js';
+import { ChatDialog } from '#/bot/api/ui/dialogue/ChatDialog.js';
+import { Reach } from '#/bot/api/walking/Reach.js';
 import { gameSupplyPort, provision, stockCounts, SupplyStockError, type SupplyPort } from '#/bot/scripts/AccountLeveler/supplies.js';
 import { PathFinder } from '#/bot/event/webwalk/PathFinder.js';
 import { loadDefaultNavEdges } from '#/bot/event/webwalk/loadTransportGraph.js';
 import { emptyWorldStateData } from '#/bot/event/webwalk/worldStateData.js';
 import type { ActivityPlan } from '#/bot/scripts/AccountLeveler/types.js';
+import AccountLeveler from '#/bot/scripts/AccountLeveler/AccountLeveler.js';
+import { enabledSkills } from '#/bot/scripts/AccountLeveler/planner.js';
 import { meleeEquipment } from '#/bot/scripts/AccountLeveler/equipment.js';
 import { supplyOffer, supplyOffers } from '#/bot/scripts/AccountLeveler/offers.js';
 
@@ -331,13 +337,16 @@ test('a planned melee kit buys and equips legs and a helmet from their actual ve
     expect(f.bank.Coins).toBeGreaterThanOrEqual(200);
 });
 
-test.skipIf(!existsSync('out/collision.lcnav.gz')).each(['Mithril platelegs', 'Mithril full helm'])('the shopping route reaches %s without quest unlocks', item => {
+test.skipIf(!existsSync('out/collision.lcnav.gz')).each(['Mithril platelegs', 'Mithril full helm', 'Rune platebody', 'Rune platelegs'])('the shopping route reaches %s', item => {
     const offer = supplyOffer(item)!;
     expect(offer).not.toBeNull();
     const finder = new PathFinder(gunzipSync(readFileSync('out/collision.lcnav.gz')));
     loadDefaultNavEdges(finder);
     const route = finder.findPath({ x: 3185, z: 3436, level: 0 }, offer.tile, {
-        state: { ...emptyWorldStateData(), members: true, items: { Coins: 200 }, skills: { agility: 1 }, canSlashWeb: false }, useTeleportCatalog: false
+        state: {
+            ...emptyWorldStateData(), ...(item.startsWith('Rune') ? { quests: { 'Dragon Slayer': 'complete' as const }, questPoints: 34 } : {}),
+            items: { Coins: 200 }, skills: { agility: 1 }, canSlashWeb: false
+        }, useTeleportCatalog: false
     });
     expect(route.ok).toBe(true);
     if (route.ok) expect(route.waypoints.at(-1)).toMatchObject(offer.tile);
@@ -721,4 +730,172 @@ test('purchasing both empty and water vials never fills the reserved empty suppl
     expect(f.bank['Vial of water']).toBe(14);
     expect(f.bank.Vial).toBe(14);
     expect(f.spent()).toBe(56);
+});
+
+
+test('trades Oziach after Dragon Slayer and answers his platebody offer', async () => {
+    let page = 0;
+    const option = 'Can I buy a rune plate mail body now please?';
+    const quest = spyOn(Quests, 'status').mockReturnValue('inProgress');
+    const trade = spyOn(Reach, 'entityOp').mockImplementation(async opts => {
+        expect(opts.op).toBe('Trade');
+        page = 1;
+        return opts.expect() ? 'done' : 'retry';
+    });
+    const patches = [quest, trade, spyOn(Shop, 'isOpen').mockImplementation(() => page === 3),
+        spyOn(ChatDialog, 'isOpen').mockImplementation(() => page === 1 || page === 2),
+        spyOn(ChatDialog, 'canContinue').mockImplementation(() => page === 1),
+        spyOn(ChatDialog, 'continue').mockImplementation(async () => { page++; return true; }),
+        spyOn(ChatDialog, 'options').mockImplementation(() => page === 2 ? [option, 'Thank you.'] : []),
+        spyOn(ChatDialog, 'chooseOption').mockImplementation(async selected => { expect(selected).toBe(option); page++; return true; }),
+        spyOn(Execution, 'delayTicks').mockResolvedValue(undefined)];
+    try {
+        const port = gameSupplyPort(() => {});
+        expect(await port.shop('Scavvo')).toBe(false);
+        expect(await port.shop('Oziach')).toBe(false);
+        expect(trade).not.toHaveBeenCalled();
+        quest.mockReturnValue('complete');
+        expect(await port.shop('Oziach')).toBe(true);
+        expect(trade).toHaveBeenCalledTimes(1);
+    } finally {
+        for (const patch of patches.reverse()) patch.mockRestore();
+    }
+});
+
+test('a platelegs plan reuses the worn rune skirt even with platelegs in the bank', async () => {
+    const f = fixture();
+    f.worn['Rune plateskirt'] = 1;
+    f.bank['Rune platelegs'] = 1;
+    await provision({ ...plan, needs: [{ item: 'Rune platelegs', count: 1, carry: 1, equip: true }] }, f.port);
+    expect(f.worn).toEqual({ 'Rune plateskirt': 1 });
+    expect(f.bank['Rune platelegs']).toBe(1);
+    expect(f.purchases()).toBe(0);
+});
+
+test('buys a post-Dragon Slayer kit at both shops and reuses it on the next run', async () => {
+    const coins = 190000;
+    const f = fixture(coins);
+    f.worn['Rune full helm'] = 1;
+    const needs = meleeEquipment({ levels: { attack: 40, defence: 40 }, quests: { 'Dragon Slayer': true },
+        stock: { coins, 'rune full helm': 1 }, target: 60, bankReady: true, wilderness: false, now: 0 });
+    const shelves: Record<string, Record<string, number>> = {
+        Scavvo: { 'Rune longsword': 32000, 'Rune platelegs': 64000 }, Oziach: { 'Rune platebody': 84500 }
+    };
+    const visits: string[] = [];
+    let keeper = '';
+    f.port.shop = async name => { keeper = name; visits.push(name); return name in shelves; };
+    f.port.shopStock = item => shelves[keeper]?.[item] ? (keeper === 'Oziach' ? 2 : 1) : 0;
+    const buy = f.port.buy;
+    f.port.buy = (name, count) => { f.setPrice(shelves[keeper][name]); return buy(name, count); };
+    await provision({ ...plan, needs }, f.port);
+    await provision({ ...plan, needs }, f.port);
+    expect(visits).toEqual(['Scavvo', 'Oziach']);
+    expect(f.purchases()).toBe(3);
+    expect(f.bank.Coins).toBe(9500);
+    expect(f.worn).toEqual({ 'Rune longsword': 1, 'Rune platebody': 1, 'Rune platelegs': 1, 'Rune full helm': 1 });
+});
+
+
+test('completing Dragon Slayer after startup triggers a rune shopping trip at the next bank', async () => {
+    const bot = new AccountLeveler();
+    const f = fixture(250000);
+    const quests = { 'Dragon Slayer': false };
+    const levels = Object.fromEntries(enabledSkills.map(skill => [skill, 40]));
+    Object.assign(bot['supplies'], f.port);
+    bot['snapshot'] = () => ({ levels, quests, stock: f.port.stock(), target: 40, bankReady: true, wilderness: false, now: 0 });
+    bot['shoppingChecked'] = true;
+    await bot['selectAndStart']();
+    expect(f.purchases()).toBe(0);
+    quests['Dragon Slayer'] = true;
+    await bot['selectAndStart']();
+    expect(f.purchases()).toBe(3);
+    expect(f.bank).toMatchObject({ 'Rune longsword': 1, 'Rune platelegs': 1, 'Rune platebody': 1 });
+    await bot['selectAndStart']();
+    expect(f.purchases()).toBe(3);
+});
+
+test('a sold-out shelf is skipped across shopping runs until its original deadline', async () => {
+    const f = fixture();
+    const shop = spyOn(f.port, 'shop');
+    const walk = spyOn(f.port, 'walk');
+    const now = spyOn(Date, 'now').mockReturnValue(100_000);
+    const random = spyOn(Math, 'random').mockReturnValue(0.5);
+    const shopCooldowns = {};
+    const options = { shopCooldowns, bestEffort: true };
+    try {
+        f.port.shopStock = () => 0;
+        await provision(plan, f.port, undefined, options);
+        expect(shop).toHaveBeenCalledTimes(1);
+        expect(Object.values(shopCooldowns)).toEqual([100_000 + 25 * 60_000]);
+        now.mockReturnValue(100_000 + 25 * 60_000 - 1);
+        f.port.shopStock = () => 5;
+        await expect(provision(plan, f.port, undefined, { shopCooldowns })).rejects.toBeInstanceOf(SupplyStockError);
+        expect(walk).toHaveBeenCalledTimes(1);
+        expect(f.purchases()).toBe(0);
+        random.mockReturnValue(0.9);
+        now.mockReturnValue(100_000 + 25 * 60_000);
+        await provision(plan, f.port, undefined, { shopCooldowns });
+        expect(shop).toHaveBeenCalledTimes(2);
+        expect(f.worn['Iron scimitar']).toBe(1);
+    } finally { now.mockRestore(); random.mockRestore(); }
+});
+
+test('buying the last arrows skips that shelf on the next trip but permits other goods and suppliers', async () => {
+    const f = fixture();
+    f.setPrice(1);
+    const options = { bestEffort: true, shopCooldowns: {} };
+    const buys: string[] = [];
+    let keeper = '';
+    f.port.shop = async name => { keeper = name; return true; };
+    f.port.shopStock = name => name === 'Bronze arrow' && keeper === 'Lowe' ? 1 : 5;
+    const buy = f.port.buy;
+    f.port.buy = (name, count) => { buys.push(keeper + '/' + name); return buy(name, count); };
+    const needs = [{ item: 'Bronze arrow', count: 1 }];
+    await provision({ ...plan, needs }, f.port, undefined, options);
+    await provision({ ...plan, needs: [{ item: 'Bronze arrow', count: 3 }, { item: 'Shortbow', count: 1 }] }, f.port, undefined, options);
+    expect(buys).toEqual(['Lowe/Bronze arrow', 'Lowe/Shortbow', 'Hickton/Bronze arrow']);
+    expect(f.bank['Bronze arrow']).toBe(3);
+});
+
+test('a missing shop inventory update does not start a restock timer', async () => {
+    const f = fixture();
+    f.port.shopStock = gameSupplyPort(() => {}).shopStock;
+    const cooldowns = {};
+    const wait = spyOn(Execution, 'delayUntil').mockImplementation(async predicate => predicate());
+    try {
+        await expect(provision(plan, f.port, undefined, { shopCooldowns: cooldowns })).rejects.toBeInstanceOf(SupplyStockError);
+        expect(cooldowns).toEqual({});
+    } finally { wait.mockRestore(); }
+});
+
+test('the account reloads shelf deadlines and can plan around the first supplier to restock', async () => {
+    const bot = new AccountLeveler();
+    let saved = '';
+    bot['storage'] = () => ({ getItem: () => saved, setItem: (_key, value) => { saved = value; } });
+    bot['key'] = () => 'restock-test';
+    const clock = spyOn(Date, 'now').mockReturnValue(100_000);
+    const random = spyOn(Math, 'random').mockReturnValueOnce(0).mockReturnValue(1);
+    try {
+        const f = vialFixture({});
+        await provision({ ...plan, needs: [{ item: 'Bronze arrow', count: 10 }] }, f.port, undefined, {
+            bestEffort: true, shopCooldowns: bot['session'].memory.cooldowns
+        });
+        bot['save']();
+        bot['load']();
+        expect(Object.values(bot['session'].memory.cooldowns).sort((a, b) => a - b)).toEqual([1_300_000, 1_900_000]);
+        expect(bot['snapshot']().unavailableItems).toContain('bronze arrow');
+        clock.mockReturnValue(1_300_000);
+        bot['load']();
+        expect(Object.values(bot['session'].memory.cooldowns)).toEqual([1_900_000]);
+        expect(bot['snapshot']().unavailableItems).not.toContain('bronze arrow');
+    } finally { random.mockRestore(); clock.mockRestore(); }
+});
+
+test.each(['Rune platelegs', 'Rune plateskirt'])('funds the last %s at Scavvo and keeps the travel reserve', async item => {
+    const f = fixture(65480);
+    f.port.shopStock = () => 1;
+    f.setPrice(65280);
+    await provision({ ...plan, needs: [{ item, count: 1, carry: 1, equip: true }] }, f.port);
+    expect(f.worn[item]).toBe(1);
+    expect(f.bank.Coins).toBe(200);
 });

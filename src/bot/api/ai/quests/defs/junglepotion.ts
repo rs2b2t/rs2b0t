@@ -1,5 +1,5 @@
+import { Modals } from '../../../ui/widgets/Modals.js';
 import { normalizeJournal as normalize } from '../journalText.js';
-import { actions, reader } from '../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../execution/Execution.js';
 import { Game } from '../../../game/Game.js';
 import Tile from '../../../../geometry/Tile.js';
@@ -149,10 +149,7 @@ export async function readJungleProgress(): Promise<QuestProgress | undefined> {
     if (status === 'notStarted') return { stage: JP_STAGE.NOT_STARTED, flags: new Set() };
     if (status !== 'inProgress') return undefined;
     const progress = parseJungleJournal(await Quests.journal(JUNGLE_POTION_QUEST));
-    if (reader.modals().main !== -1) {
-        actions.closeModal();
-        await Execution.delayTicks(1);
-    }
+    await Modals.closeIfOpen();
     return progress;
 }
 

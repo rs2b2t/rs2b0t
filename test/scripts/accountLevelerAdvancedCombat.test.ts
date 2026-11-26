@@ -168,7 +168,7 @@ test('an unavailable dungeon tool excludes the camp until the tool is owned', ()
 });
 
 test('baby blue dragons require the key and an equipped shield for the adult dragon transit', () => {
-    const s = snapshot(50);
+    const s = snapshot(60);
     const memory = isolate('taverley-baby-blue-dragons');
     expect(combatPlan(s, 'attack', memory, () => 0)).toBeNull();
     s.stock['dusty key'] = 1;
@@ -183,6 +183,6 @@ test('baby blue dragons require the key and an equipped shield for the adult dra
         expect(plan?.settings).toMatchObject({ target: 'Baby blue dragon', leashRadius: 4, travelItems: ['Dusty key'], buryBabyDragonBones: true });
     }
     expect(combatPlan(s, 'ranged', memory, () => 0)).toBeNull();
-    s.levels.hitpoints = 49;
+    s.levels.hitpoints = 59;
     expect(combatPlan(s, 'attack', memory, () => 0)).toBeNull();
 });

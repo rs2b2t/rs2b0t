@@ -1,3 +1,4 @@
+import { afterDialogueAction } from '../../exec/primitives.js';
 import Tile from '../../../../../geometry/Tile.js';
 import { GameMessages } from '../../../../chatbox/gameMessages.js';
 import { EventSignal } from '../../../../execution/EventSignal.js';
@@ -9,7 +10,7 @@ import { Modals } from '../../../../ui/widgets/Modals.js';
 import { Shop } from '../../../../shop/Shop.js';
 import { Reach } from '../../../../walking/Reach.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
-import { driveChoice, settleScene } from '../../exec/prompts.js';
+import { findSceneTarget, driveChoice, settleScene } from '../../exec/prompts.js';
 import { QuestFood } from '../../food.js';
 import { DIG_ID, DIG_ITEM, DIG_LOC, DIG_NPC, DIG_SOIL_IDS, DIG_TILE } from './areas.js';
 import { dropSpoil, driveUntilHeld, heldId, locByIdAction, locByIds, npcById, talkToNpcId, walkTo } from './common.js';
@@ -109,11 +110,9 @@ export async function takePanningTray(log: (m: string) => void): Promise<boolean
     if (!(await walkTo(DIG_TILE.TRAY_SPAWN_STAND, 0, log))) {
         return false;
     }
-    await settleScene();
-    const tray = GroundItems.query().where(g => g.id === DIG_ID.TRAY_EMPTY).within(3).nearest();
+    const tray = await findSceneTarget(() => GroundItems.query().where(g => g.id === DIG_ID.TRAY_EMPTY).within(3).nearest(), 6);
     if (!tray) {
         log('no panning tray on the ground at (3369,3378) — it respawns, so this retries');
-        await Execution.delayTicks(4);
         return false;
     }
     if (!(await tray.interact('Take'))) {
@@ -130,8 +129,7 @@ export async function takeSpecimenJar(log: (m: string) => void): Promise<boolean
     if (!(await walkTo(DIG_TILE.SACKS_STAND, 1, log))) {
         return false;
     }
-    await settleScene();
-    const sacks = locByIdAction([DIG_LOC.SAMPLE_SACKS], 'Search', 6);
+    const sacks = await findSceneTarget(() => locByIdAction([DIG_LOC.SAMPLE_SACKS], 'Search', 6));
     if (!sacks) {
         log('no sample sacks within six tiles of (3359,3399)');
         return false;
@@ -220,8 +218,7 @@ export async function panUntil(want: () => boolean, log: (m: string) => void): P
         }
         // Why: every pan and search ends in an objbox, and leaving it up makes the next click's "did a dialogue open?" read the last one.
         for (let i = 0; i < 4 && ChatDialog.canContinue(); i++) {
-            await ChatDialog.continue();
-            await Execution.delayTicks(1);
+            await afterDialogueAction(await ChatDialog.continue(), 1);
         }
         await Modals.closeIfOpen();
         await dropSpoil(log, SPOIL_FREE);
@@ -240,8 +237,7 @@ export async function panUntil(want: () => boolean, log: (m: string) => void): P
             }
             continue;
         }
-        await settleScene();
-        const point = locByIdAction([DIG_LOC.PANNING_POINT], 'Look', 8);
+        const point = await findSceneTarget(() => locByIdAction([DIG_LOC.PANNING_POINT], 'Look', 8));
         if (!point) {
             await walkTo(DIG_TILE.PANNING_STAND, 1, log);
             continue;

@@ -81,7 +81,7 @@ import { legends } from './legends/index.js';
 // Why: Scorpion Catcher follows Horror from the Deep, the other barcrawl quest, so the outpost gate is already open.
 // Why: Eadgar's Ruse follows Troll Stronghold, which is what frees Mad Eadgar and opens the mountain.
 // Why: Sheep Herder sits with the other Ardougne quests like Hazeel Cult; every leg is in East Ardougne, so the Plague City teleport pays for all of them.
-// Why: Temple of Ikov sits near the end since it fletches its own yew shortbow and wants Woodcutting 60 and Fletching 65 on top of its thieving and ranged gates.
+// Why: Temple of Ikov sits near the end because making a missing bow can require Woodcutting 60 and Fletching 65.
 // Why: the Observatory follows Clock Tower, as both are Ardougne-side and it pays 2 quest points towards Dragon Slayer's gate for one outing.
 // Why: Underground Pass follows Biohazard, which it requires complete, and sits second to last as the longest single run in the queue.
 // Why: Regicide comes straight after Underground Pass, which it requires complete, and which is also the only way back into Tirannwn until its own catapult has fired.

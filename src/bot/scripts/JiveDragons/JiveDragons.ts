@@ -1,3 +1,4 @@
+import { configuredLootNames } from '../../api/bank/bankRules.js';
 import { reader } from '../../adapter/ClientAdapter.js';
 import { GameMessages } from '../../api/chatbox/gameMessages.js';
 import { SolveClue, walkToBank } from '../../api/ai/clues/SolveClue.js';
@@ -9,9 +10,10 @@ import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { EMPTY_VIAL, SUPER_SET, plannedPotions, potionToSip, rangingPlan, type PotionPlan } from '../../api/combat/boostPotions.js';
 import { COMBAT_STYLE_OPTIONS, RANGE_STYLE_OPTIONS, parseCombatStyle, parseRangeStyle, type MeleeCombatStyle } from '../../api/combat/CombatStyle.js';
 import { castsAvailable } from '../../api/combat/CombatStyleLogic.js';
+import { dragonMeleeStyle } from '../../api/combat/dragonStyle.js';
 import { Special } from '../../api/combat/Special.js';
 import { Prayer } from '../../api/prayer/Prayer.js';
-import { Npcs } from '../../api/npcs/Npcs.js';
+import { Npcs, type Npc } from '../../api/npcs/Npcs.js';
 import { ARROWS, BOWS, MELEE_WEAPONS, STAFFS } from '../../api/combat/equipment.js';
 import { bestMeleeWeapon, knownMeleeWeapon } from '../../api/combat/meleeWeapons.js';
 import { foodCount as foodCountIn, foodHealAmount, isEdibleFood, isFoodItem, shouldEatToUseFood } from '../../api/combat/food.js';
@@ -889,7 +891,7 @@ class SetAttackStyle implements Task {
     private retryAt = 0;
     constructor(private readonly bot: JiveDragons) {}
     private selected(): boolean {
-        return STYLE === 'range' ? Game.combatMode() === RANGE_MODE : Game.hasCombatStyle(MELEE_STYLE);
+        return STYLE === 'range' ? Game.combatMode() === RANGE_MODE : Game.hasCombatStyle(this.bot.meleeStyle());
     }
     validate(): boolean {
         return !this.bot.solveClue?.ownsEquipment() && STYLE !== 'mage' && !this.selected() && Date.now() >= this.retryAt;
@@ -899,7 +901,7 @@ class SetAttackStyle implements Task {
         if (STYLE === 'range') {
             Game.setCombatMode(RANGE_MODE);
         } else {
-            Game.setCombatStyle(MELEE_STYLE);
+            Game.setCombatStyle(this.bot.meleeStyle());
         }
         if (await Execution.delayUntil(() => this.selected(), 3000)) {
             this.fails = 0;
@@ -954,7 +956,6 @@ class ArmAutocast implements Task {
     }
     async execute(): Promise<void> {
         this.bot.setStatus(`arming autocast: ${SPELL}`);
-        await Execution.delayTicks(3);
         if (await Autocast.arm(SPELL, m => this.bot.log(m))) {
             this.fails = 0;
         } else if (++this.fails >= ASSERT_BATCH) {
@@ -1267,7 +1268,7 @@ export default class JiveDragons extends TaskBot implements CombatHost {
         // Why: each site names the loot setting whose chips are its own drop table, and the schema default is that list, so neither is written down twice.
         const lootSetting = SITE.lootSetting ?? 'loot';
         const lootDefault = (SETTINGS[lootSetting]?.default as string[] | undefined) ?? DEFAULT_LOOT;
-        LOOT_SET = new Set(this.settings.list(lootSetting, lootDefault).map(s => s.toLowerCase()));
+        LOOT_SET = new Set(configuredLootNames(this.settings.list(lootSetting, lootDefault)));
         // Why: fired arrows land where the dragon dies and sit on no drop table, so the 500 a trip withdraws come home only if the loot set names them.
         if (STYLE === 'range') {
             LOOT_SET.add(AMMO.toLowerCase());
@@ -1497,6 +1498,17 @@ export default class JiveDragons extends TaskBot implements CombatHost {
     }
     eatOnce(): Promise<boolean> {
         return eatOnce(this);
+    }
+    meleeStyle(target?: string | null): MeleeCombatStyle {
+        const active = target ?? Npcs.all().find(n => n.index === this.targetIdx)?.name;
+        return dragonMeleeStyle(MELEE_STYLE, Equipment.contains('Dragon longsword') ? 'Dragon longsword' : null, huntNames(SITE), active);
+    }
+    async ensureMeleeStyle(target: Npc): Promise<boolean> {
+        if (STYLE !== 'melee' || !Equipment.contains('Dragon longsword')) return true;
+        const style = this.meleeStyle(target.name);
+        if (Game.hasCombatStyle(style)) return true;
+        if (!Game.setCombatStyle(style)) return false;
+        return Execution.delayUntil(() => Game.hasCombatStyle(style), 3000);
     }
     /** A staff has no special, and a weapon with no specwep param has no bar to click. */
     async armSpecial(): Promise<void> {

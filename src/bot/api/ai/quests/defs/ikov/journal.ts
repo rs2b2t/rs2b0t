@@ -1,7 +1,6 @@
+import { Modals } from '../../../../ui/widgets/Modals.js';
 import { normalizeJournal as normalize } from '../../journalText.js';
 // docs/QUESTS.md
-import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
-import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
 import { IKOV_QUEST } from './areas.js';
 
@@ -54,10 +53,7 @@ export async function readIkovStage(): Promise<number | undefined> {
     }
     const stage = parseIkovJournal(await Quests.journal(IKOV_QUEST));
     // Why: the journal body is a main modal, and leaving it up makes every later read come back empty.
-    if (reader.modals().main !== -1) {
-        actions.closeModal();
-        await Execution.delayTicks(1);
-    }
+    await Modals.closeIfOpen();
     if (stage !== undefined) {
         lastGood = stage;
     }

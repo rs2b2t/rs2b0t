@@ -134,7 +134,6 @@ class BankTrip implements Task {
         }
 
         await Bank.depositAllMatching(name => name !== 'Coins');
-        await Execution.delayTicks(1);
 
         if (bot.budgetLeft() === 0) {
             await Bank.depositAllMatching(() => true);

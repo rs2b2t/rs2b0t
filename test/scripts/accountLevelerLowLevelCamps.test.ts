@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { Glob } from 'bun';
 import { expect, test } from 'bun:test';
 import { gunzipSync } from 'fflate';
-import { COMBAT_CAMPS, combatPlan } from '#/bot/scripts/AccountLeveler/combat.js';
+import { COMBAT_CAMPS, alternateCombatCamp, combatPlan } from '#/bot/scripts/AccountLeveler/combat.js';
 import { emptyMemory, enabledSkills } from '#/bot/scripts/AccountLeveler/planner.js';
 import { PathFinder } from '#/bot/event/webwalk/PathFinder.js';
 import { loadDefaultNavEdges } from '#/bot/event/webwalk/loadTransportGraph.js';
@@ -12,6 +12,9 @@ import { resolveDangerZones } from '#/bot/event/webwalk/data/dangerZones.js';
 import type { LevelerSnapshot } from '#/bot/scripts/AccountLeveler/types.js';
 
 const additions = [
+    { id: 'lumbridge-west-goblins', npcIds: [100] },
+    { id: 'lumbridge-west-giant-spiders', npcIds: [59] },
+    { id: 'lumbridge-castle-rats', npcIds: [47] },
     { id: 'lumbridge-swamp-giant-rats', npcIds: [86, 87] },
     { id: 'lumbridge-south-giant-rats', npcIds: [86, 87] },
     { id: 'port-sarim-giant-rats', npcIds: [86, 87] },
@@ -130,12 +133,46 @@ test('fresh accounts rotate through at least twenty camps and eight ordinary tar
         const plan = combatPlan(s, 'attack', memory, random)!;
         expect(plan.deathWalk).toBe(true);
         expect(plan.food).toBeUndefined();
+        const recentTargets = memory.recent.slice(-3).map(id => COMBAT_CAMPS.find(camp => camp.id === id)?.target);
+        expect(recentTargets).not.toContain(plan.settings.target);
         camps.add(plan.id);
         mobs.add(String(plan.settings.target));
         memory.recent = [...memory.recent, plan.id].slice(-6);
     }
     expect(camps.size).toBeGreaterThanOrEqual(20);
     expect(mobs.size).toBeGreaterThanOrEqual(8);
+});
+
+test('crowded starter chickens redirect XP training to an eligible different target with the current kit', () => {
+    const s = snapshot(1);
+    const start = combatPlan(s, 'attack', isolate('lumbridge-chickens'), () => 0)!;
+    for (const id of ['lumbridge-west-goblins', 'lumbridge-west-giant-spiders', 'lumbridge-castle-rats']) {
+        const next = alternateCombatCamp(s, start, isolate(id), () => 0, () => 0, () => 1);
+        const camp = COMBAT_CAMPS.find(c => c.id === id)!;
+        expect(next?.settings.target).toBe(camp.target);
+        expect(next?.travel).toMatchObject({ x: camp.x, z: camp.z });
+        expect(next?.settings.coordinates).toEqual(next?.travel);
+        expect(next?.deathWalk).toBe(true);
+    }
+    const next = alternateCombatCamp(s, start, emptyMemory(), () => 0, () => 0, () => 1);
+    expect(next).not.toBeNull();
+    expect(next?.settings.target).not.toBe('Chicken');
+});
+
+test('prayer training skips starter targets that drop no bones', () => {
+    const s = snapshot(1);
+    for (const id of ['lumbridge-west-giant-spiders', 'varrock-spiders', 'lumbridge-castle-rats']) {
+        expect(combatPlan(s, 'prayer', isolate(id), () => 0)).toBeNull();
+    }
+    expect(combatPlan(s, 'prayer', isolate('lumbridge-west-goblins'), () => 0)?.settings.target).toBe('Goblin');
+});
+
+test('a feather hunt can move to another chicken camp only', () => {
+    const s = snapshot(1);
+    const start = combatPlan(s, 'attack', isolate('lumbridge-chickens'), () => 0, 'Feather', 'Chicken')!;
+    const redirect = (id: string) => alternateCombatCamp(s, start, isolate(id), () => 0, () => 0, () => 1);
+    expect(redirect('lumbridge-west-goblins')).toBeNull();
+    expect(redirect('falador-chickens')?.settings.target).toBe('Chicken');
 });
 
 test('teleporting imps and the three inaccessible starter sites remain excluded', () => {

@@ -1,6 +1,7 @@
 import { Execution } from '../../../execution/Execution.js';
 import { Game } from '../../../game/Game.js';
 import { Inventory } from '../../../inventory/Inventory.js';
+import { Modals } from '../../../ui/widgets/Modals.js';
 import { ChatDialog } from '../../../ui/dialogue/ChatDialog.js';
 import { Locs } from '../../../locs/Locs.js';
 import { Npcs } from '../../../npcs/Npcs.js';
@@ -152,7 +153,7 @@ async function handInAndDrink(log: (m: string) => void): Promise<boolean> {
     if (!(await cauldron.interact('Drink From'))) {
         return false;
     }
-    await Execution.delayTicks(3);
+    await Execution.delayUntilTicks(() => ChatDialog.canContinue() || ChatDialog.isOpen() || Modals.isOpen(), 3);
     return true;
 }
 

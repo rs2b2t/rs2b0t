@@ -3,8 +3,8 @@ import { displayName, resolveByName, type Catalog } from '../../api/market/catal
 import type { Candidate } from '../../api/market/chatProtocol.js';
 import { rowOf, type PriceBook, type PriceRow } from '../../api/market/priceBook.js';
 import { rowValid } from '../../api/market/prices.js';
-import { resolveSet, type MarketSet } from '../../api/market/sets.js';
-import { salePrice } from '../../api/market/saleIntent.js';
+import { resolveSet, setVariants, type MarketSet } from '../../api/market/sets.js';
+import { salePrice, saleStock } from '../../api/market/saleIntent.js';
 
 /** A chat request naming what the customer wants to buy. Carries no price and no reservation. */
 export type Intent = SellIntent & {
@@ -376,13 +376,25 @@ export function resolveQuote(input: {
     query: string;
     side: 'buying' | 'selling';
     qtyImplied: boolean;
+    held?: (id: number) => number;
+    requested?: number;
 }): QuoteTarget {
     const { cat, book, query, side, qtyImplied } = input;
-    const set = side === 'selling' ? resolveSet(query) : null;
-    if (set) {
-        return set.itemIds.every(id => cat.byId.has(id)) && salePrice(book, { set, maxQty: 1 }) !== null
-            ? { kind: 'set', set }
-            : { kind: 'miss', answer: !qtyImplied };
+    const requestedSet = side === 'selling' ? resolveSet(query) : null;
+    if (requestedSet) {
+        let best: MarketSet | undefined;
+        let bestQty = -1;
+        for (const set of setVariants(requestedSet)) {
+            const intent = { set, maxQty: input.requested ?? Infinity };
+            const price = salePrice(book, intent);
+            if (price === null || !set.itemIds.every(id => cat.byId.has(id))) continue;
+            const qty = Math.min(intent.maxQty, Math.floor(book.maxTradeValue / price), input.held ? saleStock(intent, input.held) : Infinity);
+            if (qty > bestQty) {
+                best = set;
+                bestQty = qty;
+            }
+        }
+        return best ? { kind: 'set', set: best } : { kind: 'miss', answer: !qtyImplied };
     }
     const candidates = resolveByName(cat, query, { exactOnly: qtyImplied }).filter(r => {
         const row = rowOf(book, r.id);

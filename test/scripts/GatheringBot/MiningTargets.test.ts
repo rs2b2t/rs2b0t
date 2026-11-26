@@ -11,6 +11,7 @@ import Tile from '#/bot/geometry/Tile.js';
 import { Input } from '#/bot/input/Input.js';
 import GatheringBot from '#/bot/scripts/GatheringBot/GatheringBot.js';
 import { Gather } from '#/bot/scripts/GatheringBot/GatheringBotTasks.js';
+import { profileForSetting } from '#/bot/scripts/GatheringBot/TickManipLogic.js';
 
 afterEach(() => mock.restore());
 
@@ -70,6 +71,32 @@ function fixture() {
 }
 
 describe('Miner target lifecycle', () => {
+    test('power iron ignores a saved cadence and switches rocks without a post-roll wait', async () => {
+        const { bot, state, near, far, task } = fixture();
+        bot['powerMode'] = true;
+        bot['rockIds'] = resolveRockIds(['Iron']);
+        bot['tickManip'] = profileForSetting('mine', '4t iron');
+        near.id = 2092;
+        far.id = 2093;
+        spyOn(Game, 'tick').mockImplementation(() => state.ticks);
+        state.advance = () => {
+            near.id = 450;
+            state.used = 1;
+        };
+
+        await task.execute();
+
+        expect(state.ticks).toBe(1);
+        state.advance = () => {
+            far.id = 450;
+            state.used = 2;
+        };
+        await task.execute();
+
+        expect(state.clicks).toEqual([near.tile, far.tile]);
+        expect(state.ticks).toBe(2);
+    });
+
     for (const gotOre of [true, false]) {
         test(`leaves a depleted rock on the next tick while hit animations continue (ore=${gotOre})`, async () => {
             const { state, near, far, task } = fixture();

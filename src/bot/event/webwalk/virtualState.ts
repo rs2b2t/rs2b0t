@@ -22,6 +22,7 @@ export function virtualizeWithItems(state: WorldStateData, add: Record<string, n
     const worn = state.worn ? { ...state.worn } : {};
     return {
         members: state.members,
+        questPoints: state.questPoints,
         skills: { ...state.skills },
         quests: { ...state.quests },
         items,

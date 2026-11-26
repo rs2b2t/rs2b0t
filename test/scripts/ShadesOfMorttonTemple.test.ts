@@ -69,11 +69,13 @@ test('permanent cure waits for the delayed reply and consumed dose before succee
     state.onTick = () => {
         if (submitted && state.tick === 2) state.pages = ['Well done, this serum is really working.', 'Razmire gives you gold coins.'];
     };
+    const continued: string[] = [];
     state.onContinue = () => {
+        continued.push(state.pages[0]);
         if (state.pages.length === 2) state.pack[0].id = SM_ID.SERUM_PERM2;
     };
     expect(await temple['applyPermanent']()).toBe(true);
-    expect(state.tick).toBeGreaterThanOrEqual(4);
+    expect(continued).toEqual(['Well done, this serum is really working.', 'Razmire gives you gold coins.']);
     expect(state.pages).toEqual([]);
     expect(state.pack[0].id).toBe(SM_ID.SERUM_PERM2);
     expect(temple['cured']).toBe(true);

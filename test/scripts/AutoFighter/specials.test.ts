@@ -42,6 +42,9 @@ test('MSB only arms with two quivered arrows and enough energy', async () => {
     state.energy = 349;
     expect(special.validate()).toBe(false);
     state.energy = 350;
+    expect(special.validate()).toBe(false);
+    bot.resumeAttack = false;
+    spyOn(Game, 'inCombat').mockReturnValue(true);
     expect(special.validate()).toBe(true);
     await special.execute();
     expect(click).toHaveBeenCalledWith(7537);

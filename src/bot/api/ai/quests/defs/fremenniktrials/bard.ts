@@ -6,7 +6,7 @@ import { Locs } from '../../../../locs/Locs.js';
 import { Reach } from '../../../../walking/Reach.js';
 import { hasFlag, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import { driveDialog, talkThrough } from '../../exec/primitives.js';
-import { settleScene, useOnLoc } from '../../exec/prompts.js';
+import { findSceneTarget, settleScene, useOnLoc } from '../../exec/prompts.js';
 import {
     ASKELADDEN,
     FT_ID,
@@ -141,8 +141,7 @@ async function spinFleece(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(FT_TILE.SPINNING_WHEEL, 2, log))) {
         return false;
     }
-    await settleScene();
-    const wheel = Locs.query().name('Spinning wheel').within(8).nearest();
+    const wheel = await findSceneTarget(() => Locs.query().name('Spinning wheel').within(8).nearest());
     const fleece = Inventory.items().find(i => i.id === FT_ID.GOLDEN_FLEECE);
     if (!wheel || !fleece) {
         log('no spinning wheel or no fleece in range');

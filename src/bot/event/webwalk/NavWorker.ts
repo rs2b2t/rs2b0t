@@ -31,6 +31,10 @@ worker.addEventListener('message', event => {
         if (message.type === 'init') {
             init(message.pack);
         } else if (message.type === 'path') {
+            if (message.expiresAt !== undefined && Date.now() >= message.expiresAt) {
+                worker.postMessage({ type: 'path', id: message.id, ok: false, reason: 'path request timed out in queue', expanded: 0, elapsedMs: 0 });
+                return;
+            }
             if (!finder) {
                 worker.postMessage({ type: 'path', id: message.id, ok: false, reason: 'worker not initialized', expanded: 0, elapsedMs: 0 });
                 return;
@@ -54,6 +58,11 @@ worker.addEventListener('message', event => {
             worker.postMessage({ type: 'path', id: message.id, elapsedMs: performance.now() - started, ...outcome });
         }
     } catch (err) {
-        worker.postMessage({ type: 'error', message: err instanceof Error ? (err.stack ?? err.message) : String(err) });
+        const reason = err instanceof Error ? (err.stack ?? err.message) : String(err);
+        if (message.type === 'path') {
+            worker.postMessage({ type: 'path', id: message.id, ok: false, reason, expanded: 0, elapsedMs: 0 });
+        } else {
+            worker.postMessage({ type: 'error', message: reason });
+        }
     }
 });

@@ -1,12 +1,12 @@
 import { PriceBooks } from '../api/market/bookStore.js';
-import { exportOrderbooks, mergeOrderbooks, parseOrderbookFile } from '../api/market/orderbook-format.js';
+import { exportOrderbooks, MAX_VALUE, mergeOrderbooks, parseOrderbookFile } from '../api/market/orderbook-format.js';
 import type { PriceBook as TransferBook } from '../api/market/orderbook-format.js';
 import { liveCatalog, type Catalog } from '../api/market/catalog.js';
 import { DEFAULT_MARGIN, DEFAULT_MAX_TRADE, removeBook, rowOf, uniqueBookName, upsertBook, type PriceBook } from '../api/market/priceBook.js';
 import { CATEGORIES, shelves, type Category } from '../api/market/categories.js';
 import { el } from './dom.js';
 import { itemIconDataUrl } from './itemIcon.js';
-import { addRow, addRows, displayRows, dropRow, formatPrice, nextSort, parsePrice, pickerRows, setField, setMargin, setMaxTradeValue, toggleSide, viewRows, type DisplayRow, type SortDir, type SortKey } from './priceBookPanelLogic.js';
+import { addRow, addRows, displayRows, dropRow, formatPrice, nextSort, parseAmount, parsePrice, pickerRows, setField, setMargin, setMaxTradeValue, toggleSide, viewRows, type DisplayRow, type SortDir, type SortKey } from './priceBookPanelLogic.js';
 
 const ICON_FILL_MS = 500;
 const ICON_FILL_TRIES = 12;
@@ -438,7 +438,45 @@ export class PriceBookPanel {
             )
         );
 
+        box.appendChild(this.stockCapField(book));
         return box;
+    }
+
+    private stockCapField(book: PriceBook): HTMLElement {
+        const form = el('form', 'rs2b0t-pricebook-field');
+        const input = el('input', 'rs2b0t-loadout-qty');
+        input.type = 'text';
+        input.dataset.role = 'stock-cap';
+        input.setAttribute('aria-label', 'Stock cap per item');
+        input.disabled = book.rows.length === 0;
+        const first = book.rows[0]?.cap;
+        const common = book.rows.every(row => row.cap === first) ? first : undefined;
+        input.value = common === undefined ? '' : String(common);
+        input.placeholder = input.disabled ? 'No items' : 'Mixed';
+
+        const apply = el('button', 'rs2b0t-button');
+        apply.type = 'submit';
+        apply.dataset.action = 'set-all-caps';
+        apply.textContent = 'Set all caps';
+        apply.title = 'Set the maximum units to buy and hold for each item in this book, including hidden rows';
+        apply.disabled = true;
+        const readCap = (): number | null => {
+            const value = parseAmount(input.value);
+            return value !== null && Number.isInteger(value) && value >= 0 && value <= MAX_VALUE ? value : null;
+        };
+        input.addEventListener('input', () => {
+            const cap = readCap();
+            apply.disabled = cap === null || cap === common;
+        });
+        form.addEventListener('submit', event => {
+            event.preventDefault();
+            const cap = readCap();
+            const current = this.current();
+            if (cap === null || apply.disabled || current?.name !== book.name) return;
+            this.commit({ ...current, rows: current.rows.map(row => ({ ...row, cap })) });
+        });
+        form.append(input, apply);
+        return form;
     }
 
     private numberField(label: string, value: number, role: string, onChange: (value: number) => void, help?: string, big = false): HTMLElement {

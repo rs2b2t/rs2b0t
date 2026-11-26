@@ -20,6 +20,7 @@ import { Npcs, talkOp, type Npc } from '../../npcs/Npcs.js';
 import { Skills } from '../../skills/Skills.js';
 import { Sustain } from '../../sustain/Sustain.js';
 import { ChatDialog } from '../../ui/dialogue/ChatDialog.js';
+import { findSceneTarget } from '../../walking/Reach.js';
 import { Traversal } from '../../walking/Traversal.js';
 import { DirectNavigator } from '../../../event/webwalk/DirectNavigator.js';
 import { SPELL_TELEPORTS } from '../../../event/webwalk/teleportCatalog.js';
@@ -298,10 +299,9 @@ async function payAndEnter(h: JiveHost, site: DragonSite): Promise<boolean> {
     if (feePrepaid(site)) {
         h.log(`${fee.npc} is already paid from the last attempt, going straight to the entrance`);
     } else {
-        const doorman = Npcs.query().name(fee.npc).action(fee.op).nearest();
+        const doorman = await findSceneTarget(() => Npcs.query().name(fee.npc).action(fee.op).nearest());
         if (!doorman) {
             h.log(`no ${fee.npc} in the scene to pay. Retrying.`);
-            await Execution.delayTicks(2);
             return false;
         }
         h.setStatus(`paying ${fee.npc}`);
@@ -352,10 +352,9 @@ async function talkPastGuard(h: JiveHost, site: DragonSite): Promise<boolean> {
         return false;
     }
     for (let attempt = 0; attempt < 3 && !site.inArea(Game.tile()); attempt++) {
-        const guard = Npcs.query().name(talk.npc).action(talk.op).nearest();
+        const guard = await findSceneTarget(() => Npcs.query().name(talk.npc).action(talk.op).nearest());
         if (!guard) {
             h.log(`no ${talk.npc} in the scene to talk past. Retrying.`);
-            await Execution.delayTicks(2);
             continue;
         }
         h.setStatus(`talking past the ${talk.npc}`);
@@ -399,8 +398,7 @@ export async function enterLair(h: JiveHost, site: DragonSite): Promise<boolean>
     if (!(await Traversal.walkResilient(gate.outside, { radius: 0, attempts: 5, timeoutMs: 300_000, log: m => h.log(`  ${m}`) }))) {
         return false;
     }
-    await Execution.delayTicks(2);
-    const door = Locs.query().where(l => l.id === gate.locId).within(5).nearest();
+    const door = await findSceneTarget(() => locById(gate.locId));
     const key = site.keyItem === null ? null : Inventory.items().find(i => i.id === site.keyItem!.id);
     if (!door || (site.keyItem !== null && !key)) {
         h.log('the gate is not in the scene yet, or the key is gone. Retrying.');
@@ -458,8 +456,7 @@ async function leaveByLoc(h: JiveHost, site: DragonSite): Promise<boolean> {
     const exit = site.exit!;
     h.setStatus('walking to the cave mouth');
     await walkNear(exit.stand, 2, say(h));
-    await Execution.delayTicks(1);
-    const cave = locById(exit.locId);
+    const cave = await findSceneTarget(() => locById(exit.locId), 1);
     if (!cave || !(await cave.interact(exit.op))) {
         h.log('the cave mouth is not in the scene yet. Retrying.');
         return false;
@@ -494,8 +491,7 @@ async function walkOutOfLair(h: JiveHost, site: DragonSite): Promise<boolean> {
         h.log('the inside of the gate is occupied. Opening it from wherever the walk stopped.');
         await walkNear(gate.inside, 2, say(h));
     }
-    await Execution.delayTicks(2);
-    const door = locById(gate.locId);
+    const door = await findSceneTarget(() => locById(gate.locId));
     if (!door || !(await door.interact(gate.op))) {
         h.log('the gate is not in the scene yet. Retrying.');
         return false;
@@ -817,9 +813,8 @@ export function inCell(): boolean {
 
 async function takeJailKey(h: JiveHost): Promise<boolean> {
     for (let attempt = 0; attempt < 3; attempt++) {
-        const drop = GroundItems.query().where(g => g.id === JAIL_KEY_ID).within(12).nearest();
+        const drop = await findSceneTarget(() => GroundItems.query().where(g => g.id === JAIL_KEY_ID).within(12).nearest());
         if (!drop) {
-            await Execution.delayTicks(2);
             continue;
         }
         if (drop.distance() > 1) {
@@ -876,8 +871,7 @@ async function killJailer(h: JiveHost): Promise<boolean> {
 }
 
 async function unlockCell(h: JiveHost): Promise<boolean> {
-    await Execution.delayTicks(2);
-    const door = locById(JAIL_DOOR_LOC);
+    const door = await findSceneTarget(() => locById(JAIL_DOOR_LOC));
     const key = Inventory.items().find(i => i.id === JAIL_KEY_ID);
     if (!door || !key) {
         h.log('no cell door in reach, or the jail key is gone. Retrying.');
@@ -906,8 +900,7 @@ export async function leaveCell(h: JiveHost): Promise<boolean> {
         h.log('the inside of the cell door is occupied. Opening it from wherever the walk stopped.');
         await walkNear(JAIL_DOOR_INSIDE, 2, say(h));
     }
-    await Execution.delayTicks(2);
-    const door = locById(JAIL_DOOR_LOC);
+    const door = await findSceneTarget(() => locById(JAIL_DOOR_LOC));
     if (!door || !(await door.interact('Open'))) {
         h.log('no cell door to open from the inside. Retrying.');
         return false;
@@ -922,9 +915,8 @@ export async function leaveCell(h: JiveHost): Promise<boolean> {
 // Why: Velrak has no wanderrange, so he drifts around a cell whose walls make that a walk, and the shared talk primitives answer an out-of-reach npc by opening the door in front of it, which here is the cell door.
 
 async function talkInCell(h: JiveHost): Promise<boolean> {
-    await Execution.delayTicks(2);
     const find = (): Npc | null => Npcs.query().name(VELRAK).where(npc => talkOp(npc.actions()) !== null).nearest();
-    let velrak = find();
+    let velrak = await findSceneTarget(find);
     if (!velrak) {
         h.log(`no ${VELRAK} in the cell. Retrying.`);
         return false;

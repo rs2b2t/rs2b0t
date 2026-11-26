@@ -4,11 +4,11 @@ import type Tile from '../../../../../geometry/Tile.js';
 import { Equipment } from '../../../../equipment/Equipment.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
 import { Traversal } from '../../../../walking/Traversal.js';
-import { gearOf, weaponOf } from '../../../../loadout/loadoutPlan.js';
+import { weaponOf } from '../../../../loadout/loadoutPlan.js';
 import { openDialogue } from '../../exec/primitives.js';
 import { driveUntil } from '../../exec/prompts.js';
 import { QuestFood } from '../../food.js';
-import { QuestLoadout } from '../../gear.js';
+import { QuestLoadout, questWornGear } from '../../gear.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { FT_ID, FT_TILE } from './areas.js';
 
@@ -157,7 +157,7 @@ function bestInBank(snap: QuestSnapshot, kinds: readonly string[]): string | nul
 
 /** The declared loadout, or the best the bank holds when nothing is declared. */
 export function plannedGear(snap: QuestSnapshot): string[] {
-    const declared = gearOf(QuestLoadout.current);
+    const declared = Object.values(questWornGear(snap));
     const names = declared.length > 0
         ? declared
         : GEAR_SLOTS.filter(kinds => !wearingSlot(snap, kinds))

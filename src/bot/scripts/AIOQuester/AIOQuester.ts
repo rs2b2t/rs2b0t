@@ -1,3 +1,4 @@
+import { DEATH_ITEM } from '../../api/ai/quests/defs/deathplateau/areas.js';
 import { resolveNodeId } from '../../../client/config/worlds.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
@@ -255,7 +256,13 @@ export default class AIOQuester extends TaskBot {
 
     sustainPolicy(): ResolvedSustainPolicy {
         const quest = this.runningId ? defById(this.runningId) : undefined;
-        return resolveSustainPolicy(this.foodItem(), quest?.sustain);
+        const policy = resolveSustainPolicy(this.foodItem(), quest?.sustain);
+        if (this.runningId !== 'death') return policy;
+        return { foods: policy.foods.filter(name => {
+            if (name === 'bread') return Inventory.countById(DEATH_ITEM.BREAD.id) > 10;
+            if (name === 'trout') return Inventory.countById(DEATH_ITEM.TROUT.id) > 10;
+            return true;
+        }) };
     }
 
     shouldEat(): boolean {

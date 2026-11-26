@@ -106,6 +106,37 @@ afterAll(() => {
 
 const { ClueExecutor } = await import('#/bot/api/ai/clues/ClueExecutor.js');
 
+describe('host prerequisite policy', () => {
+    beforeEach(() => {
+        Object.assign(RealInventory.Inventory, stubInventory);
+        ClueExecutor.resetSession();
+        inv = [3564];
+        countDialog = false;
+        pages = [];
+        answered = [];
+        continues = 0;
+        walks = [];
+    });
+
+    test('retains a quest-gated clue and yields before walking', async () => {
+        const checked: number[] = [];
+        expect(await ClueExecutor.solveHeldClue(() => {}, undefined, undefined, id => {
+            checked.push(id);
+            return 'prepare';
+        })).toBe('requirements-needed');
+        expect(checked).toEqual([3564]);
+        expect(inv).toEqual([3564]);
+        expect(walks).toEqual([]);
+    });
+
+    test('rejects disallowed Wilderness steps before walking', async () => {
+        inv = [2723];
+        expect(await ClueExecutor.solveHeldClue(() => {}, undefined, undefined, () => 'abandon')).toBe('abandon');
+        expect(walks).toEqual([]);
+        expect(inv).toEqual([2723]);
+    });
+});
+
 describe('challenge reply handling', () => {
     beforeEach(() => {
         Object.assign(RealInventory.Inventory, stubInventory);

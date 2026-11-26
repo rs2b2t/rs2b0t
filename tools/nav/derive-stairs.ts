@@ -301,7 +301,9 @@ function main(): void {
             stairsSkipped++;
             continue;
         }
-        edges.push(edge(s.from, s.to, def.name ?? s.debugname, action));
+        const guildStair = s.debugname === 'stairs' && s.from.level === 0 && s.from.x === 3188 && s.from.z === 3355;
+        const approach = guildStair ? { x: 3188, z: 3358, level: 0 } : s.from;
+        edges.push(edge(approach, s.to, def.name ?? s.debugname, action));
         stairsCases++;
     }
 

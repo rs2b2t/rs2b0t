@@ -1,3 +1,4 @@
+import { findSceneTarget } from '../../api/walking/Reach.js';
 import Tile from '../../geometry/Tile.js';
 import { Game } from '../../api/game/Game.js';
 import { Execution } from '../../api/execution/Execution.js';
@@ -113,17 +114,13 @@ export class MorttonRoute {
             if (current === target) return true;
             const step = catacombPath(current, target, inventoryCounts())?.[0];
             if (!step || !(await this.local(step.stand, 0, combat))) return false;
-            let door = Locs.query().where(loc => loc.id === step.door.id && loc.tile().equals(step.door.at)).nearest();
-            if (!door) {
-                await Execution.delayTicks(4);
-                door = Locs.query().where(loc => loc.id === step.door.id && loc.tile().equals(step.door.at)).nearest();
-            }
-            if (!door || !(await door.interact('Open'))) return false;
+            const door = await findSceneTarget(() => Locs.query()
+                .where(loc => loc.id === step.door.id && loc.tile().equals(step.door.at)).nearest(), 4);
+            if (!door || EventSignal.pending() || !(await door.interact('Open'))) return false;
             if (!(await Execution.delayUntil(() => {
                 const tile = Game.tile();
                 return !!tile && tile.x === step.land.x && tile.z === step.land.z;
             }, 7000))) return false;
-            await Execution.delayTicks(4);
         }
         return false;
     }

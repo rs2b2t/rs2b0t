@@ -1,5 +1,5 @@
+import { findSceneTarget } from '../../api/walking/Reach.js';
 import { CANT_REACH, GameMessages } from '../../api/chatbox/gameMessages.js';
-import { Execution } from '../../api/execution/Execution.js';
 import { Game } from '../../api/game/Game.js';
 import { Locs } from '../../api/locs/Locs.js';
 import { Players } from '../../api/players/Players.js';
@@ -51,8 +51,7 @@ async function useStop(h: JiveHost, stop: LocStop, what: string, status: string,
         h.log(`could not stand at the ${what} (${stop.tile.x},${stop.tile.z}). Retrying.`);
         return false;
     }
-    await Execution.delayTicks(2);
-    const loc = Locs.query().where(l => l.id === stop.locId).within(3).nearest();
+    const loc = await findSceneTarget(() => Locs.query().where(l => l.id === stop.locId).within(3).nearest());
     if (!loc) {
         h.log(`the ${what} is not in the scene yet. Retrying.`);
         return false;

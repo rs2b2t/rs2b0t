@@ -384,23 +384,15 @@ export function bankListState(open: boolean, loaded: boolean): BankListState {
     return loaded ? 'ready' : 'unready';
 }
 
-export type StockAction = 'ok' | 'retry-closed' | 'retry-unready' | 'empty-confirmed' | 'empty-unready';
+export type StockAction = 'ok' | 'retry-closed' | 'retry-unready' | 'empty-confirmed';
 
 export function stockAction(opts: {
     state: BankListState;
     hasItem: boolean;
-    waitTimedOut: boolean;
 }): StockAction {
-    if (opts.hasItem) {
-        return 'ok';
-    }
-    if (opts.state === 'closed') {
-        return 'retry-closed';
-    }
-    if (opts.state === 'ready') {
-        return 'empty-confirmed';
-    }
-    return opts.waitTimedOut ? 'empty-unready' : 'retry-unready';
+    if (opts.state === 'closed') return 'retry-closed';
+    if (opts.state === 'unready') return 'retry-unready';
+    return opts.hasItem ? 'ok' : 'empty-confirmed';
 }
 
 export function nextEmptyReads(current: number, action: StockAction): number {
@@ -408,7 +400,7 @@ export function nextEmptyReads(current: number, action: StockAction): number {
         return 0;
     }
     // A ready list can still be the pre-deposit snapshot. One miss is not enough.
-    if (action === 'empty-confirmed' || action === 'empty-unready') {
+    if (action === 'empty-confirmed') {
         return current + 1;
     }
     return current;

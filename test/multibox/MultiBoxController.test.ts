@@ -46,6 +46,17 @@ class FakeOps implements SlotOps {
 }
 
 describe('MultiBoxController', () => {
+    test('loading a group sets each render mode once and ignores repeat loads', () => {
+        const ops = new FakeOps();
+        const controller = new MultiBoxController(ops);
+        const accounts = Array.from({ length: 61 }, (_, i) => ({ username: 'group' + i, password: '' }));
+        controller.addGroup(accounts);
+        controller.addGroup(accounts);
+        expect(ops.handles.length).toBe(61);
+        expect(ops.handles.every(handle => handle.calls.filter(call => call.startsWith('mode:')).length === 1)).toBe(true);
+        expect(ops.handles[60].mode).toBe('focused');
+    });
+
     test('roster access rejects missing, loading and switching slots', async () => {
         const ops = new FakeOps();
         const c = new MultiBoxController(ops);

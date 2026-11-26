@@ -339,6 +339,7 @@ export const Equipment: {
     contains(name: string): boolean;
     /** Wear/wield from the backpack (Wield/Wear/Equip op). */
     equip(name: string): Promise<boolean>;
+    equipById(id: number): Promise<boolean>;
     /** Remove from a worn slot into the backpack. */
     unequip(name: string): Promise<boolean>;
 };
@@ -449,6 +450,7 @@ export const Bank: {
     /** Fill the pack: Withdraw-All when present, otherwise Withdraw-X for free slots. */
     withdrawLoad(name: string | number): Promise<boolean>;
     deposit(name: string, op?: string): boolean | Promise<boolean>;
+    depositXById(id: number, count: number): Promise<boolean>;
     /** Deposit every backpack slot (Deposit-All each). */
     depositInventory(): Promise<void>;
     /**
@@ -898,6 +900,7 @@ export abstract class AbstractBot {
     onStop?(): void;
     onPause?(): void;
     onResume?(): void;
+    stallDetails?(): string;
     /** Draw on the overlay canvas; called every client redraw while running. */
     onPaint?(ctx: CanvasRenderingContext2D): void;
     /** Return the tile recovery should walk back to. Implement this when the script has a working location. */

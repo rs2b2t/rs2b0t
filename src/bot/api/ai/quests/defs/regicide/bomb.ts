@@ -9,7 +9,7 @@ import type { Loc } from '../../../../model/Loc.js';
 import { Npcs, type Npc } from '../../../../npcs/Npcs.js';
 import { Modals } from '../../../../ui/widgets/Modals.js';
 import { Traversal } from '../../../../walking/Traversal.js';
-import { driveUntil, heldId, settleScene } from '../../exec/prompts.js';
+import { findSceneTarget, driveUntil, heldId, settleScene } from '../../exec/prompts.js';
 import { RG_ITEM, RG_LOC, RG_NPC, RG_SULPHUR_LOCS, RG_TILE } from './areas.js';
 import { RG_STAGE } from './journal.js';
 import { walkTo } from './isafdar.js';
@@ -29,8 +29,7 @@ function reachableLoc(locIds: readonly number[]): Loc | null {
 }
 
 async function useHeldOnLoc(itemId: number, locIds: readonly number[], expect: () => boolean, log: (m: string) => void): Promise<boolean> {
-    await settleScene();
-    const target = reachableLoc(locIds);
+    const target = await findSceneTarget(() => reachableLoc(locIds));
     const item = Inventory.items().find(entry => entry.id === itemId);
     if (!target || !item) {
         log(`nothing to use ${itemId} on within reach`);

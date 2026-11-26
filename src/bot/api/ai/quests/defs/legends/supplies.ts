@@ -1,3 +1,4 @@
+import { RUNE_LEGS } from '../../../../../data/runeLegs.js';
 import type Tile from '../../../../../geometry/Tile.js';
 import { Skills } from '../../../../skills/Skills.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
@@ -46,7 +47,7 @@ export const PRAYER_POTIONS: readonly LqItem[] = [
 // Why: rune chainbody, since the platebody wants Dragon Slayer as well as Defence 40 and the refusal is a bare false with no message.
 export const ARMOUR: readonly LqItem[] = [
     { id: 1113, name: 'Rune chainbody' },
-    { id: 1079, name: 'Rune platelegs' },
+    ...RUNE_LEGS,
     { id: 1163, name: 'Rune full helm' },
     { id: 1201, name: 'Rune kiteshield' },
     { id: 1704, name: 'Amulet of glory' }

@@ -1,3 +1,4 @@
+import { configuredLootNames } from '../../api/bank/bankRules.js';
 import { reader } from '../../adapter/ClientAdapter.js';
 import { BotHost } from '../../runtime/BotHost.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
@@ -8,6 +9,7 @@ import Tile from '../../geometry/Tile.js';
 import { DeathRecovery } from '../../api/tasks/DeathRecovery.js';
 import { ContinueDialog } from '../../api/tasks/ContinueDialog.js';
 import { Bank } from '../../api/bank/Bank.js';
+import { BankTeleport } from '../../api/bank/BankTeleport.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { Equipment } from '../../api/equipment/Equipment.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
@@ -18,6 +20,7 @@ import { etaHours, levelProgress } from '../../paint/levelProgress.js';
 import { COMBAT_STYLE_OPTIONS, parseCombatStyle, type MeleeCombatStyle } from '../../api/combat/CombatStyle.js';
 import { Autocast } from '../../api/magic/Autocast.js';
 import { castsAvailable, runeWithdrawList } from '../../api/combat/CombatStyleLogic.js';
+import { dragonMeleeStyle } from '../../api/combat/dragonStyle.js';
 import { SPELL_DB } from '../../data/spelldb.js';
 import { DROP_DB } from '../../data/dropdb.js';
 import { MELEE_WEAPONS, STAFFS } from '../../api/combat/equipment.js';
@@ -39,7 +42,8 @@ import type { SettingsSchema } from '../../runtime/Settings.js';
 import { scriptFood, suppliesOf } from '../../api/loadout/loadoutPlan.js';
 import { LOADOUT_SETTING, selectedLoadout } from '../../api/loadout/loadoutSetting.js';
 
-const TARGET = 'Green dragon';
+let TARGET = 'Green dragon';
+const RED_ANCHOR = new Tile(3216, 3820, 0);
 const DEFAULT_ANCHOR = new Tile(3096, 3814, 0);
 const DEFAULT_BANK = new Tile(3094, 3493, 0);
 const FIELD_RADIUS = 22;
@@ -55,7 +59,7 @@ const TELE_STOCK = 2;
 const SHOW_MAGE = { key: 'combatStyle', anyOf: ['mage'] };
 const SHOW_MELEE = { key: 'combatStyle', anyOf: ['melee'] };
 
-const DROPS: string[] = DROP_DB[TARGET] ?? [];
+const DROPS = [...new Set([...DROP_DB['Green dragon'], ...DROP_DB['Red dragon']])];
 const DEFAULT_LOOT = DROPS.filter(n => n.toLowerCase() !== 'bass');
 const BONE_NAME = 'Dragon bones';
 
@@ -77,13 +81,14 @@ export const SETTINGS: SettingsSchema = {
     panicHp: { type: 'number', default: 30, min: 1, max: 98, label: 'Escape below HP%', group: 'Food & healing', help: 'when out of food and this low, escape to the bank' },
     foodReserve: { type: 'number', default: 4, min: 0, max: 27, label: 'Food kept back from slot-freeing', group: 'Food & healing', help: 'a full pack spends food to make room for loot instead of banking — never below this many' },
 
-    solveClues: { type: 'boolean', default: true, label: 'Solve clue drops', group: 'Clues', help: 'green dragons drop hard clues — the trail runs out of the wilderness and back' },
+    solveClues: { type: 'boolean', default: true, label: 'Solve clue drops', group: 'Clues', help: 'dragons drop hard clues — the trail runs out of the wilderness and back' },
 
     escape: { type: 'string', default: 'Flee to bank', options: ['Flee to bank', 'Teleport to Varrock'], label: 'Escape mode', group: 'Wilderness', help: 'Teleport brings Varrock runes and runs south to level 20 to cast (teleports are blocked above level 20 wilderness)' },
-    loot: { type: 'string[]', default: DEFAULT_LOOT, options: DROPS, label: 'Loot to pick up (drop table)', group: 'Banking & loot', help: 'Dragon bones + Dragonhide + the rest of the green dragon table; everything picked up is banked.' },
+    loot: { type: 'string[]', default: DEFAULT_LOOT, options: DROPS, label: 'Loot to pick up (drop table)', group: 'Banking & loot', help: 'Pick drops to bank from the selected dragon.' },
     buryBones: { type: 'boolean', default: false, label: 'Bury dragon bones', group: 'Banking & loot', help: `bury ${BONE_NAME} for Prayer xp instead of banking them (always looted when on) — they are the most valuable drop, so this trades gold for xp` },
     bankCommonJunk: { type: 'boolean', default: true, label: 'Also grab shared gems/junk', group: 'Banking & loot' },
-    anchorTile: { type: 'tile', default: DEFAULT_ANCHOR, label: 'Dragon field tile', group: 'Location' },
+    target: { type: 'string', default: 'Green dragon', options: ['Green dragon', 'Red dragon'], label: 'Wilderness dragon', group: 'Location' },
+    anchorTile: { type: 'tile', default: DEFAULT_ANCHOR, label: 'Green dragon field tile', group: 'Location', showIf: { key: 'target', anyOf: ['Green dragon'] } },
     bankTile: { type: 'tile', default: DEFAULT_BANK, label: 'Bank stand tile (Edgeville)', group: 'Location' },
     logDetail: { type: 'string', default: 'Normal', options: ['Normal', 'Verbose'], label: 'Log detail', group: 'Diagnostics', help: 'Verbose adds task-switch and decision traces (pack census, loot skips, slot freeing, escape reasons)' }
 };
@@ -196,10 +201,12 @@ function hasVarrockRunes(): boolean {
     return VARROCK_TELE_RUNES.every(r => Inventory.count(r.rune) >= r.count);
 }
 function findLoot() {
-    return GroundItems.query()
+    const drops = GroundItems.query()
         .where(g => wantsGroundItem({ id: g.id, name: g.name ?? null }, lootFilter()))
         .within(FIELD_RADIUS)
-        .nearest();
+        .results()
+        .sort((a, b) => a.distance() - b.distance());
+    return drops.find(drop => drop.name === BONE_NAME || drop.name === HIDE_NAME) ?? drops[0] ?? null;
 }
 
 /** Loot merging into a stack already held needs no slot. */
@@ -438,13 +445,16 @@ class SetAttackStyle implements Task {
     private fails = 0;
     private retryAt = 0;
     constructor(private bot: GreenDragon) {}
+    private style(): MeleeCombatStyle {
+        return dragonMeleeStyle(MELEE_STYLE, Equipment.contains('Dragon longsword') ? 'Dragon longsword' : null, [TARGET]);
+    }
     validate(): boolean {
-        return STYLE === 'melee' && !Game.hasCombatStyle(MELEE_STYLE) && Date.now() >= this.retryAt;
+        return STYLE === 'melee' && !Game.hasCombatStyle(this.style()) && Date.now() >= this.retryAt;
     }
     async execute(): Promise<void> {
         this.bot.setStatus('setting combat style');
-        Game.setCombatStyle(MELEE_STYLE);
-        if (await Execution.delayUntil(() => Game.hasCombatStyle(MELEE_STYLE), 3000)) {
+        Game.setCombatStyle(this.style());
+        if (await Execution.delayUntil(() => Game.hasCombatStyle(this.style()), 3000)) {
             this.fails = 0;
         } else if (++this.fails >= ASSERT_BATCH) {
             this.fails = 0;
@@ -469,7 +479,6 @@ class ArmAutocast implements Task {
     }
     async execute(): Promise<void> {
         this.bot.setStatus(`arming autocast: ${SPELL}`);
-        await Execution.delayTicks(3);
         if (await Autocast.arm(SPELL, m => this.bot.log(m))) {
             this.fails = 0;
         } else if (++this.fails >= ASSERT_BATCH) {
@@ -542,6 +551,7 @@ class BankRun implements Task {
 }
 
 async function bankRoutine(bot: GreenDragon): Promise<void> {
+    if (TELE_ESCAPE && !atBank()) await BankTeleport.cast('Varrock', message => bot.log(message), true);
     if (!(await Traversal.walkResilient(BANK_TILE, { radius: 3, attempts: 6, timeoutMs: 300_000, log: m => bot.log(`  ${m}`) }))) {
         bot.log('walk to the bank failed — will retry');
         return;
@@ -827,7 +837,7 @@ class Fight implements Task {
         return !underAttack() && hpFrac() >= PANIC_HP && fieldDragons().length > 0;
     }
     async execute(): Promise<void> {
-        this.bot.setStatus('fighting green dragons');
+        this.bot.setStatus(`fighting ${TARGET.toLowerCase()}s`);
         const deadline = performance.now() + 120_000;
         while (performance.now() < deadline) {
             if (EventSignal.pending() || this.bot.died || ChatDialog.canContinue() || underAttack()) {
@@ -849,7 +859,7 @@ class Fight implements Task {
             const dragons = fieldDragons();
             if (this.targetIdx !== null && !dragons.some(d => d.index === this.targetIdx)) {
                 this.bot.countKill();
-                this.bot.log(`green dragon down — ${this.bot.kills()} kills`);
+                this.bot.log(`${TARGET} down — ${this.bot.kills()} kills`);
                 this.targetIdx = null;
             }
             if (findLoot() !== null) {
@@ -881,14 +891,14 @@ class Fight implements Task {
                     this.bot.countBurial();
                     this.bot.vlog(`buried ${BONE_NAME} (${this.bot.burials()} total)`);
                 }
-                await Execution.delayTicks(2);
+                await Execution.delayTicks(1);
                 continue;
             }
             const dragon = dragons.sort((a, b) => a.distance() - b.distance())[0];
             if (!dragon) {
                 return;
             }
-            this.bot.vlog(`attacking green dragon #${dragon.index} at ${dragon.distance()} tiles`);
+            this.bot.vlog(`attacking ${TARGET.toLowerCase()} #${dragon.index} at ${dragon.distance()} tiles`);
             await dragon.interact('Attack');
             this.targetIdx = dragon.index;
             await Execution.delayUntil(() => Game.inCombat() || fieldDragons().length === 0, 4000);
@@ -941,10 +951,11 @@ export default class GreenDragon extends TaskBot {
         PANIC_HP = this.settings.num('panicHp', 30) / 100;
         RUNES_WITHDRAW = this.settings.num('runesWithdraw', 150);
         FOOD_WITHDRAW = this.settings.num('foodWithdraw', 20);
-        LOOT_SET = new Set(this.settings.list('loot', DEFAULT_LOOT).map(s => s.toLowerCase()));
+        LOOT_SET = new Set(configuredLootNames(this.settings.list('loot', DEFAULT_LOOT)));
         BANK_COMMON = this.settings.bool('bankCommonJunk', true);
         TELE_ESCAPE = this.settings.str('escape', 'Flee to bank') === 'Teleport to Varrock';
-        ANCHOR = this.settings.tile('anchorTile', DEFAULT_ANCHOR);
+        TARGET = this.settings.str('target') === 'Red dragon' ? 'Red dragon' : 'Green dragon';
+        ANCHOR = TARGET === 'Red dragon' ? RED_ANCHOR : this.settings.tile('anchorTile', DEFAULT_ANCHOR);
         BANK_TILE = this.settings.tile('bankTile', DEFAULT_BANK);
         FOOD_RESERVE = this.settings.num('foodReserve', 4);
         BURY_BONES = this.settings.bool('buryBones', false);
@@ -975,7 +986,7 @@ export default class GreenDragon extends TaskBot {
 
         await assertAutoRetaliate(this);
 
-        this.log(`GreenDragon — style ${STYLE} w/ ${WEAPON} + ${SHIELD}${STYLE === 'mage' ? ` (${SPELL})` : ''}, food '${FOOD_NAME}' (reserve ${FOOD_RESERVE}), escape '${TELE_ESCAPE ? 'Varrock tele' : 'flee to bank'}', clues ${SOLVE_CLUES ? 'on' : 'off'}${BURY_BONES ? `, burying ${BONE_NAME}` : ''}, potions ${POTIONS.length > 0 ? POTIONS.map(p => `${p.want}x ${p.flask}`).join(' + ') : 'off'}, field ${ANCHOR}, bank ${BANK_TILE}`);
+        this.log(`${TARGET} — style ${STYLE} w/ ${WEAPON} + ${SHIELD}${STYLE === 'mage' ? ` (${SPELL})` : ''}, food '${FOOD_NAME}' (reserve ${FOOD_RESERVE}), escape '${TELE_ESCAPE ? 'Varrock tele' : 'flee to bank'}', clues ${SOLVE_CLUES ? 'on' : 'off'}${BURY_BONES ? `, burying ${BONE_NAME}` : ''}, potions ${POTIONS.length > 0 ? POTIONS.map(p => `${p.want}x ${p.flask}`).join(' + ') : 'off'}, field ${ANCHOR}, bank ${BANK_TILE}`);
         this.vlog(`verbose logging on — loot set [${[...LOOT_SET].join(', ')}], common junk ${BANK_COMMON ? 'on' : 'off'}`);
 
         const traced = (name: string, task: Task): Task => new Traced(this, name, task);
@@ -1101,7 +1112,7 @@ export default class GreenDragon extends TaskBot {
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
         const p = Paint.begin(ctx, { dock: 'chatbox', accent: '#6fbf73' });
-        p.title(`GreenDragon — ${this.status}`);
+        p.title(`${TARGET} — ${this.status}`);
 
         // Why: a trail can walk most of the map, so leg and travel detail is the only sign it is progressing.
         // Why: ClueSolver paints the same block, so the two stay in sync.

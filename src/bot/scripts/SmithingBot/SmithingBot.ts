@@ -165,10 +165,18 @@ class BankTrip implements Task {
             this.bot.log('could not open the bank — will retry');
             return;
         }
+        if (!Bank.ready() || !(await Bank.backpackReady())) return;
+        const barName = this.bot.barItemName();
+        const available = Bank.count(barName) + this.bot.barCount();
+        const needed = this.bot.barsNeededForProduct();
         const hammerPat = this.bot.hammerName().toLowerCase();
         await Bank.depositAllMatching(name => !name.toLowerCase().includes(hammerPat));
-        await Execution.delayTicks(1);
         this.bot.countTrip();
+
+        if (available < needed) {
+            this.bot.requestFinish(`Insufficient ${barName} for ${this.bot.productName()} (need ${needed}, have ${available})`);
+            return;
+        }
 
         if (!this.bot.hammerItem()) {
             const hammerBank = Bank.items().find(i => i.name !== null && i.name.toLowerCase().includes(hammerPat));
@@ -184,13 +192,6 @@ class BankTrip implements Task {
             await Execution.delayUntil(() => this.bot.hammerItem() !== null, 3000);
         }
 
-        const barBank = Bank.items().find(i => i.name !== null && i.name.toLowerCase().includes(this.bot.barItemName().toLowerCase()));
-        if (!barBank || barBank.name === null) {
-            this.bot.log(`no '${this.bot.barItemName()}' in the bank — idling`);
-            await Execution.delayTicks(5);
-            return;
-        }
-        const barName = barBank.name;
         this.bot.log(`withdrawing ${barName}`);
         if (!(await Bank.withdrawLoad(barName))) {
             this.bot.log(`could not withdraw ${barName} — will retry`);

@@ -419,7 +419,6 @@ export default class WildyAgility extends TaskBot {
         }
 
         await Bank.depositInventory();
-        await Execution.delayTicks(1);
         await this.withdrawFood();
         this.log(`${reason}: restocked ${foodCount()} '${FOOD}'`);
         return true;

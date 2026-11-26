@@ -1,4 +1,4 @@
-import { reader } from '../../adapter/ClientAdapter.js';
+import { reader, type InvItemSnapshot } from '../../adapter/ClientAdapter.js';
 import { TaskBot } from '../../api/bot/Bot.js';
 import { Bank } from '../../api/bank/Bank.js';
 import { Banking } from '../../api/bank/Banking.js';
@@ -14,6 +14,7 @@ import type { SettingsSchema } from '../../runtime/Settings.js';
 import { droppableOf, questCategories, reportLine, summaryLine } from './BankSorterLogic.js';
 
 const QUEST_TAB = 2;
+const DROPS_PER_TICK = 5;
 
 export const BANKSORTER_SETTINGS: SettingsSchema = {
     sortBank: { type: 'boolean', default: true, label: 'Sort the bank' },
@@ -57,28 +58,86 @@ export default class BankSorter extends TaskBot {
         return new Map(Quests.all().map(q => [q.name, q.status]));
     }
 
-    private async dropAll(found: readonly QuestJunkFinding[]): Promise<number> {
-        let dropped = 0;
-        for (const item of found) {
-            if (!(await Bank.withdrawById(item.id, 'Withdraw All'))) {
-                continue;
-            }
-            if (!(await Execution.delayUntil(() => Inventory.countById(item.id) > 0, 3000))) {
-                continue;
-            }
+    private async dropLoad(load: readonly InvItemSnapshot[]): Promise<number> {
+        const matches = (a: Pick<InvItemSnapshot, 'slot' | 'id' | 'count'>, b: InvItemSnapshot) =>
+            a.slot === b.slot && a.id === b.id && a.count === b.count;
+        const ready = () => {
+            const pack = Bank.normalBackpackSnapshot();
+            return pack !== null && load.every(item => pack.some(slot => matches(slot, item)));
+        };
+        if (!ready() && !(await Execution.delayUntil(ready, 3000))) return 0;
 
-            await Bank.close();
-            const held = Inventory.items().find(i => i.id === item.id);
-            if (held && (await held.interact('Drop'))) {
-                if (await Execution.delayUntil(() => Inventory.countById(item.id) === 0, 3000)) {
-                    dropped += 1;
-                }
+        const sent = new Set<number>();
+        const queue = load.map(item => ({ item, attempts: 0 }));
+        while (queue.length && !Bank.isOpen() && reader.inventorySnapshotReady()) {
+            const batch = queue.splice(0, DROPS_PER_TICK);
+            const pack = Inventory.items();
+            for (const { item } of batch) {
+                const held = pack.find(slot => matches(slot, item));
+                if (held && await held.interact('Drop')) sent.add(item.slot);
             }
-            if (!(await Banking.open())) {
-                break;
+            await Execution.delayTicks(1);
+            const after = Bank.normalBackpackSnapshot();
+            if (!after) return 0;
+            for (const entry of batch) {
+                entry.attempts++;
+                if (entry.attempts < 3 && after.some(slot => matches(slot, entry.item))) queue.push(entry);
             }
         }
 
+        const pack = Bank.normalBackpackSnapshot();
+        if (!pack) return 0;
+        const removed = load.filter(item => sent.has(item.slot) && !pack.some(slot => slot.slot === item.slot && slot.id === item.id));
+        return removed.reduce((total, item) => total + item.count, 0);
+    }
+
+    private async dropAll(found: readonly QuestJunkFinding[]): Promise<number> {
+        const pending = new Set(found.map(item => item.id));
+        if (!pending.size || !(await Bank.backpackReady())) return 0;
+        const carried = Inventory.items().filter(item => pending.has(item.id));
+        if (carried.length) {
+            const catalog = reader.objCatalog();
+            for (const item of carried) {
+                if (catalog.find(obj => obj.id === item.id)?.stackable !== false) {
+                    pending.delete(item.id);
+                    this.log(`Keeping the carried stack of ${item.name} separate from bank junk`);
+                }
+            }
+        }
+
+        let dropped = 0;
+        while (pending.size && Bank.isOpen() && await Bank.waitReady() && await Bank.backpackReady()) {
+            if (Inventory.isFull()) {
+                this.log('No free backpack slots for bank junk');
+                break;
+            }
+            await Bank.setNoteMode(false);
+            const occupied = new Set(Inventory.items().map(item => item.slot));
+            const withdrawn = new Set<number>();
+            for (const id of pending) {
+                if (!Bank.isOpen() || Inventory.isFull()) break;
+                const banked = Bank.countById(id);
+                const before = Inventory.countById(id);
+                const ok = banked > 0 && await Bank.withdrawLoad(id);
+                const gained = Inventory.countById(id) - before;
+                if (gained > 0) withdrawn.add(id);
+                if (!ok || gained <= 0 || gained >= banked) pending.delete(id);
+            }
+            const load = reader.bankSideItems().filter(item => withdrawn.has(item.id) && !occupied.has(item.slot));
+            if (!load.length || !(await Bank.close())) break;
+            const cleared = await this.dropLoad(load);
+            dropped += cleared;
+            if (cleared < load.reduce((total, item) => total + item.count, 0)) {
+                const pack = Bank.normalBackpackSnapshot();
+                if (!pack) break;
+                for (const item of load) {
+                    if (pack.some(slot => slot.slot === item.slot && slot.id === item.id)) pending.delete(item.id);
+                }
+                this.log('Some quest junk could not be dropped');
+            }
+            if (pending.size && !(await Banking.open())) break;
+        }
+        if (this.sort && !Bank.isOpen()) await Banking.open();
         return dropped;
     }
 
@@ -87,7 +146,7 @@ export default class BankSorter extends TaskBot {
         const statuses = await this.questStatuses();
 
         this.status = 'walking to the bank';
-        if (!(await Banking.open())) {
+        if (!(await Banking.open()) || !(await Bank.waitReady())) {
             ScriptRunner.stop('BankSorter: could not open a bank');
             return;
         }

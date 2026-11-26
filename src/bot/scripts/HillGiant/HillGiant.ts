@@ -1,8 +1,10 @@
+import { configuredLootNames } from '../../api/bank/bankRules.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Game } from '../../api/game/Game.js';
 import Tile from '../../geometry/Tile.js';
+import { findSceneTarget } from '../../api/walking/Reach.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { ContinueDialog } from '../../api/tasks/ContinueDialog.js';
 import { DeathRecovery } from '../../api/tasks/DeathRecovery.js';
@@ -82,7 +84,7 @@ export default class HillGiant extends TaskBot {
         this.bankCommon = this.settings.bool('bankCommonJunk', true);
         this.buryBones = this.settings.bool('buryBones', false);
         this.lootSlots = this.settings.num('lootSlots', 14);
-        this.lootSet = new Set(this.settings.list('loot', DEFAULT_LOOT).map((n: string) => n.toLowerCase()));
+        this.lootSet = new Set(configuredLootNames(this.settings.list('loot', DEFAULT_LOOT)));
         if (this.buryBones) {
             this.lootSet.add(BIG_BONES.toLowerCase());
         }
@@ -233,13 +235,15 @@ export default class HillGiant extends TaskBot {
                 this.log(`got the ${BRASS_KEY}`);
                 return true;
             }
-            const drop = GroundItems.query().name(BRASS_KEY).within(8).nearest();
-            if (drop && (await drop.interact('Take'))) {
+            const drop = await findSceneTarget(() => GroundItems.query().name(BRASS_KEY).within(8).nearest(), 5);
+            if (!drop) {
+                this.log(`no ${BRASS_KEY} on the floor yet — waiting for the respawn`);
+                continue;
+            }
+            if (await drop.interact('Take')) {
                 if (await Execution.delayUntil(() => this.hasBrassKey(), 3000)) {
                     return true;
                 }
-            } else {
-                this.log(`no ${BRASS_KEY} on the floor yet — waiting for the respawn`);
             }
             await Execution.delayTicks(5);
         }
@@ -511,7 +515,6 @@ class Fight implements Task {
             if (this.targetIdx !== null && isHillGiantKill(this.byIndex(this.targetIdx) !== null)) {
                 this.bot.countKill();
                 this.targetIdx = null;
-                await Execution.delayTicks(2);
                 return;
             }
             // Yield for food, keep targetIdx so the next Fight pass still counts the despawn.
@@ -520,14 +523,14 @@ class Fight implements Task {
             }
             const cur = this.targetIdx !== null ? this.byIndex(this.targetIdx) : null;
             if (cur && !Game.inCombat() && !cur.inCombat) {
-                await Execution.delayTicks(3);
+                await Execution.delayUntilTicks(() => this.byIndex(cur.index) === null, 3);
                 if (this.targetIdx !== null && isHillGiantKill(this.byIndex(this.targetIdx) !== null)) {
                     this.bot.countKill();
                 }
                 this.targetIdx = null;
                 return;
             }
-            await Execution.delayTicks(2);
+            await Execution.delayTicks(1);
         }
         this.targetIdx = null;
     }

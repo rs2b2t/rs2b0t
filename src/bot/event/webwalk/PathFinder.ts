@@ -122,6 +122,7 @@ export type NavRequest =
     | {
           type: 'path';
           id: number;
+          expiresAt?: number;
           from: NavPoint;
           to: NavPoint;
           avoid?: { x: number; z: number }[];
@@ -958,6 +959,7 @@ export class PathFinder {
 function hasOtherGates(requires: TransportRequires): boolean {
     return (
         requires.members === true ||
+        requires.minQuestPoints !== undefined ||
         requires.freeSlots !== undefined ||
         (requires.skills !== undefined && requires.skills.length > 0) ||
         (requires.items !== undefined && requires.items.length > 0) ||

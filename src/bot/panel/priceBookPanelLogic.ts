@@ -218,6 +218,11 @@ export function formatPrice(n: number): string {
 /** Read a box back, in any of the forms it can show or a person can type. */
 // Why: the box is editable, so whatever it displays has to be something it also accepts.
 export function parsePrice(text: string): number | null {
+    const amount = parseAmount(text);
+    return amount === null ? null : Math.trunc(amount);
+}
+
+export function parseAmount(text: string): number | null {
     const cleaned = text.trim().replace(/[\s,]/g, '');
     if (cleaned.length === 0) {
         return null;
@@ -226,7 +231,7 @@ export function parsePrice(text: string): number | null {
     if (!m) {
         return null;
     }
-    const scale = m[2] === undefined ? 1 : m[2].toLowerCase() === 'k' ? 1000 : MILLION;
-    const value = Number(m[1]) * scale;
-    return Number.isFinite(value) ? Math.trunc(value) : null;
+    const exponent = m[2] === undefined ? 0 : m[2].toLowerCase() === 'k' ? 3 : 6;
+    const value = Number(`${m[1]}e${exponent}`);
+    return Number.isFinite(value) ? value : null;
 }

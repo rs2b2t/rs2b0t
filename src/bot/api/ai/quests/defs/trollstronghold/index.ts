@@ -13,8 +13,8 @@ import { QUESTS } from '../../data/quests.js';
 import { hasFlag, type QuestModule, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import { talkChoosingBy } from '../../exec/primitives.js';
 import { QuestFood } from '../../food.js';
-import { QuestLoadout } from '../../gear.js';
-import { gearOf, weaponOf } from '../../../../loadout/loadoutPlan.js';
+import { QuestLoadout, questWornGear } from '../../gear.js';
+import { weaponOf } from '../../../../loadout/loadoutPlan.js';
 import {
     BOOT_COST,
     COIN_FLOAT,
@@ -121,7 +121,7 @@ function scavengedGear(snap: QuestSnapshot): string[] {
 
 /** A declared loadout is taken literally; declaring nothing falls back to scavenging. */
 export function plannedGear(snap: QuestSnapshot): string[] {
-    const declared = gearOf(QuestLoadout.current);
+    const declared = Object.values(questWornGear(snap));
     const names = declared.length > 0 ? declared : scavengedGear(snap);
     return names.filter(name => !unwearable.has(name.toLowerCase()) && !worn(snap, name));
 }

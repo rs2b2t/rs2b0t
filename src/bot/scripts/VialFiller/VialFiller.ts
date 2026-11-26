@@ -119,14 +119,14 @@ export default class VialFiller extends LoopingBot {
                 await Bank.withdrawX(COINS, this.coinFloat);
             }
             if (Inventory.count(COINS) === 0) {
-                ScriptRunner.stop('no coins to restock vials with');
+                this.requestFinish('no coins to restock vials with');
                 return false;
             }
         } else if (Bank.count(EMPTY_VIAL) === 0) {
             if (this.buyVials) {
                 this.log(`no ${EMPTY_VIAL}s in the bank — the Jatix restock will refill on trip ${this.buyEvery}, or bank some vials.`);
             } else {
-                ScriptRunner.stop(`no ${EMPTY_VIAL}s left in the bank`);
+                this.requestFinish(`no ${EMPTY_VIAL}s left in the bank`);
             }
             return false;
         } else {

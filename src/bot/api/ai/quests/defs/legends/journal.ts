@@ -1,6 +1,5 @@
+import { Modals } from '../../../../ui/widgets/Modals.js';
 import { normalizeJournal as normalize } from '../../journalText.js';
-import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
-import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 import { LEGENDS_QUEST, LQ_STAGE } from './areas.js';
@@ -112,10 +111,7 @@ export async function readLegendsProgress(): Promise<QuestProgress | undefined> 
 
     const progress = parseLegendsJournal(await Quests.journal(LEGENDS_QUEST));
     // Why: the journal is a main modal, and leaving it up makes every later read come back empty.
-    if (reader.modals().main !== -1) {
-        actions.closeModal();
-        await Execution.delayTicks(1);
-    }
+    await Modals.closeIfOpen();
     if (progress !== undefined) {
         lastRead = progress;
         return progress;

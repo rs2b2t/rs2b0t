@@ -1,4 +1,5 @@
-import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
+import { Modals } from '../../../../ui/widgets/Modals.js';
+import { reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
 import { Game } from '../../../../game/Game.js';
@@ -214,9 +215,7 @@ export function readScroll(itemId: number): (log: (m: string) => void) => Promis
         }
         if (!opened) return false;
         if (!(await driveUntil(() => reader.modals().main !== -1, YES_READ, log, 10_000))) return false;
-        actions.closeModal();
-        await Execution.delayTicks(1);
-        return true;
+        return Modals.close();
     };
 }
 

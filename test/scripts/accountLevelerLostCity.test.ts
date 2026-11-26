@@ -20,7 +20,8 @@ const snapshot = (): LevelerSnapshot => ({
     stock: { coins: 1000000, lobster: 100, diamond: 1, 'dragonfire shield': 1, 'mithril scimitar': 1 }
 });
 
-test('an eligible account schedules Lost City before ordinary training', () => {
+test('an eligible account can draw Lost City alongside ordinary training', () => {
+    expect(planNext(snapshot(), emptyMemory(), () => 0.5)).not.toMatchObject({ plan: { quest: 'Lost City' } });
     const decision = planNext(snapshot(), emptyMemory(), () => 0);
     expect(decision.kind).toBe('activity');
     if (decision.kind !== 'activity') return;
@@ -175,6 +176,7 @@ test('an already-running leveler audits newly unlocked dragon weapons and cools 
     Object.assign(bot['supplies'], f.port);
     class Idle extends LoopingBot { override loop(): void {} }
     const patches = [
+        spyOn(Math, 'random').mockReturnValue(0),
         spyOn(Game, 'myName').mockReturnValue(null),
         spyOn(Game, 'tile').mockReturnValue({ x: 3200, z: 3200, level: 0 }),
         spyOn(Skills, 'xp').mockReturnValue(0),

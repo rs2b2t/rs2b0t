@@ -83,7 +83,8 @@ const ALE_MS = 45_000;
 
 /** Hand Harold the Asgarnian ale his `harold_drink` branch asks for. */
 export async function giveAleToHarold(log: (m: string) => void): Promise<boolean> {
-    if (held(DEATH_ITEM.ASGARNIAN_ALE.id) === 0) {
+    const before = held(DEATH_ITEM.ASGARNIAN_ALE.id);
+    if (before === 0) {
         log('no Asgarnian ale in the pack to give Harold');
         return false;
     }
@@ -93,15 +94,9 @@ export async function giveAleToHarold(log: (m: string) => void): Promise<boolean
     if (!(await openDialogue('Harold', log))) {
         return false;
     }
-    const drunk = (): boolean => held(DEATH_ITEM.ASGARNIAN_ALE.id) === 0;
-    // Why: the branch ends on the 3-way menu that offers the gamble, so the drive stops when the ale leaves the pack.
-    if (!(await driveUntil(drunk, ['Can I buy you a drink?'], log, ALE_MS))) {
-        log('Harold never took the ale');
-        return false;
-    }
-    // Why: the branch signs off on the menu, and a menu left standing is a chat modal the next step's clicks get dropped behind.
-    await driveDialog(['Can I buy you a drink?'], log);
-    return true;
+    const served = () => held(DEATH_ITEM.ASGARNIAN_ALE.id) < before && ChatDialog.options().some(option => option.includes('gamble'));
+    if (!(await driveBoxes(served, ALE_MS, [], log))) return false;
+    return driveDialog(['Where were you when you last had the combination?'], log);
 }
 
 export async function giveBlurberryToHarold(log: (m: string) => void): Promise<boolean> {
@@ -240,24 +235,18 @@ async function playRound(bet: number, log: (m: string) => void): Promise<RoundRe
         log(`Harold gamble: the roll landed but no verdict came; panel shows [${diceState()}]`);
         return 'abort';
     }
-    // Why: `player_roll` writes the verdict into the panel before it unhides the Continue layer, and pressing Continue removes the panel.
-    const won = reader.mainModalTexts().some(text => /you win/i.test(text));
     if (!(await pressWhenArmed(continueButton, actions.pauseButton, () => !diceOpen(), 'Continue', log))) {
         return 'abort';
     }
     await drainRoundTail(log);
-    log(`Harold gamble: ${won ? 'won' : 'lost'} ${bet}, coins ${before} → ${coins()}`);
-    if (combinationFound()) {
-        return 'iou';
-    }
-    if (!won) {
-        return 'loss';
-    }
-    if (coins() <= before) {
-        log(`Harold gamble: a win of ${bet} paid nothing and left no IOU`);
+    if (combinationFound()) return 'iou';
+    const after = coins();
+    if (after === before) {
+        log(`Harold gamble: no coins or IOU settled for the bet of ${bet}`);
         return 'abort';
     }
-    return 'win';
+    log(`Harold gamble: ${after > before ? 'won' : 'lost'} ${bet}, coins ${before} → ${after}`);
+    return after > before ? 'win' : 'loss';
 }
 
 const MAX_ROUNDS = 25;
@@ -275,7 +264,9 @@ export function nextStake(purse: number, pack: number): number {
 
 /** The purse the round's verdict implies. */
 export function purseAfter(purse: number, stake: number, result: 'win' | 'loss'): number {
-    return result === 'loss' ? purse + stake : Math.min(MAX_BET, purse * 2 + 1);
+    if (result === 'loss') return purse + stake;
+    if (stake <= purse) return purse - stake;
+    return Math.min(MAX_BET, purse * 2 + 1);
 }
 
 /** Roll against Harold, raising the stake past his purse, until he writes the IOU. */
@@ -283,9 +274,9 @@ export async function gambleWithHarold(log: (m: string) => void): Promise<boolea
     if (combinationFound()) {
         return true;
     }
-    if (!(await giveBlurberryToHarold(log))) {
-        return false;
-    }
+    if (!(await enterHaroldRoom(log))) return false;
+    if ((held(DEATH_ITEM.BLURBERRY_SPECIAL.id) || held(DEATH_ITEM.PREMADE_BLURBERRY_SPECIAL.id))
+        && !(await giveBlurberryToHarold(log))) return false;
     let purse = HAROLD_PURSE_START;
     for (let round = 1; round <= MAX_ROUNDS && !combinationFound(); round++) {
         const bet = nextStake(purse, coins());

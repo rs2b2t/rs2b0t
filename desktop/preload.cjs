@@ -38,3 +38,22 @@ contextBridge.exposeInMainWorld('rs2b0tDesktopStorage', {
     compareAndSet: (key, expected, value) => call('compareAndSet', key, expected, value),
     subscribe: callback => { listeners.add(callback); }
 });
+
+const parallelism = typeof process !== 'undefined' && process.isMainFrame && process.argv.find(arg => arg.startsWith('--multibox-parallelism='));
+if (parallelism) {
+    let nextId = 0;
+    contextBridge.exposeInMainWorld('rs2b0tLoginCoordinator', {
+        parallelism: Number(parallelism.split('=')[1]),
+        register() {
+            const id = ++nextId;
+            let waiting = false;
+            const call = (action, delay) => ipcRenderer.sendSync('rs2b0t-login', id, action, delay);
+            return {
+                requestPermit() { waiting = !call('requestPermit'); return !waiting; },
+                queueStatus() { return waiting ? call('queueStatus') : null; },
+                leaveQueue() { if (waiting) call('leaveQueue'); waiting = false; },
+                holdFor: delay => call('holdFor', delay)
+            };
+        }
+    });
+}

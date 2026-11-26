@@ -58,6 +58,22 @@ export class MultiBoxController {
     // New bots start empty; `account` is only for automation and vault restores.
     // Why: title-screen auto-login stays off unless the bot's Global checkbox (or ?autologin=1) arms it, though a running script still reconnects on its own (#215).
     add(account?: Account): SlotSnapshot | null {
+        const slot = this.addSlot(account);
+        if (!slot) return null;
+        this.applyModes();
+        return this.snap(slot);
+    }
+
+    addGroup(accounts: Account[]): void {
+        const before = this.slots.length;
+        try {
+            for (const account of accounts) this.addSlot(account);
+        } finally {
+            if (this.slots.length !== before) this.applyModes();
+        }
+    }
+
+    private addSlot(account?: Account): Slot | null {
         if (this.switchingWorld) return null;
         const acct: Account = { ...(account ?? { username: `bot${this.nextId}`, password: '' }), world: account?.world ?? this.defaultWorld };
         const username = normalizeUsername(acct.username);
@@ -92,8 +108,7 @@ export class MultiBoxController {
         if (tab === this.active) {
             this.focusedId = slot.id;
         }
-        this.applyModes();
-        return this.snap(slot);
+        return slot;
     }
 
     remove(id: number): void {

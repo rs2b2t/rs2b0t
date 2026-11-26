@@ -525,7 +525,6 @@ class ArmAutocast implements Task {
     async execute(): Promise<void> {
         const spell = this.bot.targetSpell();
         this.bot.setStatus(`arming autocast: ${spell}`);
-        await Execution.delayTicks(3);
         if (await Autocast.arm(spell, m => this.bot.log(m))) {
             this.fails = 0;
         } else if (++this.fails >= 5) {
@@ -787,7 +786,7 @@ class Fight implements Task {
                 continue;
             }
 
-            await Execution.delayTicks(2);
+            await Execution.delayTicks(1);
         }
     }
 

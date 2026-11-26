@@ -23,7 +23,7 @@ export const Autocast = {
             log(`'${spellName}' is not an autocastable spell — see SPELL_DB (Wind Strike … Fire Wave)`);
             return false;
         }
-        if (!this.staffTabAttached()) {
+        if (!(await Execution.delayUntilTicks(() => this.staffTabAttached(), 3))) {
             log('combat tab is not the staff layout — is a staff wielded?');
             return false;
         }

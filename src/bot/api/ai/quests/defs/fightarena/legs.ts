@@ -13,7 +13,7 @@ import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
 import { ITEM_DB } from '../../../../../data/itemdb.js';
 import type Tile from '../../../../../geometry/Tile.js';
 import { driveDialog } from '../../exec/primitives.js';
-import { settleScene } from '../../exec/prompts.js';
+import { findSceneTarget } from '../../exec/prompts.js';
 import { FA_LOC, FA_OBJ, FA_TILE, pocketOf, type FaPocket } from './areas.js';
 import { PROTECT_LEVEL, PROTECT_MELEE, runFight, type ArenaFight } from './fights.js';
 
@@ -57,8 +57,7 @@ export async function searchChest(log: (m: string) => void): Promise<boolean> {
         log('could not stand north of the guards\' chest');
         return false;
     }
-    await settleScene();
-    const shut = Locs.query().name(FA_LOC.CHEST).action('Open').within(4).nearest();
+    const shut = await findSceneTarget(() => Locs.query().name(FA_LOC.CHEST).action('Open').within(4).nearest());
     if (shut) {
         await shut.interact('Open');
         await Execution.delayTicks(2);
@@ -136,8 +135,7 @@ async function openLocById(locId: number, near: Tile, log: (m: string) => void):
     if (!(await walkExactly(near, log))) {
         return false;
     }
-    await settleScene();
-    const door = Locs.query().where(l => l.id === locId).action('Open').within(6).nearest();
+    const door = await findSceneTarget(() => Locs.query().where(l => l.id === locId).action('Open').within(6).nearest());
     if (!door) {
         log(`no loc ${locId} offering Open at (${near.x},${near.z})`);
         return false;
@@ -191,8 +189,7 @@ export async function unlockJeremy(log: (m: string) => void): Promise<boolean> {
     if (!(await walkExactly(FA_TILE.JEREMY_DOOR_STAND, log))) {
         return false;
     }
-    await settleScene();
-    const door = Locs.query().where(l => l.id === FA_LOC.JEREMY_DOOR).within(6).nearest();
+    const door = await findSceneTarget(() => Locs.query().where(l => l.id === FA_LOC.JEREMY_DOOR).within(6).nearest());
     const keys = Inventory.items().find(item => item.id === FA_OBJ.KEYS);
     if (!door || !keys) {
         log('no Jeremy gate in reach, or no cell keys held');

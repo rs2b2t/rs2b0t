@@ -1,3 +1,4 @@
+import { configuredLootNames } from '../../api/bank/bankRules.js';
 import { reader } from '../../adapter/ClientAdapter.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { GameMessages } from '../../api/chatbox/gameMessages.js';
@@ -373,7 +374,6 @@ class ArmAutocast implements Task {
     }
     async execute(): Promise<void> {
         this.bot.setStatus(`arming autocast: ${SPELL}`);
-        await Execution.delayTicks(3);
         if (await Autocast.arm(SPELL, m => this.bot.log(m))) {
             this.fails = 0;
         } else if (++this.fails >= ASSERT_BATCH) {
@@ -500,7 +500,7 @@ export default class JiveKBD extends TaskBot implements CombatHost, EntryHost {
         DOSES = this.settings.num('dosesWithdraw', 1);
         ESCAPE_STOCK = this.settings.num('teleStock', 2);
         HEAL_TO = this.settings.num('healTo', 90) / 100;
-        LOOT_SET = new Set(this.settings.list('loot', DROPS).map(s => s.toLowerCase()));
+        LOOT_SET = new Set(configuredLootNames(this.settings.list('loot', DROPS)));
         BANK_COMMON = this.settings.bool('bankCommonJunk', true);
         VERBOSE = this.settings.str('logDetail', 'Normal') === 'Verbose';
 

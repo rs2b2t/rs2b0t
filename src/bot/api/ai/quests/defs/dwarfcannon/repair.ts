@@ -1,4 +1,5 @@
 import { GameMessages } from '../../../../chatbox/gameMessages.js';
+import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Game } from '../../../../game/Game.js';
 import { GroundItems } from '../../../../grounditems/GroundItems.js';
@@ -7,7 +8,7 @@ import { Locs } from '../../../../locs/Locs.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import type Tile from '../../../../../geometry/Tile.js';
 import { isUnderground, talkThrough, walkWithHops } from '../../exec/primitives.js';
-import { driveUntil, settleScene } from '../../exec/prompts.js';
+import { driveUntil, findSceneTarget } from '../../exec/prompts.js';
 import { CANNON_PARTS, CAVE_HOPS, DWARF_CHILD, MC_LOC, MC_OBJ, MC_TILE, RAILINGS } from './areas.js';
 
 const WALK = { attempts: 3, timeoutMs: 180_000 } as const;
@@ -32,8 +33,7 @@ async function fixOne(entry: { id: number; at: Tile }, log: (m: string) => void)
         return false;
     }
     for (let attempt = 0; attempt < 6; attempt++) {
-        await settleScene();
-        const railing = Locs.query().where(l => l.id === entry.id).nearest();
+        const railing = await findSceneTarget(() => Locs.query().where(l => l.id === entry.id).nearest());
         if (!railing) {
             log(`no railing loc ${entry.id} at (${entry.at.x},${entry.at.z})`);
             return false;
@@ -78,8 +78,7 @@ async function climb(stand: Tile, op: string, toLevel: number, log: (m: string) 
     if (!(await walkTo(stand, 1, log))) {
         return false;
     }
-    await settleScene();
-    const ladder = Locs.query().name('Ladder').action(op).within(4).nearest();
+    const ladder = await findSceneTarget(() => Locs.query().name('Ladder').action(op).within(4).nearest());
     if (!ladder) {
         log(`no Ladder offering '${op}' at (${stand.x},${stand.z},${stand.level})`);
         return false;
@@ -120,8 +119,7 @@ export async function fetchRemains(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(MC_TILE.REMAINS, 2, log))) {
         return false;
     }
-    await settleScene();
-    const drop = GroundItems.query().name(MC_OBJ.REMAINS.name).within(8).nearest();
+    const drop = await findSceneTarget(() => GroundItems.query().name(MC_OBJ.REMAINS.name).within(8).nearest());
     if (!drop) {
         log('no Dwarf remains on the tower floor');
         return false;
@@ -155,8 +153,7 @@ export async function rescueChild(rescued: boolean, log: (m: string) => void): P
     if (!(await walkTo(MC_TILE.CRATE, 2, log))) {
         return false;
     }
-    await settleScene();
-    const crate = Locs.query().where(l => l.id === MC_LOC.CRATE).nearest();
+    const crate = await findSceneTarget(() => Locs.query().where(l => l.id === MC_LOC.CRATE).nearest());
     if (!crate) {
         log(`no crate loc ${MC_LOC.CRATE} at (${MC_TILE.CRATE.x},${MC_TILE.CRATE.z})`);
         return false;
@@ -165,7 +162,7 @@ export async function rescueChild(rescued: boolean, log: (m: string) => void): P
         return false;
     }
     // The crate spawns the youngster and opens his dialogue in one script, and its last line sets the stage, so drain it.
-    await Execution.delayTicks(2);
+    await Execution.delayUntilTicks(() => ChatDialog.isOpen() || ChatDialog.canContinue(), 2);
     await talkThrough(DWARF_CHILD.npc, DWARF_CHILD.prefer, log);
     return true;
 }
@@ -196,8 +193,7 @@ export function cannonOutcome(text: string): PartOutcome {
 
 /** Inspect once and answer for one named component; `null` drives no menu. */
 async function inspectFor(part: string | null, log: (m: string) => void): Promise<PartOutcome> {
-    await settleScene();
-    const cannon = Locs.query().where(l => l.id === MC_LOC.BROKEN_CANNON).nearest();
+    const cannon = await findSceneTarget(() => Locs.query().where(l => l.id === MC_LOC.BROKEN_CANNON).nearest());
     if (!cannon) {
         log(`no broken cannon loc ${MC_LOC.BROKEN_CANNON} in the shed`);
         return 'retry';

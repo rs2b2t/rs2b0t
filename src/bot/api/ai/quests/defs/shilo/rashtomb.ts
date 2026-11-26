@@ -7,7 +7,7 @@ import { Equipment } from '../../../../equipment/Equipment.js';
 import type { Npc } from '../../../../model/Npc.js';
 import { Npcs } from '../../../../npcs/Npcs.js';
 import { SV_ITEM, SV_LOC, SV_NPC, SV_TILE, inDolmenRoom, type ShiloArea } from './areas.js';
-import { driveChoice, heldId, here, locNear, promptLoc, settleScene, useOnLoc } from './scene.js';
+import { findSceneTarget, driveChoice, heldId, here, locNear, promptLoc, settleScene, useOnLoc } from './scene.js';
 
 /** The doors hide themselves again about 50 ticks after the trees are searched. */
 function carvedDoors(): ReturnType<typeof locNear> {
@@ -44,8 +44,7 @@ export async function searchCarvedDoors(log: (m: string) => void): Promise<boole
     if (!(await Traversal.walkResilient(SV_TILE.CARVED_DOORS, { radius: 2, attempts: 3, timeoutMs: 180_000, log }))) {
         return false;
     }
-    await settleScene();
-    const doors = locNear(SV_LOC.CARVED_DOORS, 'Search', 10);
+    const doors = await findSceneTarget(() => locNear(SV_LOC.CARVED_DOORS, 'Search', 10));
     if (!doors) {
         log('the carved doors closed again before they could be searched');
         return false;
@@ -227,8 +226,7 @@ async function crossTombDoors(dir: 'north' | 'south', log: (m: string) => void):
     if (!(await Traversal.walkResilient(stand, { radius: 2, attempts: 3, timeoutMs: 120_000, log }))) {
         return false;
     }
-    await settleScene();
-    const doors = locNear(SV_LOC.TOMB_DOORS, 'Open', 8);
+    const doors = await findSceneTarget(() => locNear(SV_LOC.TOMB_DOORS, 'Open', 8));
     if (!doors) {
         log(`no skeletal doors in range to cross ${dir}`);
         return false;

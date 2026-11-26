@@ -3,6 +3,7 @@ import { reader } from '#/bot/adapter/ClientAdapter.js';
 import { Bank } from '#/bot/api/bank/Bank.js';
 import { Execution } from '#/bot/api/execution/Execution.js';
 import { Game } from '#/bot/api/game/Game.js';
+import { InvItem } from '#/bot/api/inventory/Inventory.js';
 import { Skills } from '#/bot/api/skills/Skills.js';
 import { Quests } from '#/bot/api/ui/questlog/Quests.js';
 import { ScriptRunner } from '#/bot/runtime/ScriptRunner.js';
@@ -16,7 +17,7 @@ const EYE = 221;
 
 afterEach(() => mock.restore());
 
-async function fixture() {
+async function fixture(herb = 'Guam leaf', secondary = 'Eye of newt') {
     const state = { open: false, closeFails: 0, withdrawFails: 0, ready: true, stops: [] as string[], withdrawals: [] as number[] };
     const pack = new Map<number, number>();
     const stock = new Map([[VIAL, 28], [GUAM, 28], [EYE, 28]]);
@@ -25,7 +26,23 @@ async function fixture() {
     spyOn(Game, 'tile').mockReturnValue({ x: 3253, z: 3420, level: 0 });
     spyOn(Skills, 'level').mockReturnValue(99);
     spyOn(Skills, 'xp').mockReturnValue(0);
-    spyOn(reader, 'inventory').mockImplementation(() => [...pack].flatMap(([id, count]) => Array.from({ length: count }, (_, slot) => ({ id, name: String(id), count: 1, slot, comId: 3214, ops: [] }))));
+    spyOn(reader, 'inventory').mockImplementation(() => [...pack]
+        .flatMap(([id, count]) => Array<number>(count).fill(id))
+        .map((id, slot) => ({ id, name: String(id), count: 1, slot, comId: 3214, ops: [] })));
+    const mix = spyOn(InvItem.prototype, 'useOn').mockImplementation(function (this: InvItem, target) {
+        if (state.open || !(target instanceof InvItem)) return false;
+        const items = reader.inventory();
+        if (items[this.slot]?.id !== this.id || items[target.slot]?.id !== target.id) return false;
+        const product = [
+            [GUAM, VIAL, UNFINISHED], [EYE, UNFINISHED, 121],
+            [257, VIAL, 99], [231, 99, 139]
+        ].find(([ingredient, solvent]) => ingredient === this.id && solvent === target.id)?.[2];
+        if (!product) return false;
+        pack.set(this.id, pack.get(this.id)! - 1);
+        pack.set(target.id, pack.get(target.id)! - 1);
+        pack.set(product, (pack.get(product) ?? 0) + 1);
+        return true;
+    });
     spyOn(Bank, 'isOpen').mockImplementation(() => state.open);
     spyOn(Bank, 'openNearestAccess').mockImplementation(async () => { state.open = true; return true; });
     spyOn(Bank, 'ready').mockImplementation(() => state.ready);
@@ -46,10 +63,10 @@ async function fixture() {
     spyOn(Execution, 'delayTicks').mockResolvedValue(undefined);
     spyOn(ScriptRunner, 'stop').mockImplementation(reason => { state.stops.push(reason); });
     const bot = new PotionMaker();
-    bot.settings = new SettingsBag({ herb: 'Guam leaf', secondary: 'Eye of newt' });
+    bot.settings = new SettingsBag({ herb, secondary });
     bot.bindLog(() => {});
     await bot.onStart();
-    return { bot, state, pack, stock };
+    return { bot, state, pack, stock, mix };
 }
 
 test('failed close after restocking is retried with a loaded pack', async () => {
@@ -59,7 +76,7 @@ test('failed close after restocking is retried with a loaded pack', async () => 
     expect(state.open).toBe(true);
     await bot.loop();
     expect(state.open).toBe(false);
-    expect(pack.get(GUAM)).toBe(14);
+    expect(pack.get(UNFINISHED)).toBe(14);
     expect(state.withdrawals).toEqual([VIAL, GUAM]);
 });
 
@@ -242,4 +259,55 @@ test('a quest output target limits brewing to the remaining bottles', async () =
     await bot.loop();
     expect(pack.get(GUAM)).toBe(1);
     expect(pack.get(VIAL)).toBe(1);
+});
+
+test('brews ten prayer potions from a loaded pack of ten waters and fourteen Ranarr', async () => {
+    const { bot, state, pack, stock, mix } = await fixture('Ranarr weed', 'Snape grass');
+    stock.clear();
+    stock.set(231, 10);
+    pack.set(257, 14);
+    pack.set(VIAL, 10);
+    for (let i = 0; i < 40 && !state.stops.length; i++) await bot.loop();
+    expect(stock.get(139)).toBe(10);
+    expect(stock.get(257)).toBe(4);
+    expect(state.stops).toEqual(['no vials of water in the bank']);
+    expect(mix).toHaveBeenCalledTimes(20);
+});
+
+test.each([false, true])('stops when a mix makes no inventory progress (finishing: %s)', async finishing => {
+    const { bot, state, pack } = await fixture('Ranarr weed', 'Snape grass');
+    pack.set(finishing ? 99 : VIAL, 10);
+    pack.set(finishing ? 231 : 257, 10);
+    const mix = spyOn(InvItem.prototype, 'useOn').mockReturnValue(true);
+    for (let i = 0; i < 4 && !state.stops.length; i++) await bot.loop();
+    expect(state.stops).toEqual([finishing ? 'could not mix Snape grass with unfinished potions' : 'could not mix Ranarr weed with vials of water']);
+    expect(mix).toHaveBeenCalledTimes(3);
+});
+
+test.each([[1, 3], [3, 1]])('restocks a matched batch from %i water and %i Kwuarm', async (vials, herbs) => {
+    const { bot, stock, pack } = await fixture('Kwuarm', 'Limpwurt root');
+    stock.set(VIAL, vials);
+    stock.set(263, herbs);
+    await bot.loop();
+    expect(pack.get(VIAL)).toBe(1);
+    expect(pack.get(263)).toBe(1);
+});
+
+test('finishes a stranded Kwuarm potion and banks the spare herbs when water runs out', async () => {
+    const { bot, state, stock, pack } = await fixture('Kwuarm', 'Limpwurt root');
+    stock.set(VIAL, 0);
+    stock.set(225, 3);
+    pack.set(263, 2);
+    pack.set(105, 1);
+    spyOn(InvItem.prototype, 'useOn').mockImplementation(function (this: InvItem, target) {
+        if (this.id !== 225 || !(target instanceof InvItem) || target.id !== 105) return false;
+        pack.delete(225);
+        pack.delete(105);
+        pack.set(157, 1);
+        return true;
+    });
+    for (let i = 0; i < 5 && !state.stops.length; i++) await bot.loop();
+    expect(stock.get(157)).toBe(1);
+    expect(stock.get(263)).toBe(2);
+    expect(state.stops).toEqual(['no vials of water in the bank']);
 });

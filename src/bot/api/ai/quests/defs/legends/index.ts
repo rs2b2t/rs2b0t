@@ -272,8 +272,7 @@ async function eatOne(log: (m: string) => void): Promise<boolean> {
         return false;
     }
     await food.interact('Eat');
-    await Execution.delayTicks(2);
-    return Inventory.free() > 0;
+    return Execution.delayUntilTicks(() => Inventory.free() > 0, 2);
 }
 
 // Why: the pack is tightest through the trials and the fights want the most food, so the float is chosen by where the quest is.

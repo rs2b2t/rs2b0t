@@ -147,7 +147,7 @@ export async function runHandoff(spec: HandoffSpec): Promise<boolean> {
     while (performance.now() < deadline) {
         // Why: the engine shuts the offer screen a tick before it opens the confirm, so one frame with neither up is the handover.
         if (!Trade.active()) {
-            await Execution.delayTicks(3);
+            await Execution.delayUntilTicks(() => Trade.active() || (confirmed && !giving && landed()), 3);
             if (!Trade.active()) {
                 break;
             }
@@ -201,7 +201,11 @@ export async function runHandoff(spec: HandoffSpec): Promise<boolean> {
 
     // Why: the pack view only comes back once the window is gone, so nothing is measured before then.
     await Execution.delayUntil(() => !Trade.active(), SCREEN_MS);
-    await Execution.delayTicks(2);
+    if (giving) {
+        await Execution.delayTicks(2);
+    } else {
+        await Execution.delayUntilTicks(landed, 2);
+    }
 
     if (!landed()) {
         log(`${label} did not move a ${name} (offered=${offered} confirmed=${confirmed})`);

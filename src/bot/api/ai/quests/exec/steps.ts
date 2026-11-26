@@ -1,3 +1,4 @@
+import { findSceneTarget } from '../../../walking/Reach.js';
 import type { WorldTile } from '../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../execution/Execution.js';
 import { Game } from '../../../game/Game.js';
@@ -81,9 +82,9 @@ export async function executeStep(step: QuestStep, hops: LadderHop[], log: (m: s
         case 'grabGround': {
             // Why: arriving at the spawn isn't a take; Cook's egg logged grab success with an empty pen.
             // Why: re-query after the walk and Take if it's there, otherwise the gather is still outstanding.
-            const tryTake = async (): Promise<boolean> => {
+            const tryTake = async (waitTicks = 0): Promise<boolean> => {
                 const before = Inventory.count(step.item);
-                const g = GroundItems.query().name(step.item).within(12).nearest();
+                const g = await findSceneTarget(() => GroundItems.query().name(step.item).within(12).nearest(), waitTicks);
                 if (!g) {
                     return false;
                 }
@@ -98,13 +99,7 @@ export async function executeStep(step: QuestStep, hops: LadderHop[], log: (m: s
             if (!(await ensureAt(step.anchor, 2, log))) {
                 return false;
             }
-            if (await tryTake()) {
-                return true;
-            }
-            if (step.waitIfMissing) {
-                await Execution.delayTicks(2);
-            }
-            return false;
+            return tryTake(step.waitIfMissing ? 2 : 0);
         }
         case 'pickLoc': {
             const before = Inventory.count(step.item);
@@ -242,7 +237,8 @@ export async function executeStep(step: QuestStep, hops: LadderHop[], log: (m: s
             return ok;
         }
         case 'buy': {
-            const before = Inventory.count(step.item);
+            const owned = () => Inventory.count(step.item) + (step.alternative ? Inventory.count(step.alternative) : 0);
+            const before = owned();
             const purse = buyPurseTopUp(Inventory.count('Coins'), step.estGp);
             if (purse.need) {
                 // Why: `reachableBank` picks by walking cost, and Shilo's teller has no booth behind its map icon, so `Banking.open` needs the npc access the location declares.
@@ -264,9 +260,11 @@ export async function executeStep(step: QuestStep, hops: LadderHop[], log: (m: s
                 log(`buy: could not open ${step.shop.npc}'s shop near the anchor`);
                 return false;
             }
-            await Shop.buy(step.item, step.qty);
+            const item = step.alternative && !Shop.stock().some(row => row.name.toLowerCase() === step.item.toLowerCase() && row.count > 0)
+                ? step.alternative : step.item;
+            await Shop.buy(item, step.qty);
             await Shop.close();
-            return Inventory.count(step.item) > before;
+            return owned() > before;
         }
         case 'mineRock': {
             const before = Inventory.count(step.item);
