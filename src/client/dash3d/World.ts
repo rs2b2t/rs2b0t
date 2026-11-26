@@ -8,6 +8,7 @@ import Square from '#/client/dash3d/Square.js';
 import Ground from '#/client/dash3d/Ground.js';
 import { TerrainOverlayShape } from '#/client/dash3d/TerrainOverlayShape.js';
 import QuickGround from '#/client/dash3d/QuickGround.js';
+import { emptyVisibilityTable, getVisibilityTable } from '#/client/dash3d/VisibilityTable.js';
 import Wall from '#/client/dash3d/Wall.js';
 import Decor from '#/client/dash3d/Decor.js';
 
@@ -113,7 +114,7 @@ export default class World {
     static groundX: number = -1;
     static groundZ: number = -1;
 
-    private static visBacking: boolean[][][][] = new TypedArray4d(8, 32, 51, 51, false);
+    private static visBacking: boolean[][][][];
     private static visBackingDirty: boolean[][] | null = null;
 
     static numActiveOccluders: number = 0;
@@ -867,6 +868,11 @@ export default class World {
         this.xOrig = (viewportWidth / 2) | 0;
         this.yOrig = (viewportHeight / 2) | 0;
 
+        const key = [frustumStart, frustumEnd, viewportWidth, viewportHeight, ...pitchDistance].join(',');
+        this.visBacking = getVisibilityTable(key, table => this.fillVisibilityTable(table, pitchDistance, frustumStart, frustumEnd));
+    }
+
+    private static fillVisibilityTable(table: boolean[][][][], pitchDistance: Int32Array, frustumStart: number, frustumEnd: number): void {
         const visBacking: boolean[][][][] = new TypedArray4d(9, 32, 53, 53, false);
         for (let pitch: number = 128; pitch <= 384; pitch += 32) {
             for (let yaw: number = 0; yaw < 2048; yaw += 64) {
@@ -926,7 +932,7 @@ export default class World {
                             }
                         }
 
-                        this.visBacking[pitchLevel][yawLevel][x + 25][z + 25] = visible;
+                        table[pitchLevel][yawLevel][x + 25][z + 25] = visible;
                     }
                 }
             }
@@ -975,6 +981,7 @@ export default class World {
         World.cameraSinY = Pix3D.sinTable[eyeYaw];
         World.cameraCosY = Pix3D.cosTable[eyeYaw];
 
+        World.visBacking ??= emptyVisibilityTable();
         World.visBackingDirty = World.visBacking[((eyePitch - 128) / 32) | 0][(eyeYaw / 64) | 0];
         World.cx = eyeX;
         World.cy = eyeY;

@@ -69,6 +69,17 @@ export function boxStoragePrefix(username: string): string {
     return `rs2b0t:${username}:`;
 }
 
+function storeKeys(store: Storage): string[] {
+    if (desktopStorage && store === globalThis.localStorage) return desktopStorage.keys();
+    const keys: string[] = [];
+    const length = store.length;
+    for (let i = 0; i < length; i++) {
+        const key = store.key(i);
+        if (key) keys.push(key);
+    }
+    return keys;
+}
+
 export function collectBoxStorage(usernames: string[]): BoxStorageMap {
     const out: BoxStorageMap = {};
     if (typeof localStorage !== 'undefined') {
@@ -90,15 +101,10 @@ export function applyBoxStorage(storage: BoxStorageMap, wipe: string[]): void {
         stores.push(sessionStorage);
     }
     for (const store of stores) {
-        const remove: string[] = [];
-        for (let i = 0; i < store.length; i++) {
-            const key = store.key(i);
-            if (key && users.some(user => key.startsWith(boxStoragePrefix(user)))) {
-                remove.push(key);
+        for (const key of storeKeys(store)) {
+            if (users.some(user => key.startsWith(boxStoragePrefix(user)))) {
+                store.removeItem(key);
             }
-        }
-        for (const key of remove) {
-            store.removeItem(key);
         }
         for (const [user, entries] of Object.entries(storage)) {
             const prefix = boxStoragePrefix(user);
@@ -110,11 +116,7 @@ export function applyBoxStorage(storage: BoxStorageMap, wipe: string[]): void {
 }
 
 function readStore(store: Storage, usernames: string[], out: BoxStorageMap, includeSelectedScript = true): void {
-    for (let i = 0; i < store.length; i++) {
-        const key = store.key(i);
-        if (!key) {
-            continue;
-        }
+    for (const key of storeKeys(store)) {
         for (const user of usernames) {
             const prefix = boxStoragePrefix(user);
             if (!key.startsWith(prefix)) {

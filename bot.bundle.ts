@@ -73,7 +73,8 @@ const entrypoints: [entry: string, output: string][] = [
 for (const [entry, output] of entrypoints) {
     const build = await Bun.build({
         entrypoints: [entry],
-        sourcemap: 'external',
+        naming: output,
+        sourcemap: 'linked',
         define,
         minify: prod
     });
@@ -83,12 +84,8 @@ for (const [entry, output] of entrypoints) {
         process.exit(1);
     }
 
-    let source = await build.outputs[0].text();
+    const source = await build.outputs[0].text();
     const sourcemap = build.outputs[0].sourcemap ? await build.outputs[0].sourcemap.text() : '';
-
-    // the bundle is renamed on disk; keep the sourcemap pointer in sync
-    const generatedName = build.outputs[0].path.split('/').pop()!;
-    source = source.replace(`sourceMappingURL=${generatedName}.map`, `sourceMappingURL=${output}.map`);
 
     fs.writeFileSync(join(out, output), source);
     fs.writeFileSync(join(out, `${output}.map`), sourcemap);
