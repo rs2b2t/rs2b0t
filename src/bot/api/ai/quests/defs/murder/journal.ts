@@ -1,5 +1,5 @@
 import { questProgressAt, readQuestJournal, type JournalCache } from '../../journalReader.js';
-import { normalizeJournal as normalize } from '../../journalText.js';
+import { matchJournal, normalizeJournal as normalize } from '../../journalText.js';
 import type { QuestProgress } from '../../engine/types.js';
 import { MURDER_NAME } from './areas.js';
 
@@ -23,18 +23,7 @@ const FLAGS: readonly [string, string][] = [
 ];
 
 export function parseMurderJournal(lines: readonly string[] | string): QuestProgress | undefined {
-    const text = normalize(lines);
-    const hit = STAGES.find(([needle]) => text.includes(needle));
-    if (!hit) {
-        return undefined;
-    }
-    const flags = new Set<string>();
-    for (const [needle, flag] of FLAGS) {
-        if (text.includes(needle)) {
-            flags.add(flag);
-        }
-    }
-    return { stage: hit[1], flags };
+    return matchJournal(normalize(lines), STAGES, FLAGS);
 }
 
 // Why: the page drops every in-progress line once the poison is proved, so a stale read doesn't mean the quest went backwards.
