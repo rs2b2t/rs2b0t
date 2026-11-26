@@ -44,6 +44,7 @@ function boot(): void {
     }
 
     const rail = document.getElementById('mbx-rail')!;
+    const tabStrip = document.getElementById('mbx-tabs')!;
     const addTile = document.getElementById('mbx-add')!;
 
     const worldRouting = supportsWorldRouting();
@@ -133,7 +134,7 @@ function boot(): void {
             pendingTabEdits.push(save);
             return flushTabEdits();
         }).catch(err => {
-            document.getElementById('mbx-tabs')!.after(tabSaveError);
+            tabStrip.after(tabSaveError);
             console.error('[rs2b0t] failed to save tab state', err);
         });
     }
@@ -187,7 +188,7 @@ function boot(): void {
         return mutateTabs(() => controller.setSlotTab(id, tab), () => [id]);
     }
 
-    const tabBar = new TabBar(document.getElementById('mbx-tabs')!, {
+    const tabBar = new TabBar(tabStrip, {
         onSelect: name => void mutateTabs(() => controller.setActiveTab(name)),
         onAdd: name => mutateTabs(() => controller.addTab(name)),
         onRename: renameTab,

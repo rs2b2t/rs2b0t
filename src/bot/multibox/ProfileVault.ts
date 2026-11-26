@@ -540,6 +540,7 @@ export class ProfileVault {
             const requested = tabs.map(tab => tab.trim());
             assertTabStateValid(requested, activeTab ?? MAIN_TAB, []);
             const save = async (draft: ProfileVault) => {
+                if (replaced && replaced.to === undefined && !draft.customTabs.includes(replaced.from)) return;
                 const previous = previousTabs ?? this.sharedTabs;
                 const removed = new Set(previous.filter(tab => !requested.includes(tab)));
                 const merged = draft.customTabs.filter(tab => !removed.has(tab));

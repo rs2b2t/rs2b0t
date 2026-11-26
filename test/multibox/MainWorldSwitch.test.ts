@@ -332,11 +332,12 @@ async function failTabWrite(edit: () => boolean | Promise<boolean>): Promise<voi
     }
 }
 
-test('moving a slot retries its destination after the tab creation write fails', async () => {
+test('moving a slot retries a failed tab creation after the rail detaches', async () => {
     await withWall('local', async wall => {
         const profile = { username: 'fixture', password: 'fixture', tab: 'Fleet' };
         await openSettings().importText(serializeProfileFile({ profiles: [profile], tabs: ['Fleet'], activeTab: 'Fleet', storage: {} }));
         const [slot] = wall.slots();
+        document.getElementById('mbx-rail')!.remove();
         await failTabWrite(() => wall.addTab('Work'));
         expect(await wall.setSlotTab(slot.id, 'Work')).toBe(true);
         await waitFor(() => vault.list()[0].tab === 'Work');
@@ -415,6 +416,33 @@ test('renaming and deleting an imported tab move only its members', async () => 
             expect(await reopened.unlock('test-passphrase')).toBe(true);
             expect(reopened.list().map(p => p.tab)).toEqual(['Fleet', 'Reserve', 'Main']);
             expect(reopened.tabState()).toEqual({ tabs: ['Fleet', 'Reserve'], activeTab: 'Fleet' });
+        } finally {
+            saves.mockRestore();
+        }
+    });
+});
+
+test.each([
+    { tabs: ['Fleet'] },
+    { tabs: ['Fleet', 'Work'] }
+])('deleting an already removed tab leaves the replacement tabs $tabs and selection intact', async ({ tabs }) => {
+    await withWall('local', async wall => {
+        const profile = { username: 'fixture', password: 'fixture', tab: 'Old' };
+        await openSettings().importText(serializeProfileFile({
+            profiles: [profile], tabs: ['Work', 'Old'], activeTab: 'Old', storage: {}
+        }));
+        const other = new ProfileVault();
+        expect(await other.unlock('test-passphrase')).toBe(true);
+        const backup = { profiles: [{ ...profile, tab: 'Fleet' }], tabs, activeTab: 'Fleet' };
+        await other.replaceAll(backup);
+
+        const saves = spyOn(vault, 'saveTabState');
+        try {
+            expect(await wall.removeTab('Old')).toBe(true);
+            await saves.mock.results[0].value;
+            const reopened = new ProfileVault();
+            expect(await reopened.unlock('test-passphrase')).toBe(true);
+            expect(reopened.snapshot()).toEqual(backup);
         } finally {
             saves.mockRestore();
         }
@@ -824,7 +852,14 @@ test('a shared import can load from the open chooser and reveal its tile', async
         document.getElementById('mbx-load-all')!.click();
         expect(wall.controller.activeTab()).toBe('Main');
         await openChooser();
-        pick();
+        const selection = spyOn(vault, 'saveActiveTab');
+        try {
+            pick();
+            await waitFor(() => selection.mock.results.length > 0);
+            await selection.mock.results[0].value;
+        } finally {
+            selection.mockRestore();
+        }
         expect(wall.controller.activeTab()).toBe(tab);
         expect(document.querySelectorAll('iframe')).toHaveLength(3);
         expect(document.querySelector('iframe')).toBe(original);
