@@ -15,6 +15,7 @@ import Tile from '../../../../../geometry/Tile.js';
 import { talkThrough } from '../../exec/primitives.js';
 import { openBankLeg } from '../../exec/steps.js';
 import { QuestFood } from '../../food.js';
+import { steelBarsForNails } from '../../nails.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 
 // Why: 4 of the 7 shopping items are bought; planks only lie on the ground (nearest pile outside Crandor is the Graveyard of Shadows), nails are 2 to a steel bar, and an unfired bowl is clay, water and a potter's wheel.
@@ -296,11 +297,10 @@ async function makeUnfiredBowl(log: (m: string) => void): Promise<boolean> {
 
 /** Nails are 2 to a steel bar and nothing sells bars: 1 iron and 2 coal per bar at the Falador furnace, then the Dwarven Mine anvil. */
 export async function smithNails(need: number, log: (m: string) => void): Promise<boolean> {
-    // `need` is the shortfall. 2 nails to a bar.
     if (need <= 0) {
         return true;
     }
-    const bars = Math.ceil(need / 2);
+    const bars = steelBarsForNails(need);
     const ore = (): number => Inventory.count(SUPPLY_ITEM.IRON_ORE);
     // Why: a banked maze key reads to decide() as "the briefing never happened", Ned waits on the map, and the shield can't be fetched once the ship has sailed.
     const KEEP = ['coins', 'pickaxe', 'hammer', 'maze key', 'crandor map', 'map part', 'dragonfire shield',
