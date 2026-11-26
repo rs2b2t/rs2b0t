@@ -421,12 +421,14 @@ function boot(): void {
         renderRail();
     }
 
+    const confirmLegacy = (suffix: string, user: string) =>
+        window.confirm(`Older versions shared "${suffix}" between standalone settings and profile "${user}". Does this setting belong to that profile?`);
     const settings = new SettingsPanel({
+        confirmLegacy,
         ensureUnlocked: () => ensureUnlocked(),
         snapshot: () => ({
             ...vault.snapshot(),
-            storage: collectBoxStorage(vault.list().map(p => p.username), suffix =>
-                window.confirm(`Older versions shared "${suffix}" between standalone settings and profile "set". Include it in this profile backup?`))
+            storage: collectBoxStorage(vault.list().map(p => p.username), confirmLegacy)
         }),
         replaceAll: async data => {
             const previous = vault.list().map(p => p.username);

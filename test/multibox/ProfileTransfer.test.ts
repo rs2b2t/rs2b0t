@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { Loadouts } from '#/bot/api/loadout/loadoutStore.js';
 import { readProfileScript, readScriptSettings, replaceScriptSettings, storedScripts, writeProfileScript } from '#/bot/multibox/RosterStorage.js';
+import { SettingsPanel } from '#/bot/multibox/SettingsPanel.js';
 import type { Profile } from '#/bot/multibox/ProfileVault.js';
 import { SettingsStore } from '#/bot/runtime/Settings.js';
 import { boxKey } from '#/bot/runtime/box.js';
@@ -100,18 +101,20 @@ describe('ProfileTransfer', () => {
         expect(parseProfileFile(result.stdout.toString()).storage.source.selectedScript).toBe('Fisher');
     });
 
-    test('desktop export keeps the session login edited after restoring set', () => {
-        const result = Bun.spawnSync(['bun', 'test/fixtures/roster-desktop-storage.ts', '--export-edited-login']);
+    test.each(['set', 'set:Travel'])('desktop export keeps the session login edited after restoring %s', user => {
+        const result = Bun.spawnSync(['bun', 'test/fixtures/roster-desktop-storage.ts', '--export-edited-login', user]);
         expect(result.exitCode, result.stderr.toString()).toBe(0);
         const { storage } = parseProfileFile(result.stdout.toString());
-        expect(JSON.parse(storage.set.creds)).toEqual({ username: 'edited', password: '' });
+        expect(JSON.parse(storage[user].creds)).toEqual({ username: 'edited', password: '' });
+        expect(storage[user].selectedScript).toBe('Fisher');
+        if (user === 'set:Travel') expect(storage[user].rendererEnabled).toBe('0');
     });
 
-    test('desktop export distinguishes mirrored standalone writes from legacy session settings', () => {
-        const result = Bun.spawnSync(['bun', 'test/fixtures/roster-desktop-storage.ts', '--export-set']);
+    test.each(['set', 'set:Travel'])('desktop export distinguishes mirrored standalone writes from legacy %s session settings', user => {
+        const result = Bun.spawnSync(['bun', 'test/fixtures/roster-desktop-storage.ts', '--export-set', user]);
         expect(result.exitCode, result.stderr.toString()).toBe(0);
         expect(JSON.parse(result.stdout.toString())).toEqual({
-            before: { set: { 'set:Miner:rock': 'coal', 'set:Global:runEnergyMin': '73' } }, offered: [], after: {}
+            before: { [user]: { 'set:Miner:rock': 'coal', 'set:Global:runEnergyMin': '73' } }, offered: [], after: {}
         });
     });
 
@@ -143,8 +146,8 @@ describe('ProfileTransfer', () => {
         expect(JSON.parse(result.stdout.toString()).threshold).toBe(20);
     });
 
-    test('desktop export respects a profile setting cleared in another session', () => {
-        const result = Bun.spawnSync(['bun', 'test/fixtures/roster-desktop-storage.ts', '--export-cleared']);
+    test.each(['set', 'set:Travel'])('desktop export respects a %s profile setting cleared in another session', user => {
+        const result = Bun.spawnSync(['bun', 'test/fixtures/roster-desktop-storage.ts', '--export-cleared', user]);
         expect(result.exitCode, result.stderr.toString()).toBe(0);
         expect(JSON.parse(result.stdout.toString())).toEqual({ offered: [], restored: 20 });
     });
@@ -350,6 +353,49 @@ describe('ProfileTransfer', () => {
         expect(readScriptSettings('set:Travel', 'Miner')).toEqual({});
     });
 
+    test('the first backup asks which account owns each legacy setting', () => {
+        const suffix = 'set:Global:runEnergyMin';
+        const users = ['set:Travel', 'set:Other'];
+        const profiles = users.map(username => ({ username, password: '' }));
+        for (const user of users) {
+            localStorage.setItem(`rs2b0t:${user}:${suffix}`, '73');
+            sessionStorage.setItem(`rs2b0t:${user}:${suffix}`, '42');
+        }
+        const offered: string[][] = [];
+        const storage = collectBoxStorage(users, (field, user) => {
+            offered.push([user, field]);
+            return user === 'set:Travel';
+        });
+        expect(offered.sort()).toEqual([['set:Other', suffix], ['set:Travel', suffix]]);
+        expect(storage).toEqual({ 'set:Travel': { [suffix]: '42' } });
+        const backup = parseProfileFile(serializeProfileFile({ ...snap, profiles, storage }));
+        applyBoxStorage(backup.storage, users);
+        sessionStorage.clear();
+        expect(inBox('set:Travel', () => SettingsStore.globalBag().num('runEnergyMin'))).toBe(42);
+        expect(inBox('set:Other', () => SettingsStore.globalBag().num('runEnergyMin'))).toBe(20);
+    });
+
+    test('v1 standalone Travel fields stay out of a restored profile without confirmation', async () => {
+        const user = 'set:Travel';
+        const fields = { selectedScript: 'Fisher', rendererEnabled: '1', creds: 'fixture', 'set:Miner:rock': 'trail' };
+        const file = JSON.stringify({ ...snap, profiles: [{ username: user, password: '' }], storage: { [user]: fields }, kind: PROFILE_FILE_KIND, v: 1 });
+        for (const field of Object.keys(fields)) SettingsStore.save('Travel', field, 'destination');
+        applyBoxStorage(parseProfileFile(file).storage, [user]);
+        sessionStorage.clear();
+        expect(readProfileScript(user)).toBe('');
+        expect(collectBoxStorage([user])).toEqual({});
+        for (const field of Object.keys(fields)) expect(SettingsStore.saved('Travel', field)).toBe('destination');
+        const panel = new SettingsPanel({
+            ensureUnlocked: async () => true,
+            snapshot: () => snap,
+            confirmLegacy: (suffix, owner) => owner === user && suffix === 'selectedScript',
+            replaceAll: async data => applyBoxStorage(data.storage, [user])
+        });
+        await panel.importText(file);
+        sessionStorage.clear();
+        expect(collectBoxStorage([user])).toEqual({ [user]: { selectedScript: 'Fisher' } });
+    });
+
     test('restoring a v1 backup with misclassified entries under overlapping names keeps standalone values', () => {
         const loadout = { name: 'travel', worn: {}, carry: [] };
         SettingsStore.save('Global', 'runEnergyMin', '73');
@@ -361,7 +407,7 @@ describe('ProfileTransfer', () => {
         sessionStorage.clear();
         expect(SettingsStore.saved('Global', 'runEnergyMin')).toBe('73');
         expect(Loadouts.all()).toEqual([loadout]);
-        expect(collectBoxStorage(profiles.map(p => p.username))).toEqual({ 'set:Global': { selectedScript: 'Miner' } });
+        expect(collectBoxStorage(profiles.map(p => p.username))).toEqual({});
     });
 
     test('round-trips explicit profile fields that also name standalone settings', () => {

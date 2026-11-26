@@ -26,12 +26,6 @@ export function isSetProfile(id: string): boolean {
     return id === 'set' || id.startsWith('set:');
 }
 
-export function isLegacyProfileSuffix(id: string, suffix: string): boolean {
-    if (id === 'set') return !suffix.includes(':') || isLegacySetProfileSetting(suffix);
-    if (!id.startsWith('set:')) return true;
-    return suffix.startsWith('set:') || suffix === 'creds' || suffix === 'selectedScript' || suffix === 'rendererEnabled';
-}
-
 export function boxKey(suffix: string, id = boxId()): string {
     if (id === 'set' && suffix.includes(':')) return setProfilePrefix + encodeSuffix(suffix);
     if (id.startsWith('set:')) return nestedProfilePrefix(id) + encodeSuffix(suffix);

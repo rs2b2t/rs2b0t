@@ -1,12 +1,15 @@
-import { allowsLegacyBoxItem, boxKey, boxSuffix, disableLegacySetProfileSettings, isLegacyProfileSuffix, isSetProfile, legacyBoxSuffix } from '../runtime/box.js';
+import { allowsLegacyBoxItem, boxKey, boxSuffix, disableLegacySetProfileSettings, isLegacySetProfileSetting, isSetProfile, legacyBoxSuffix } from '../runtime/box.js';
 import type { Profile } from './ProfileVault.js';
-import { desktopStorage, storeKeys } from '../runtime/desktopStorage.js';
+import { desktopStorage, isEncodedSettingKey, storeKeys } from '../runtime/desktopStorage.js';
 
 export const PROFILE_FILE_KIND = 'rs2b0t-multibox-profiles';
 export const PROFILE_FILE_VERSION = 2;
 export const PROFILE_FILE_NAME = 'rs2b0t-profiles.json';
 
 export type BoxStorageMap = Record<string, Record<string, string>>;
+
+export type ConfirmLegacySetting = (suffix: string, username: string) => boolean;
+type LegacySettings = Map<string, { user: string; suffix: string; store: Storage }>;
 
 export interface ProfileSnapshot {
     profiles: Profile[];
@@ -36,7 +39,7 @@ export function serializeProfileFile(data: ProfileSnapshot): string {
     return `${JSON.stringify(file, null, 2)}\n`;
 }
 
-export function parseProfileFile(text: string): ProfileSnapshot {
+export function parseProfileFile(text: string, includeLegacy?: ConfirmLegacySetting): ProfileSnapshot {
     let parsed: unknown;
     try {
         parsed = JSON.parse(text);
@@ -63,7 +66,7 @@ export function parseProfileFile(text: string): ProfileSnapshot {
         profiles: requireProfiles(obj.profiles),
         tabs: obj.tabs as string[],
         activeTab: obj.activeTab,
-        storage: parseStorage(obj.storage, obj.v)
+        storage: parseStorage(obj.storage, obj.v, includeLegacy)
     };
 }
 
@@ -71,9 +74,9 @@ export function boxStoragePrefix(username: string): string {
     return `rs2b0t:${username}:`;
 }
 
-export function collectBoxStorage(usernames: string[], includeLegacy?: (suffix: string) => boolean): BoxStorageMap {
+export function collectBoxStorage(usernames: string[], includeLegacy?: ConfirmLegacySetting): BoxStorageMap {
     const out: BoxStorageMap = {};
-    const legacy = includeLegacy && usernames.includes('set') ? new Map<string, Storage>() : null;
+    const legacy: LegacySettings | undefined = includeLegacy ? new Map() : undefined;
     if (typeof localStorage !== 'undefined') {
         readStore(localStorage, usernames, out, legacy);
     }
@@ -82,12 +85,12 @@ export function collectBoxStorage(usernames: string[], includeLegacy?: (suffix: 
     }
     if (legacy && includeLegacy) {
         const preferred = desktopStorage ? globalThis.localStorage : globalThis.sessionStorage;
-        for (const [suffix, store] of legacy) {
-            if (out.set && Object.hasOwn(out.set, suffix) && (store !== preferred || store.getItem(boxKey(suffix, 'set')) !== null)) continue;
-            const value = store.getItem(boxStoragePrefix('set') + suffix);
-            if (value === null || !includeLegacy(suffix)) continue;
-            out.set ??= {};
-            out.set[suffix] = value;
+        for (const [key, { user, suffix, store }] of legacy) {
+            if (out[user] && Object.hasOwn(out[user], suffix) && (store !== preferred || store.getItem(key) !== null)) continue;
+            const value = store.getItem(boxStoragePrefix(user) + suffix);
+            if (value === null || !includeLegacy(suffix, user)) continue;
+            out[user] ??= {};
+            out[user][suffix] = value;
         }
     }
     return out;
@@ -117,18 +120,21 @@ export function applyBoxStorage(storage: BoxStorageMap, wipe: string[]): void {
     }
 }
 
-function readStore(store: Storage, usernames: string[], out: BoxStorageMap, legacy: Map<string, Storage> | null, desktopSession = false): void {
+function readStore(store: Storage, usernames: string[], out: BoxStorageMap, legacy?: LegacySettings, desktopSession = false): void {
     for (const key of storeKeys(store)) {
-        const candidate = legacy && legacyBoxSuffix(store, key, 'set');
-        if (legacy && candidate !== null && (!desktopSession || !legacy.has(candidate))) legacy.set(candidate, store);
         for (const user of usernames) {
             const suffix = boxSuffix(key, boxStoragePrefix(user), user);
             if (suffix === null) {
+                if (!legacy || !isSetProfile(user)) continue;
+                const candidate = legacyBoxSuffix(store, key, user);
+                if (candidate === null) continue;
+                const ownedKey = boxKey(candidate, user);
+                if (!desktopSession || !legacy.has(ownedKey)) legacy.set(ownedKey, { user, suffix: candidate, store });
                 continue;
             }
             if (desktopSession && suffix === 'selectedScript') continue;
-            if (desktopSession && user === 'set' && suffix.startsWith('set:')) {
-                if (out.set && Object.hasOwn(out.set, suffix)) continue;
+            if (desktopSession && isEncodedSettingKey(key) && (suffix.startsWith('set:') || suffix === 'rendererEnabled')) {
+                if (out[user] && Object.hasOwn(out[user], suffix)) continue;
                 if (!allowsLegacyBoxItem(store, key, user)) continue;
             }
             const value = store.getItem(key);
@@ -141,7 +147,7 @@ function readStore(store: Storage, usernames: string[], out: BoxStorageMap, lega
     }
 }
 
-function parseStorage(raw: unknown, version: number): BoxStorageMap {
+function parseStorage(raw: unknown, version: number, includeLegacy?: ConfirmLegacySetting): BoxStorageMap {
     if (raw === undefined) {
         return {};
     }
@@ -161,7 +167,10 @@ function parseStorage(raw: unknown, version: number): BoxStorageMap {
             if (typeof value !== 'string') {
                 throw new Error(`profile file storage '${user}.${suffix}' must be a string`);
             }
-            if (version === 1 && !isLegacyProfileSuffix(user, suffix)) continue;
+            if (version === 1) {
+                if (user === 'set' && suffix.includes(':') && !isLegacySetProfileSetting(suffix)) continue;
+                if (user.startsWith('set:') && !includeLegacy?.(suffix, user)) continue;
+            }
             box[suffix] = value;
         }
         out[user] = box;
