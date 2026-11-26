@@ -201,18 +201,26 @@ function sharedStorage(dir) {
             release();
         }
     }
-    function updateMigration(state, change) {
-        const previous = JSON.stringify(state);
-        // Why: a first launch can exit before seed() drops its deletion list.
-        for (const [id, migration] of Object.entries(state.panelMigrations ?? {})) {
+    function retryAbandonedMigrations(state) {
+        if (!state.initialized || !state.panelMigrations) return;
+        for (const [id, migration] of Object.entries(state.panelMigrations)) {
             try {
                 process.kill(migration.pid, 0);
             } catch (error) {
-                if (error.code === 'ESRCH') delete state.panelMigrations[id];
+                if (error.code !== 'ESRCH') continue;
+                if (state.seededWithoutProfiles && migration.origin) {
+                    state.profileRetries ??= {};
+                    state.profileRetries[migration.origin] ??= null;
+                }
+                delete state.panelMigrations[id];
             }
         }
+        if (!Object.keys(state.panelMigrations).length) delete state.panelMigrations;
+    }
+    function updateMigration(state, change) {
+        const previous = JSON.stringify(state);
         const result = change(state);
-        if (state.panelMigrations && !Object.keys(state.panelMigrations).length) delete state.panelMigrations;
+        retryAbandonedMigrations(state);
         if (!state.profileRetries && !state.panelMigrations) delete state.seededWithoutProfiles;
         if (JSON.stringify(state) !== previous) write(state);
         return result;
@@ -230,17 +238,17 @@ function sharedStorage(dir) {
     }
     return {
         initialized: () => read().initialized,
-        migrationStatus(trackPanel = false, recover = false) {
+        migrationStatus(panelOrigin, recover = false) {
             let state = read();
-            if ((!state.initialized && trackPanel) || recover) {
+            if (state.panelMigrations || (!state.initialized && panelOrigin) || recover) {
                 state = update(current => {
                     if (recover) {
                         promoteSharedAccounts(current);
                         if (!hasSharedRoster(current.data)) current.profileRecovery ??= migrationId;
                     }
-                    if (!current.initialized && trackPanel) {
+                    if (!current.initialized && panelOrigin) {
                         current.panelMigrations ??= {};
-                        current.panelMigrations[migrationId] = { pid: process.pid, removed: [] };
+                        current.panelMigrations[migrationId] = { pid: process.pid, origin: panelOrigin, removed: [] };
                     }
                     return current;
                 });

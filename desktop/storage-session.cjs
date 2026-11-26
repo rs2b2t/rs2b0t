@@ -17,8 +17,9 @@ function prepareStorage(app, serverUrl) {
     const legacy = join(directory, 'Local Storage');
     const recoveryRequested = process.env.B0T_RECOVER_LEGACY_PROFILES === '1';
     const hasLegacy = fs.existsSync(legacy);
+    const configuredOrigin = hasLegacy && URL.canParse(serverUrl) ? new URL(serverUrl).origin : undefined;
     const { initialized, retrySettings, retryProfileOrigins = [], expectedProfiles } = hasLegacy || recoveryRequested
-        ? store.migrationStatus(hasLegacy && URL.canParse(serverUrl) && isCustomOrigin(new URL(serverUrl).origin), recoveryRequested)
+        ? store.migrationStatus(isCustomOrigin(configuredOrigin) ? configuredOrigin : undefined, recoveryRequested)
         : {};
     const recover = !!expectedProfiles;
     const automaticRetry = initialized && !recover;
