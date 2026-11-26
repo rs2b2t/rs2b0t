@@ -249,6 +249,17 @@ describe('ProfileVault', () => {
         expect(localStorage.getItem(KEY)).toBeNull();
     });
 
+    test('unlock waits for a pending reset on the same browser vault', async () => {
+        const v = new ProfileVault();
+        await v.setup('pw');
+        await v.upsert({ username: 'alice', password: 'fixture' });
+        const [reset, unlocked] = await navigator.locks.request(KEY, () => [v.reset(), v.unlock('pw')] as const);
+        await reset;
+        expect(await unlocked).toBe(false);
+        expect(() => v.list()).toThrow('vault is not unlocked');
+        expect(new ProfileVault().status()).toBe('empty');
+    });
+
     test('reset during another tab\'s world write leaves the vault empty', async () => {
         const first = new ProfileVault();
         await first.setup('pw');

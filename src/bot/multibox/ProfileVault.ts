@@ -352,7 +352,7 @@ export class ProfileVault {
             this.key = null;
             this.salt = null;
         };
-        if (this.shared && !desktopStorage) await withBrowserLock(clear);
+        if (this.shared && !desktopStorage) await this.enqueueShared(() => withBrowserLock(clear));
         else clear();
     }
 
@@ -550,10 +550,10 @@ export class ProfileVault {
         await this.persist();
     }
 
-    async saveTabState(tabs: string[], tabByUser: ReadonlyMap<string, string>, activeTab: string, change?: TabChange, previousTabs?: string[]): Promise<void> {
+    async saveTabState(tabs: string[], tabByUser: ReadonlyMap<string, string>, activeTab?: string, change?: TabChange, previousTabs?: string[]): Promise<void> {
         if (this.pendingReplacement) return this.afterReplacement(() => this.saveTabState(tabs, tabByUser, activeTab, change, previousTabs));
         const requested = tabs.map(tab => tab.trim());
-        assertTabStateValid(requested, activeTab, []);
+        assertTabStateValid(requested, activeTab ?? MAIN_TAB, []);
         for (const [username, tab] of tabByUser) {
             if (tab !== MAIN_TAB && !requested.includes(tab)) {
                 throw new Error(`tab '${tab}' for '${username}' is not in the tab list`);
@@ -579,14 +579,19 @@ export class ProfileVault {
                     const next = requested.slice(index + 1).find(candidate => merged.includes(candidate));
                     merged.splice(next ? merged.indexOf(next) : merged.length, 0, tab);
                 }
-                await draft.saveTabState(merged, tabByUser, merged.includes(activeTab) ? activeTab : MAIN_TAB, change);
+                const selected = activeTab === undefined || merged.includes(activeTab) ? activeTab : MAIN_TAB;
+                await draft.saveTabState(merged, tabByUser, selected, change);
             });
             this.sharedTabs = requested;
             return;
         }
         const all = this.assertUnlocked();
+        let selected = activeTab ?? this.active;
+        if (activeTab === undefined && change?.from === selected) {
+            selected = 'to' in change ? change.to : this.customTabs[this.customTabs.indexOf(selected) - 1] ?? MAIN_TAB;
+        }
         this.customTabs = requested;
-        this.active = activeTab;
+        this.active = requested.includes(selected) ? selected : MAIN_TAB;
         for (const p of all) {
             let next = p.tab;
             if (change && p.tab === change.from) {

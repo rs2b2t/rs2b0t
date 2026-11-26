@@ -259,6 +259,60 @@ test('settings import preserves the group and selection of an omitted live slot'
         const reopened = new ProfileVault();
         expect(await reopened.unlock('test-passphrase')).toBe(true);
         expect(reopened.snapshot()).toEqual({ profiles, tabs: ['Fleet'], activeTab: 'Fleet' });
+
+        const bob = wall.slots()[1];
+        expect(wall.setSlotTab(bob.id, 'Work')).toBe(true);
+        await waitFor(() => vault.list()[0].tab === 'Work' || wall.slots()[1].tab !== 'Work');
+        expect(await reopened.unlock('test-passphrase')).toBe(true);
+        expect(reopened.snapshot()).toEqual({
+            profiles: [{ ...profiles[0], tab: 'Work' }], tabs: ['Work', 'Fleet'], activeTab: 'Fleet'
+        });
+    });
+});
+
+test('adding a group preserves the active tab selected in another wall', async () => {
+    await withWall('local', async wall => {
+        await vault.saveTabState(['Fleet'], new Map(), 'Main');
+        document.getElementById('mbx-add')!.click();
+        await waitFor(() => !!chooserRow('alice'));
+        const other = new ProfileVault();
+        expect(await other.unlock('test-passphrase')).toBe(true);
+        await other.saveTabState(['Fleet'], new Map(), 'Fleet');
+        expect(wall.controller.activeTab()).toBe('Main');
+        expect(wall.addTab('Work')).toBe(true);
+        await waitFor(() => vault.tabState().tabs.includes('Work'));
+        expect(await other.unlock('test-passphrase')).toBe(true);
+        expect(other.tabState()).toEqual({ tabs: ['Fleet', 'Work'], activeTab: 'Fleet' });
+
+        expect(wall.renameTab('Fleet', 'Renamed')).toBe(true);
+        await waitFor(() => vault.tabState().tabs.includes('Renamed'));
+        expect(await other.unlock('test-passphrase')).toBe(true);
+        expect(other.tabState()).toEqual({ tabs: ['Renamed', 'Work'], activeTab: 'Renamed' });
+    });
+});
+
+test('a group edit retries a failed recovery before accepting another change', async () => {
+    await withWall('local', async wall => {
+        document.getElementById('mbx-add')!.click();
+        await waitFor(() => !!chooserRow('alice'));
+        const lock = spyOn(navigator.locks, 'request').mockRejectedValueOnce(new Error('write denied'));
+        const refresh = spyOn(vault, 'refresh').mockRejectedValueOnce(new Error('refresh failed'));
+        try {
+            expect(wall.addTab('Rejected')).toBe(true);
+            await waitFor(() => refresh.mock.calls.length > 0);
+            expect(wall.addTab('Work')).toBe(false);
+            expect(wall.controller.tabs()).not.toContain('Work');
+            await waitFor(() => !wall.controller.tabs().includes('Rejected'));
+            expect(wall.addTab('Work')).toBe(true);
+            await waitFor(() => vault.tabState().tabs.includes('Work'));
+
+            const reopened = new ProfileVault();
+            expect(await reopened.unlock('test-passphrase')).toBe(true);
+            expect(reopened.tabState().tabs).toEqual(['Work']);
+        } finally {
+            refresh.mockRestore();
+            lock.mockRestore();
+        }
     });
 });
 

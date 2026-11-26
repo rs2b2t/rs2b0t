@@ -93,14 +93,18 @@ function boot(): void {
         orderWrite = orderWrite.then(() => vault.reorder(usernames)).catch(err => console.error('[rs2b0t] failed to save bot order', err));
     }
 
-    function persistTabState(tabByUser: ReadonlyMap<string, string> = new Map(), previousTabs?: string[], change?: TabChange): void {
+    function persistTabState(tabByUser: ReadonlyMap<string, string> = new Map(), previousActive = controller.activeTab(), previousTabs?: string[], change?: TabChange): void {
         if (!tabsHydrated || vault.status() !== 'unlocked') {
             return;
         }
         const customTabs = controller.tabs().slice(1);
-        const activeTab = controller.activeTab();
+        const active = controller.activeTab();
+        const selection = !change && active !== previousActive ? active : undefined;
+        const destinations = new Set(tabByUser.values());
+        const saved = vault.tabState().tabs;
+        const previous = previousTabs ?? customTabs.filter(tab => !destinations.has(tab) || saved.includes(tab));
         orderWrite = orderWrite.then(() => {
-            if (!recoveringTabs) return vault.saveTabState(customTabs, tabByUser, activeTab, change, previousTabs ?? customTabs);
+            if (!recoveringTabs) return vault.saveTabState(customTabs, tabByUser, selection, change, previous);
         }).catch(err => {
             console.error('[rs2b0t] failed to save tab state', err);
             recoveringTabs = true;
@@ -112,16 +116,23 @@ function boot(): void {
         return mutateTabs(() => controller.renameTab(from, to), { from, to: to.trim() });
     }
 
+    function groupsReady(): boolean {
+        if (recoveringTabs) refreshSavedAccounts();
+        return !recoveringTabs;
+    }
+
     function mutateTabs(action: () => boolean, change?: TabChange): boolean {
+        if (!groupsReady()) return false;
         const previousTabs = controller.tabs().slice(1);
+        const previousActive = controller.activeTab();
         if (!action()) return false;
         renderRail();
-        persistTabState(undefined, previousTabs, change);
+        persistTabState(undefined, previousActive, previousTabs, change);
         return true;
     }
 
     function setSlotTab(id: number, tab: string): boolean {
-        if (!controller.setSlotTab(id, tab)) return false;
+        if (!groupsReady() || !controller.setSlotTab(id, tab)) return false;
         const slots = controller.snapshot();
         const slot = slots.find(slot => slot.id === id)!;
         renderRail(slots);
@@ -307,12 +318,13 @@ function boot(): void {
     });
 
     const chooser = new ProfileChooser((p, focus, savedTab) => {
+        const previousActive = controller.activeTab();
         if (p.tab) controller.addTab(p.tab);
         const slot = controller.add(p) ?? controller.snapshot().find(s => normalizeUsername(s.username) === normalizeUsername(p.username));
         if (slot && savedTab) controller.setSlotTab(slot.id, savedTab);
         if (focus && slot) controller.focus(slot.id);
         renderRail();
-        persistTabState(p.tab === undefined && slot ? new Map([[p.username, slot.tab]]) : undefined);
+        persistTabState(p.tab === undefined && slot ? new Map([[p.username, slot.tab]]) : undefined, previousActive);
     }, {
         defaultWorld, worldRouting, onWorldChange: worldRouting ? changeProfileWorld : undefined,
         onLoadGroup: (profiles, tab) => {
@@ -487,7 +499,7 @@ function boot(): void {
         worldRouting,
         assignGroup: (usernames, name) => {
             const save = orderWrite.then(() => {
-                if (recoveringTabs) throw new Error('Saved groups changed. Try again after the wall refreshes.');
+                if (!groupsReady()) throw new Error('Saved groups changed. Try again after the wall refreshes.');
                 return vault.assignGroup(usernames, name);
             });
             orderWrite = save.catch(() => {});
