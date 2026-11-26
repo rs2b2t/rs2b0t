@@ -2,6 +2,7 @@ import { reader, actions } from '../../adapter/ClientAdapter.js';
 import { LoopingBot } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { Game } from '../../api/game/Game.js';
+import { TANNED_LEATHER_IDS } from '../../data/tannedLeather.js';
 import Tile from '../../geometry/Tile.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { Bank } from '../../api/bank/Bank.js';
@@ -56,7 +57,7 @@ interface LeatherKind {
 // Why: chaps deliberately has no make10, since all three of its buttons make one engine-side.
 const LEATHERS: Record<string, LeatherKind> = {
     Leather: {
-        leatherId: 1741,
+        leatherId: TANNED_LEATHER_IDS.soft,
         flow: 'interface',
         recipes: [
             { level: 1, qty: 1, label: 'Leather gloves', make1: 8638, make10: 8636 },
@@ -69,12 +70,12 @@ const LEATHERS: Record<string, LeatherKind> = {
         ]
     },
     'Hard leather': {
-        leatherId: 1743,
+        leatherId: TANNED_LEATHER_IDS.hard,
         flow: 'single',
         recipes: [{ level: 28, qty: 1, label: 'Hardleather body' }]
     },
     'Green dragon leather': {
-        leatherId: 1745,
+        leatherId: TANNED_LEATHER_IDS.green,
         flow: 'multi3',
         recipes: [
             { level: 57, qty: 1, label: 'Green vambraces', slot: 'b' },
@@ -83,7 +84,7 @@ const LEATHERS: Record<string, LeatherKind> = {
         ]
     },
     'Blue dragon leather': {
-        leatherId: 2505,
+        leatherId: TANNED_LEATHER_IDS.blue,
         flow: 'multi3',
         recipes: [
             { level: 66, qty: 1, label: 'Blue vambraces', slot: 'b' },
@@ -92,7 +93,7 @@ const LEATHERS: Record<string, LeatherKind> = {
         ]
     },
     'Red dragon leather': {
-        leatherId: 2507,
+        leatherId: TANNED_LEATHER_IDS.red,
         flow: 'multi3',
         recipes: [
             { level: 73, qty: 1, label: 'Red vambraces', slot: 'b' },
@@ -101,7 +102,7 @@ const LEATHERS: Record<string, LeatherKind> = {
         ]
     },
     'Black dragon leather': {
-        leatherId: 2509,
+        leatherId: TANNED_LEATHER_IDS.black,
         flow: 'multi3',
         recipes: [
             { level: 79, qty: 1, label: 'Black vambraces', slot: 'b' },
