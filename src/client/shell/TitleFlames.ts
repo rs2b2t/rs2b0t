@@ -95,13 +95,19 @@ export default class TitleFlames {
         this.flameBuffer2 = new Int32Array(32768);
     }
 
-    start(): void {
+    start(shouldDraw?: (now: number, lastDrawAt: number) => boolean): void {
         if (this.active) {
             return;
         }
 
         this.active = true;
+        let lastDrawAt = -Infinity;
         this.flamesInterval = setInterval((): void => {
+            if (shouldDraw) {
+                const now = performance.now();
+                if (!shouldDraw(now, lastDrawAt)) return;
+                lastDrawAt = now;
+            }
             this.renderFlames();
         }, 35);
     }

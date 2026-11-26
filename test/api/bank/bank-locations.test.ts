@@ -1,7 +1,3 @@
-import { loadDefaultFinder } from '../../lib/navigation.js';
-import fs from 'node:fs';
-import path from 'node:path';
-
 import { afterEach, describe, expect, test } from 'bun:test';
 
 import {
@@ -20,9 +16,9 @@ import {
 } from '#/bot/api/bank/BankLocations.js';
 import type { BankLocation, BankPathCost, NavigatorLike } from '#/bot/api/bank/BankLocations.js';
 import Tile from '#/bot/geometry/Tile.js';
-import { PathFinder } from '#/bot/event/webwalk/PathFinder.js';
 import { richTransportQuestMap } from '#/bot/event/webwalk/transportQuestReqs.js';
 import { emptyWorldStateData, type WorldStateData } from '#/bot/event/webwalk/worldStateData.js';
+import { fullMapFinder, hasCollisionPack } from '../../lib/navCollision.js';
 
 const MAGE_KEY = `rs2b0t:set:Global:${USE_MAGE_BANK}`;
 
@@ -334,14 +330,6 @@ function navState(): WorldStateData {
     };
 }
 
-function loadFinder(): PathFinder | null {
-    const packPath = path.join(process.cwd(), 'out/collision.lcnav.gz');
-    if (!fs.existsSync(packPath)) {
-        return null;
-    }
-    return loadDefaultFinder(packPath);
-}
-
 test('bankCostForNavigator maps navigator outcomes to a cost, off by catalog', async () => {
     const navigator = {
         async findPath(_from: unknown, _to: unknown, opts?: unknown) {
@@ -353,17 +341,16 @@ test('bankCostForNavigator maps navigator outcomes to a cost, off by catalog', a
     await expect(bankCostForNavigator({ findPath: async () => ({ ok: false, reason: 'blocked' }) })({ x: 0, z: 0, level: 0 }, new Tile(1, 1, 0))).resolves.toBeNull();
 });
 
-describe('nearestWalkableBank picks the walkable-nearest bank, not the air-nearest one', () => {
-    // Why: these run the real nav pack (~13MB cold), so they're skipped unless the pack is present.
-
-    const finder = loadFinder();
-    const state = navState();
-    if (!finder) {
-        return;
+describe.skipIf(!hasCollisionPack)('nearestWalkableBank picks the walkable-nearest bank, not the air-nearest one', () => {
+    let costWalk: BankPathCost;
+    let blockedCost: BankPathCost;
+    if (hasCollisionPack) {
+        const finder = fullMapFinder();
+        const state = navState();
+        costWalk = bankCostForFinder(finder, { state, maxExpansions: 500_000 });
+        blockedCost = bankCostForFinder(finder, { state, maxExpansions: 500_000, avoidDoors: new Set(['3091|3957']) });
     }
 
-    const costWalk = bankCostForFinder(finder, { state, maxExpansions: 500_000 });
-    const blockedCost = bankCostForFinder(finder, { state, maxExpansions: 500_000, avoidDoors: new Set(['3091|3957']) });
     const walkTo = (from: { x: number; z: number; level: number }, name: string, cost: BankPathCost = costWalk): number | null => {
         const bank = BANK_LOCATIONS.find(b => b.name === name)!;
         return cost(from, bank.tile);

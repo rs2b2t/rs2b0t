@@ -1,15 +1,12 @@
-import { loadDefaultFinder } from '../../../lib/navigation.js';
-import fs from 'node:fs';
-import path from 'node:path';
-
 import { describe, expect, test } from 'bun:test';
 
 import { CLUE_DB } from '#/bot/api/ai/clues/data/cluedb.js';
 import { TALK_ANCHORS } from '#/bot/api/ai/clues/data/talkAnchors.js';
 import { PACK_UNREACHABLE } from '#/bot/api/ai/clues/data/unreachable.js';
-import { PathFinder, type NavPoint } from '#/bot/event/webwalk/PathFinder.js';
+import type { PathFinder, NavPoint } from '#/bot/event/webwalk/PathFinder.js';
 import { richTransportQuestMap } from '#/bot/event/webwalk/transportQuestReqs.js';
 import { emptyWorldStateData, type WorldStateData } from '#/bot/event/webwalk/worldStateData.js';
+import { fullMapFinder, hasCollisionPack } from '../../../lib/navCollision.js';
 
 // Why: audit-clues.ts plans with no world state, which fails open on every gated edge; this asks what is still shut with the quests done and the gate kit in the pack.
 
@@ -65,14 +62,6 @@ function destination(id: number): NavPoint | null {
     return anchor ? { x: anchor.x, z: anchor.z, level: anchor.level } : null;
 }
 
-function loadFinder(): PathFinder | null {
-    const packPath = path.join(process.cwd(), 'out/collision.lcnav.gz');
-    if (!fs.existsSync(packPath)) {
-        return null;
-    }
-    return loadDefaultFinder(packPath);
-}
-
 function unreachable(finder: PathFinder, state: WorldStateData): number[] {
     const out: number[] = [];
     for (const id of HARD) {
@@ -95,11 +84,8 @@ describe('hard clue destinations, quests complete and the gate kit carried', () 
         expect(HARD.filter(id => destination(id) === null)).toEqual([]);
     });
 
-    test('nothing is shut that PACK_UNREACHABLE does not already diagnose', () => {
-        const finder = loadFinder();
-        if (!finder) {
-            return;
-        }
+    test.skipIf(!hasCollisionPack)('nothing is shut that PACK_UNREACHABLE does not already diagnose', () => {
+        const finder = fullMapFinder();
         const shut = unreachable(finder, kitted(true));
         const undiagnosed = shut.filter(id => PACK_UNREACHABLE[id] === undefined);
         expect(
@@ -107,11 +93,8 @@ describe('hard clue destinations, quests complete and the gate kit carried', () 
         ).toEqual([]);
     }, 120_000);
 
-    test('the quests are what open the gnome and Karamja destinations', () => {
-        const finder = loadFinder();
-        if (!finder) {
-            return;
-        }
+    test.skipIf(!hasCollisionPack)('the quests are what open the gnome and Karamja destinations', () => {
+        const finder = fullMapFinder();
         const withQuests = new Set(unreachable(finder, kitted(true)));
         const without = unreachable(finder, kitted(false));
         const opened = without.filter(id => !withQuests.has(id));

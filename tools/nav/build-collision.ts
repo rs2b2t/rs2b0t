@@ -428,6 +428,14 @@ function main(): void {
     console.log(`mapsquares loaded: ${squares.length} (${(loaded - started).toFixed(0)}ms, ${builder.collision.zoneCount()} zones)`);
 
     const baked: BakedMapsquare[] = squares.map(({ mx, mz }) => bakeMapsquare(builder.collision, (x, z, level) => builder.hasGround(x, z, level), mx, mz));
+    if (opts.verify) {
+        const failures = verify(baked, builder.collision, locs);
+        if (failures > 0) {
+            console.error(`${failures} verification check(s) failed`);
+            process.exit(1);
+        }
+    }
+
     const raw = writePack(baked, opts.members);
     const gz = Bun.gzipSync(raw, { level: 9 });
 
@@ -455,14 +463,6 @@ function main(): void {
     console.log(`  raw: ${raw.length} bytes (${(raw.length / 1048576).toFixed(2)} MB) -> ${opts.out}`);
     console.log(`  gzip: ${gz.length} bytes (${(gz.length / 1048576).toFixed(2)} MB) -> ${opts.out}.gz`);
     console.log(`  elapsed: ${((performance.now() - started) / 1000).toFixed(1)}s`);
-
-    if (opts.verify) {
-        const failures = verify(baked, builder.collision, locs);
-        if (failures > 0) {
-            console.error(`${failures} verification check(s) failed`);
-            process.exit(1);
-        }
-    }
 }
 
 main();

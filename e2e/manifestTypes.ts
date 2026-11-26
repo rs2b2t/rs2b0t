@@ -36,6 +36,7 @@ export interface Case {
     env?: Readonly<Record<string, string>>;
     args?: readonly string[];
     budgetMin?: number;
+    ownsServices?: true;
     /** Commit where this case last ran green. Required when status is 'vetted'. */
     provenAt?: string;
     /** Doc path or npm script naming how to run this. Required when status is 'documented'. */

@@ -893,7 +893,7 @@ export class WorldMapPicker {
                 unsubTick();
                 unsubSettings();
                 window.removeEventListener('resize', onResize);
-                settingsModal.close();
+                settingsModal.dispose();
                 canvas.removeEventListener('wheel', onWheel);
                 canvas.removeEventListener('pointerdown', onPointerDown);
                 canvas.removeEventListener('pointermove', onPointerMove);

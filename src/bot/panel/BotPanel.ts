@@ -5,7 +5,7 @@ import { reader } from '../adapter/ClientAdapter.js';
 import type { BotHostImpl } from '../runtime/BotHost.js';
 import type { LogLine, ScriptContext } from '../runtime/ScriptContext.js';
 import { AutoRelogin } from '../runtime/AutoRelogin.js';
-import { boxId, boxKey, wallLinkHref } from '../runtime/box.js';
+import { boxId, boxKey, boxKeyTail, profileStorageKeys, wallLinkHref } from '../runtime/box.js';
 import { Credentials } from '../runtime/Credentials.js';
 import { ScriptRegistry, type ScriptMeta } from '../runtime/ScriptRegistry.js';
 import { resolveDestination } from '../api/map/WalkDestinations.js';
@@ -255,6 +255,7 @@ export default class BotPanel {
     assignScript(name: string): void {
         this.assertScriptIdle();
         this.selectScript(this.requireScript(name).name);
+        this.library.cancelPendingSelection();
     }
 
     copyScriptSettings(name: string, values: Record<string, string>): void {
@@ -275,18 +276,14 @@ export default class BotPanel {
             if (!Object.hasOwn(schema, key) || typeof value !== 'string') throw new Error(`Invalid setting: ${name}.${key}`);
         }
         const keys = new Set(Object.keys(schema));
-        const prefixes = (name === 'JiveRC' ? ['NatureCrafter', name] : [name]).map(script => boxKey(`set:${script}:`));
-        const savedKeys = desktopStorage ? desktopStorage.keys() : [];
-        for (const storage of desktopStorage ? [sessionStorage] : [sessionStorage, localStorage]) {
-            const length = storage.length;
-            for (let i = 0; i < length; i++) {
-                const key = storage.key(i);
-                if (key) savedKeys.push(key);
-            }
-        }
+        const box = boxId();
+        const prefixes = (name === 'JiveRC' ? ['NatureCrafter', name] : [name]).map(script => `set:${script}:`);
+        const savedKeys = [localStorage, sessionStorage].flatMap(store => profileStorageKeys(store, box));
         for (const key of savedKeys) {
-            const prefix = prefixes.find(prefix => key.startsWith(prefix));
-            if (prefix) keys.add(key.slice(prefix.length));
+            for (const prefix of prefixes) {
+                const setting = boxKeyTail(key, prefix, box);
+                if (setting !== null) keys.add(setting);
+            }
         }
         this.assertNoUrlOverrides(name, keys);
         return { name, keys };
@@ -332,7 +329,7 @@ export default class BotPanel {
             this.assertNoUrlOverrides('WalkTo', ['destination', 'customTile']);
             SettingsStore.save('WalkTo', 'destination', target.name);
             SettingsStore.save('WalkTo', 'customTile', '0,0,0');
-            this.applyScriptSelection('WalkTo');
+            this.assignScript('WalkTo');
             this.handleStart(true);
         });
     }

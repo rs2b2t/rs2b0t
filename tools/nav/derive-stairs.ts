@@ -350,7 +350,8 @@ function main(): void {
     const json = '[\n' + finalEdges.map(e => '    ' + JSON.stringify(e)).join(',\n') + '\n]\n';
 
     const stats = `${finalEdges.length} edges (${rawCount} raw = ${stairsCases} stairs.rs2 + ${ladderEdges} generic-ladder, ${stairsSkipped} unresolved; ${dropped} unsnappable dropped; ${supersededDropped} curated-superseded dropped; snapped + reversed)`;
-    if (process.argv.includes('--check')) {
+    const checkOnly = process.argv.includes('--check');
+    if (checkOnly) {
         const current = fs.existsSync(out) ? fs.readFileSync(out, 'utf8') : '';
         if (current !== json) {
             console.error(`STALE: ${out} — run bun tools/nav/derive-stairs.ts`);
@@ -358,10 +359,6 @@ function main(): void {
         } else {
             console.log(`ok: ${out} matches — ${stats}`);
         }
-    } else {
-        fs.mkdirSync(path.dirname(out), { recursive: true });
-        fs.writeFileSync(out, json);
-        console.log(`wrote ${out}: ${stats}`);
     }
 
     const cheb = (p: NavPoint, x: number, z: number): number => Math.max(Math.abs(p.x - x), Math.abs(p.z - z));
@@ -381,6 +378,10 @@ function main(): void {
     }
     if (failures > 0) {
         process.exitCode = 1;
+    } else if (!checkOnly) {
+        fs.mkdirSync(path.dirname(out), { recursive: true });
+        fs.writeFileSync(out, json);
+        console.log(`wrote ${out}: ${stats}`);
     }
 }
 

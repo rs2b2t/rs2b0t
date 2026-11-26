@@ -1,3 +1,4 @@
+import { indexByUsername } from './MultiBoxController.js';
 import { desktopStorage } from '../runtime/desktopStorage.js';
 import type { WorldNumber } from '../../client/config/worlds.js';
 
@@ -8,6 +9,11 @@ export interface Profile {
     // rail tab this account lives in; absent = the Main tab
     tab?: string;
     world?: WorldNumber;
+}
+
+export interface TabReplacement {
+    from: string;
+    to?: string;
 }
 
 interface TabState {
@@ -165,10 +171,10 @@ export class ProfileVault {
     private persistTail = Promise.resolve();
     private persistGeneration = 0;
     private worldTail = Promise.resolve();
-    private pendingImport: Promise<void> | null = null;
+    private pendingReplacement: Promise<void> | null = null;
 
     private sharedTail = Promise.resolve();
-    private sharedTabs: { tabs: string[]; assignments: Map<string, string> } | null = null;
+    private sharedTabs: string[] = [];
 
     constructor(private storage: VaultStorage | undefined = hasLocal ? localStorage : undefined) {}
 
@@ -204,9 +210,16 @@ export class ProfileVault {
         return parsePayload(new TextDecoder().decode(plaintext));
     }
 
+    private compareAndSet(expected: string | null, value: string): boolean {
+        if (this.shared) return desktopStorage!.compareAndSet(KEY, expected, value);
+        if (this.storage!.getItem(KEY) !== expected) return false;
+        this.storage!.setItem(KEY, value);
+        return true;
+    }
+
     private sharedChange(change: (draft: ProfileVault) => Promise<void>, retry = true): Promise<void> {
         const generation = this.persistGeneration;
-        const write = this.sharedTail.then(async () => {
+        const update = async () => {
             for (let attempt = 0; attempt < 8; attempt++) {
                 this.assertUnlocked();
                 const expected = this.storage!.getItem(KEY);
@@ -230,7 +243,7 @@ export class ProfileVault {
                 draft.active = payload.activeTab;
                 await change(draft);
                 if (generation !== this.persistGeneration) throw new Error('Vault changed before the accounts were saved.');
-                if (desktopStorage!.compareAndSet(KEY, expected, values.get(KEY)!)) {
+                if (this.compareAndSet(expected, values.get(KEY)!)) {
                     this.cache = draft.cache;
                     this.customTabs = draft.customTabs;
                     this.active = draft.active;
@@ -239,7 +252,9 @@ export class ProfileVault {
                 if (!retry) break;
             }
             throw new Error('Saved accounts changed in another instance; try again.');
-        });
+        };
+        if (!this.shared) return this.queueReplacement(update);
+        const write = this.sharedTail.then(update);
         this.sharedTail = write.catch(() => {});
         return write;
     }
@@ -286,7 +301,7 @@ export class ProfileVault {
     }
 
     async unlock(pass: string): Promise<boolean> {
-        if (this.pendingImport) return this.afterImport(() => this.unlock(pass));
+        if (this.pendingReplacement) return this.afterReplacement(() => this.unlock(pass));
         const blob = parseBlob(this.storage ? this.storage!.getItem(KEY) : null);
         if (!blob) {
             return false;
@@ -334,18 +349,21 @@ export class ProfileVault {
     }
 
     adoptGroupState(): { tabs: string[]; assignments: Map<string, string> } {
-        const assignments = new Map(this.assertUnlocked().map(p => [p.username, p.tab ?? MAIN_TAB]));
-        this.sharedTabs = { tabs: [...this.customTabs], assignments };
-        return this.sharedTabs;
+        const assignments = new Map<string, string>();
+        for (const profile of this.assertUnlocked()) {
+            if (!assignments.has(profile.username)) assignments.set(profile.username, profile.tab ?? MAIN_TAB);
+        }
+        this.sharedTabs = [...this.customTabs];
+        return { tabs: [...this.customTabs], assignments };
     }
 
     snapshot(): { profiles: Profile[]; tabs: string[]; activeTab: string } {
         return { profiles: this.list(), ...this.tabState() };
     }
 
-    private afterImport<T>(change: () => Promise<T>): Promise<T> {
+    private afterReplacement<T>(change: () => Promise<T>): Promise<T> {
         const generation = this.persistGeneration;
-        return this.pendingImport!.then(() => {
+        return this.pendingReplacement!.then(() => {
             if (generation !== this.persistGeneration) throw new Error('Vault changed before the accounts were saved.');
             return change();
         });
@@ -353,7 +371,7 @@ export class ProfileVault {
 
     async replaceAll(data: VaultPayload): Promise<void> {
         if (this.shared) return this.sharedChange(draft => draft.replaceAll(data), false);
-        if (this.pendingImport) return this.afterImport(() => this.replaceAll(data));
+        if (this.pendingReplacement) return this.afterReplacement(() => this.replaceAll(data));
         this.assertUnlocked();
         const profiles = profilesFrom(data.profiles);
         if (profiles.length !== data.profiles.length) {
@@ -361,26 +379,37 @@ export class ProfileVault {
         }
         assertTabStateValid(data.tabs, data.activeTab, profiles);
         const payload = { profiles, tabs: [...data.tabs], activeTab: data.activeTab };
+        return this.persistReplacement(() => payload);
+    }
+
+    private persistReplacement(build: () => VaultPayload): Promise<void> {
         const generation = this.persistGeneration;
-        const write = Promise.all([this.worldTail, this.persistTail]).then(async () => {
-            if (generation !== this.persistGeneration) return;
+        return this.queueReplacement(async () => {
+            const payload = build();
             await this.persist(undefined, payload);
             if (generation !== this.persistGeneration) return;
-            this.cache = profiles;
+            this.cache = payload.profiles;
             this.customTabs = payload.tabs;
             this.active = payload.activeTab;
         });
-        this.pendingImport = write.catch(() => {});
+    }
+
+    private async queueReplacement(change: () => Promise<void>): Promise<void> {
+        const generation = this.persistGeneration;
+        const write = Promise.all([this.worldTail, this.persistTail]).then(() => {
+            if (generation === this.persistGeneration) return change();
+        });
+        this.pendingReplacement = write.catch(() => {});
         try {
             await write;
         } finally {
-            this.pendingImport = null;
+            this.pendingReplacement = null;
         }
     }
 
-    async upsert(p: Profile): Promise<void> {
-        if (this.shared) return this.sharedChange(draft => draft.upsert(p));
-        if (this.pendingImport) return this.afterImport(() => this.upsert(p));
+    async upsert(p: Profile, initialTab = MAIN_TAB): Promise<void> {
+        if (this.shared) return this.sharedChange(draft => draft.upsert(p, initialTab));
+        if (this.pendingReplacement) return this.afterReplacement(() => this.upsert(p, initialTab));
         if (p.world !== undefined) {
             assertWorld(p.world);
         }
@@ -391,11 +420,16 @@ export class ProfileVault {
         const i = all.findIndex(x => x.username === p.username);
         const previous = all[i];
         const generation = this.persistGeneration;
-        // tab membership changes flow only through saveTabState, a password
-        // re-save (the in-game save prompt) must not move the account
         const entry: Profile = i >= 0 ? { ...all[i], password: p.password } : { username: p.username, password: p.password, ...(p.world === undefined ? {} : { world: p.world }) };
         if (i >= 0) {
             all[i] = entry;
+        } else if (initialTab !== MAIN_TAB) {
+            if (!initialTab.trim()) throw new Error('Choose a group name.');
+            return this.persistReplacement(() => ({
+                profiles: [...all, { ...entry, tab: initialTab }],
+                tabs: this.customTabs.includes(initialTab) ? this.customTabs : [...this.customTabs, initialTab],
+                activeTab: this.active
+            }));
         } else {
             all.push(entry);
         }
@@ -414,7 +448,7 @@ export class ProfileVault {
 
     async setWorld(username: string, world: WorldNumber): Promise<void> {
         if (this.shared) return this.sharedChange(draft => draft.setWorld(username, world));
-        if (this.pendingImport) return this.afterImport(() => this.setWorld(username, world));
+        if (this.pendingReplacement) return this.afterReplacement(() => this.setWorld(username, world));
         assertWorld(world);
         const generation = this.persistGeneration;
         const change = this.worldTail.then(async () => {
@@ -446,25 +480,35 @@ export class ProfileVault {
     async assignGroup(usernames: string[], name: string): Promise<void> {
         const tab = name.trim();
         if (!tab || !usernames.length) throw new Error('Choose profiles and enter a group name.');
-        if (this.shared) return this.sharedChange(draft => draft.assignGroup(usernames, tab));
-        if (this.pendingImport) return this.afterImport(() => this.assignGroup(usernames, tab));
-        const saved = new Set(this.assertUnlocked().map(p => p.username));
-        if (usernames.some(username => !saved.has(username))) throw new Error('Only saved profiles can be grouped.');
-        const tabs = [...this.customTabs];
-        if (tab !== MAIN_TAB && !tabs.includes(tab)) tabs.push(tab);
-        await this.saveTabState(tabs, new Map(usernames.map(username => [username, tab])), this.active);
+        if (this.pendingReplacement) return this.afterReplacement(() => this.assignGroup(usernames, tab));
+        const assign = async (draft: ProfileVault) => {
+            const saved = draft.savedUsernames();
+            const assignments = new Map<string, string>();
+            for (const username of usernames) {
+                const match = saved.get(username);
+                if (match === undefined) throw new Error('Only saved profiles can be grouped.');
+                assignments.set(match, tab);
+            }
+            const tabs = [...draft.customTabs];
+            if (tab !== MAIN_TAB && !tabs.includes(tab)) tabs.push(tab);
+            await draft.applyTabState(tabs, assignments, 'all');
+        };
+        return this.storage ? this.sharedChange(assign) : assign(this);
     }
 
     async remove(username: string): Promise<void> {
         if (this.shared) return this.sharedChange(draft => draft.remove(username));
-        if (this.pendingImport) return this.afterImport(() => this.remove(username));
-        this.cache = this.assertUnlocked().filter(x => x.username !== username);
-        await this.persist();
+        if (this.pendingReplacement) return this.afterReplacement(() => this.remove(username));
+        return this.persistReplacement(() => ({
+            profiles: this.assertUnlocked().filter(p => p.username !== username),
+            tabs: this.customTabs,
+            activeTab: this.active
+        }));
     }
 
     async reorder(usernames: string[]): Promise<void> {
         if (this.shared) return this.sharedChange(draft => draft.reorder(usernames));
-        if (this.pendingImport) return this.afterImport(() => this.reorder(usernames));
+        if (this.pendingReplacement) return this.afterReplacement(() => this.reorder(usernames));
         const all = this.assertUnlocked();
         const byUsername = new Map(all.map(profile => [profile.username, profile]));
         const seen = new Set<string>();
@@ -491,51 +535,98 @@ export class ProfileVault {
         await this.persist();
     }
 
-    async saveTabState(tabs: string[], tabByUser: ReadonlyMap<string, string>, activeTab: string): Promise<void> {
-        if (this.pendingImport) return this.afterImport(() => this.saveTabState(tabs, tabByUser, activeTab));
-        if (this.shared) {
-            const requested = tabs.map(tab => tab.trim());
-            assertTabStateValid(requested, activeTab, []);
-            return this.sharedChange(async draft => {
-                const previous = this.sharedTabs ?? { tabs: [], assignments: new Map<string, string>() };
-                const removed = new Set(previous.tabs.filter(tab => !requested.includes(tab)));
+    async saveActiveTab(tab: string): Promise<void> {
+        if (this.pendingReplacement) return this.afterReplacement(() => this.saveActiveTab(tab));
+        this.assertUnlocked();
+        const select = async (draft: ProfileVault) => {
+            if (tab === draft.active || (tab !== MAIN_TAB && !draft.customTabs.includes(tab))) return;
+            draft.active = tab;
+            await draft.persist();
+        };
+        return this.storage ? this.sharedChange(select) : select(this);
+    }
+
+    async saveTabState(tabs: string[], tabByUser: ReadonlyMap<string, string>, activeTab?: string, replaced?: TabReplacement, previousTabs?: string[]): Promise<void> {
+        if (this.pendingReplacement) return this.afterReplacement(() => this.saveTabState(tabs, tabByUser, activeTab, replaced, previousTabs));
+        const requested = tabs.map(tab => {
+            if (previousTabs || this.customTabs.includes(tab) || this.sharedTabs.includes(tab)) return tab;
+            return tab.trim();
+        });
+        if (this.shared || previousTabs) {
+            assertTabStateValid(requested, activeTab ?? MAIN_TAB, []);
+            const save = async (draft: ProfileVault) => {
+                if (replaced && !draft.customTabs.includes(replaced.from)) return;
+                if (replaced?.to !== undefined) {
+                    const { from, to } = replaced;
+                    const renamed = draft.customTabs.includes(to)
+                        ? draft.customTabs.filter(tab => tab !== from)
+                        : draft.customTabs.map(tab => tab === from ? to : tab);
+                    await draft.applyTabState(renamed, new Map(), 'all', draft.active === from ? to : draft.active, replaced);
+                    return;
+                }
+                const previous = previousTabs ?? this.sharedTabs;
+                const removed = new Set(previous.filter(tab => !requested.includes(tab)));
                 const merged = draft.customTabs.filter(tab => !removed.has(tab));
-                const ordered = requested.filter(tab => previous.tabs.includes(tab) && merged.includes(tab));
-                const priorOrder = previous.tabs.filter(tab => ordered.includes(tab));
+                const ordered = requested.filter(tab => previous.includes(tab) && merged.includes(tab));
+                const priorOrder = previous.filter(tab => ordered.includes(tab));
                 if (ordered.some((tab, index) => tab !== priorOrder[index])) {
                     let index = 0;
                     for (let slot = 0; slot < merged.length; slot++) if (ordered.includes(merged[slot])) merged[slot] = ordered[index++];
                 }
+                const assignments = draft.resolveSlotTabs(tabByUser, replaced?.from);
+                const destinations = new Set(assignments.values());
                 for (const [index, tab] of requested.entries()) {
-                    if (previous.tabs.includes(tab) || merged.includes(tab)) continue;
+                    if (merged.includes(tab) || (previous.includes(tab) && !destinations.has(tab))) continue;
                     const next = requested.slice(index + 1).find(candidate => merged.includes(candidate));
                     merged.splice(next ? merged.indexOf(next) : merged.length, 0, tab);
                 }
-                const assignments = new Map<string, string>();
-                for (const [username, tab] of tabByUser) {
+                for (const tab of tabByUser.values()) {
                     if (tab !== MAIN_TAB && !requested.includes(tab)) throw new Error(`tab '${tab}' is not in the tab list`);
-                    if (previous.assignments.get(username) !== tab) assignments.set(username, tab);
                 }
-                await draft.saveTabState(merged, assignments, merged.includes(activeTab) ? activeTab : MAIN_TAB);
-            }).then(() => {
-                this.sharedTabs = { tabs: requested, assignments: new Map(tabByUser) };
-            });
+                const selection = replaced && replaced.from !== draft.active ? draft.active : activeTab;
+                const selected = selection === MAIN_TAB || (selection && merged.includes(selection)) ? selection : undefined;
+                await draft.applyTabState(merged, assignments, replaced ? 'all' : 'first', selected, replaced);
+            };
+            await (this.storage ? this.sharedChange(save) : save(this));
+            this.sharedTabs = requested;
+            return;
         }
-        const all = this.assertUnlocked();
-        const trimmed = tabs.map(t => t.trim());
-        assertTabStateValid(trimmed, activeTab, []);
+        return this.applyTabState(requested, new Map(tabByUser), replaced ? 'all' : 'first', activeTab, replaced);
+    }
+
+    private savedUsernames() {
+        return indexByUsername(this.assertUnlocked().map(p => [p.username, p.username] as const));
+    }
+
+    private resolveSlotTabs(tabByUser: ReadonlyMap<string, string>, from?: string): Map<string, string> {
+        const assignments = new Map<string, string>();
+        if (!tabByUser.size) return assignments;
+        const saved = this.savedUsernames();
+        const members = from === undefined ? undefined : new Set(this.assertUnlocked().filter(p => p.tab === from).map(p => p.username));
         for (const [username, tab] of tabByUser) {
-            if (tab !== MAIN_TAB && !trimmed.includes(tab)) {
+            const match = saved.get(username);
+            if (match !== undefined && (!members || members.has(match))) assignments.set(match, tab);
+        }
+        return assignments;
+    }
+
+    private async applyTabState(tabs: string[], assignments: Map<string, string>, matches: 'first' | 'all', activeTab?: string, replaced?: TabReplacement): Promise<void> {
+        const all = this.assertUnlocked();
+        const active = activeTab ?? (tabs.includes(this.active) ? this.active : MAIN_TAB);
+        assertTabStateValid(tabs, active, []);
+        for (const [username, tab] of assignments) {
+            if (tab !== MAIN_TAB && !tabs.includes(tab)) {
                 throw new Error(`tab '${tab}' for '${username}' is not in the tab list`);
             }
         }
-        this.customTabs = trimmed;
-        this.active = activeTab;
+        this.customTabs = tabs;
+        this.active = active;
         for (const p of all) {
-            const next = tabByUser.get(p.username) ?? p.tab;
+            const next = replaced && p.tab !== replaced.from ? p.tab : replaced?.to ?? assignments.get(p.username) ?? p.tab;
+            if (matches === 'first') assignments.delete(p.username);
             // a profile not loaded in this wall keeps its stored tab, landing in Main when that tab has been deleted
             // Why: the deleting wall only knows prior-tab targets for the bots it has loaded
-            if (next !== undefined && next !== MAIN_TAB && trimmed.includes(next)) {
+            if (next !== undefined && next !== MAIN_TAB && tabs.includes(next)) {
                 p.tab = next;
             } else {
                 delete p.tab;
@@ -569,7 +660,7 @@ export class ProfileVault {
             const blob: StoredBlob = { v: 1, kdf: 'PBKDF2-SHA256', iter: ITER, salt: b64(salt), iv: b64(iv), ct: b64(new Uint8Array(ct)) };
             const encoded = JSON.stringify(blob);
             if (this.shared) {
-                if (!desktopStorage!.compareAndSet(KEY, expected ?? null, encoded)) throw new Error('Saved accounts changed in another instance; unlock the vault again.');
+                if (!this.compareAndSet(expected ?? null, encoded)) throw new Error('Saved accounts changed in another instance; unlock the vault again.');
             } else {
                 this.storage!.setItem(KEY, encoded);
             }

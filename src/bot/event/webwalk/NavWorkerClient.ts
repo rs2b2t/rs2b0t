@@ -3,6 +3,8 @@ import type { NavPoint, NavResponse, PathOutcome } from './PathFinder.js';
 import type { PathPolicy } from './types.js';
 import type { WorldStateData } from './worldStateData.js';
 
+declare const NAV_WORKER_URL: string;
+
 export type PathResult = PathOutcome & { elapsedMs?: number };
 
 export type FindPathOpts = {
@@ -48,7 +50,8 @@ export class NavWorkerClient {
 
         let worker: Worker;
         try {
-            worker = new Worker(new URL('./navworker.js', import.meta.url), { type: 'module' });
+            const url = new URL(typeof NAV_WORKER_URL === 'undefined' ? './navworker.js' : NAV_WORKER_URL, import.meta.url);
+            worker = new Worker(url, { type: 'module' });
         } catch (err) {
             this.fail(String(err));
             return;

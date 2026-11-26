@@ -1,8 +1,9 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 
 import { PriceBooks } from '#/bot/api/market/bookStore.js';
 import { resetLiveCatalog } from '#/bot/api/market/catalog.js';
 import { PriceBookPanel } from '#/bot/panel/PriceBookPanel.js';
+import { boxKey } from '#/bot/runtime/box.js';
 import { parseOrderbookFile } from '#/bot/api/market/orderbook-format.js';
 import { resetObjCatalog } from '#/bot/adapter/ClientAdapter.js';
 import ObjType from '#/client/config/ObjType.js';
@@ -132,6 +133,168 @@ describe('filtering the book', () => {
 
 // Why: every edit commits through the store and rebuilds the panel, which used to drop the table back to the first row.
 describe('editing a row', () => {
+    const buyField = '[data-item="440"] [data-role=buy]';
+    const clearBuy = '[data-item="440"] [data-action=clear-buy]';
+
+    function openPinnedPanel(): PriceBookPanel {
+        const panel = openPanel();
+        const buy = panel.root.querySelector<HTMLInputElement>(buyField)!;
+        buy.value = '80';
+        buy.dispatchEvent(new Event('change'));
+        return panel;
+    }
+
+    test('saves the next price edit after a clear fails', () => {
+        const panel = openPinnedPanel();
+        const save = spyOn(PriceBooks, 'save').mockImplementationOnce(() => {
+            throw new DOMException('storage full', 'QuotaExceededError');
+        });
+        const report = spyOn(console, 'error').mockImplementationOnce(() => {});
+        try {
+            panel.root.querySelector<HTMLButtonElement>(clearBuy)!.click();
+        } finally {
+            save.mockRestore();
+            report.mockRestore();
+        }
+
+        const buy = panel.root.querySelector<HTMLInputElement>(buyField)!;
+        expect(buy.value).toBe('80');
+        buy.value = '81';
+        buy.dispatchEvent(new Event('change'));
+        sessionStorage.removeItem(boxKey('set:PriceBooks:books'));
+        expect(PriceBooks.byName('seers')!.rows.find(row => row.id === 440)?.buy).toBe(81);
+        panel.close();
+    });
+
+    test.each([
+        { side: 'buy', derived: '90', otherPin: { sell: 120 } },
+        { side: 'sell', derived: '110', otherPin: { buy: 80 } }
+    ])('clears the $side pin while the book name has a pending edit', ({ side, derived, otherPin }) => {
+        const panel = openPinnedPanel();
+        const row = '[data-item="440"]';
+        const field = (role: string) => panel.root.querySelector<HTMLInputElement>(`${row} [data-role="${role}"]`)!;
+        field('sell').value = '120';
+        field('sell').dispatchEvent(new Event('change'));
+
+        panel.root.querySelector<HTMLButtonElement>('[data-action=rename]')!.click();
+        type(panel.root.querySelector<HTMLInputElement>('[data-role=book-name]')!, 'renamed');
+        panel.root.querySelector<HTMLButtonElement>(`${row} [data-action="clear-${side}"]`)!.click();
+
+        expect(field(side).value).toBe(derived);
+        sessionStorage.removeItem(boxKey('set:PriceBooks:books'));
+        expect(PriceBooks.names()).toEqual(['renamed']);
+        expect(PriceBooks.byName('renamed')!.rows.find(r => r.id === 440)).toEqual({
+            id: 440, mid: 100, cap: 0, buying: true, selling: true, ...otherPin
+        });
+        panel.close();
+    });
+
+    test('refreshes the selection when clearing a pin in a deleted book', () => {
+        const panel = openPinnedPanel();
+        const book = PriceBooks.byName('seers')!;
+        PriceBooks.save([book, { ...book, name: 'other' }]);
+        const second = new PriceBookPanel();
+        document.body.appendChild(second.root);
+        second.open('seers');
+        second.root.querySelector<HTMLButtonElement>('[data-action=delete]')!.click();
+        second.close();
+
+        const mid = panel.root.querySelector<HTMLInputElement>('[data-item="440"] [data-role=mid]')!;
+        type(mid, '200');
+        mid.addEventListener('blur', () => mid.dispatchEvent(new Event('change')), { once: true });
+        const staleClear = panel.root.querySelector<HTMLButtonElement>(clearBuy)!;
+        staleClear.click();
+        expect(panel.root.querySelector<HTMLSelectElement>('select')!.value).toBe('other');
+        expect(staleClear.isConnected).toBe(false);
+        expect(PriceBooks.all()).toEqual([{ ...book, name: 'other' }]);
+        panel.close();
+    });
+
+    test.each([
+        { side: 'buy', edit: 'buy', pinned: '80', pending: '85', derived: '90' },
+        { side: 'sell', edit: 'sell', pinned: '120', pending: '125', derived: '110' },
+        { side: 'sell', edit: 'mid', pinned: '125', pending: '85', derived: '94' }
+    ])('clears the $side pin while $edit has a pending edit', ({ side, edit, pinned, pending, derived }) => {
+        const panel = openPanel();
+        const row = '[data-item="440"]';
+        const field = (role = side) => panel.root.querySelector<HTMLInputElement>(`${row} [data-role="${role}"]`)!;
+        const input = field();
+        input.value = pinned;
+        input.dispatchEvent(new Event('change'));
+
+        const editing = field(edit);
+        type(editing, pending);
+        let changed = false;
+        const commitPending = () => {
+            if (changed) return;
+            changed = true;
+            editing.dispatchEvent(new Event('change'));
+        };
+        editing.addEventListener('blur', commitPending, { once: true });
+        const editor = panel.root.querySelector<HTMLElement>('.rs2b0t-pricebook')!;
+        const replaceChildren = editor.replaceChildren.bind(editor);
+        editor.replaceChildren = (...nodes) => {
+            if (document.activeElement === editing) commitPending();
+            replaceChildren(...nodes);
+        };
+        const clear = panel.root.querySelector<HTMLButtonElement>(`${row} [data-action="clear-${side}"]`)!;
+        if (clear.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))) {
+            clear.focus();
+        }
+        if (clear.isConnected) {
+            clear.click();
+        }
+
+        const saved = PriceBooks.byName('seers')!.rows.find(row => row.id === 440)!;
+        expect(saved.mid).toBe(edit === 'mid' ? 85 : 100);
+        expect(saved).not.toHaveProperty(side);
+        expect(field().value).toBe(derived);
+        panel.close();
+    });
+
+    test.each([
+        { side: 'buy', other: 'sell', pin: '250', derived: '90', afterMid: '180', afterSpread: '160' },
+        { side: 'sell', other: 'buy', pin: '75', derived: '110', afterMid: '220', afterSpread: '240' }
+    ])('keeps $side derived and $other pinned after a stale panel toggles selling', ({ side, other, pin, derived, afterMid, afterSpread }) => {
+        const panel = openPanel();
+        const row = '[data-item="440"]';
+        const field = (role: string) => panel.root.querySelector<HTMLInputElement>(`${row} input[data-role="${role}"]`)!;
+        const clear = () => panel.root.querySelector<HTMLButtonElement>(`${row} button[data-action="clear-${side}"]`);
+        const change = (input: HTMLInputElement, value: string) => {
+            input.value = value;
+            input.dispatchEvent(new Event('change'));
+        };
+
+        change(field('buy'), '80');
+        change(field('sell'), '125');
+        const second = new PriceBookPanel();
+        document.body.appendChild(second.root);
+        second.open('seers');
+        change(second.root.querySelector<HTMLInputElement>(`${row} input[data-role="${other}"]`)!, pin);
+        expect(clear()).not.toBeNull();
+        clear()!.click();
+        expect(clear()).toBeNull();
+        expect(field(side).value).toBe(derived);
+        expect(field(other).value).toBe(pin);
+
+        second.root.querySelector<HTMLButtonElement>(`${row} [data-role=selling]`)!.click();
+        second.close();
+        const key = boxKey('set:PriceBooks:books');
+        const [book] = JSON.parse(localStorage.getItem(key)!);
+        expect(book.rows.find((r: { id: number }) => r.id === 440)).toEqual({
+            id: 440, mid: 100, cap: 0, buying: true, selling: false, [other]: Number(pin)
+        });
+        panel.close();
+        sessionStorage.removeItem(key);
+        panel.open('seers');
+        change(field('mid'), '200');
+        expect(field(side).value).toBe(afterMid);
+        change(panel.root.querySelector<HTMLInputElement>('[data-role=margin]')!, '40');
+        expect(field(side).value).toBe(afterSpread);
+        expect(field(other).value).toBe(pin);
+        panel.close();
+    });
+
     test('leaves the table where it was scrolled to', () => {
         const panel = openPanel();
         table(panel).scrollTop = 140;
@@ -177,6 +340,24 @@ describe('editing a row', () => {
         cell.dispatchEvent(new Event('change'));
 
         expect(table(panel).scrollTop).toBe(140);
+    });
+
+    test.each(['buying', 'selling'] as const)('turning off %s in two open panels keeps it off', side => {
+        const first = openPanel();
+        const second = new PriceBookPanel();
+        document.body.appendChild(second.root);
+        second.open('seers');
+        const toggle = (panel: PriceBookPanel) => panel.root.querySelector<HTMLButtonElement>(`[data-item="440"] [data-role="${side}"]`)!;
+
+        toggle(first).click();
+        expect(toggle(first).dataset.on).toBe('false');
+        expect(toggle(second).dataset.on).toBe('true');
+        toggle(second).click();
+
+        expect(PriceBooks.byName('seers')!.rows.find(row => row.id === 440)![side]).toBe(false);
+        expect(toggle(second).dataset.on).toBe('false');
+        first.close();
+        second.close();
     });
 
     test('a toggle keeps the scroll too', () => {

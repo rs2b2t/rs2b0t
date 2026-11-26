@@ -2,7 +2,6 @@ import { CanvasEnabledKeys, KeyCodes } from '#/client/shell/KeyCodes.js';
 
 import { canvas, canvas2d } from '#/client/graphics/Canvas.js';
 import Pix3D from '#/client/dash3d/Pix3D.js';
-import PixMap from '#/client/graphics/PixMap.js';
 
 import { sleep } from '#/client/util/JsUtil.js';
 
@@ -13,7 +12,6 @@ export default abstract class GameShell {
     protected otim: number[] = new Array(10);
     protected fps: number = 0;
     protected debug: boolean = false;
-    protected drawArea: PixMap | null = null;
     protected fullredraw: boolean = true;
     protected focus: boolean = true;
 
@@ -83,8 +81,7 @@ export default abstract class GameShell {
     protected resize(width: number, height: number) {
         canvas.width = width;
         canvas.height = height;
-        this.drawArea = new PixMap(width, height);
-        Pix3D.setRenderClipping();
+        Pix3D.setClipping(width, height);
     }
 
     async run() {

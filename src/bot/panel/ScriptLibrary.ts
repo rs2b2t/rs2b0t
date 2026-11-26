@@ -11,6 +11,8 @@ export default class ScriptLibrary {
 
     private category = 'All';
     private query = '';
+    private latestLoadId = 0;
+    private ignoreLoadsThrough = 0;
 
     constructor(private onSelect: (name: string) => void) {
         this.backdrop = el('div', 'rs2b0t-modal-backdrop');
@@ -115,6 +117,7 @@ export default class ScriptLibrary {
     }
 
     private async handleLoad(pending: Promise<LoadResult>): Promise<void> {
+        const loadId = ++this.latestLoadId;
         this.loadStatus.textContent = 'loading…';
         this.loadStatus.className = 'rs2b0t-load-status';
 
@@ -122,8 +125,11 @@ export default class ScriptLibrary {
         if (result.ok && result.name) {
             this.loadStatus.textContent = `loaded '${result.name}'`;
             this.loadStatus.className = 'rs2b0t-load-status rs2b0t-load-ok';
-            this.onSelect(result.name);
-            this.close();
+            if (loadId > this.ignoreLoadsThrough) {
+                this.ignoreLoadsThrough = loadId;
+                this.onSelect(result.name);
+                this.backdrop.style.display = 'none';
+            }
         } else {
             this.loadStatus.textContent = `load failed: ${result.ok ? 'no bot exported' : result.error}`;
             this.loadStatus.className = 'rs2b0t-load-status rs2b0t-load-error';
@@ -141,7 +147,12 @@ export default class ScriptLibrary {
         this.searchEl.focus();
     }
 
+    cancelPendingSelection(): void {
+        this.ignoreLoadsThrough = this.latestLoadId;
+    }
+
     close(): void {
+        this.cancelPendingSelection();
         this.backdrop.style.display = 'none';
     }
 

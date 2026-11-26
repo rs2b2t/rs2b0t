@@ -1,4 +1,5 @@
 import { Client } from '#/client/shell/Client.js';
+import type TitleFlames from '#/client/shell/TitleFlames.js';
 import { WorkerClock } from '#/bot/runtime/WorkerClock.js';
 
 import { AutoRelogin } from './AutoRelogin.js';
@@ -59,6 +60,10 @@ export default class BotClient extends Client {
         // Why: only the host frame is timed; it's synchronous and script plus producer work dwarfs the client's own loop.
         // Why: super.mainloop() is async, so timing it would count yields to other bots.
         BotDiag.measure('logic', () => BotHost.onFrame());
+    }
+
+    protected override startTitleFlames(flames: TitleFlames): void {
+        flames.start((now, lastDrawAt) => RenderGate.shouldDraw(now, lastDrawAt));
     }
 
     override async mainredraw(): Promise<void> {

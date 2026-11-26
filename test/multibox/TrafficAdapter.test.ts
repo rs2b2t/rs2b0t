@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test';
+import { installWallTrafficChannel, publisherTrafficChannel } from '#/client/io/TrafficChannel.js';
+import { TrafficMeter } from '#/client/io/TrafficMeter.js';
 import { TrafficCollector } from '#/bot/adapter/TrafficAdapter.js';
 
 class FakeChannel {
@@ -14,7 +16,63 @@ class FakeChannel {
     }
 }
 
+function flushChannel(channel: BroadcastChannel): Promise<void> {
+    const sender = new BroadcastChannel(channel.name);
+    return new Promise(resolve => {
+        function onMessage(event: MessageEvent): void {
+            if (event.data !== 'flush') return;
+            channel.removeEventListener('message', onMessage);
+            sender.close();
+            resolve();
+        }
+        channel.addEventListener('message', onMessage);
+        sender.postMessage('flush');
+    });
+}
+
 describe('TrafficCollector', () => {
+    test('counts only the frame and cache worker publishers on each wall', async () => {
+        let now = 0;
+        const channels: BroadcastChannel[] = [];
+        const walls = Array.from({ length: 3 }, () => document.implementation.createHTMLDocument());
+        const collectors = walls.map(wall => new TrafficCollector({
+            channelName: installWallTrafficChannel(wall),
+            channelFactory: name => {
+                const channel = new BroadcastChannel(name);
+                channels.push(channel);
+                return channel;
+            },
+            now: () => now,
+            publisherTimeoutMs: 1000
+        }));
+        const meters: TrafficMeter[] = [];
+        try {
+            for (const [wall, count, received, sent] of [[walls[0], 30, 100, 3], [walls[1], 31, 200, 7]] as const) {
+                for (let i = 0; i < count; i++) {
+                    const name = publisherTrafficChannel({ frameElement: wall.createElement('iframe') });
+                    const frame = new TrafficMeter({ channelName: name });
+                    const worker = new TrafficMeter({ channelName: publisherTrafficChannel({ name }) });
+                    frame.addReceived(received);
+                    worker.addSent(sent);
+                    meters.push(frame, worker);
+                }
+            }
+            for (const meter of meters) meter.publish();
+            await Promise.all(channels.map(flushChannel));
+            now = 1001;
+            for (const meter of meters) meter.publish();
+            await Promise.all(channels.map(flushChannel));
+            expect(collectors.map(collector => collector.snapshot())).toEqual([
+                { status: 'available', receivedBytes: 3000, sentBytes: 90 },
+                { status: 'available', receivedBytes: 6200, sentBytes: 217 },
+                { status: 'unavailable', reason: 'browser traffic publisher did not appear' }
+            ]);
+        } finally {
+            for (const meter of meters) meter.close();
+            for (const collector of collectors) collector.close();
+        }
+    });
+
     test('aggregates delta heartbeats from every browser realm', () => {
         const channel = new FakeChannel();
         let now = 1000;

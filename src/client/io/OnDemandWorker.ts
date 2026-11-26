@@ -37,6 +37,7 @@ type CompletedMessage = {
 
 type OutboundMessage =
     | CompletedMessage
+    | { type: 'ready' }
     | { type: 'message'; message: string }
     | { type: 'failCount'; failCount: number }
     | { type: 'ack'; id: number }
@@ -185,8 +186,6 @@ class WorkerOnDemand {
         } else {
             this.dbReady = Promise.resolve();
         }
-
-        this.schedule();
     }
 
     stop(): void {
@@ -216,6 +215,7 @@ class WorkerOnDemand {
         };
 
         this.queue.push(req);
+        this.schedule();
     }
 
     async prefetchPriority(archive: number, file: number, priority: number): Promise<void> {
@@ -236,6 +236,7 @@ class WorkerOnDemand {
         }
 
         this.totalPrefetchFiles++;
+        this.schedule();
     }
 
     async prefetch(archive: number, file: number): Promise<void> {
@@ -252,10 +253,15 @@ class WorkerOnDemand {
             cycle: 0,
             urgent: false
         });
+        this.schedule();
     }
 
     private schedule(): void {
-        if (!this.running) {
+        if (!this.running || this.loopBusy || this.loopTimer !== null) {
+            return;
+        }
+
+        if (!this.queue.length && !this.missing.length && !this.pending.length && !this.topPriority && !this.stream) {
             return;
         }
 
@@ -264,11 +270,7 @@ class WorkerOnDemand {
     }
 
     private tick(): void {
-        if (this.loopBusy) {
-            this.schedule();
-            return;
-        }
-
+        this.loopTimer = null;
         this.loopBusy = true;
         this.run()
             .catch((e: unknown) => {
@@ -711,6 +713,7 @@ worker.addEventListener('message', (event: MessageEvent<InboundMessage>): void =
             worker.postMessage({ type: 'error', error: e instanceof Error ? e.message : String(e) });
         });
 });
+worker.postMessage({ type: 'ready' });
 
 async function handleMessage(message: InboundMessage): Promise<void> {
     if (message.type === 'init') {

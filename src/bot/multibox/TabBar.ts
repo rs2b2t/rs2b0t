@@ -5,8 +5,8 @@ const TAB_MIME = 'application/x-mbx-tab';
 interface TabBarCallbacks {
     onSelect(name: string): void;
     // Return false to keep the invalid name open and flagged.
-    onAdd(name: string): boolean;
-    onRename(oldName: string, newName: string): boolean;
+    onAdd(name: string): boolean | Promise<boolean>;
+    onRename(oldName: string, newName: string): boolean | Promise<boolean>;
     onRemove(name: string): void;
     // `toIndex` uses the full tab list, with Main pinned at 0.
     onMove(name: string, toIndex: number): void;
@@ -27,9 +27,6 @@ export class TabBar {
     ) {}
 
     render(tabs: string[], active: string): void {
-        if (this.editing) {
-            return;
-        }
         // Rebuild only on changes so the 1 Hz repaint keeps drag markers intact.
         const sig = JSON.stringify([tabs, active]);
         if (sig === this.lastSig) {
@@ -38,7 +35,7 @@ export class TabBar {
         this.lastSig = sig;
         this.tabs = [...tabs];
         this.active = active;
-        this.rebuild();
+        if (!this.editing) this.rebuild();
     }
 
     private rebuild(): void {
@@ -156,7 +153,7 @@ export class TabBar {
         return chip;
     }
 
-    private openInput(host: HTMLElement, initial: string, commit: (value: string) => boolean): void {
+    private openInput(host: HTMLElement, initial: string, commit: (value: string) => boolean | Promise<boolean>): void {
         this.editing = true;
         this.closeMenu();
         host.textContent = '';
@@ -166,21 +163,20 @@ export class TabBar {
         input.value = initial;
         const close = (): void => {
             this.editing = false;
-            // A successful commit rerenders through the owner; otherwise restore the chips.
             if (this.container.contains(input)) {
-                this.lastSig = null;
                 this.rebuild();
             }
         };
-        input.addEventListener('keydown', ev => {
+        input.addEventListener('keydown', async ev => {
             ev.stopPropagation();
             if (ev.key === 'Enter') {
                 ev.preventDefault();
-                this.editing = false;
-                if (commit(input.value)) {
+                const result = commit(input.value);
+                const changed = typeof result === 'boolean' ? result : await result;
+                if (!this.container.contains(input)) return;
+                if (changed) {
                     close();
                 } else {
-                    this.editing = true;
                     input.classList.add('is-invalid');
                 }
             } else if (ev.key === 'Escape') {
