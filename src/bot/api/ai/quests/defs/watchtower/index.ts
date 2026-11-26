@@ -1,3 +1,4 @@
+import { customStep, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { Game } from '../../../../game/Game.js';
 import { clearSpace, fitSupplies, foodCount, WATCHTOWER_FOODS } from './loadout.js';
 import { QuestFood } from '../../food.js';
@@ -74,22 +75,22 @@ function escapePocket(area: WatchtowerArea, wanted: WatchtowerArea): QuestStep |
     switch (area) {
         case 'towerFloor':
         case 'mirrorTower':
-            return { kind: 'custom', name: 'climb down from the wizard floor', run: leaveWizardFloor };
+            return customStep('climb down from the wizard floor', leaveWizardFloor);
         case 'grewIsland':
-            return { kind: 'custom', name: 'swing back off Grew island', run: leaveGrewIsland };
+            return customStep('swing back off Grew island', leaveGrewIsland);
         case 'tobanCamp':
-            return { kind: 'custom', name: "leave Toban's camp", run: leaveTobanCamp };
+            return customStep("leave Toban's camp", leaveTobanCamp);
         case 'cityGuard':
-            return { kind: 'custom', name: 'jump back out of the city-guard pocket', run: jumpBack };
+            return customStep('jump back out of the city-guard pocket', jumpBack);
         case 'skavidCaves':
             return { kind: 'custom', name: 'leave the skavid cave', run: async log => {
                 if (!(await leaveCave(log))) return false;
                 return watchtowerArea(Game.tile()) !== 'lowerCity' || leaveCity(log);
             } };
         case 'enclave':
-            return { kind: 'custom', name: 'leave the shaman enclave', run: leaveEnclave };
+            return customStep('leave the shaman enclave', leaveEnclave);
         case 'lowerCity':
-            return { kind: 'custom', name: 'leave the ogre city', run: leaveCity };
+            return customStep('leave the ogre city', leaveCity);
         default:
             return null;
     }
@@ -112,17 +113,17 @@ function stageTribes(snap: QuestSnapshot, area: WatchtowerArea): QuestStep {
 
     if (!hasFlag(progress, 'helped-og')) {
         if (held(snap, WT_ITEM.STOLEN_GOLD.id) > 0 || !hasFlag(progress, 'spoken-og')) {
-            return at(area, 'yanille', { kind: 'custom', name: 'talk to Og', run: talkToOg });
+            return at(area, 'yanille', customStep('talk to Og', talkToOg));
         }
         if (held(snap, WT_ITEM.TOBAN_KEY.id) > 0) {
-            return at(area, 'tobanCamp', { kind: 'custom', name: "take the stolen gold from Toban's chest", run: openTobanChest });
+            return at(area, 'tobanCamp', customStep("take the stolen gold from Toban's chest", openTobanChest));
         }
-        return at(area, 'yanille', { kind: 'custom', name: 'ask Og for another chest key', run: talkToOg });
+        return at(area, 'yanille', customStep('ask Og for another chest key', talkToOg));
     }
 
     if (!hasFlag(progress, 'helped-toban')) {
         if (held(snap, WT_ITEM.DRAGON_BONES.id) > 0 || !hasFlag(progress, 'spoken-toban')) {
-            return at(area, 'tobanCamp', { kind: 'custom', name: 'talk to Toban', run: talkToToban });
+            return at(area, 'tobanCamp', customStep('talk to Toban', talkToToban));
         }
         let bones = bankOnly(snap, WT_ITEM.DRAGON_BONES);
         if (bones?.kind === 'wait') {
@@ -133,7 +134,7 @@ function stageTribes(snap: QuestSnapshot, area: WatchtowerArea): QuestStep {
         }
         return bones
             ? at(area, 'yanille', bones)
-            : at(area, 'tobanCamp', { kind: 'custom', name: 'talk to Toban', run: talkToToban });
+            : at(area, 'tobanCamp', customStep('talk to Toban', talkToToban));
     }
 
     if (!hasFlag(progress, 'helped-grew')) {
@@ -141,13 +142,13 @@ function stageTribes(snap: QuestSnapshot, area: WatchtowerArea): QuestStep {
             const rope = needRope(snap, area);
             return rope
                 ? at(area, 'yanille', rope)
-                : at(area, 'grewIsland', { kind: 'custom', name: 'talk to Grew', run: talkToGrew });
+                : at(area, 'grewIsland', customStep('talk to Grew', talkToGrew));
         }
-        return at(area, 'tobanCamp', { kind: 'custom', name: "knock out one of Gorad's teeth", run: killGorad });
+        return at(area, 'tobanCamp', customStep("knock out one of Gorad's teeth", killGorad));
     }
 
     const shortOfBerries = owned(snap, WT_ITEM.JANGERBERRIES.id) < JANGERBERRY_TARGET;
-    const pickBerries: QuestStep = { kind: 'custom', name: 'pick jangerberries on Grew island', run: pickJangerberries };
+    const pickBerries: QuestStep = customStep('pick jangerberries on Grew island', pickJangerberries);
 
     // Already on the island: take the berries now, as coming back costs another rope.
     if (shortOfBerries && area === 'grewIsland') {
@@ -170,13 +171,13 @@ function stageTribes(snap: QuestSnapshot, area: WatchtowerArea): QuestStep {
     }
 
     return escapePocket(area, 'yanille')
-        ?? { kind: 'wait', reason: 'every tribe is helped but no relic part is in the pack' };
+        ?? waitStep('every tribe is helped but no relic part is in the pack');
 }
 
 function stageRelicGate(snap: QuestSnapshot, area: WatchtowerArea): QuestStep {
     if (held(snap, WT_ITEM.OGRE_RELIC.id) > 0) {
         return escapePocket(area, 'yanille')
-            ?? { kind: 'custom', name: 'show the relic to the north-west ogre guard', run: showRelicToGuard };
+            ?? customStep('show the relic to the north-west ogre guard', showRelicToGuard);
     }
     if (!snap.bankKnown) {
         return at(area, 'yanille', scanBank());
@@ -184,23 +185,23 @@ function stageRelicGate(snap: QuestSnapshot, area: WatchtowerArea): QuestStep {
     if (banked(snap, WT_ITEM.OGRE_RELIC.id) > 0) {
         return at(area, 'yanille', withdrawFrom([{ name: WT_ITEM.OGRE_RELIC.name, id: WT_ITEM.OGRE_RELIC.id, qty: 1 }]));
     }
-    return at(area, 'towerFloor', { kind: 'custom', name: 'ask the wizard for another relic', run: askWizardForRelic });
+    return at(area, 'towerFloor', customStep('ask the wizard for another relic', askWizardForRelic));
 }
 
 function stageCityEntry(snap: QuestSnapshot, area: WatchtowerArea): QuestStep {
     if (area === 'cityGuard') {
-        return { kind: 'custom', name: 'ask the city guard for passage', run: askRiddle };
+        return customStep('ask the city guard for passage', askRiddle);
     }
     if (!hasFlag(snap.progress, 'market-paid')) {
         if (held(snap, WT_ITEM.ROCK_CAKE.id) === 0) {
-            return { kind: 'custom', name: 'steal a rock cake from the ogre stall', run: stealRockCake };
+            return customStep('steal a rock cake from the ogre stall', stealRockCake);
         }
-        return { kind: 'custom', name: 'give the rock cake to the battlement guard', run: crossBattlement };
+        return customStep('give the rock cake to the battlement guard', crossBattlement);
     }
     const purse = held(snap, WT_ITEM.COINS.id) < CHASM_TOLL * 2 ? sourceCoins(snap, CITY_PURSE) : null;
     return purse
         ? at(area, 'yanille', purse)
-        : { kind: 'custom', name: 'pay the ogre guard, jump the chasm, ask the riddle', run: askRiddle };
+        : customStep('pay the ogre guard, jump the chasm, ask the riddle', askRiddle);
 }
 
 function stageRiddle(snap: QuestSnapshot, area: WatchtowerArea): QuestStep {
@@ -212,7 +213,7 @@ function stageRiddle(snap: QuestSnapshot, area: WatchtowerArea): QuestStep {
     const purse = held(snap, WT_ITEM.COINS.id) < CHASM_TOLL * 2 ? sourceCoins(snap, CITY_PURSE) : null;
     return purse
         ? at(area, 'yanille', purse)
-        : { kind: 'custom', name: 'answer the riddle with a death rune', run: answerRiddle };
+        : customStep('answer the riddle with a death rune', answerRiddle);
 }
 
 // Why: a cave mouth refuses entry without the map and a lit light source, and bounces you to a fixed tile, which loops forever if the kit was banked or lost.
@@ -225,7 +226,7 @@ function needCaveKit(snap: QuestSnapshot, area: WatchtowerArea): QuestStep | nul
             return at(area, 'yanille', inBank);
         }
         const purse = held(snap, WT_ITEM.COINS.id) < CHASM_TOLL * 2 ? sourceCoins(snap, CITY_PURSE) : null;
-        return purse ? at(area, 'yanille', purse) : at(area, 'cityGuard', { kind: 'custom', name: 'ask the city guard for another skavid map', run: askRiddle });
+        return purse ? at(area, 'yanille', purse) : at(area, 'cityGuard', customStep('ask the city guard for another skavid map', askRiddle));
     }
     const light = sourceLightSource(snap);
     return light ? at(area, 'yanille', light) : null;
@@ -238,7 +239,7 @@ function stageCaves(snap: QuestSnapshot, area: WatchtowerArea): QuestStep {
     }
     const cave = nextSkavidCave(snap.progress);
     if (cave === 5) {
-        return { kind: 'custom', name: 'learn skavid words from the scared skavid', run: learnFromScaredSkavid };
+        return customStep('learn skavid words from the scared skavid', learnFromScaredSkavid);
     }
     if (cave <= 4) {
         return { kind: 'custom', name: `answer the skavid in cave ${cave}`, run: log => learnWord(cave, log) };
@@ -248,21 +249,21 @@ function stageCaves(snap: QuestSnapshot, area: WatchtowerArea): QuestStep {
         const bar = bankOnly(snap, WT_ITEM.GOLD_BAR);
         if (bar && (bar.kind !== 'wait' || payment === true)) return at(area, 'yanille', bar);
     }
-    return at(area, 'skavidCaves', { kind: 'custom', name: 'answer the mad skavid for a crystal', run: answerMadSkavid });
+    return at(area, 'skavidCaves', customStep('answer the mad skavid for a crystal', answerMadSkavid));
 }
 
 function stageEnclaveEntry(snap: QuestSnapshot, area: WatchtowerArea): QuestStep {
     if (area === 'enclave') {
-        return { kind: 'custom', name: 'leave the shaman enclave', run: leaveEnclave };
+        return customStep('leave the shaman enclave', leaveEnclave);
     }
     if (held(snap, WT_ITEM.NIGHTSHADE.id) === 0) {
         return needCaveKit(snap, area)
-            ?? { kind: 'custom', name: 'take Nightshade from the skavid cave', run: takeNightshade };
+            ?? customStep('take Nightshade from the skavid cave', takeNightshade);
     }
     const food = sourceFood(snap, ENCLAVE_FOOD);
     return food
         ? at(area, 'yanille', food)
-        : { kind: 'custom', name: 'feed the enclave guard Nightshade', run: enterEnclave };
+        : customStep('feed the enclave guard Nightshade', enterEnclave);
 }
 
 function stagePotion(snap: QuestSnapshot, area: WatchtowerArea): QuestStep {
@@ -271,7 +272,7 @@ function stagePotion(snap: QuestSnapshot, area: WatchtowerArea): QuestStep {
         if (banked(snap, potion.id) > 0) return at(area, 'yanille', withdrawFrom([{ ...potion, qty: 1 }]));
     }
     if (held(snap, WT_ITEM.OGRE_POTION.id) > 0) {
-        return at(area, 'towerFloor', { kind: 'custom', name: 'have the wizard infuse the ogre potion', run: infusePotion });
+        return at(area, 'towerFloor', customStep('have the wizard infuse the ogre potion', infusePotion));
     }
     const escape = escapePocket(area, 'yanille');
     if (escape) {
@@ -291,7 +292,7 @@ function stagePotion(snap: QuestSnapshot, area: WatchtowerArea): QuestStep {
     if (held(snap, WT_ITEM.GUAM_JANGER_VIAL.id) === 0 && held(snap, WT_ITEM.JANGERBERRIES.id) === 0) {
         if (banked(snap, WT_ITEM.JANGERBERRIES.id) > 0) return withdrawFrom([{ ...WT_ITEM.JANGERBERRIES, qty: 1 }]);
         return needRope(snap, area)
-            ?? { kind: 'custom', name: 'pick jangerberries on Grew island', run: pickJangerberries };
+            ?? customStep('pick jangerberries on Grew island', pickJangerberries);
     }
     if (held(snap, WT_ITEM.GROUND_BAT_BONES.id) === 0) {
         if (banked(snap, WT_ITEM.GROUND_BAT_BONES.id) > 0) return withdrawFrom([{ ...WT_ITEM.GROUND_BAT_BONES, qty: 1 }]);
@@ -303,9 +304,9 @@ function stagePotion(snap: QuestSnapshot, area: WatchtowerArea): QuestStep {
         if (pestle) {
             return pestle;
         }
-        return { kind: 'custom', name: 'grind the bat bones', run: grindBatBones };
+        return customStep('grind the bat bones', grindBatBones);
     }
-    return { kind: 'custom', name: 'brew the ogre potion', run: brewOgrePotion };
+    return customStep('brew the ogre potion', brewOgrePotion);
 }
 
 function stageShamans(snap: QuestSnapshot, area: WatchtowerArea): QuestStep {
@@ -319,20 +320,20 @@ function stageShamans(snap: QuestSnapshot, area: WatchtowerArea): QuestStep {
     if (left > 0) {
         if (held(snap, WT_ITEM.MAGIC_OGRE_POTION.id) === 0) {
             if (area === 'enclave') {
-                return { kind: 'custom', name: 'leave the enclave to brew another potion', run: leaveEnclave };
+                return customStep('leave the enclave to brew another potion', leaveEnclave);
             }
             return stagePotion(snap, area);
         }
         if (area !== 'enclave' && held(snap, WT_ITEM.NIGHTSHADE.id) === 0) {
             return needCaveKit(snap, area)
-                ?? provisioned({ kind: 'custom', name: 'take Nightshade for the enclave', run: takeNightshade });
+                ?? provisioned(customStep('take Nightshade for the enclave', takeNightshade));
         }
         // The mining follows in the same visit, so the pickaxe rides along and saves a second trip through the guard.
         const pick = area === 'enclave' ? null : sourcePickaxe(snap);
         if (pick) {
             return provisioned(at(area, 'yanille', pick));
         }
-        return provisioned({ kind: 'custom', name: 'dissolve the ogre shamans', run: dissolveShamans });
+        return provisioned(customStep('dissolve the ogre shamans', dissolveShamans));
     }
 
     if (held(snap, WT_ITEM.CRYSTAL4.id) === 0 && banked(snap, WT_ITEM.CRYSTAL4.id) === 0) {
@@ -343,25 +344,25 @@ function stageShamans(snap: QuestSnapshot, area: WatchtowerArea): QuestStep {
         }
         if (area !== 'enclave' && held(snap, WT_ITEM.NIGHTSHADE.id) === 0) {
             return needCaveKit(snap, area)
-                ?? provisioned({ kind: 'custom', name: 'take Nightshade for the enclave', run: takeNightshade });
+                ?? provisioned(customStep('take Nightshade for the enclave', takeNightshade));
         }
-        return provisioned({ kind: 'custom', name: 'mine the Rock of Dalgroth', run: mineDalgroth });
+        return provisioned(customStep('mine the Rock of Dalgroth', mineDalgroth));
     }
     if (held(snap, WT_ITEM.CRYSTAL3.id) === 0 && banked(snap, WT_ITEM.CRYSTAL3.id) === 0) {
         if (area !== 'enclave' && held(snap, WT_ITEM.NIGHTSHADE.id) === 0) {
             return needCaveKit(snap, area)
-                ?? provisioned({ kind: 'custom', name: 'take Nightshade for the enclave', run: takeNightshade });
+                ?? provisioned(customStep('take Nightshade for the enclave', takeNightshade));
         }
-        return provisioned({ kind: 'custom', name: 'search a shaman robe for the third crystal', run: searchShamanRobe });
+        return provisioned(customStep('search a shaman robe for the third crystal', searchShamanRobe));
     }
     if (area === 'enclave') {
-        return { kind: 'custom', name: 'leave the shaman enclave', run: leaveEnclave };
+        return customStep('leave the shaman enclave', leaveEnclave);
     }
     const recovery = recoverCrystals(snap, area);
     if (recovery) {
         return recovery;
     }
-    return at(area, 'towerFloor', { kind: 'custom', name: 'take all four crystals to the wizard', run: showCrystalsToWizard });
+    return at(area, 'towerFloor', customStep('take all four crystals to the wizard', showCrystalsToWizard));
 }
 
 const CRYSTAL_RECOVERY: Readonly<Record<number, { name: string; run: (log: (m: string) => void) => Promise<boolean> }>> = {
@@ -386,7 +387,7 @@ function recoverCrystals(snap: QuestSnapshot, area: WatchtowerArea): QuestStep |
         return at(area, 'yanille', scanBank());
     }
     const recovery = CRYSTAL_RECOVERY[lost.id];
-    const step: QuestStep = { kind: 'custom', name: recovery.name, run: recovery.run };
+    const step: QuestStep = customStep(recovery.name, recovery.run);
     if (lost.id === WT_ITEM.CRYSTAL1.id) {
         const rope = needRope(snap, area);
         return rope ? at(area, 'yanille', rope) : at(area, 'grewIsland', step);
@@ -400,33 +401,33 @@ function recoverCrystals(snap: QuestSnapshot, area: WatchtowerArea): QuestStep |
 }
 
 function decideNext(snap: QuestSnapshot): QuestStep {
-    if (inDragonLair(snap.tile)) return { kind: 'custom', name: 'leave the dragon lair', run: leaveDragonLair };
-    if (dragonBankPending()) return { kind: 'custom', name: 'refresh the bank after the dragon hunt', run: refreshDragonBank };
+    if (inDragonLair(snap.tile)) return customStep('leave the dragon lair', leaveDragonLair);
+    if (dragonBankPending()) return customStep('refresh the bank after the dragon hunt', refreshDragonBank);
     if (snap.journal === 'complete' || (snap.stage ?? -1) >= WATCHTOWER_STAGE.COMPLETE) {
         if (held(snap, WT_ITEM.WATCHTOWER_SPELL.id) > 0) {
-            return { kind: 'custom', name: 'read the Watchtower spell scroll', run: readSpellScroll };
+            return customStep('read the Watchtower spell scroll', readSpellScroll);
         }
         // Completing teleports into the mirror tower in region 45_73.
         const stranded = escapePocket(watchtowerArea(snap.tile), 'yanille');
         return stranded ?? { kind: 'done' };
     }
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     if (snap.stage === undefined) {
-        return { kind: 'wait', reason: 'Watch Tower journal stage unavailable' };
+        return waitStep('Watch Tower journal stage unavailable');
     }
     const area = watchtowerArea(snap.tile);
     if (area === 'unknown') {
-        return { kind: 'wait', reason: 'player location unavailable' };
+        return waitStep('player location unavailable');
     }
     // Why: pulling the lever teleports into the shielded copy of the tower in region 45_73, and nothing else goes there.
     // Why: standing in it means the quest is done, whatever the journal colour has caught up to.
     if (area === 'mirrorTower') {
         if (held(snap, WT_ITEM.WATCHTOWER_SPELL.id) > 0) {
-            return { kind: 'custom', name: 'read the Watchtower spell scroll', run: readSpellScroll };
+            return customStep('read the Watchtower spell scroll', readSpellScroll);
         }
-        return { kind: 'custom', name: 'climb down from the activated Watchtower', run: leaveWizardFloor };
+        return customStep('climb down from the activated Watchtower', leaveWizardFloor);
     }
 
     if ((snap.freeSlots ?? 28) < 2 || foodCount(snap) > 8) {
@@ -442,14 +443,14 @@ function decideNext(snap: QuestSnapshot): QuestStep {
 
     switch (snap.stage) {
         case WATCHTOWER_STAGE.NOT_STARTED:
-            return { kind: 'custom', name: 'climb the Watchtower and ask the wizard for work', run: startQuest };
+            return customStep('climb the Watchtower and ask the wizard for work', startQuest);
 
         case WATCHTOWER_STAGE.STARTED: {
             if (held(snap, WT_ITEM.FINGERNAILS.id) > 0) {
-                return at(area, 'towerFloor', { kind: 'custom', name: 'give the fingernails to the wizard', run: handInFingernails });
+                return at(area, 'towerFloor', customStep('give the fingernails to the wizard', handInFingernails));
             }
             return escapePocket(area, 'yanille')
-                ?? { kind: 'custom', name: 'search the bush by the Watchtower for evidence', run: searchEvidenceBush };
+                ?? customStep('search the bush by the Watchtower for evidence', searchEvidenceBush);
         }
 
         // The journal renders one block for stages 2 through 5, so stage 3 reads back as stage 2; owning the assembled relic is the only visible difference.
@@ -474,7 +475,7 @@ function decideNext(snap: QuestSnapshot): QuestStep {
             return stageEnclaveEntry(snap, area);
 
         case WATCHTOWER_STAGE.FED_NIGHTSHADE:
-            return at(area, 'towerFloor', { kind: 'custom', name: 'ask the wizard how to beat the shamans', run: askWizardAboutShamans });
+            return at(area, 'towerFloor', customStep('ask the wizard how to beat the shamans', askWizardAboutShamans));
 
         case WATCHTOWER_STAGE.LEARNED_POTION:
             return stagePotion(snap, area);
@@ -483,10 +484,10 @@ function decideNext(snap: QuestSnapshot): QuestStep {
             return stageShamans(snap, area);
 
         case WATCHTOWER_STAGE.FOUND_ALL_CRYSTALS:
-            return at(area, 'towerFloor', { kind: 'custom', name: 'pull the lever to activate the shield', run: pullLever });
+            return at(area, 'towerFloor', customStep('pull the lever to activate the shield', pullLever));
 
         default:
-            return { kind: 'wait', reason: 'Watch Tower stage ' + snap.stage + ' is not implemented yet' };
+            return waitStep('Watch Tower stage ' + snap.stage + ' is not implemented yet');
     }
 }
 
@@ -500,7 +501,7 @@ export const watchtower: QuestModule = {
     bank: WT_TILE.YANILLE_BANK,
     ownsInventory: true,
     resumeAt: tile => inDragonLair(tile) || escapePocket(watchtowerArea(tile), 'yanille') !== null,
-    recover: tile => inDragonLair(tile) ? { kind: 'custom', name: 'leave the dragon lair', run: leaveDragonLair } : escapePocket(watchtowerArea(tile), 'yanille'),
+    recover: tile => inDragonLair(tile) ? customStep('leave the dragon lair', leaveDragonLair) : escapePocket(watchtowerArea(tile), 'yanille'),
     readProgress: readWatchtowerProgress,
     sustain: { foods: WATCHTOWER_FOODS, eatBelowHp: 0.6 },
     decide

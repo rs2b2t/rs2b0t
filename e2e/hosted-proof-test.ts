@@ -1,12 +1,7 @@
-import { launchBrowser } from './lib/harness.js';
+import { fail, launchBrowser } from './lib/harness.js';
 
 const base = process.argv[2] ?? 'http://localhost:8890';
 const username = `hp${Date.now().toString(36).slice(-7)}`;
-
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
-}
 
 type R = {
     rs2b0t: {

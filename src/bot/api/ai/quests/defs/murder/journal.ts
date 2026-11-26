@@ -1,6 +1,5 @@
-import { Modals } from '../../../../ui/widgets/Modals.js';
+import { questProgressAt, readQuestJournal, type JournalCache } from '../../journalReader.js';
 import { normalizeJournal as normalize } from '../../journalText.js';
-import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 import { MURDER_NAME } from './areas.js';
 
@@ -39,28 +38,13 @@ export function parseMurderJournal(lines: readonly string[] | string): QuestProg
 }
 
 // Why: the page drops every in-progress line once the poison is proved, so a stale read doesn't mean the quest went backwards.
-let lastGood: QuestProgress | undefined;
+const cache: JournalCache<QuestProgress> = {};
 
-export async function readMurderProgress(): Promise<QuestProgress | undefined> {
-    const status = Quests.status(MURDER_NAME);
-    if (status === 'complete') {
-        return { stage: MURDER_STAGE.COMPLETE, flags: new Set() };
-    }
-    if (status === 'notStarted') {
-        return { stage: MURDER_STAGE.NOT_STARTED, flags: new Set() };
-    }
-    if (status !== 'inProgress') {
-        return undefined;
-    }
-    const progress = parseMurderJournal(await Quests.journal(MURDER_NAME));
-    await Modals.closeIfOpen();
-    if (progress) {
-        lastGood = progress;
-    }
-    return progress ?? lastGood;
+export function readMurderProgress(): Promise<QuestProgress | undefined> {
+    return readQuestJournal(MURDER_NAME, MURDER_STAGE, parseMurderJournal, questProgressAt, cache);
 }
 
 /** Test seam: the last good read is memoised for the process. */
 export function resetMurderProgressCache(): void {
-    lastGood = undefined;
+    cache.lastGood = undefined;
 }

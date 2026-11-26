@@ -1,3 +1,4 @@
+import { customStep, talkTo, waitForJournal } from '../engine/questSteps.js';
 import { Execution } from '../../../execution/Execution.js';
 import { Inventory } from '../../../inventory/Inventory.js';
 import { GroundItems } from '../../../grounditems/GroundItems.js';
@@ -85,21 +86,21 @@ async function returnSkull(log: (m: string) => void): Promise<boolean> {
 
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'complete') { return { kind: 'done' }; }
-    if (snap.journal === 'unknown') { return { kind: 'wait', reason: 'quest journal not loaded' }; }
-    if (snap.journal === 'notStarted') { return { kind: 'talk', stop: AERECK }; }
-    if (snap.inv.has('skull')) { return { kind: 'custom', name: 'return skull', run: returnSkull }; }
+    if (snap.journal === 'unknown') { return waitForJournal(); }
+    if (snap.journal === 'notStarted') { return talkTo(AERECK); }
+    if (snap.inv.has('skull')) { return customStep('return skull', returnSkull); }
     const amuletLower = AMULET.toLowerCase();
     if (!snap.inv.has(amuletLower) && !snap.worn.has(amuletLower)) {
         if (!snap.bankKnown) return { kind: 'scanBank', bank: DRAYNOR_BANK };
         if (bankedId(snap, AMULET_ID) > 0) {
             return { kind: 'withdraw', items: [{ name: AMULET, id: AMULET_ID, qty: 1 }], bank: DRAYNOR_BANK };
         }
-        return { kind: 'talk', stop: URHNEY };
+        return talkTo(URHNEY);
     }
     if (!snap.worn.has(amuletLower)) {
         return { kind: 'equip', item: AMULET };
     }
-    return { kind: 'custom', name: 'ghost + skull', run: ghostAndSkull };
+    return customStep('ghost + skull', ghostAndSkull);
 }
 
 export const restlessghost: QuestModule = {

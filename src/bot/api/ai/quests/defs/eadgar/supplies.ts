@@ -1,3 +1,4 @@
+import { customStep, waitStep } from '../../engine/questSteps.js';
 import { findSceneTarget } from '../../exec/prompts.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Game } from '../../../../game/Game.js';
@@ -7,6 +8,7 @@ import { Inventory } from '../../../../inventory/Inventory.js';
 import { Locs } from '../../../../locs/Locs.js';
 import { Npcs } from '../../../../npcs/Npcs.js';
 import { Traversal } from '../../../../walking/Traversal.js';
+import { bankedName, hasName, heldName } from '../../engine/snapshotItems.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { talkChoosingBy } from '../../exec/primitives.js';
 import { FOOD_FLOAT, QuestFood } from '../../food.js';
@@ -66,7 +68,7 @@ export function foodNames(): string[] {
 }
 
 export function foodHeld(snap: QuestSnapshot): number {
-    return foodNames().reduce((total, name) => total + (snap.inv.get(name.toLowerCase()) ?? 0), 0);
+    return foodNames().reduce((total, name) => total + heldName(snap, name), 0);
 }
 
 export const scanBank = (snap: QuestSnapshot): QuestStep => ({ kind: 'scanBank', bank: questBank(snap) });
@@ -177,7 +179,7 @@ export function prepare(snap: QuestSnapshot, zone: EadgarZone, foodWant = FOOD_T
         if (!worn(snap, ER_ITEM.CLIMBING_BOOTS)) {
             return wearAll([ER_ITEM.CLIMBING_BOOTS.name]);
         }
-        const carried = plannedGear(snap).filter(name => (snap.inv.get(name.toLowerCase()) ?? 0) > 0);
+        const carried = plannedGear(snap).filter(name => hasName(snap, name));
         return carried.length > 0 ? wearAll(carried) : null;
     }
 
@@ -203,15 +205,15 @@ export function prepare(snap: QuestSnapshot, zone: EadgarZone, foodWant = FOOD_T
     }
     // A loadout names what you want; anything the bank lacks is skipped, as this quest fights nothing it can't walk away from.
     for (const name of plannedGear(snap)) {
-        const inPack = snap.inv.get(name.toLowerCase()) ?? 0;
-        if (inPack === 0 && (snap.bank?.get(name.toLowerCase()) ?? 0) > 0) {
+        const inPack = heldName(snap, name);
+        if (inPack === 0 && bankedName(snap, name) > 0) {
             fromVault.push({ name, qty: 1, id: -1 });
         }
     }
     const have = foodHeld(snap);
     if (have < foodWant) {
         for (const name of foodNames()) {
-            const stock = snap.bank?.get(name.toLowerCase()) ?? 0;
+            const stock = bankedName(snap, name);
             if (stock > 0) {
                 fromVault.push({ name, qty: Math.min(foodWant - have, stock), id: -1 });
                 break;
@@ -223,21 +225,21 @@ export function prepare(snap: QuestSnapshot, zone: EadgarZone, foodWant = FOOD_T
         return { kind: 'withdraw', bank: questBank(snap), items: fromVault.map(item => (item.id < 0 ? { name: item.name, qty: item.qty } : item)) };
     }
 
-    const toWear = plannedGear(snap).filter(name => (snap.inv.get(name.toLowerCase()) ?? 0) > 0);
+    const toWear = plannedGear(snap).filter(name => hasName(snap, name));
     if (toWear.length > 0) {
         return wearAll(toWear);
     }
     if (!bootsReady) {
         if (held(snap, ER_ITEM.COINS) < BOOT_COST) {
-            return { kind: 'wait', reason: `need ${BOOT_COST} gp for Climbing boots, the bank has none` };
+            return waitStep(`need ${BOOT_COST} gp for Climbing boots, the bank has none`);
         }
-        return { kind: 'custom', name: 'buy Climbing boots from Tenzing (12gp)', run: buyBoots };
+        return customStep('buy Climbing boots from Tenzing (12gp)', buyBoots);
     }
     if (!worn(snap, ER_ITEM.CLIMBING_BOOTS)) {
         return wearAll([ER_ITEM.CLIMBING_BOOTS.name]);
     }
     if (foodHeld(snap) === 0) {
-        return { kind: 'wait', reason: `no food in the bank (tried ${foodNames().join(', ')})` };
+        return waitStep(`no food in the bank (tried ${foodNames().join(', ')})`);
     }
     return null;
 }

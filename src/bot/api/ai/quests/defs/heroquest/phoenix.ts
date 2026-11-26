@@ -1,3 +1,4 @@
+import { customStep } from '../../engine/questSteps.js';
 import { EventSignal } from '../../../../execution/EventSignal.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Game } from '../../../../game/Game.js';
@@ -163,7 +164,7 @@ export async function handInCandlestick(log: (m: string) => void): Promise<boole
 export function phoenixArmbandStep(snap: QuestSnapshot, stage: number): QuestStep | null {
     switch (stage) {
         case HERO_STAGE.STARTED:
-            return { kind: 'custom', name: 'ask Straven about the master thief armband', run: talkToStraven };
+            return customStep('ask Straven about the master thief armband', talkToStraven);
 
         case HERO_STAGE.PHOENIX_SPOKEN: {
             // Why: the bow is bought in Varrock, where Straven already stands; after the crossing it costs a return ferry and a walk across 2 kingdoms.
@@ -171,11 +172,11 @@ export function phoenixArmbandStep(snap: QuestSnapshot, stage: number): QuestSte
             if (kit) {
                 return kit;
             }
-            return { kind: 'custom', name: 'give Alfonse the password', run: talkToAlfonse };
+            return customStep('give Alfonse the password', talkToAlfonse);
         }
 
         case HERO_STAGE.PHOENIX_ALFONSE:
-            return { kind: 'custom', name: 'ask Charlie about the secret door', run: talkToCharlie };
+            return customStep('ask Charlie about the secret door', talkToCharlie);
 
         case HERO_STAGE.PHOENIX_CHARLIE: {
             const kit = snipeKitStep(snap);
@@ -189,7 +190,7 @@ export function phoenixArmbandStep(snap: QuestSnapshot, stage: number): QuestSte
             if (heldId(snap, HERO_ID.CANDLESTICK) === 0) {
                 return { kind: 'wait', cooperative: true, reason: 'waiting on the rival to hand over a candlestick' };
             }
-            return { kind: 'custom', name: 'give Straven the candlestick', run: handInCandlestick };
+            return customStep('give Straven the candlestick', handInCandlestick);
 
         default:
             return null;

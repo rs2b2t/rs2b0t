@@ -1,8 +1,12 @@
+import { waitStep } from '../../engine/questSteps.js';
 import Tile from '../../../../../geometry/Tile.js';
+import { cachedBankId as banked, heldId as held, inventoryAndBankCount as owned } from '../../engine/snapshotItems.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { WT_ITEM, WT_TILE, type WatchtowerItem } from './areas.js';
 import { clearSpace, fitSupplies, foodCount, foodNames, phaseItems } from './loadout.js';
 import { watchtowerArea } from './areas.js';
+
+export { banked, held, owned };
 
 // Why: every shop here was read out of the engine's own configs.
 // Why: nobody in this game is called 'Shop keeper'; the shop belongs to a named NPC through param=owned_shop, and Shop.open() matches on the display name.
@@ -16,18 +20,6 @@ const DEATH_RUNE_PRICE = 120;
 const VIAL_PRICE = 20;
 const PESTLE_PRICE = 40;
 const PICKAXE_PRICE = 60;
-
-export function held(snap: QuestSnapshot, id: number): number {
-    return snap.invIds?.get(id) ?? 0;
-}
-
-export function banked(snap: QuestSnapshot, id: number): number {
-    return snap.bankIds?.get(id) ?? 0;
-}
-
-export function owned(snap: QuestSnapshot, id: number): number {
-    return held(snap, id) + banked(snap, id);
-}
 
 /** Tolls and shop money the quest runs on. */
 const KIT_COINS = 2000;
@@ -74,7 +66,7 @@ export function bankOnly(snap: QuestSnapshot, item: WatchtowerItem, qty: number 
     if (inBank > 0) {
         return withdrawFrom([{ name: item.name, id: item.id, qty: Math.min(qty - held(snap, item.id), inBank) }]);
     }
-    return { kind: 'wait', reason: `no ${item.name} in the bank — it is a drop-only item` };
+    return waitStep(`no ${item.name} in the bank — it is a drop-only item`);
 }
 
 export function sourceCoins(snap: QuestSnapshot, want: number): QuestStep | null {
@@ -86,7 +78,7 @@ export function sourceCoins(snap: QuestSnapshot, want: number): QuestStep | null
     }
     const available = banked(snap, WT_ITEM.COINS.id);
     if (available <= 0) {
-        return { kind: 'wait', reason: `need ${want} gp for Gu'Tanoth tolls and shops` };
+        return waitStep(`need ${want} gp for Gu'Tanoth tolls and shops`);
     }
     return withdrawFrom([{ name: WT_ITEM.COINS.name, id: WT_ITEM.COINS.id, qty: Math.min(want - held(snap, WT_ITEM.COINS.id), available) }]);
 }
@@ -147,7 +139,7 @@ export function sourceFood(snap: QuestSnapshot, want: number): QuestStep | null 
             return { kind: 'withdraw', items: [{ name: food, qty: Math.min(want - carried, inBank, Math.max(0, (snap.freeSlots ?? 28) - 2)) }], bank: WT_TILE.YANILLE_BANK };
         }
     }
-    return { kind: 'wait', reason: 'no food in the bank for the shaman enclave' };
+    return waitStep('no food in the bank for the shaman enclave');
 }
 
 // Why: the bank supplies the kit in one go; sourcing item by item costs a trip each from wherever the quest has got to.

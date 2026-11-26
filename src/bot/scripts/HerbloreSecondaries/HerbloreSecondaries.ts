@@ -3,7 +3,7 @@ import { Execution } from '../../api/execution/Execution.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Sustain } from '../../api/sustain/Sustain.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import Tile from '../../geometry/Tile.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { ContinueDialog } from '../../api/tasks/ContinueDialog.js';
@@ -82,7 +82,7 @@ export default class HerbloreSecondaries extends TaskBot {
     private startedAt = Date.now();
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
 
         const pick = this.settings.str('secondary', "Red spiders' eggs");
         const def = secondaryByName(pick);

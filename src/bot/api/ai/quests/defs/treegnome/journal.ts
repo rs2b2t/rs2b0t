@@ -1,6 +1,5 @@
-import { Modals } from '../../../../ui/widgets/Modals.js';
+import { questProgressAt, readQuestJournal } from '../../journalReader.js';
 import { normalizeJournal as normalize } from '../../journalText.js';
-import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 
 /** `quest_tree.constant`, plus `^tree_complete` from `general/configs/quest.constant`. */
@@ -39,18 +38,6 @@ export function parseTreeGnomeJournal(lines: readonly string[] | string): QuestP
     return hit === undefined ? undefined : { stage: hit[1], flags: new Set() };
 }
 
-export async function readTreeGnomeProgress(): Promise<QuestProgress | undefined> {
-    const status = Quests.status(TREE_GNOME_VILLAGE);
-    if (status === 'complete') {
-        return { stage: TG_STAGE.COMPLETE, flags: new Set() };
-    }
-    if (status === 'notStarted') {
-        return { stage: TG_STAGE.NOT_STARTED, flags: new Set() };
-    }
-    if (status !== 'inProgress') {
-        return undefined;
-    }
-    const progress = parseTreeGnomeJournal(await Quests.journal(TREE_GNOME_VILLAGE));
-    await Modals.closeIfOpen();
-    return progress;
+export function readTreeGnomeProgress(): Promise<QuestProgress | undefined> {
+    return readQuestJournal(TREE_GNOME_VILLAGE, TG_STAGE, parseTreeGnomeJournal, questProgressAt);
 }

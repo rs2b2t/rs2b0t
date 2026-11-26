@@ -1,6 +1,6 @@
 import { configuredLootNames } from '../../api/bank/bankRules.js';
-import { reader } from '../../adapter/ClientAdapter.js';
-import { TaskBot, type Task } from '../../api/bot/Bot.js';
+import type { Task } from '../../api/bot/Bot.js';
+import { HuntingBot, Parked } from '../../api/combat/hunting/HuntingBot.js';
 import { GameMessages } from '../../api/chatbox/gameMessages.js';
 import { castsAvailable } from '../../api/combat/CombatStyleLogic.js';
 import { STAFFS } from '../../api/combat/equipment.js';
@@ -8,7 +8,7 @@ import { foodCount as foodCountIn, foodForms, foodHealAmount, isFoodItem, should
 import { Equipment } from '../../api/equipment/Equipment.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import { GroundItems, type GroundItem } from '../../api/grounditems/GroundItems.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Npcs } from '../../api/npcs/Npcs.js';
@@ -22,8 +22,8 @@ import { DeathRecovery } from '../../api/tasks/DeathRecovery.js';
 import { DROP_DB } from '../../data/dropdb.js';
 import { SPELL_DB } from '../../data/spelldb.js';
 import Tile from '../../geometry/Tile.js';
-import { COMBAT_SKILLS, XpTracker, jiveFrame, paintLevels } from '../../paint/jive.js';
-import { fmtDuration, wrapText } from '../../paint/paintLogic.js';
+import { jiveFrame } from '../../paint/jive.js';
+import { fmtDuration } from '../../paint/paintLogic.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsBag, SettingsSchema } from '../../runtime/Settings.js';
 import { Fight, HoldSafespot, Retreat, WalkToSpot, anchorFor, type CombatHost } from '../../api/combat/hunting/combat.js';
@@ -44,20 +44,8 @@ const DRINK_MS = 4000;
 
 const ASSERT_BATCH = 5;
 const ASSERT_RETRY_MS = 60_000;
-const PARK_TICKS = 10;
-
-const LOOT_SHOWN = 6;
-const PARK_ROWS = 2;
-const PARK_FG = '#e0705a';
-/** The gap and the button row that follow every section. */
-const CONTROL_ROWS = 2;
 
 const STYLE: Style = 'mage';
-
-/** Cells laid out two across, the shape statGrid draws. */
-function inPairs<T>(cells: T[]): T[][] {
-    return Array.from({ length: Math.ceil(cells.length / 2) }, (_, i) => cells.slice(i * 2, i * 2 + 2));
-}
 
 const DROPS: string[] = DROP_DB[KBD_LAIR.target] ?? [];
 
@@ -289,16 +277,6 @@ async function freeSlot(bot: JiveKBD): Promise<void> {
     }
 }
 
-class Parked implements Task {
-    constructor(private readonly bot: JiveKBD) {}
-    validate(): boolean {
-        return this.bot.parked;
-    }
-    async execute(): Promise<void> {
-        await Execution.delayTicks(PARK_TICKS);
-    }
-}
-
 class Eat implements Task {
     constructor(private readonly bot: JiveKBD) {}
     validate(): boolean {
@@ -456,29 +434,12 @@ class EnterLair implements Task {
     }
 }
 
-export default class JiveKBD extends TaskBot implements CombatHost, EntryHost {
-    override loopDelay = 600;
-
-    status = 'starting';
-    startedAt = Date.now();
-    xp = new XpTracker(COMBAT_SKILLS, Skills);
-    killsTotal = 0;
-    bankTrips = 0;
-    looted = 0;
+export default class JiveKBD extends HuntingBot implements CombatHost, EntryHost {
     dosesDrunk = 0;
     lastDoseTick: number | null = null;
-    readonly lootCounts = new Map<string, number>();
-    safespotIdx = 0;
-    parked = false;
-    parkReason = '';
-    died = false;
-    targetIdx: number | null = null;
-
-    private bankEmpty = false;
-    private supplyEmpty = false;
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
 
         const base = siteFor(this.settings.str('site', 'kbd-lair'));
         SITE = {
@@ -504,9 +465,7 @@ export default class JiveKBD extends TaskBot implements CombatHost, EntryHost {
         BANK_COMMON = this.settings.bool('bankCommonJunk', true);
         VERBOSE = this.settings.str('logDetail', 'Normal') === 'Verbose';
 
-        this.startedAt = Date.now();
-        this.xp.begin();
-        this.safespotIdx = 0;
+        this.beginHunt();
         this.lastDoseTick = null;
         lootSkip.clear();
 
@@ -561,23 +520,11 @@ export default class JiveKBD extends TaskBot implements CombatHost, EntryHost {
         return [SITE.target.toLowerCase()];
     }
 
-    setStatus(s: string): void {
-        this.status = s;
-    }
     /** Suppressed unless logDetail is Verbose, so the log ring keeps what matters. */
     vlog(msg: string): void {
         if (VERBOSE) {
             this.log(msg);
         }
-    }
-    parkFor(reason: string): void {
-        if (this.parked) {
-            return;
-        }
-        this.parked = true;
-        this.parkReason = reason;
-        this.setStatus('parked');
-        this.log(`PARKED: ${reason}`);
     }
     style(): Style {
         return STYLE;
@@ -628,25 +575,7 @@ export default class JiveKBD extends TaskBot implements CombatHost, EntryHost {
     boneName(): string {
         return '';
     }
-    safespotIndex(): number {
-        return this.safespotIdx;
-    }
-    setSafespotIndex(n: number): void {
-        this.safespotIdx = n;
-    }
-    countKill(): void {
-        this.killsTotal++;
-    }
     countBurial(): void {}
-    countLoot(name?: string | null): void {
-        this.looted++;
-        if (name) {
-            this.lootCounts.set(name, (this.lootCounts.get(name) ?? 0) + 1);
-        }
-    }
-    countBankTrip(): void {
-        this.bankTrips++;
-    }
 
     /** Drink the smallest antipoison flask held. False with none in the pack. */
     async drinkAntipoison(): Promise<boolean> {
@@ -669,44 +598,7 @@ export default class JiveKBD extends TaskBot implements CombatHost, EntryHost {
 
     /** What the last bank trip came back with. */
     noteTrip(food: boolean, supplies: boolean): void {
-        this.bankEmpty = !food;
-        this.supplyEmpty = !supplies;
-        if (!food) {
-            this.parkFor(`no '${FOOD_NAME}' left in the bank after a full trip. The run stopped at the booth rather than walk the wilderness with no way to heal. Deposit food, or point the loadout at food the bank has, and restart.`);
-        }
-    }
-    bankKnownEmpty(): boolean {
-        return this.bankEmpty;
-    }
-    supplyKnownEmpty(): boolean {
-        return this.supplyEmpty;
-    }
-
-    /** The wireframe box around whatever the fight loop is watching. */
-    outlineTarget(ctx: CanvasRenderingContext2D): void {
-        if (this.targetIdx === null) {
-            return;
-        }
-        const box = reader.npcBox(this.targetIdx);
-        if (!box) {
-            return;
-        }
-        ctx.save();
-        ctx.strokeStyle = 'rgba(255, 224, 64, 0.55)';
-        ctx.lineWidth = 1.5;
-        ctx.lineJoin = 'round';
-        const edge = (a: number, b: number): void => {
-            ctx.beginPath();
-            ctx.moveTo(box[a].x, box[a].y);
-            ctx.lineTo(box[b].x, box[b].y);
-            ctx.stroke();
-        };
-        for (let i = 0; i < 4; i++) {
-            edge(i, (i + 1) % 4);
-            edge(4 + i, 4 + ((i + 1) % 4));
-            edge(i, 4 + i);
-        }
-        ctx.restore();
+        this.recordTrip(food, supplies, FOOD_NAME, 'walk the wilderness');
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
@@ -738,22 +630,12 @@ export default class JiveKBD extends TaskBot implements CombatHost, EntryHost {
                 [{ text: `Casts: ${castsLeft()}` }, { text: `Food: ${foodCount()}` }]
             ]);
         } else if (section === 'Levels') {
-            paintLevels(p, this.xp.gains(), mins, CONTROL_ROWS);
+            this.paintLevels(p, mins);
         } else if (section === 'Loot') {
-            const top = [...this.lootCounts.entries()]
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, LOOT_SHOWN)
-                .map(([name, n]) => ({ text: `${n}x ${name}` }));
-            p.statGrid([[{ text: `Looted: ${this.looted}` }], ...inPairs(top)]);
+            this.paintLoot(p);
         }
 
-        if (this.parked) {
-            const room = Math.max(0, Math.min(PARK_ROWS, p.rowsLeft() - CONTROL_ROWS));
-            const lines = wrapText(this.parkReason, p.cols(), 2);
-            for (const [i, line] of lines.slice(0, room).entries()) {
-                p.text(i === room - 1 && lines.length > room ? `${line}…` : line, PARK_FG);
-            }
-        }
+        this.paintParkReason(p);
         p.gap();
         ScriptRunner.paintControls(p);
         p.end();

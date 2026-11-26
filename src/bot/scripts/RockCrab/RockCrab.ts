@@ -3,7 +3,7 @@ import { CUSTOM_RANGED_SETTINGS, rangedItem } from '../../api/combat/rangedSetti
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import Tile from '../../geometry/Tile.js';
 import { DeathRecovery } from '../../api/tasks/DeathRecovery.js';
 import { PeriodicBank } from '../../api/tasks/PeriodicBank.js';
@@ -140,7 +140,7 @@ export default class RockCrab extends TaskBot {
     died = false;
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
 
         const slots = [1, 2, 3, 4, 5].map(i => this.settings.tile(`loc${i}`, DEFAULT_SPOTS[i - 1]));
         const seen = new Set<string>();

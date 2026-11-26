@@ -1,3 +1,4 @@
+import { customStep, waitStep } from '../../engine/questSteps.js';
 import { CANT_REACH, GameMessages } from '../../../../chatbox/gameMessages.js';
 import { EventSignal } from '../../../../execution/EventSignal.js';
 import { Execution } from '../../../../execution/Execution.js';
@@ -194,10 +195,10 @@ export function phoenixStep(snap: QuestSnapshot): QuestStep {
 
         case SOA_STAGE.TOLD_OF_BOOK:
             if (heldId(snap, SOA_ID.BOOK) > 0) {
-                return { kind: 'custom', name: 'read The Shield of Arrav', run: readBook };
+                return customStep('read The Shield of Arrav', readBook);
             }
             // Why: 9 other Bookcase locs stand within 4 tiles, and only this one carries Check.
-            return { kind: 'custom', name: 'check the palace bookcase', run: takeBook };
+            return customStep('check the palace bookcase', takeBook);
 
         case SOA_STAGE.READ_BOOK:
             return say(RELDO, 'ask Reldo for a quest');
@@ -210,13 +211,13 @@ export function phoenixStep(snap: QuestSnapshot): QuestStep {
 
         // Why: Straven lives in a sealed underground pocket, and the shared hop walks to a stand 2 tiles off, calls it arrived, and never climbs.
         case SOA_STAGE.FIND_STRAVEN:
-            return { kind: 'custom', name: 'offer Straven your services', run: joinPhoenixGang };
+            return customStep('offer Straven your services', joinPhoenixGang);
 
         case SOA_STAGE.KILL_JONNY:
             if (heldId(snap, SOA_ID.REPORT) > 0 || flags.has('report-held')) {
-                return { kind: 'custom', name: 'hand the report to Straven', run: handInReport };
+                return customStep('hand the report to Straven', handInReport);
             }
-            return { kind: 'custom', name: 'kill Jonny the beard for the report', run: killJonny };
+            return customStep('kill Jonny the beard for the report', killJonny);
 
         case SOA_STAGE.PHOENIX_JOINED: {
             // Why: `[oploc1,phoenixopenchest]` and `~obj_gettotal` both count the bank, so a banked half or key is never re-issued and only a withdraw gets it back.
@@ -228,10 +229,10 @@ export function phoenixStep(snap: QuestSnapshot): QuestStep {
             if (heldId(snap, SOA_ID.SHIELD_PHOENIX) > 0) {
                 return { kind: 'wait', cooperative: true, reason: 'phoenix half held — the other half is not this leg' };
             }
-            return { kind: 'custom', name: 'search the Phoenix hideout chest', run: takePhoenixHalf };
+            return customStep('search the Phoenix hideout chest', takePhoenixHalf);
         }
 
         default:
-            return { kind: 'wait', reason: `phoenix leg has nothing for stage ${stage}` };
+            return waitStep(`phoenix leg has nothing for stage ${stage}`);
     }
 }

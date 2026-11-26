@@ -1,6 +1,5 @@
 import { normalizeJournal } from '../../journalText.js';
-import { Modals } from '../../../../ui/widgets/Modals.js';
-import { Quests } from '../../../../ui/questlog/Quests.js';
+import { questProgressAt, readQuestJournal } from '../../journalReader.js';
 import type { QuestProgress } from '../../engine/types.js';
 
 export const DEATH_PLATEAU_QUEST = 'Death Plateau';
@@ -191,19 +190,6 @@ export function parseDeathPlateauJournal(lines: readonly string[] | string): Que
     return { stage, flags };
 }
 
-export async function readDeathPlateauProgress(): Promise<QuestProgress | undefined> {
-    const status = Quests.status(DEATH_PLATEAU_QUEST);
-    if (status === 'complete') {
-        return { stage: DP_STAGE.COMPLETE, flags: new Set() };
-    }
-    if (status === 'notStarted') {
-        return { stage: DP_STAGE.NOT_STARTED, flags: new Set() };
-    }
-    if (status !== 'inProgress') {
-        return undefined;
-    }
-
-    const progress = parseDeathPlateauJournal(await Quests.journal(DEATH_PLATEAU_QUEST));
-    await Modals.closeIfOpen();
-    return progress;
+export function readDeathPlateauProgress(): Promise<QuestProgress | undefined> {
+    return readQuestJournal(DEATH_PLATEAU_QUEST, DP_STAGE, parseDeathPlateauJournal, questProgressAt);
 }

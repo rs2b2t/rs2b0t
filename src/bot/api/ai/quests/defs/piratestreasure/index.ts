@@ -1,3 +1,4 @@
+import { customStep, talkTo as talk, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { QUESTS } from '../../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { FRANK, LUTHAS, PT_ID, PT_NAME, PT_STAGE, WYDIN, ZAMBO_SHOP } from './areas.js';
@@ -8,14 +9,12 @@ import { collectRum, digTreasure, openChest, readMessage } from './treasure.js';
 
 const RUM_GP = 100;
 
-const talk = (stop: typeof FRANK): QuestStep => ({ kind: 'talk', stop });
-
 function buyRum(): QuestStep {
     return { kind: 'buy', item: PT_NAME.RUM, qty: 1, shop: ZAMBO_SHOP, estGp: RUM_GP };
 }
 
 function ship(): QuestStep {
-    return { kind: 'custom', name: 'ship the crate from the plantation', run: shipCrate };
+    return customStep('ship the crate from the plantation', shipCrate);
 }
 
 // Why: the apron is bought before the crossing so its Varrock trip rides the Varrock-Draynor-Port Sarim line and isn't a round trip after the rum ships.
@@ -38,7 +37,7 @@ function smuggle(snap: QuestSnapshot, flag: string | undefined): QuestStep {
                 return ship();
             }
             return wornId(snap, PT_ID.WHITE_APRON)
-                ? { kind: 'custom', name: 'search the back room for the rum', run: collectRum }
+                ? customStep('search the back room for the rum', collectRum)
                 : { kind: 'equip', item: PT_NAME.WHITE_APRON };
         // Why: `%hunt_store_employed = 2` renders this page for a rum bought minutes earlier on Karamja too, and carrying that onto the boat gets it confiscated.
         case 'rum-in-hand':
@@ -50,10 +49,10 @@ function smuggle(snap: QuestSnapshot, flag: string | undefined): QuestStep {
 
 function treasure(snap: QuestSnapshot): QuestStep {
     if (heldId(snap, PT_ID.PIRATE_MESSAGE) > 0) {
-        return { kind: 'custom', name: 'read the pirate message', run: readMessage };
+        return customStep('read the pirate message', readMessage);
     }
     if (heldId(snap, PT_ID.CHEST_KEY) > 0) {
-        return { kind: 'custom', name: 'open the Blue Moon chest', run: openChest };
+        return customStep('open the Blue Moon chest', openChest);
     }
     // Frank re-issues the key to anyone who turns up without one.
     return talk(FRANK);
@@ -61,14 +60,14 @@ function treasure(snap: QuestSnapshot): QuestStep {
 
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     if (snap.journal === 'complete') {
         return { kind: 'done' };
     }
     const stage = snap.progress?.stage ?? snap.stage;
     if (stage === undefined) {
-        return { kind: 'wait', reason: 'quest stage not readable' };
+        return waitStep('quest stage not readable');
     }
     const flag = [...(snap.progress?.flags ?? [])][0];
     const supplies = kit(
@@ -87,7 +86,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         case PT_STAGE.RECEIVED_KEY:
             return treasure(snap);
         case PT_STAGE.READ_NOTE:
-            return { kind: 'custom', name: 'dig up the treasure', run: digTreasure };
+            return customStep('dig up the treasure', digTreasure);
         default:
             return { kind: 'done' };
     }

@@ -57,15 +57,17 @@ export default class ParamsModal {
         this.backdrop.appendChild(modal);
         document.body.appendChild(this.backdrop);
 
-        document.addEventListener('keydown', e => {
-            if (e.key === 'Escape' && this.isOpen()) {
-                // Why: nested hosts (map picker window keydown) would otherwise treat this Escape as "close the outer modal" too.
-                e.preventDefault();
-                e.stopPropagation();
-                this.close();
-            }
-        });
+        document.addEventListener('keydown', this.onKeyDown);
     }
+
+    private readonly onKeyDown = (e: KeyboardEvent): void => {
+        if (e.key === 'Escape' && this.isOpen()) {
+            // Why: nested hosts (map picker window keydown) would otherwise treat this Escape as "close the outer modal" too.
+            e.preventDefault();
+            e.stopPropagation();
+            this.close();
+        }
+    };
 
     isOpen(): boolean {
         return this.backdrop.style.display === 'flex';
@@ -117,6 +119,12 @@ export default class ParamsModal {
         const cb = this.onCloseCb;
         this.onCloseCb = null;
         cb?.();
+    }
+
+    dispose(): void {
+        this.close();
+        document.removeEventListener('keydown', this.onKeyDown);
+        this.backdrop.remove();
     }
 
     // extra DOM shown atop the Global popup only (account/login controls)

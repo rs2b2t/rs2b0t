@@ -1,6 +1,8 @@
+import { waitStep } from '../../engine/questSteps.js';
 import { ITEM_DB } from '../../../../../data/itemdb.js';
 import { Equipment } from '../../../../equipment/Equipment.js';
 import { QuestLoadout, questWornGear } from '../../gear.js';
+import { bankedName, hasName } from '../../engine/snapshotItems.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { foodNames, scanBank, withdrawFrom } from './supplies.js';
 import { SV_ITEM, SV_TILE } from './areas.js';
@@ -37,11 +39,11 @@ export function combatGear(snap: QuestSnapshot): QuestStep | null {
     const missing = candidates(snap);
     if (missing.length === 0) return null;
     const names = missing.flatMap(usable => {
-        const pick = usable.find(name => (snap.inv.get(name.toLowerCase()) ?? 0) > 0)
-            ?? usable.find(name => (snap.bank?.get(name.toLowerCase()) ?? 0) > 0);
+        const pick = usable.find(name => hasName(snap, name))
+            ?? usable.find(name => bankedName(snap, name) > 0);
         return pick ? [pick] : [];
     });
-    const carried = names.filter(name => (snap.inv.get(name.toLowerCase()) ?? 0) > 0);
+    const carried = names.filter(name => hasName(snap, name));
     if (carried.length > 0) {
         return {
             kind: 'custom',
@@ -68,7 +70,7 @@ export function combatGear(snap: QuestSnapshot): QuestStep | null {
         const stored = [...snap.inv.keys()].find(name => rejected.has(name) || food.has(name) || !protectedNames.has(name));
         return stored
             ? { kind: 'deposit', exactKeep: true, keep: [...snap.inv.keys()].filter(name => name !== stored), bank: SV_TILE.ARDOUGNE_BANK }
-            : { kind: 'wait', reason: 'need a free inventory slot for combat gear' };
+            : waitStep('need a free inventory slot for combat gear');
     }
     return withdrawFrom(names.slice(0, snap.freeSlots ?? names.length).map(name => ({ name, qty: 1 })));
 }

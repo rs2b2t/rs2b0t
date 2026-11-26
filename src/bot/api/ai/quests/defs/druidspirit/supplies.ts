@@ -1,13 +1,17 @@
+import { customStep, talkTo, waitStep } from '../../engine/questSteps.js';
 import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
 import { Locs, type Loc } from '../../../../locs/Locs.js';
 import { Skills } from '../../../../skills/Skills.js';
 import { Traversal } from '../../../../walking/Traversal.js';
+import { cachedBankId as bankedId, heldId } from '../../engine/snapshotItems.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { findSceneTarget } from '../../exec/prompts.js';
 import { pickaxeAt } from '../knightssword/supplies.js';
 import { BOB, DOMMIK, NS_ID, NS_LOC, NS_NAME, NS_TILE, URHNEY } from './areas.js';
+
+export { bankedId, heldId };
 
 /** Kept through any deposit this quest issues. */
 export const NS_TOOLS: readonly string[] = [
@@ -17,9 +21,6 @@ export const NS_TOOLS: readonly string[] = [
     'silver ore', 'silver bar', 'coins',
     'bronze pickaxe', 'iron pickaxe', 'steel pickaxe', 'mithril pickaxe', 'adamant pickaxe', 'rune pickaxe'
 ];
-
-export const heldId = (snap: QuestSnapshot, id: number): number => snap.invIds?.get(id) ?? 0;
-export const bankedId = (snap: QuestSnapshot, id: number): number => snap.bankIds?.get(id) ?? 0;
 
 const scanBank: QuestStep = { kind: 'scanBank' };
 const withdraw = (name: string, id: number, qty = 1): QuestStep => ({ kind: 'withdraw', items: [{ name, qty, id }] });
@@ -39,7 +40,7 @@ export function amulet(snap: QuestSnapshot): QuestStep | null {
         return withdraw(NS_NAME.GHOSTSPEAK, NS_ID.GHOSTSPEAK);
     }
     // Why: Urhney replaces a lost amulet, so this does not require user intervention.
-    return { kind: 'talk', stop: URHNEY };
+    return talkTo(URHNEY);
 }
 
 /** Walk to the furnace and complete the resulting make menu. */
@@ -136,16 +137,16 @@ export function sickleStep(snap: QuestSnapshot, miningLevel?: number, smithingLe
         return { kind: 'buy', item: NS_NAME.MOULD, qty: 1, shop: DOMMIK, estGp: 200 };
     }
     if (heldId(snap, NS_ID.SILVER_BAR) > 0) {
-        return { kind: 'custom', name: 'cast the silver sickle', run: castSickle };
+        return customStep('cast the silver sickle', castSickle);
     }
     if (bankedId(snap, NS_ID.SILVER_BAR) > 0) {
         return withdraw(NS_NAME.SILVER_BAR, NS_ID.SILVER_BAR);
     }
     if ((smithingLevel ?? Skills.level('smithing')) < 20) {
-        return { kind: 'wait', reason: 'need 20 Smithing to smelt silver, or a Silver bar or Silver sickle in the bank' };
+        return waitStep('need 20 Smithing to smelt silver, or a Silver bar or Silver sickle in the bank');
     }
     if (heldId(snap, NS_ID.SILVER_ORE) > 0) {
-        return { kind: 'custom', name: 'smelt a silver bar', run: smeltSilver };
+        return customStep('smelt a silver bar', smeltSilver);
     }
     if (bankedId(snap, NS_ID.SILVER_ORE) > 0) {
         return withdraw(NS_NAME.SILVER_ORE, NS_ID.SILVER_ORE);

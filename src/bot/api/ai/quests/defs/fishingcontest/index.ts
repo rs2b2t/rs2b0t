@@ -1,4 +1,5 @@
 // docs/QUESTS.md
+import { customStep, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { QUESTS } from '../../data/quests.js';
 import { bankedId, heldId, type QuestModule, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import { FC_ID, inCompound } from './areas.js';
@@ -22,19 +23,19 @@ function outside(snap: QuestSnapshot, step: QuestStep | null): QuestStep | null 
     if (step === null || !inCompound(snap.tile)) {
         return step;
     }
-    return { kind: 'custom', name: 'leave the competition ground', run: leaveCompound };
+    return customStep('leave the competition ground', leaveCompound);
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     if (snap.journal === 'complete') {
         return { kind: 'done' };
     }
     const stage = snap.stage;
     if (stage === undefined) {
-        return { kind: 'wait', reason: 'Fishing Contest journal stage unavailable' };
+        return waitStep('Fishing Contest journal stage unavailable');
     }
 
     switch (stage) {
@@ -42,7 +43,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         case FC_STAGE.NOT_STARTED:
             return sourceGarlic(snap)
                 ?? sourceSpade(snap)
-                ?? { kind: 'custom', name: 'ask the Mountain Dwarf for the competition pass', run: startQuest };
+                ?? customStep('ask the Mountain Dwarf for the competition pass', startQuest);
 
         case FC_STAGE.STARTED:
             return outside(snap, sourcePass(snap)
@@ -50,37 +51,37 @@ export function decide(snap: QuestSnapshot): QuestStep {
                 ?? sourceRod(snap)
                 ?? sourceWorms(snap, WORM_TARGET)
                 ?? sourceFee(snap))
-                ?? { kind: 'custom', name: 'pay Bonzo the contest entry fee', run: payEntryFee };
+                ?? customStep('pay Bonzo the contest entry fee', payEntryFee);
 
         // Why: the willow spot yields sardines whatever the bait, so this stage never fishes; it stashes the garlic or unwinds a round that already did.
         case FC_STAGE.IN_COMP:
             if (heldId(snap, FC_ID.GARLIC) > 0) {
-                return { kind: 'custom', name: 'stash the garlic in the wall pipe', run: stashGarlic };
+                return customStep('stash the garlic in the wall pipe', stashGarlic);
             }
             if (heldId(snap, FC_ID.RAW_SARDINE) > 0) {
-                return { kind: 'custom', name: 'hand the sardines to Bonzo and re-enter', run: handOverCatch };
+                return customStep('hand the sardines to Bonzo and re-enter', handOverCatch);
             }
             return outside(snap, sourcePass(snap) ?? sourceGarlic(snap))
-                ?? { kind: 'wait', reason: 'the willow spot cannot win and there is no garlic to move the stranger' };
+                ?? waitStep('the willow spot cannot win and there is no garlic to move the stranger');
 
         // Why: the pass is checked here too; a death or teleport out of the fence leaves a paid-up contest Morris won't let the bot back into.
         case FC_STAGE.GARLIC_COMP:
             return outside(snap, sourcePass(snap) ?? sourceRod(snap) ?? sourceWorms(snap, 1))
-                ?? { kind: 'custom', name: 'fish the contest beside the pipes', run: fishAtPipes };
+                ?? customStep('fish the contest beside the pipes', fishAtPipes);
 
         case FC_STAGE.WON_COMP: {
             if (heldId(snap, FC_ID.TROPHY) > 0) {
-                return { kind: 'custom', name: 'take the trophy to the Mountain Dwarf', run: deliverTrophy };
+                return customStep('take the trophy to the Mountain Dwarf', deliverTrophy);
             }
             const banked: QuestStep | null = bankedId(snap, FC_ID.TROPHY) > 0
                 ? { kind: 'withdraw', items: [{ name: ITEM.TROPHY, qty: 1, id: FC_ID.TROPHY }] }
                 : null;
             return outside(snap, banked ?? sourcePass(snap))
-                ?? { kind: 'custom', name: 'ask Bonzo for a spare trophy', run: claimSpareTrophy };
+                ?? customStep('ask Bonzo for a spare trophy', claimSpareTrophy);
         }
 
         default:
-            return { kind: 'wait', reason: `no leg for Fishing Contest stage ${stage}` };
+            return waitStep(`no leg for Fishing Contest stage ${stage}`);
     }
 }
 

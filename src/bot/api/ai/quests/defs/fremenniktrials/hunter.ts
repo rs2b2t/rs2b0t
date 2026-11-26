@@ -1,3 +1,4 @@
+import { customStep, talkTo } from '../../engine/questSteps.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Game } from '../../../../game/Game.js';
 import { GameMessages } from '../../../../chatbox/gameMessages.js';
@@ -51,7 +52,7 @@ export function hunterStep(snap: QuestSnapshot): QuestStep | null {
         return null;
     }
     if (heldId(snap, FT_ID.TALISMAN_CHARGED) > 0) {
-        return { kind: 'talk', stop: SIGLI([]) };
+        return talkTo(SIGLI([]));
     }
     // Why: dressing before the first walk north costs 1 bank trip; dressing after Sigli hands the talisman over costs 2.
     const kit = combatKit(snap);
@@ -60,9 +61,9 @@ export function hunterStep(snap: QuestSnapshot): QuestStep | null {
     }
     if (!hasFlag(snap.progress, 'hunter-started') || heldId(snap, FT_ID.TALISMAN) === 0) {
         // Sigli replaces a missing talisman.
-        return { kind: 'talk', stop: SIGLI(["What's a Draugen?", 'Yes']) };
+        return talkTo(SIGLI(["What's a Draugen?", 'Yes']));
     }
-    return { kind: 'custom', name: 'track and kill the Draugen', run: hunt };
+    return customStep('track and kill the Draugen', hunt);
 }
 
 function lastGuide(mark: number): string | null {

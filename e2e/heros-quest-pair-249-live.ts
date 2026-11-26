@@ -9,9 +9,10 @@
 //   HEADED=1 bun e2e/heros-quest-pair-249-live.ts --tick 300 --minutes 150
 //   HEADED=1 bun e2e/heros-quest-pair-249-live.ts --stage armband --minutes 75
 //   HEADED=1 bun e2e/heros-quest-pair-249-live.ts --stage grip --minutes 20
+import { setQuestStats } from './lib/questHarness.js';
 import type { Page } from 'playwright-core';
 
-import { deployIsolatedClient, launchBrowser } from './lib/harness.js';
+import { deployIsolatedClient, fail, launchBrowser } from './lib/harness.js';
 import {
     cheatQuiet,
     clearChatDialogs,
@@ -65,11 +66,6 @@ function parse(argv: string[]): Args {
 
 const args = parse(process.argv.slice(2));
 
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
-}
-
 const QUEST = "Hero's Quest";
 const VARROCK_WEST_BANK = { x: 3185, z: 3440, level: 0 };
 // Why: the walk-and-shop half of this quest takes ten minutes a side and is proven on its own, so
@@ -93,12 +89,6 @@ const BANK_SEED: BankSeedItem[] = [
     { debugName: 'ice_gloves', displayName: 'Ice gloves', qty: 1 }
 ];
 
-const STATS = [
-    'attack', 'strength', 'defence', 'hitpoints', 'ranged', 'magic', 'prayer',
-    'cooking', 'woodcutting', 'fletching', 'fishing', 'firemaking', 'crafting',
-    'smithing', 'mining', 'herblore', 'agility', 'thieving', 'runecraft'
-];
-
 // Why: the four prerequisites are another six hours of running quests that are not the one under test,
 // so they are set rather than earned, at the values `quest.constant` calls complete, because
 // `~send_quest_progress` colours the list green only on `current >= complete`.
@@ -107,15 +97,6 @@ const PREREQS: [string, number][] = [
     ['dragonquest', 10],
     ['arthur', 7]
 ];
-
-async function setStats(page: Page, level: number): Promise<void> {
-    for (const skill of STATS) {
-        await cheatQuiet(page, `setstat ${skill} ${level}`);
-    }
-    await clearChatDialogs(page, 'level-up dialog(s)');
-    await page.waitForTimeout(1500);
-    await clearChatDialogs(page, 'straggler dialog(s)');
-}
 
 async function setPrereqs(page: Page, gang: 'phoenix' | 'blackarm'): Promise<void> {
     for (const [name, value] of PREREQS) {
@@ -172,7 +153,7 @@ async function bringUp(page: Page, user: string, gang: 'phoenix' | 'blackarm', p
     await mainlandAccount(page, args.base, user, clientPage);
     console.log(`mainland-ready as '${user}' (${gang})`);
     await cheatQuiet(page, `speed ${args.tickMs}`);
-    await setStats(page, args.stats);
+    await setQuestStats(page, args.stats);
     await setPrereqs(page, gang);
     // Why: the quest list is coloured by `~send_quest_progress` calls that `general/scripts/quests.rs2`
     // runs at login, so a varp set mid-session leaves every prerequisite reading red to the client and

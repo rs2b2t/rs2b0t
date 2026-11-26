@@ -1,3 +1,4 @@
+import { customStep as custom, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { QUESTS } from '../../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { UP_ITEM, UP_TILE, carried, held, insideIbanTemple, insideWitchHouse, pastGridTile, upassArea, worn, type UpassArea } from './areas.js';
@@ -52,9 +53,6 @@ import {
 import { outstandingCrossing, takeNextCrossing } from './railings.js';
 import { bowWorn, drawGear, kitShortfall, meleeCarried, sourceKit, wearGear } from './supplies.js';
 
-const custom = (name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep =>
-    ({ kind: 'custom', name, run });
-
 function flag(snap: QuestSnapshot, name: string): boolean {
     return snap.progress?.flags.has(name) ?? false;
 }
@@ -79,7 +77,7 @@ function readyToDescend(snap: QuestSnapshot): QuestStep | null {
     if (!meleeCarried(snap)) {
         missing.push('a melee weapon (the paladins, the demons and Kalrag), have none');
     }
-    return missing.length === 0 ? null : { kind: 'wait', reason: `not equipped for the pass: ${missing.join('; ')}` };
+    return missing.length === 0 ? null : waitStep(`not equipped for the pass: ${missing.join('; ')}`);
 }
 
 function bridgeLeg(snap: QuestSnapshot, area: UpassArea): QuestStep {
@@ -88,7 +86,7 @@ function bridgeLeg(snap: QuestSnapshot, area: UpassArea): QuestStep {
         return readyToDescend(snap) ?? inWest(snap, area, custom('enter the underground pass', enterCave));
     }
     if (area !== 'area1') {
-        return { kind: 'wait', reason: `bridge leg reached from ${area}` };
+        return waitStep(`bridge leg reached from ${area}`);
     }
     if (carried(snap, UP_ITEM.LIT_ARROW) === 0) {
         if (held(snap, UP_ITEM.DAMP_CLOTH) === 0 && held(snap, UP_ITEM.UNLIT_ARROW) === 0) {
@@ -224,7 +222,7 @@ function finishLeg(area: UpassArea): QuestStep {
         case 'mainland':
             return custom('report to King Lathas', reportToLathas);
         default:
-            return { kind: 'wait', reason: `thrown out of Iban's temple into ${area}` };
+            return waitStep(`thrown out of Iban's temple into ${area}`);
     }
 }
 
@@ -267,23 +265,23 @@ function stageStep(snap: QuestSnapshot, area: UpassArea, stage: number): QuestSt
         case UP_STAGE.DEFEATED_IBAN:
             return finishLeg(area);
         default:
-            return { kind: 'wait', reason: `Underground Pass stage ${stage} is not implemented` };
+            return waitStep(`Underground Pass stage ${stage} is not implemented`);
     }
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     const area = upassArea(snap.tile);
     if (area === 'unknown') {
-        return { kind: 'wait', reason: 'player location unavailable' };
+        return waitStep('player location unavailable');
     }
     if (snap.journal === 'complete' || (snap.stage ?? -1) >= UP_STAGE.COMPLETE) {
         return { kind: 'done' };
     }
     if (snap.stage === undefined) {
-        return { kind: 'wait', reason: 'Underground Pass journal stage unavailable' };
+        return waitStep('Underground Pass journal stage unavailable');
     }
     return stageStep(snap, area, snap.stage);
 }

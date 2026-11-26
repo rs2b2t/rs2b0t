@@ -255,6 +255,7 @@ export default class BotPanel {
     assignScript(name: string): void {
         this.assertScriptIdle();
         this.selectScript(this.requireScript(name).name);
+        this.library.cancelPendingSelection();
     }
 
     copyScriptSettings(name: string, values: Record<string, string>): void {
@@ -328,7 +329,7 @@ export default class BotPanel {
             this.assertNoUrlOverrides('WalkTo', ['destination', 'customTile']);
             SettingsStore.save('WalkTo', 'destination', target.name);
             SettingsStore.save('WalkTo', 'customTile', '0,0,0');
-            this.applyScriptSelection('WalkTo');
+            this.assignScript('WalkTo');
             this.handleStart(true);
         });
     }

@@ -1,3 +1,4 @@
+import { customStep, waitStep } from '../../engine/questSteps.js';
 import { EventSignal } from '../../../../execution/EventSignal.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Game } from '../../../../game/Game.js';
@@ -259,41 +260,41 @@ export function blackarmArmbandStep(snap: QuestSnapshot, stage: number): QuestSt
             if (piece) {
                 return piece;
             }
-            return { kind: 'custom', name: 'say the password at the Brimhaven hideout', run: enterBrimhavenHq };
+            return customStep('say the password at the Brimhaven hideout', enterBrimhavenHq);
         }
 
         case HERO_STAGE.BLACKARM_HQ:
-            return { kind: 'custom', name: 'take Hartigen’s papers from Trobert', run: talkToTrobert };
+            return customStep('take Hartigen’s papers from Trobert', talkToTrobert);
 
         case HERO_STAGE.BLACKARM_PAPERS: {
             if (heldId(snap, HERO_ID.ID_PAPERS) === 0) {
-                return { kind: 'custom', name: 'ask Trobert for a spare set of papers', run: talkToTrobert };
+                return customStep('ask Trobert for a spare set of papers', talkToTrobert);
             }
             const dressed = disguiseStep(snap);
             if (dressed) {
                 return dressed;
             }
-            return { kind: 'custom', name: 'pass Garv as Hartigen the Black Knight', run: enterMansion };
+            return customStep('pass Garv as Hartigen the Black Knight', enterMansion);
         }
 
         case HERO_STAGE.BLACKARM_MANSION:
-            return { kind: 'custom', name: 'report to Grip as his new deputy', run: askGripForKey };
+            return customStep('report to Grip as his new deputy', askGripForKey);
 
         case HERO_STAGE.BLACKARM_PAPERS_GIVEN:
             if (heldId(snap, HERO_ID.GRIP_KEYS) > 0) {
-                return { kind: 'custom', name: 'open the treasure room and the chest', run: lootCandlesticks };
+                return customStep('open the treasure room and the chest', lootCandlesticks);
             }
             // Why: Grip re-issues the spare whenever the bot holds none, so a bot that fetches after every trade swaps keys with its rival forever and never lures him onto the slit.
             if (heldId(snap, HERO_ID.MISC_KEY) === 0 && shouldFetchKey()) {
-                return { kind: 'custom', name: 'ask Grip for a job, which hands over his spare key', run: askGripForKey };
+                return customStep('ask Grip for a job, which hands over his spare key', askGripForKey);
             }
             return { kind: 'custom', cooperative: true, name: 'lure Grip to the arrow slit for the rival', run: lureGripAndTakeKeyring };
 
         case HERO_STAGE.BLACKARM_LOOTED:
             if (heldId(snap, HERO_ID.CANDLESTICK) === 0) {
-                return { kind: 'wait', reason: 'the chest is looted but no candlestick is carried' };
+                return waitStep('the chest is looted but no candlestick is carried');
             }
-            return { kind: 'custom', name: 'give Katrine the candlestick', run: handInCandlestick };
+            return customStep('give Katrine the candlestick', handInCandlestick);
 
         default:
             return null;

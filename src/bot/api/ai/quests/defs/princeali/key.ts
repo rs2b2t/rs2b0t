@@ -1,3 +1,4 @@
+import { customStep, talkTo } from '../../engine/questSteps.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { gotoNpc, talkStrict } from '../../exec/primitives.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
@@ -88,7 +89,7 @@ export function takeKeyPrint(snap: QuestSnapshot): QuestStep | null {
     if (held(snap, PA_ITEM.SOFT_CLAY.id) === 0) {
         return null;
     }
-    return { kind: 'talk', stop: KELI_PRINT };
+    return talkTo(KELI_PRINT);
 }
 
 export function collectKey(snap: QuestSnapshot): QuestStep | null {
@@ -100,12 +101,12 @@ export function collectKey(snap: QuestSnapshot): QuestStep | null {
         return withdrawFrom([{ name: PA_ITEM.PRINCE_KEY.name, id: PA_ITEM.PRINCE_KEY.id, qty: 1 }]);
     }
     if (keyIssued(snap)) {
-        return { kind: 'custom', name: 'ask Leela to replace the lost key', run: collectFromLeela };
+        return customStep('ask Leela to replace the lost key', collectFromLeela);
     }
     if (held(snap, PA_ITEM.KEY_PRINT.id) === 0 || held(snap, PA_ITEM.BRONZE_BAR.id) === 0) {
         return null;
     }
-    return { kind: 'custom', name: 'have Osman forge the key, then collect it from Leela', run: forgeAndCollect };
+    return customStep('have Osman forge the key, then collect it from Leela', forgeAndCollect);
 }
 
 async function collectFromLeela(log: (m: string) => void): Promise<boolean> {

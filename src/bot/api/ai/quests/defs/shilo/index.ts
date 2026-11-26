@@ -1,3 +1,4 @@
+import { customStep as step, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import type { WorldTile } from '../../../../../adapter/ClientAdapter.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
 import { QUESTS } from '../../data/quests.js';
@@ -73,10 +74,6 @@ function onKaramja(tile: WorldTile | null | undefined): boolean {
         return false;
     }
     return tile.x >= 2735 && tile.x <= 3010 && tile.z >= 2870 && tile.z <= 3245;
-}
-
-function step(name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep {
-    return { kind: 'custom', name, run };
 }
 
 // Why: a step that assumes open ground from inside a pocket sends the walker at a tile on the wrong side of a one-way crossing and spends 3 passes proving it unreachable.
@@ -273,7 +270,7 @@ function needBeads(snap: QuestSnapshot, area: ShiloArea): QuestStep | null {
     }
     return recoverFromBank(snap, SV_ITEM.DEAD_BEADS)
         ?? craftChain(snap, area, false)
-        ?? { kind: 'wait', reason: 'no Beads of the Dead to wear' };
+        ?? waitStep('no Beads of the Dead to wear');
 }
 
 /** Engine stages 10 and 11: through the hillside doors, past the gate, down the rocks. */
@@ -289,13 +286,13 @@ function stageTomb(snap: QuestSnapshot, area: ShiloArea): QuestStep {
     const wanted = bonesWanted(snap);
     // Bones come from Ardougne, so being short inside the tomb means walking back out.
     if (held(snap, SV_ITEM.BONES.id) < wanted && area !== 'karamja') {
-        return escapePocket(area) ?? { kind: 'wait', reason: 'short of bones and nowhere to go' };
+        return escapePocket(area) ?? waitStep('short of bones and nowhere to go');
     }
     if (area === 'rashInner') {
         // The third bone opens the doors and pushes us through, so nothing is left once the journal catches up.
         return wanted > 0
             ? step('place a bone in the tomb door', placeBone)
-            : { kind: 'wait', reason: 'all three bones are placed — waiting for the journal' };
+            : waitStep('all three bones are placed — waiting for the journal');
     }
     if (area === 'rashLedge') {
         return step('climb down to the tomb chamber', log => climbRashRocks('down', log));
@@ -314,7 +311,7 @@ function stageTomb(snap: QuestSnapshot, area: ShiloArea): QuestStep {
 function stageBoss(snap: QuestSnapshot, area: ShiloArea): QuestStep {
     if (owned(snap, SV_ITEM.RASH_CORPSE.id) > 0) {
         if (held(snap, SV_ITEM.RASH_CORPSE.id) === 0) {
-            return recoverFromBank(snap, SV_ITEM.RASH_CORPSE) ?? { kind: 'wait', reason: 'the remains are unreachable' };
+            return recoverFromBank(snap, SV_ITEM.RASH_CORPSE) ?? waitStep('the remains are unreachable');
         }
         return inTheOpenOrIn(area, 'berviriusTomb', step("lay the remains on Bervirius' dolmen", deliverCorpse));
     }
@@ -345,13 +342,13 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return escapePocket(area) ?? { kind: 'done' };
     }
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     if (snap.stage === undefined) {
-        return { kind: 'wait', reason: 'Shilo Village journal stage unavailable' };
+        return waitStep('Shilo Village journal stage unavailable');
     }
     if (area === 'unknown') {
-        return { kind: 'wait', reason: 'player location unavailable' };
+        return waitStep('player location unavailable');
     }
 
     const gear = combatGear(snap);
@@ -391,7 +388,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
             return stageBoss(snap, area);
 
         default:
-            return { kind: 'wait', reason: `Shilo Village stage ${snap.stage} is not implemented` };
+            return waitStep(`Shilo Village stage ${snap.stage} is not implemented`);
     }
 }
 

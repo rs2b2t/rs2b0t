@@ -1,3 +1,4 @@
+import { customStep, waitStep } from '../../engine/questSteps.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Game } from '../../../../game/Game.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
@@ -70,10 +71,7 @@ function sourceRanarrVial(snap: QuestSnapshot): QuestStep | null {
     }
     if (held(snap, ER_ITEM.RANARR) === 0) {
         if (banked(snap, ER_ITEM.RANARR) === 0) {
-            return {
-                kind: 'wait',
-                reason: 'no Ranarr weed and no Unfinished potion in the bank — no shop in 2004 sells either'
-            };
+            return waitStep('no Ranarr weed and no Unfinished potion in the bank — no shop in 2004 sells either');
         }
         return withdrawById(snap, ER_ITEM.RANARR.id, ER_ITEM.RANARR.name);
     }
@@ -179,14 +177,14 @@ export function sourceTrollPotion(snap: QuestSnapshot): QuestStep | null {
     if (held(snap, ER_ITEM.THISTLE) > 0) {
         return sourceTinderbox(snap)
             ?? sourceLogs(snap, 1)
-            ?? { kind: 'custom', name: 'dry the thistle over a fire', run: dryThistle };
+            ?? customStep('dry the thistle over a fire', dryThistle);
     }
     // Why: the thistle only grows on Trollheim and everything that processes it is bought at the bottom of the mountain, so the kit is assembled before the climb.
     return sourceTinderbox(snap)
         ?? sourceLogs(snap, 1)
         ?? sourcePestle(snap)
         ?? sourceRanarrVial(snap)
-        ?? { kind: 'custom', name: 'pick a Troll Thistle', run: pickThistle };
+        ?? customStep('pick a Troll Thistle', pickThistle);
 }
 
 /** Outside Mad Eadgar's cell door on the prison floor. */

@@ -1,7 +1,7 @@
 import { Bank } from '../../api/bank/Bank.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Locs } from '../../api/locs/Locs.js';
 import { Skills } from '../../api/skills/Skills.js';
@@ -51,7 +51,7 @@ export default class JiveCrafting extends TaskBot {
     private amulet: Amulet | null = null;
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
 
         this.startedAt = Date.now();
         this.xp.begin();

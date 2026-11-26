@@ -1,6 +1,6 @@
 // Settles one question: does the Lumbridge castle spinning wheel at 3209,3212,1 spin wool? Prince Ali's wool leg depends on the answer.
 // Why: sheepshearer avoids the wheel on the strength of commit 3a8c3a9 (2026-07-16), which predates the multi-level loc-snapshot settle fix in e146904 (2026-07-22) by six days, and a level-1 loc queried in the tick after a staircase climb reads back empty. The wheel is driven directly rather than through AIOQuester, which at stage 0 routes to Hassan and never reaches the wool leg.
-import { fail, launchBrowser } from './lib/harness.js';
+import { fail, launchBrowser, logBotConsole } from './lib/harness.js';
 import { cheat, cheatQuiet, mainlandAccount } from './tutorial/harness.js';
 
 const argv = process.argv.slice(2);
@@ -30,13 +30,7 @@ const browser = await launchBrowser();
 try {
     const page = await browser.newPage();
     const t0 = Date.now();
-    page.on('pageerror', e => console.log(`pageerror: ${e}`));
-    page.on('console', m => {
-        const txt = m.text();
-        if (txt.startsWith('[bot]')) {
-            console.log(`  [${Math.round((Date.now() - t0) / 1000)}s] ${txt}`);
-        }
-    });
+    logBotConsole(page, t0);
 
     await mainlandAccount(page, base, user);
     await cheat(page, 'speed 300');

@@ -1,7 +1,6 @@
 import { configuredLootNames } from '../../api/bank/bankRules.js';
 import { TaskBot } from '../../api/bot/Bot.js';
-import { Execution } from '../../api/execution/Execution.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import { GroundItems, type GroundItem } from '../../api/grounditems/GroundItems.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { foodCount as countFood, shouldEatFood } from '../../api/combat/food.js';
@@ -85,7 +84,7 @@ export default class WanderLooter extends TaskBot {
     private eats = 0;
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
         this.lootNamesValue = configuredLootNames(this.settings.list('loot', DEFAULT_LOOT));
         if (this.lootNamesValue.length === 0) {
             throw new Error('WanderLooter: loot list is empty');

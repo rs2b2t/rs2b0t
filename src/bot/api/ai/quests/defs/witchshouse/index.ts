@@ -1,3 +1,4 @@
+import { customStep as custom, talkTo, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { prepareStrikes, STRIKE_CASTS, STRIKE_RUNES } from '../../strike.js';
 import { QUESTS } from '../../data/quests.js';
 import { bankedId, heldId, type QuestModule, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
@@ -14,12 +15,6 @@ export { DiaryState, resetDiaryState } from './house.js';
 const WH_FOOD = 12;
 const STAFF_GP = 2000;
 const KEEP = ['door key', 'key', 'magnet', 'cheese', 'ball', 'diary', 'leather gloves', 'coins', ...STRIKE_RUNES, ...FIRE_STAVES.map(staff => staff.name.toLowerCase())];
-
-const custom = (name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep => ({
-    kind: 'custom',
-    name,
-    run
-});
 
 function fireStaff(snap: QuestSnapshot): QuestStep | null {
     if ((snap.magic ?? 1) < 13 || FIRE_STAVES.some(staff => snap.wornIds?.has(staff.id) || snap.worn.has(staff.name.toLowerCase()))) return null;
@@ -43,14 +38,14 @@ function fireStaff(snap: QuestSnapshot): QuestStep | null {
 
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     const stage = snap.progress?.stage ?? snap.stage;
     if (snap.journal === 'complete' || (stage ?? 0) >= WH_STAGE.COMPLETE) {
         return { kind: 'done' };
     }
     if (stage === undefined) {
-        return { kind: 'wait', reason: "Witch's House journal stage unavailable" };
+        return waitStep("Witch's House journal stage unavailable");
     }
 
     const staff = stage < WH_STAGE.DEFEATED ? fireStaff(snap) : null;
@@ -62,11 +57,11 @@ export function decide(snap: QuestSnapshot): QuestStep {
     }
 
     if (stage === WH_STAGE.NOT_STARTED) {
-        return { kind: 'talk', stop: BOY };
+        return talkTo(BOY);
     }
     if (stage >= WH_STAGE.DEFEATED && heldId(snap, WH_OBJ.BALL) > 0) {
         if (inGarden(snap.tile) || inShed(snap.tile)) return custom('carry the ball safely out of the garden', leaveGarden);
-        return { kind: 'talk', stop: BOY };
+        return talkTo(BOY);
     }
     // Why: every remaining step is behind the front door, whose `oploc1` reads the key out of the pack.
     if (heldId(snap, WH_OBJ.DOOR_KEY) === 0) {

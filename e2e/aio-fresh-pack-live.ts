@@ -5,7 +5,7 @@
 //   HEADED=1 bun e2e/aio-fresh-pack-live.ts --quest doric --junk 28 --resume doricquest=10 --minutes 8
 import type { Page } from 'playwright-core';
 
-import { deployIsolatedClient, launchBrowser } from './lib/harness.js';
+import { deployIsolatedClient, fail, launchBrowser } from './lib/harness.js';
 import { cheatQuiet, mainlandAccount, relog, startScript } from './tutorial/harness.js';
 
 interface Args {
@@ -49,11 +49,6 @@ function parseArgs(argv: string[]): Args {
 }
 
 const args = parseArgs(process.argv.slice(2));
-
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
-}
 
 type LogLine = { time: number; level: string; msg: string };
 

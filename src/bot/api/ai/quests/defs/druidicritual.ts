@@ -1,3 +1,4 @@
+import { customStep, talkTo, waitForJournal, waitStep } from '../engine/questSteps.js';
 import { Modals } from '../../../ui/widgets/Modals.js';
 import { findSceneTarget } from '../exec/prompts.js';
 import { Execution } from '../../../execution/Execution.js';
@@ -11,6 +12,7 @@ import { Npcs } from '../../../npcs/Npcs.js';
 import { Traversal } from '../../../walking/Traversal.js';
 import { DirectNavigator } from '../../../../event/webwalk/DirectNavigator.js';
 import { QUESTS } from '../data/quests.js';
+import { bankedName as banked, hasName as held } from '../engine/snapshotItems.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { walkWithHops, type LadderHop, type NpcStop } from '../exec/primitives.js';
 
@@ -119,8 +121,6 @@ export function druidicRitualArea(tile: QuestSnapshot['tile']): DruidicRitualAre
     return 'mainland';
 }
 
-const held = (snap: QuestSnapshot, name: string): boolean => (snap.inv.get(name.toLowerCase()) ?? 0) > 0;
-const banked = (snap: QuestSnapshot, name: string): number => snap.bank?.get(name.toLowerCase()) ?? 0;
 const heldForm = (snap: QuestSnapshot, meat: RitualMeat): boolean => held(snap, meat.raw) || held(snap, meat.enchanted);
 
 function acquisitionSpace(snap: QuestSnapshot, slots: number): QuestStep | null {
@@ -299,7 +299,7 @@ async function leaveDungeon(log: (message: string) => void): Promise<boolean> {
 function stageTwo(snap: QuestSnapshot): QuestStep {
     const allEnchantedHeld = RITUAL_MEATS.every(meat => held(snap, meat.enchanted));
     if (allEnchantedHeld) {
-        return { kind: 'talk', stop: SANFEW };
+        return talkTo(SANFEW);
     }
 
     const missingHeld = RITUAL_MEATS.filter(meat => !heldForm(snap, meat));
@@ -308,7 +308,7 @@ function stageTwo(snap: QuestSnapshot): QuestStep {
 
     if (area === 'dungeon') {
         if (missingHeld.length > 0) {
-            return { kind: 'custom', name: 'leave the dungeon to recover missing ritual meat', run: leaveDungeon };
+            return customStep('leave the dungeon to recover missing ritual meat', leaveDungeon);
         }
         if (rawHeld) {
             return { kind: 'custom', name: `dip ${rawHeld.raw} in the Cauldron of Thunder`, run: log => dipMeat(rawHeld, log) };
@@ -339,7 +339,7 @@ function stageTwo(snap: QuestSnapshot): QuestStep {
     if (rawHeld) {
         return { kind: 'custom', name: `dip ${rawHeld.raw} in the Cauldron of Thunder`, run: log => dipMeat(rawHeld, log) };
     }
-    return { kind: 'wait', reason: 'ritual meat state is incomplete' };
+    return waitStep('ritual meat state is incomplete');
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
@@ -347,24 +347,24 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return { kind: 'done' };
     }
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     if (snap.stage === undefined) {
-        return { kind: 'wait', reason: 'Druidic Ritual stage unavailable' };
+        return waitStep('Druidic Ritual stage unavailable');
     }
     if (snap.stage === DRUIDIC_RITUAL_STAGE.NOT_STARTED) {
-        return { kind: 'talk', stop: KAQEMEEX };
+        return talkTo(KAQEMEEX);
     }
     if (snap.stage === DRUIDIC_RITUAL_STAGE.STARTED) {
-        return { kind: 'talk', stop: SANFEW };
+        return talkTo(SANFEW);
     }
     if (snap.stage === DRUIDIC_RITUAL_STAGE.SPOKEN_TO_SANFEW) {
         return stageTwo(snap);
     }
     if (snap.stage === DRUIDIC_RITUAL_STAGE.GIVEN_INGREDIENTS) {
-        return { kind: 'talk', stop: KAQEMEEX };
+        return talkTo(KAQEMEEX);
     }
-    return { kind: 'wait', reason: `unrecognized Druidic Ritual stage ${snap.stage}` };
+    return waitStep(`unrecognized Druidic Ritual stage ${snap.stage}`);
 }
 
 export const druidicritual: QuestModule = {

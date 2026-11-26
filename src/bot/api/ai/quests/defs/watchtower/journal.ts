@@ -1,6 +1,5 @@
-import { Modals } from '../../../../ui/widgets/Modals.js';
+import { questProgressAt, readQuestJournal } from '../../journalReader.js';
 import { normalizeJournal as normalize } from '../../journalText.js';
-import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 
 export const WATCHTOWER_STAGE = {
@@ -98,13 +97,6 @@ export function parseWatchtowerJournal(lines: readonly string[] | string): Quest
     return stage === undefined ? undefined : { stage, flags: readFlags(text) };
 }
 
-export async function readWatchtowerProgress(): Promise<QuestProgress | undefined> {
-    const status = Quests.status(WATCHTOWER_QUEST);
-    if (status === 'complete') return { stage: WATCHTOWER_STAGE.COMPLETE, flags: new Set() };
-    if (status === 'notStarted') return { stage: WATCHTOWER_STAGE.NOT_STARTED, flags: new Set() };
-    if (status !== 'inProgress') return undefined;
-
-    const progress = parseWatchtowerJournal(await Quests.journal(WATCHTOWER_QUEST));
-    await Modals.closeIfOpen();
-    return progress;
+export function readWatchtowerProgress(): Promise<QuestProgress | undefined> {
+    return readQuestJournal(WATCHTOWER_QUEST, WATCHTOWER_STAGE, parseWatchtowerJournal, questProgressAt);
 }

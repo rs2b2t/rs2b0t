@@ -1,32 +1,14 @@
 // Coin and skill gates fail open without a WorldState snapshot and fail closed with one.
 import { describe, expect, test } from 'bun:test';
-import { gunzipSync } from 'fflate';
-import fs from 'node:fs';
-import path from 'node:path';
 
-import { PathFinder } from '#/bot/event/webwalk/PathFinder.js';
-import { loadDefaultNavEdges } from '#/bot/event/webwalk/loadTransportGraph.js';
 import { meetsRequires, isEdgeAllowed, hasGatingRequires } from '#/bot/event/webwalk/requires.js';
 import { specialRequiresAt } from '#/bot/event/webwalk/specialRequires.js';
-import type { WorldStateData } from '#/bot/event/webwalk/worldStateData.js';
+import { emptyWorldStateData, type WorldStateData } from '#/bot/event/webwalk/worldStateData.js';
+import { fullMapFinder, hasCollisionPack, isolatedLandingFinder } from '../../lib/navCollision.js';
 
 /** Ardougne dock → Brimhaven shore (#352): coin-gated ship + gangplank. */
 const ARD_DOCK = { x: 2668, z: 3285, level: 0 } as const;
 const BRIM_SHORE = { x: 2779, z: 3218, level: 0 } as const;
-
-function loadFinder(): PathFinder | null {
-    const packPath = path.join(process.cwd(), 'out/collision.lcnav.gz');
-    if (!fs.existsSync(packPath)) {
-        return null;
-    }
-    let bytes: Uint8Array = new Uint8Array(fs.readFileSync(packPath));
-    if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-        bytes = new Uint8Array(gunzipSync(bytes));
-    }
-    const finder = new PathFinder(bytes as Uint8Array);
-    loadDefaultNavEdges(finder);
-    return finder;
-}
 
 describe('requires without WorldState (pack fail-open)', () => {
     test('isEdgeAllowed stays fail-closed without state (helper policy; not PathFinder search)', () => {
@@ -59,11 +41,24 @@ describe('requires without WorldState (pack fail-open)', () => {
         ).toBe(true);
     });
 
-    test('findPath without state expands coin-gated ship (offline pack parity)', () => {
-        const finder = loadFinder();
-        if (!finder) {
-            return;
+    test('Captain Barnaby charges 30 coins when a world state is supplied', () => {
+        const dock = { x: 2683, z: 3272, level: 0 };
+        const deck = { x: 2775, z: 3234, level: 1 };
+        const shore = { x: 2772, z: 3234, level: 0 };
+        const finder = isolatedLandingFinder([dock, deck, shore]);
+        const route = (coins?: number) => finder.findPath(dock, shore, {
+            useTeleportCatalog: false,
+            state: coins === undefined ? undefined : { ...emptyWorldStateData(), items: { Coins: coins } }
+        });
+
+        expect(route(29).ok).toBe(false);
+        for (const trip of [route(), route(30)]) {
+            expect(trip).toMatchObject({ ok: true, hops: [{ kind: 'ship', locName: 'Captain Barnaby' }, { kind: 'gangplank' }] });
         }
+    });
+
+    test.skipIf(!hasCollisionPack)('findPath without state expands coin-gated ship (offline pack parity)', () => {
+        const finder = fullMapFinder();
         const out = finder.findPath(ARD_DOCK, BRIM_SHORE, { useTeleportCatalog: false });
         expect(out.ok).toBe(true);
         if (!out.ok) {
@@ -75,11 +70,8 @@ describe('requires without WorldState (pack fail-open)', () => {
         expect(out.hops.some(h => h.locName === 'Captain Barnaby')).toBe(true);
     });
 
-    test('findPath with zero coins fails closed on ship (live honesty)', () => {
-        const finder = loadFinder();
-        if (!finder) {
-            return;
-        }
+    test.skipIf(!hasCollisionPack)('findPath with zero coins fails closed on ship (live honesty)', () => {
+        const finder = fullMapFinder();
         const broke: WorldStateData = {
             members: true,
             skills: {},

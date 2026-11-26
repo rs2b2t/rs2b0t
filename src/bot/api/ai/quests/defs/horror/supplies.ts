@@ -1,3 +1,4 @@
+import { customStep, waitStep } from '../../engine/questSteps.js';
 import { Execution } from '../../../../execution/Execution.js';
 import Tile from '../../../../../geometry/Tile.js';
 import { Traversal } from '../../../../walking/Traversal.js';
@@ -8,6 +9,7 @@ import { Locs } from '../../../../locs/Locs.js';
 import { FOOD_FLOAT, QuestFood } from '../../food.js';
 import { QuestLoadout } from '../../gear.js';
 import { weaponOf } from '../../../../loadout/loadoutPlan.js';
+import { cachedBankId as bankedId, heldId } from '../../engine/snapshotItems.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { findSceneTarget, useOnLoc } from '../../exec/prompts.js';
 import { smithNails } from '../dragonslayer/supplies.js';
@@ -15,6 +17,8 @@ import { PICKAXES, bankedPickaxe, liveBestWeapon } from '../../weapons.js';
 import {
     ARCHERY_SHOP, GENERAL_SHOP, HD_ID, HD_ITEM, HD_LOC, HD_TILE, RUNE_SHOP, SWORD_SHOP
 } from './areas.js';
+
+export { bankedId, heldId };
 
 const COIN_FLOAT = 20_000;
 const COIN_LOW = 2_000;
@@ -49,14 +53,6 @@ const LAW_RUNES = 60;
 
 /** Below this the kit is topped up, so a part-spent stack does not trigger a trip. */
 const LAW_LOW = Math.ceil(LAW_RUNES / 3);
-
-export function heldId(snap: QuestSnapshot, id: number): number {
-    return snap.invIds?.get(id) ?? 0;
-}
-
-export function bankedId(snap: QuestSnapshot, id: number): number {
-    return snap.bankIds?.get(id) ?? 0;
-}
 
 const withdraw = (items: { name: string; qty: number; id?: number }[]): QuestStep =>
     ({ kind: 'withdraw', items });
@@ -154,7 +150,7 @@ export function nails(snap: QuestSnapshot): QuestStep {
     const held = heldId(snap, HD_ID.NAILS);
     const need = NAILS_NEEDED - held;
     if (need <= 0) {
-        return { kind: 'wait', reason: 'nails already held' };
+        return waitStep('nails already held');
     }
     const fromNails = fromBank(snap, HD_ID.NAILS, HD_ITEM.NAILS, need);
     if (fromNails) {
@@ -238,7 +234,7 @@ const smeltGlass = (log: (m: string) => void): Promise<boolean> => useOnLocFrom(
 /** The next rung of the molten-glass chain. */
 function moltenGlass(snap: QuestSnapshot): QuestStep {
     if (heldId(snap, HD_ID.MOLTEN_GLASS) > 0) {
-        return { kind: 'wait', reason: 'molten glass already held' };
+        return waitStep('molten glass already held');
     }
     const banked = fromBank(snap, HD_ID.MOLTEN_GLASS, HD_ITEM.MOLTEN_GLASS, 1);
     if (banked) {
@@ -247,18 +243,18 @@ function moltenGlass(snap: QuestSnapshot): QuestStep {
     const ash = heldId(snap, HD_ID.SODA_ASH);
     const sand = heldId(snap, HD_ID.BUCKET_OF_SAND);
     if (ash > 0 && sand > 0) {
-        return { kind: 'custom', name: 'smelt molten glass', run: smeltGlass };
+        return customStep('smelt molten glass', smeltGlass);
     }
     if (ash === 0) {
         if (heldId(snap, HD_ID.SEAWEED) > 0) {
-            return { kind: 'custom', name: 'cook seaweed into soda ash', run: cookSeaweed };
+            return customStep('cook seaweed into soda ash', cookSeaweed);
         }
         return { kind: 'grabGround', item: HD_ITEM.SEAWEED, anchor: HD_TILE.SEAWEED, waitIfMissing: true };
     }
     if (heldId(snap, HD_ID.BUCKET) === 0) {
         return source(snap, HD_ID.BUCKET, HD_ITEM.BUCKET, 1, GENERAL_SHOP, 100);
     }
-    return { kind: 'custom', name: 'fill a bucket with sand', run: fillSand };
+    return customStep('fill a bucket with sand', fillSand);
 }
 
 /** True while the glass still has to be made. */
@@ -336,8 +332,6 @@ export function dungeonKit(snap: QuestSnapshot, needLight: boolean): QuestStep |
 
 // Why: Zeke's Superior Scimitars stops at mithril, so the weapon is whatever the loadout holds; absent or unwieldable, the fights fall back to magic and pray through the melee form.
 let meleeGaveUp = false;
-
-
 
 /** Attempts before the weapon is written off, an unwieldable one never lands. */
 const WIELD_TRIES = 3;

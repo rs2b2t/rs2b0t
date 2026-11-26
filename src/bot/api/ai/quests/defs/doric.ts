@@ -1,3 +1,4 @@
+import { customStep, waitForJournal, waitStep } from '../engine/questSteps.js';
 import { Modals } from '../../../ui/widgets/Modals.js';
 import { normalizeJournal as journalText } from '../journalText.js';
 import { reader } from '../../../../adapter/ClientAdapter.js';
@@ -405,11 +406,7 @@ function allMaterialsHeld(snap: QuestSnapshot): boolean {
 
 function stageTen(snap: QuestSnapshot, miningLevel: number, miningXp: number): QuestStep {
     if (allMaterialsHeld(snap)) {
-        return {
-            kind: 'custom',
-            name: 'stage 10: hand Doric 6 Clay, 4 Copper ore, and 2 Iron ore and collect the full reward',
-            run: handInMaterials
-        };
+        return customStep('stage 10: hand Doric 6 Clay, 4 Copper ore, and 2 Iron ore and collect the full reward', handInMaterials);
     }
 
     const bank = nearestBank(snap);
@@ -428,7 +425,7 @@ function stageTen(snap: QuestSnapshot, miningLevel: number, miningXp: number): Q
 
     // Copper above 4 only trains Mining for iron. Drop 1 at a time so each iteration yields to the random-event supervisor.
     if (heldCount(snap, DORIC_ITEM.COPPER) > DORIC_ITEM.COPPER.qty) {
-        return { kind: 'custom', name: 'drop one surplus training Copper ore', run: dropOneCopper };
+        return customStep('drop one surplus training Copper ore', dropOneCopper);
     }
 
     const missing = MATERIALS.filter(item => heldCount(snap, item) < item.qty);
@@ -444,11 +441,7 @@ function stageTen(snap: QuestSnapshot, miningLevel: number, miningXp: number): Q
                 bank
             };
         }
-        return {
-            kind: 'custom',
-            name: 'source a free Bronze pickaxe at Rimmington',
-            run: acquireBronzePickaxe
-        };
+        return customStep('source a free Bronze pickaxe at Rimmington', acquireBronzePickaxe);
     }
 
     const space = makeSpace(snap, 1, bank);
@@ -471,13 +464,13 @@ function stageTen(snap: QuestSnapshot, miningLevel: number, miningXp: number): Q
         return { kind: 'custom', name: `mine Iron ore ${heldCount(snap, DORIC_ITEM.IRON)}/${DORIC_ITEM.IRON.qty}`, run: log => mineOne('Iron', DORIC_ITEM.IRON, log) };
     }
 
-    return { kind: 'wait', reason: 'Doric material state could not be resolved' };
+    return waitStep('Doric material state could not be resolved');
 }
 
 export function decideForMiningLevel(snap: QuestSnapshot, miningLevel: number, miningXp = 0): QuestStep {
     if (snap.journal === 'complete' || (snap.stage ?? 0) >= DORIC_STAGE.COMPLETE) return { kind: 'done' };
-    if (snap.journal === 'unknown') return { kind: 'wait', reason: 'quest journal not loaded' };
-    if (snap.stage === undefined) return { kind: 'wait', reason: "Doric's Quest stage unavailable" };
+    if (snap.journal === 'unknown') return waitForJournal();
+    if (snap.stage === undefined) return waitStep("Doric's Quest stage unavailable");
 
     switch (snap.stage) {
         case DORIC_STAGE.NOT_STARTED:
@@ -485,7 +478,7 @@ export function decideForMiningLevel(snap: QuestSnapshot, miningLevel: number, m
         case DORIC_STAGE.STARTED:
             return stageTen(snap, miningLevel, miningXp);
         default:
-            return { kind: 'wait', reason: `unrecognized Doric's Quest stage ${snap.stage}` };
+            return waitStep(`unrecognized Doric's Quest stage ${snap.stage}`);
     }
 }
 

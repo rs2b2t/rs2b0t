@@ -1,3 +1,4 @@
+import { waitStep } from '../../engine/questSteps.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { RG_ITEM, RG_TILE, banked, carried, type RegicideItem } from './areas.js';
 
@@ -93,7 +94,7 @@ export function managePack(snap: QuestSnapshot, plan: PackPlan): QuestStep | nul
     }
     const free = snap.freeSlots ?? 28;
     if (plan.freeNeeded !== undefined && free < plan.freeNeeded) {
-        return { kind: 'wait', reason: `${plan.what} needs ${plan.freeNeeded} free slot(s) and the pack has ${free} — nothing left to bank` };
+        return waitStep(`${plan.what} needs ${plan.freeNeeded} free slot(s) and the pack has ${free} — nothing left to bank`);
     }
     return null;
 }

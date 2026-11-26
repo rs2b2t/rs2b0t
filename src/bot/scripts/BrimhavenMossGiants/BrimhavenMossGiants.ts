@@ -1,8 +1,7 @@
 import { configuredLootNames } from '../../api/bank/bankRules.js';
 import { rangedItem } from '../../api/combat/rangedSettings.js';
 import { TaskBot } from '../../api/bot/Bot.js';
-import { Execution } from '../../api/execution/Execution.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import Tile from '../../geometry/Tile.js';
 import { DeathRecovery } from '../../api/tasks/DeathRecovery.js';
 import { ContinueDialog } from '../../api/tasks/ContinueDialog.js';
@@ -39,7 +38,7 @@ export default class BrimhavenMossGiants extends TaskBot {
     died = false;
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
         Game.setAutoRetaliate(true); // Why: this script drives combat through auto-retaliate.
 
         cfg.style = (this.settings.str('combatStyle', 'melee') as CombatStyle);

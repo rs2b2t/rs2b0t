@@ -1,3 +1,4 @@
+import { waitStep } from '../../engine/questSteps.js';
 import Tile from '../../../../../geometry/Tile.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { PC_ITEM, PC_TILE, banked, held, type PlagueItem } from './areas.js';
@@ -59,7 +60,7 @@ function sourcePurse(snap: QuestSnapshot, floor: number, blocking: boolean): Que
     }
     const available = banked(snap, PC_ITEM.COINS);
     if (available <= 0) {
-        return blocking ? { kind: 'wait', reason: 'no coins banked for the rope, pestle and chocolate bar' } : null;
+        return blocking ? waitStep('no coins banked for the rope, pestle and chocolate bar') : null;
     }
     return withdrawAnywhere([{ name: PC_ITEM.COINS.name, id: PC_ITEM.COINS.id, qty: Math.min(PURSE, available) }]);
 }

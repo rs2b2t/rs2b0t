@@ -1,6 +1,5 @@
-import { Modals } from '../../../../ui/widgets/Modals.js';
+import { questProgressAt, readQuestJournal, type JournalCache } from '../../journalReader.js';
 import { normalizeJournal as normalize } from '../../journalText.js';
-import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 import { PT_QUEST, PT_STAGE } from './areas.js';
 
@@ -45,18 +44,8 @@ export function parsePiratesTreasureJournal(lines: readonly string[] | string): 
 }
 
 /** A failed read doesn't mean the quest went backwards. */
-let lastGood: QuestProgress | undefined;
+const cache: JournalCache<QuestProgress> = {};
 
-export async function readPiratesTreasureProgress(): Promise<QuestProgress | undefined> {
-    const status = Quests.status(PT_QUEST);
-    if (status === 'complete') return { stage: PT_STAGE.COMPLETE, flags: new Set() };
-    if (status === 'notStarted') return { stage: PT_STAGE.NOT_STARTED, flags: new Set() };
-    if (status !== 'inProgress') return undefined;
-
-    const progress = parsePiratesTreasureJournal(await Quests.journal(PT_QUEST));
-    await Modals.closeIfOpen();
-    if (progress) {
-        lastGood = progress;
-    }
-    return progress ?? lastGood;
+export function readPiratesTreasureProgress(): Promise<QuestProgress | undefined> {
+    return readQuestJournal(PT_QUEST, PT_STAGE, parsePiratesTreasureJournal, questProgressAt, cache);
 }
