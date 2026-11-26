@@ -98,6 +98,16 @@ describe('bake settings snapshot/restore (settings modal discard)', () => {
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     }
 
+    function rebuiltMap(): Awaited<ReturnType<typeof basemapRegen.regenerateBasemap>> {
+        return {
+            manifest: {
+                schema: 2, fingerprint: 'terrain', origin: { x: 0, z: 0 }, sizeTiles: { w: 1, h: 1 },
+                pixelsPerTile: 1, basemapUrl: 'live-regen'
+            },
+            image: document.createElement('canvas')
+        };
+    }
+
     async function withPicker(check: () => void | Promise<void>): Promise<void> {
         const fetchDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'fetch')!;
         const frame = spyOn(globalThis, 'requestAnimationFrame').mockReturnValue(1);
@@ -159,13 +169,7 @@ describe('bake settings snapshot/restore (settings modal discard)', () => {
                 bakeCheckbox('Map-square borders').click();
                 expect(SettingsStore.saved(MAP_PICKER_SETTINGS_NS, 'bakeBorders')).toBe('true');
                 if (alreadyOpen) bakeCheckbox('Stamp labels into rebuild').click();
-                pending.resolve({
-                    manifest: {
-                        schema: 2, fingerprint: 'terrain', origin: { x: 0, z: 0 }, sizeTiles: { w: 1, h: 1 },
-                        pixelsPerTile: 1, basemapUrl: 'live-regen'
-                    },
-                    image: document.createElement('canvas')
-                });
+                pending.resolve(rebuiltMap());
                 await new Promise<void>(resolve => setImmediate(resolve));
                 expect(document.querySelector('.rs2b0t-walkmap-status')?.textContent).toContain('basemap rebuilt');
                 bakeCheckbox('NPC dots').click();
@@ -173,6 +177,32 @@ describe('bake settings snapshot/restore (settings modal discard)', () => {
                 expect(SettingsStore.snapshotStored(MAP_PICKER_SETTINGS_NS, 'bakeBorders')).toEqual({ local: 'false', session: 'false' });
                 expect(SettingsStore.saved(MAP_PICKER_SETTINGS_NS, 'bakeLabels')).toBe(alreadyOpen ? 'true' : undefined);
                 expect(SettingsStore.saved(MAP_PICKER_SETTINGS_NS, 'bakeNpcs')).toBeUndefined();
+            });
+        } finally {
+            bake.mockRestore();
+        }
+    });
+
+    test.each([false, true])('Settings opened during a rebuild keeps the other tab\'s label save (reopened: %p)', async reopened => {
+        SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'skipRebuildConfirm', 'true');
+        const pending = Promise.withResolvers<ReturnType<typeof rebuiltMap>>();
+        const bake = spyOn(basemapRegen, 'regenerateBasemap').mockReturnValue(pending.promise);
+        try {
+            await withPicker(async () => {
+                if (reopened) openSettings();
+                document.querySelector<HTMLButtonElement>('.rs2b0t-walkmap-rebuild')!.click();
+                expect(bake).toHaveBeenCalledWith(prefs());
+                if (reopened) escapeSettings();
+                localStorage.setItem('rs2b0t:set:MapPicker:bakeLabels', 'true');
+                openSettings();
+                pending.resolve(rebuiltMap());
+                await new Promise<void>(resolve => setImmediate(resolve));
+                expect(document.querySelector('.rs2b0t-walkmap-status')?.textContent).toContain('basemap rebuilt');
+
+                bakeCheckbox('Stamp labels into rebuild').click();
+                expect(SettingsStore.saved(MAP_PICKER_SETTINGS_NS, 'bakeLabels')).toBe('false');
+                escapeSettings();
+                expect(SettingsStore.snapshotStored(MAP_PICKER_SETTINGS_NS, 'bakeLabels')).toEqual({ local: 'true', session: null });
             });
         } finally {
             bake.mockRestore();

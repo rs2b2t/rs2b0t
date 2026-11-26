@@ -994,15 +994,18 @@ export class WorldMapPicker {
                     status.style.color = '#fa0';
                     try {
                         const prefs = resolveBasemapBakePrefs();
-                        const rebuiltSettings = snapshotMapPickerBakeSettings();
+                        const baselineAtStart = bakeSettingsSnapshot;
+                        const rebuiltSettings = baselineAtStart ? snapshotMapPickerBakeSettings() : null;
                         const lastBakedEdit = editSequence;
                         const next = await regenerateBasemap(prefs);
                         if (closed) {
                             return;
                         }
-                        bakeSettingsSnapshot = rebuiltSettings;
-                        for (const [key, sequence] of editedSettings) {
-                            if (sequence <= lastBakedEdit) editedSettings.delete(key);
+                        if (rebuiltSettings && bakeSettingsSnapshot === baselineAtStart) {
+                            bakeSettingsSnapshot = rebuiltSettings;
+                            for (const [key, sequence] of editedSettings) {
+                                if (sequence <= lastBakedEdit) editedSettings.delete(key);
+                            }
                         }
                         const crcKey = await fetchClientCrcKey();
                         if (crcKey) {
