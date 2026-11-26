@@ -15,10 +15,6 @@ import { driveDialog } from '../../exec/primitives.js';
 import { WT_ITEM, WT_LOC, WT_NPC, WT_TILE, watchtowerArea } from './areas.js';
 import { settleScene } from './scene.js';
 
-function heldId(id: number): number {
-    return Inventory.items().filter(item => item.id === id).reduce((sum, item) => sum + item.count, 0);
-}
-
 function locNear(id: number, op: string, within = 10): Loc | null {
     return Locs.query().where(loc => loc.id === id).action(op).within(within).nearest();
 }
@@ -30,7 +26,7 @@ export async function enterEnclave(log: (m: string) => void): Promise<boolean> {
     if (watchtowerArea(Game.tile()) === 'enclave') {
         return true;
     }
-    if (heldId(WT_ITEM.NIGHTSHADE.id) === 0) {
+    if (Inventory.countById(WT_ITEM.NIGHTSHADE.id) === 0) {
         log('no Nightshade — the enclave guard cannot be distracted');
         return false;
     }
@@ -88,7 +84,7 @@ async function safeToContinue(log: (m: string) => void): Promise<boolean> {
 export async function dissolveShamans(log: (m: string) => void): Promise<boolean> {
     if (EventSignal.pending() || !(await safeToContinue(log)) || !(await enterEnclave(log))) return false;
     for (const spot of WT_TILE.SHAMANS) {
-        if (!(await safeToContinue(log)) || heldId(WT_ITEM.MAGIC_OGRE_POTION.id) === 0) return false;
+        if (!(await safeToContinue(log)) || Inventory.countById(WT_ITEM.MAGIC_OGRE_POTION.id) === 0) return false;
         if (!(await Traversal.walkResilient(spot, { radius: 2, attempts: 2, timeoutMs: 90_000, log }))) {
             if (EventSignal.pending()) return false;
             continue;
@@ -113,7 +109,7 @@ export async function dissolveShamans(log: (m: string) => void): Promise<boolean
 }
 
 export async function mineDalgroth(log: (m: string) => void): Promise<boolean> {
-    if (heldId(WT_ITEM.CRYSTAL4.id) > 0) {
+    if (Inventory.countById(WT_ITEM.CRYSTAL4.id) > 0) {
         return true;
     }
     if (!(await safeToContinue(log)) || !(await enterEnclave(log))) {
@@ -128,11 +124,11 @@ export async function mineDalgroth(log: (m: string) => void): Promise<boolean> {
         log('no Rock of Dalgroth in range, or no pickaxe carried');
         return false;
     }
-    return Execution.delayUntil(() => heldId(WT_ITEM.CRYSTAL4.id) > 0, 20_000);
+    return Execution.delayUntil(() => Inventory.countById(WT_ITEM.CRYSTAL4.id) > 0, 20_000);
 }
 
 export async function searchShamanRobe(log: (m: string) => void): Promise<boolean> {
-    if (heldId(WT_ITEM.CRYSTAL3.id) > 0) {
+    if (Inventory.countById(WT_ITEM.CRYSTAL3.id) > 0) {
         return true;
     }
     if (!(await safeToContinue(log)) || !(await enterEnclave(log))) {
@@ -142,13 +138,13 @@ export async function searchShamanRobe(log: (m: string) => void): Promise<boolea
         return false;
     }
     if (!(await safeToContinue(log))) return false;
-    if (heldId(WT_ITEM.SHAMAN_ROBE.id) === 0) {
+    if (Inventory.countById(WT_ITEM.SHAMAN_ROBE.id) === 0) {
         const robe = GroundItems.query().name(WT_ITEM.SHAMAN_ROBE.name).within(4).nearest();
         if (!robe || !(await robe.interact('Take'))) {
             log('no shaman robe on the enclave floor');
             return false;
         }
-        if (!(await Execution.delayUntil(() => heldId(WT_ITEM.SHAMAN_ROBE.id) > 0, 6000))) {
+        if (!(await Execution.delayUntil(() => Inventory.countById(WT_ITEM.SHAMAN_ROBE.id) > 0, 6000))) {
             return false;
         }
     }
@@ -156,5 +152,5 @@ export async function searchShamanRobe(log: (m: string) => void): Promise<boolea
     if (!carried || !(await carried.interact('Search'))) {
         return false;
     }
-    return Execution.delayUntil(() => heldId(WT_ITEM.CRYSTAL3.id) > 0, 8000);
+    return Execution.delayUntil(() => Inventory.countById(WT_ITEM.CRYSTAL3.id) > 0, 8000);
 }
