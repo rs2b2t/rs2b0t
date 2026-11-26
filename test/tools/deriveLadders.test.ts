@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { zipSync } from 'fflate';
+import { twoLevelCollisionPack } from '../fixtures/two-level-collision-pack.js';
 
 const generator = join(import.meta.dir, '../../tools/nav/derive-ladders.py');
 let root: string;
@@ -19,9 +20,7 @@ test('unpacked maps generate the same ladder edges as the preferred cache ZIP', 
     writeFileSync(join(root, 'content/pack/loc.pack'), '42=ladder\n');
     writeFileSync(join(scripts, 'ladder.loc'), '[ladder]\nname=Ladder\nop1=Climb-up\n');
     writeFileSync(join(scripts, 'ladder.rs2'), '[oploc1,ladder]\np_telejump(movecoord(loc_coord,0,1,0));\n');
-    writeFileSync(join(root, 'collision.lcnav'), Buffer.concat([
-        Buffer.from('LCNV'), Buffer.from([1, 0, 0, 0, 1, 0, 1, 1, 3]), Buffer.alloc(2 * (4096 + 512), 0xff)
-    ]));
+    writeFileSync(join(root, 'collision.lcnav'), twoLevelCollisionPack([[1, 1]]));
 
     function derive() {
         const stairs = join(data, 'stairEdges.json');
