@@ -17,13 +17,27 @@ const RUNE_PICKAXE = 1275;
 const MAX_MINING = 70;
 
 export function snap(invIds: [number, number][] = [], options: BankOptions = {}): QuestSnapshot {
-    return knightsSwordSnapshot({ ...options, journal: 'inProgress', defaultCoins: COIN_LOW * 2, invIds });
+    return knightsSwordSnapshot({
+        bankIds: options.bankIds,
+        bankKnown: options.bankKnown,
+        tile: options.tile,
+        journal: 'inProgress',
+        defaultCoins: COIN_LOW * 2,
+        invIds
+    });
 }
 
 const withdrawn = (step: QuestStep): number[] =>
     step.kind === 'withdraw' ? step.items.map(i => i.id ?? -1) : [];
 
 const lobsters = (held: number) => ({ name: 'Lobster', held, target: 14, low: 4 });
+
+test('supply snapshots ignore inventory and equipment in bank options', () => {
+    const options = { bankKnown: true, inv: [['lobster', 14]], wornIds: [BRONZE_PICKAXE] };
+    const snapshot = snap([], options);
+    expect(snapshot.inv.size).toBe(0);
+    expect(snapshot.wornIds?.size).toBe(0);
+});
 
 describe('kit', () => {
     test('scans the bank before withdrawing anything it has not seen', () => {
