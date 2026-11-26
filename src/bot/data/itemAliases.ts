@@ -1,4 +1,11 @@
 import type { ItemAlias } from '../api/market/aliasTypes.js';
+import { AMULETS } from './amulets.js';
+
+const amuletAliases: Record<number, ItemAlias> = {};
+for (const { label, strung, unstrung } of AMULETS) {
+    amuletAliases[unstrung] = { words: ['unstrung'], label: `${label} (u)` };
+    amuletAliases[strung] = { words: ['strung'], label };
+}
 
 /** User-facing aliases that cannot be derived from object debugnames. @see tools/items/gen-namecollisions.ts */
 // Why: Four hides share one display name and are distinguished only by id.
@@ -42,19 +49,7 @@ export const ITEM_ALIASES: Readonly<Record<number, ItemAlias>> = {
     3837: { words: ['guthix'], label: 'Guthix torn page 3' },
     3838: { words: ['guthix'], label: 'Guthix torn page 4' },
 
-    // Strung and unstrung amulets share a name; use natural label order.
-    1673: { words: ['unstrung'], label: 'Gold amulet (u)' },
-    1675: { words: ['unstrung'], label: 'Sapphire amulet (u)' },
-    1677: { words: ['unstrung'], label: 'Emerald amulet (u)' },
-    1679: { words: ['unstrung'], label: 'Ruby amulet (u)' },
-    1681: { words: ['unstrung'], label: 'Diamond amulet (u)' },
-    1683: { words: ['unstrung'], label: 'Dragonstone amulet (u)' },
-    1692: { words: ['strung'], label: 'Gold amulet' },
-    1694: { words: ['strung'], label: 'Sapphire amulet' },
-    1696: { words: ['strung'], label: 'Emerald amulet' },
-    1698: { words: ['strung'], label: 'Ruby amulet' },
-    1700: { words: ['strung'], label: 'Diamond amulet' },
-    1702: { words: ['strung'], label: 'Dragonstone amulet' }
+    ...amuletAliases
 };
 
 /** Shorthand a customer types instead of the display name, keyed by the lowercased name. */
