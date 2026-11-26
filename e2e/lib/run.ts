@@ -1,10 +1,8 @@
 import { spawn } from 'node:child_process';
-import { closeSync, existsSync, mkdtempSync, openSync, readdirSync, readFileSync, renameSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, renameSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { getSystemErrorName } from 'node:util';
 import { errorTail } from '../../tools/lib/e2e-report.js';
-import { ownedService } from './ownedService.mjs';
 
 export type Status = 'pass' | 'fail' | 'timeout' | 'skip';
 
@@ -16,22 +14,26 @@ const CLEANUP_MS = 500;
 const active = new Set<() => void>();
 
 function openGroups() {
-    const dir = mkdtempSync(join(tmpdir(), 'e2e-groups-'));
+    let prefix = join(tmpdir(), 'e2e-groups-');
+    // Why: macOS sockaddr_un has 104 bytes including the terminating NUL.
+    if (Buffer.byteLength(prefix + 'XXXXXX/owner') >= 104) prefix = '/tmp/e2e-groups-';
+    const dir = mkdtempSync(prefix);
     try {
-        return { dir, fd: openSync(join(dir, 'owner'), 'wx+') };
+        const owner = Bun.listen({ unix: join(dir, 'owner'), socket: { data() {} } });
+        return { dir, owner };
     } catch (error) {
         rmSync(dir, { recursive: true, force: true });
         throw error;
     }
 }
 
-function closeGroups({ dir, fd }: ReturnType<typeof openGroups>): number[] {
+function closeGroups({ dir, owner }: ReturnType<typeof openGroups>): number[] {
     const closed = dir + '.closed';
     try {
         renameSync(dir, closed);
         return readdirSync(closed).filter(name => /^\d+$/.test(name)).map(Number);
     } finally {
-        closeSync(fd);
+        owner.stop(true);
         rmSync(closed, { recursive: true, force: true });
     }
 }
@@ -61,17 +63,14 @@ function statusLine(label: string, started: number, last: string): void {
 
 export async function run(label: string, cmd: string[], logFile: string, budgetMs: number, verdict?: (text: string) => Status, caseEnv?: Readonly<Record<string, string>>): Promise<{ status: Status; ms: number; tail: string }> {
     const started = Date.now();
-    // Why: the case env lands after HEADED so a case may ask for a headed run of its own.
-    const env = { ...process.env, HEADED: '0', ...caseEnv, E2E_SERVICE_GROUPS: undefined };
     const log = Bun.file(logFile).writer();
     let groups: ReturnType<typeof openGroups> | undefined;
     const launch = () => {
         if (process.platform !== 'win32') groups = openGroups();
-        const service = ownedService(cmd[0], env, groups?.dir);
-        return spawn(service.executablePath, cmd.slice(1), {
+        return spawn(cmd[0], cmd.slice(1), {
             detached: !!groups,
-            stdio: groups ? ['ignore', 'pipe', 'pipe', groups.fd] : ['ignore', 'pipe', 'pipe'],
-            env: { ...service.env, E2E_RUNNER_LOCK_FD: groups ? '3' : undefined }
+            stdio: ['ignore', 'pipe', 'pipe'],
+            env: { ...process.env, HEADED: '0', ...caseEnv, E2E_SERVICE_GROUPS: groups?.dir }
         });
     };
     let proc: ReturnType<typeof launch>;
@@ -82,11 +81,24 @@ export async function run(label: string, cmd: string[], logFile: string, budgetM
         await log.end();
         throw error;
     }
+    let harnessGroup = groups ? proc.pid : undefined;
+    proc.once('exit', () => {
+        if (harnessGroup && !groupExists(harnessGroup)) harnessGroup = undefined;
+    });
     let stoppingGroups: number[] = [];
     function stop(killHarness = true): void {
         if (!active.delete(stop)) return;
-        if (groups) stoppingGroups = closeGroups(groups);
-        else if (killHarness) proc.kill('SIGKILL');
+        if (groups) {
+            stoppingGroups = closeGroups(groups);
+            if (harnessGroup) {
+                try {
+                    process.kill(-harnessGroup, 'SIGKILL');
+                    stoppingGroups.push(harnessGroup);
+                } catch (error) {
+                    if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
+                }
+            }
+        } else if (killHarness) proc.kill('SIGKILL');
     }
     active.add(stop);
     const completion = Promise.withResolvers<number | null | 'timeout'>();
@@ -125,15 +137,6 @@ export async function run(label: string, cmd: string[], logFile: string, budgetM
     let code;
     try {
         code = await completion.promise;
-        if (groups && code === 127) {
-            const file = join(groups.dir, proc.pid + '.errno');
-            if (existsSync(file)) {
-                const errno = -Number(readFileSync(file, 'utf8'));
-                const code = getSystemErrorName(errno);
-                const syscall = 'spawn ' + cmd[0];
-                throw Object.assign(new Error(syscall + ' ' + code), { code, errno, syscall, path: cmd[0], spawnargs: cmd.slice(1) });
-            }
-        }
     } finally {
         clearTimeout(timer);
         proc.stdout?.destroy();

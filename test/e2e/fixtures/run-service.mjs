@@ -18,6 +18,7 @@ if (mode === 'service') {
     writeFileSync(prefix + '.pid', String(process.pid));
     console.log('ready');
     process.send('ready');
+    if (flags.includes('stopped')) process.kill(-process.pid, 'SIGSTOP');
     if (!flags.includes('brief-child')) setTimeout(() => console.log('survived'), Number(lifetime));
 } else {
     const detached = flags.includes('detached');

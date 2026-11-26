@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { run } from '../../e2e/lib/run.js';
@@ -32,12 +32,46 @@ async function waitFor(check: () => boolean) {
 
 const serviceFixture = join(import.meta.dirname, 'fixtures/run-service.mjs');
 
+test.skipIf(process.platform === 'win32')('a harness can reap all its children before exiting', async () => {
+    const script = 'import os\nif os.fork() == 0: os._exit(0)\ntry:\n while True: os.wait()\nexcept ChildProcessError: pass';
+    expect((await run('wait', ['/usr/bin/python3', '-I', '-c', script], join(dir, 'log'), 1000)).status).toBe('pass');
+});
+
+test.skipIf(process.platform === 'win32')('the deadline kills a stopped harness group', async () => {
+    const file = join(dir, 'pid');
+    const script = 'import os, signal, sys\nfrom pathlib import Path\nPath(sys.argv[1]).write_text(str(os.getpid()))\nos.killpg(os.getpid(), signal.SIGSTOP)';
+    const result = await run('stopped', ['/usr/bin/python3', '-I', '-c', script, file], join(dir, 'log'), 1000);
+    const pid = Number(readFileSync(file, 'utf8'));
+    try {
+        expect(result.status).toBe('timeout');
+        expect(result.ms).toBeLessThan(2000);
+        expect(exited(pid)).toBe(true);
+    } finally {
+        if (!exited(pid)) process.kill(-pid, 'SIGKILL');
+    }
+});
+
 test('a zero exit in the last second of the budget passes', async () => {
     const cmd = ['node', serviceFixture, 'parent', join(dir, 'service'), '800'];
     expect((await run('early', cmd, join(dir, 'early'), 1500)).status).toBe('pass');
 });
 
-test.skipIf(process.platform === 'win32')('an owned group stays live after its service and last child exit', async () => {
+test.skipIf(process.platform === 'win32')('a detached service starts under a long TMPDIR', async () => {
+    const longDir = join(dir, 'x'.repeat(104));
+    mkdirSync(longDir);
+    const previous = process.env.TMPDIR;
+    process.env.TMPDIR = longDir;
+    try {
+        const result = await run('long', ['node', serviceFixture, 'parent', join(dir, 'service'), '10', 'detached'], join(dir, 'log'), 1500);
+        expect(result.status).toBe('pass');
+        expect(result.tail).toContain('survived');
+    } finally {
+        if (previous === undefined) delete process.env.TMPDIR;
+        else process.env.TMPDIR = previous;
+    }
+});
+
+test.skipIf(process.platform === 'win32')('teardown tolerates an owned service and its last child exiting early', async () => {
     const prefix = join(dir, 'short');
     const cmd = ['node', serviceFixture, 'parent'];
     const sibling = run('sibling', [...cmd, join(dir, 'sibling'), '1800', 'detached'], join(dir, 'sibling.log'), 5000);
@@ -49,7 +83,6 @@ test.skipIf(process.platform === 'win32')('an owned group stays live after its s
         leader = Number(readFileSync(prefix + '.pid', 'utf8'));
         last = Number(readFileSync(prefix + '.last', 'utf8'));
         await waitFor(() => exited(leader) && exited(last));
-        expect(() => process.kill(-leader, 0)).not.toThrow();
     } finally {
         writeFileSync(prefix + '.release', '');
         const [result, other] = await Promise.all([harness, sibling]);
@@ -71,6 +104,7 @@ test.skipIf(process.platform === 'win32').each([
     ['detached'],
     ['detached', 'exit'],
     ['detached', 'private'],
+    ['detached', 'private', 'stopped'],
     ['detached', 'private', 'exit'],
     ['detached', 'private', 'exit', 'hold-pipe']
 ].map(flags => ({ flags })))('cleans up the service and releases the worker ($flags)', async ({ flags }) => {
@@ -103,10 +137,8 @@ test('the deadline releases readers held by an unregistered child', async () => 
     const start = performance.now();
     const harness = run('open pipes', ['node', serviceFixture, 'parent', prefix, '6000', 'detached', 'unregistered', 'exit'], join(dir, 'log'), 1500);
     await waitFor(() => existsSync(prefix + '.exited') && exited(Number(readFileSync(prefix + '.exited', 'utf8'))));
-    const parent = Number(readFileSync(prefix + '.exited', 'utf8'));
     const pid = Number(readFileSync(prefix + '.pid', 'utf8'));
     try {
-        if (process.platform !== 'win32') expect(() => process.kill(-parent, 0)).not.toThrow();
         const result = await harness;
         expect(result.status).toBe('timeout');
         expect(existsSync(prefix + '.exited')).toBe(true);
@@ -144,7 +176,7 @@ test.skipIf(process.platform === 'win32').each([
 });
 
 test.skipIf(process.platform === 'win32')('a case resolves its executable from its own PATH', async () => {
-    symlinkSync('/bin/cat', join(dir, 'echo'));
+    writeFileSync(join(dir, 'echo'), '#!/bin/sh\nexec /bin/cat "$1"\n', { mode: 0o755 });
     const input = join(dir, '$1 with spaces');
     writeFileSync(input, 'fixture\n');
     const result = await run('path', ['echo', input], join(dir, 'path'), 1500, undefined, { PATH: dir });

@@ -1,41 +1,38 @@
 #!/usr/bin/python3 -I
-import fcntl
 import os
 import shutil
 import signal
+import socket
 import sys
 from pathlib import Path
 
-if os.getpgrp() != os.getpid():
-    sys.exit("Owned E2E services require a dedicated process group")
-
-runner_fd = os.environ.pop("E2E_RUNNER_LOCK_FD", None)
-if runner_fd is not None:
-    fd = int(runner_fd)
-    fcntl.flock(fd, fcntl.LOCK_EX)
-    os.close(fd)
+group = os.getpid()
+if os.getsid(0) != group:
+    sys.exit("Owned E2E services require a dedicated session")
 
 groups = Path(os.environ["E2E_SERVICE_GROUPS"])
-group = groups / str(os.getpid())
-with (groups / "owner").open("rb") as owner:
-    group.touch()
-    mask = signal.pthread_sigmask(signal.SIG_BLOCK, [signal.SIGHUP, signal.SIGINT, signal.SIGQUIT, signal.SIGTERM])
-    if os.fork() == 0:
-        # Why: the watcher must release the harness output and Playwright's protocol pipes before waiting.
+with socket.socket(socket.AF_UNIX) as owner:
+    owner.connect(str(groups / "owner"))
+    (groups / str(group)).touch()
+    watcher = os.fork()
+    if watcher == 0:
+        # Why: staying in the session pins its ID while a stopped service group needs an external signal.
+        os.setpgid(0, 0)
         os.dup2(owner.fileno(), 0)
         os.closerange(1, max(5, owner.fileno() + 1))
-        fcntl.flock(0, fcntl.LOCK_SH)
-        shutil.rmtree(groups, ignore_errors=True)
-        os.killpg(0, signal.SIGKILL)
-        os._exit(1)
-    signal.pthread_sigmask(signal.SIG_SETMASK, mask)
+        try:
+            os.read(0, 1)
+        finally:
+            try:
+                os.killpg(group, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            shutil.rmtree(groups, ignore_errors=True)
+        os._exit(0)
+    os.setpgid(watcher, watcher)
 
 for name in ("SIGPIPE", "SIGXFZ", "SIGXFSZ"):
     if hasattr(signal, name):
         signal.signal(getattr(signal, name), signal.SIG_DFL)
 executable = os.environ["E2E_SERVICE_EXECUTABLE"]
-try:
-    os.execvp(executable, [executable, *sys.argv[1:]])
-except OSError as error:
-    group.with_suffix(".errno").write_text(str(error.errno))
-    sys.exit(127)
+os.execvp(executable, [executable, *sys.argv[1:]])
