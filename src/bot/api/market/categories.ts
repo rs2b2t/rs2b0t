@@ -1,4 +1,5 @@
 import type { ObjRecord } from '../../adapter/ClientAdapter.js';
+import { GEMS } from '../../data/gems.js';
 import { ITEM_DB } from '../../data/itemdb.js';
 import type { Catalog } from './catalog.js';
 
@@ -40,7 +41,10 @@ const SECONDARIES = [
 ];
 
 // Why: matching the stone anywhere in the name swept up every ring and amulet cut from it, which belong with the jewellery.
-const GEM = /^(uncut )?(sapphire|emerald|ruby|diamond|dragonstone|opal|jade|red topaz)$/;
+const GEM_NAMES = new Set(GEMS.flatMap(gem => {
+    const name = gem.name.toLowerCase();
+    return [name, `uncut ${name}`];
+}));
 
 const TOOLS = [
     'fishing rod', 'fishing net', 'lobster pot', 'harpoon', 'fishing bait', 'karambwan vessel',
@@ -102,7 +106,7 @@ export function categoryOf(rec: Pick<ObjRecord, 'name' | 'equippable'>, known: K
     if (has(name, SECONDARIES)) {
         return 'Herblore';
     }
-    if (GEM.test(name)) {
+    if (GEM_NAMES.has(name)) {
         return 'Gems';
     }
     // Prefer explicit loadout categories; most food names have no useful suffix.
