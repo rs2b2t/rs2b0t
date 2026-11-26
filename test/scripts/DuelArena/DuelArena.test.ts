@@ -73,13 +73,13 @@ beforeEach(() => {
     Game.combatStyleResolution = style => ({
         requested: style,
         effective: style,
-        mode: { attack: 0, strength: 1, controlled: 2, defence: 3 }[style]
+        mode: { attack: 0, strength: 1, controlled: 2, defence: 3, minimum: 3 }[style]
     });
     Game.combatMode = () => combatMode;
     Game.setCombatStyle = style => {
         selectedStyles.push(style);
         if (typeof style === 'string') {
-            combatMode = { attack: 0, strength: 1, controlled: 2, defence: 3 }[style];
+            combatMode = { attack: 0, strength: 1, controlled: 2, defence: 3, minimum: 3 }[style];
         }
         return true;
     };

@@ -69,7 +69,7 @@ export const Execution: {
 
 // game state
 
-export type MeleeCombatStyle = 'attack' | 'strength' | 'controlled' | 'defence';
+export type MeleeCombatStyle = 'attack' | 'strength' | 'controlled' | 'defence' | 'minimum';
 
 /** An available combat mode and its interface label. */
 export interface CombatModeLabel {
