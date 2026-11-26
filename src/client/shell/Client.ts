@@ -579,6 +579,7 @@ export class Client extends GameShell {
     private friendUsername: (string | null)[] = new TypedArray1d(200, null);
     private friendUserhash: BigInt64Array = new BigInt64Array(200);
     private friendNodeId: Int32Array = new Int32Array(200);
+    private minimapFriends: WeakMap<ClientPlayer, { name: string; online: boolean }> | null = null;
 
     private ignoreCount: number = 0;
     private ignoreUserhash: bigint[] = [];
@@ -2034,6 +2035,7 @@ export class Client extends GameShell {
                 this.locChanges = new LinkList();
                 this.friendServerStatus = 0;
                 this.friendCount = 0;
+                this.minimapFriends = null;
                 this.tutComId = -1;
                 this.chatModalId = -1;
                 this.mainModalId = -1;
@@ -6793,6 +6795,7 @@ export class Client extends GameShell {
                     if (username === this.friendUserhash[i]) {
                         if (this.friendNodeId[i] !== world) {
                             this.friendNodeId[i] = world;
+                            this.minimapFriends = null;
                             this.redrawSide = true;
                             if (world > 0) {
                                 this.addChat(5, displayName + ' has logged in.', '');
@@ -6812,6 +6815,7 @@ export class Client extends GameShell {
                     this.friendUsername[this.friendCount] = displayName;
                     this.friendNodeId[this.friendCount] = world;
                     this.friendCount++;
+                    this.minimapFriends = null;
                     this.redrawSide = true;
                 }
 
@@ -11537,16 +11541,7 @@ export class Client extends GameShell {
                 anchorX = ((player.x / 32) | 0) - ((this.localPlayer.x / 32) | 0);
                 anchorY = ((player.z / 32) | 0) - ((this.localPlayer.z / 32) | 0);
 
-                let friend: boolean = false;
-                const userhash: bigint = JString.toUserhash(player.name);
-                for (let j: number = 0; j < this.friendCount; j++) {
-                    if (userhash === this.friendUserhash[j] && this.friendNodeId[j] !== 0) {
-                        friend = true;
-                        break;
-                    }
-                }
-
-                if (friend) {
+                if (this.isOnlineMinimapFriend(player, player.name)) {
                     this.minimapDrawDot(anchorY, this.mapdots4, anchorX);
                 } else {
                     this.minimapDrawDot(anchorY, this.mapdots3, anchorX);
@@ -11587,6 +11582,28 @@ export class Client extends GameShell {
         Pix2D.fillRect(97, 78, 3, 3, Colour.WHITE);
 
         this.areaGame?.setPixels();
+    }
+
+    private isOnlineMinimapFriend(player: ClientPlayer, name: string): boolean {
+        if (this.friendCount === 0) {
+            return false;
+        }
+        const cache = this.minimapFriends ??= new WeakMap();
+        const cached = cache.get(player);
+        if (cached?.name === name) {
+            return cached.online;
+        }
+
+        const hash = JString.toUserhash(name);
+        let online = false;
+        for (let i = 0; i < this.friendCount; i++) {
+            if (hash === this.friendUserhash[i] && this.friendNodeId[i] !== 0) {
+                online = true;
+                break;
+            }
+        }
+        cache.set(player, { name, online });
+        return online;
     }
 
     minimapDrawArrow(dx: number, dy: number, image: Pix32 | null) {
@@ -11722,6 +11739,7 @@ export class Client extends GameShell {
             this.friendUserhash[this.friendCount] = userhash;
             this.friendNodeId[this.friendCount] = 0;
             this.friendCount++;
+            this.minimapFriends = null;
 
             this.redrawSide = true;
 
@@ -11770,6 +11788,7 @@ export class Client extends GameShell {
         for (let i: number = 0; i < this.friendCount; i++) {
             if (this.friendUserhash[i] === userhash) {
                 this.friendCount--;
+                this.minimapFriends = null;
                 this.redrawSide = true;
 
                 for (let j: number = i; j < this.friendCount; j++) {
