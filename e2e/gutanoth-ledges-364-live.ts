@@ -4,8 +4,8 @@
 //   CASE=toban HEADED=1 bun e2e/gutanoth-ledges-364-live.ts
 
 //   ~/redeploy.sh && HEADED=1 bun e2e/gutanoth-ledges-364-live.ts
-import type { Page } from 'playwright-core';
 import { launchBrowser, parseArgs } from './lib/harness.js';
+import { cheb, teleportForRoute } from './lib/teleport.js';
 import { createHarnessProof } from './lib/harnessProof.js';
 import { runLiveWalkProof } from './lib/liveWalkProof.js';
 import { cheatQuiet, mainlandAccount, maxmeAndClearDialogs } from './tutorial/harness.js';
@@ -24,45 +24,10 @@ const DIG = CASE === 'toban' ? TOBAN_DIG : CHASM_DIG;
 const ARRIVAL = 2;
 const BUDGET_MS = 180_000;
 
-type Tile = { x: number; z: number; level: number };
-type Abi = { __rs2b0t: { reader: { worldTile(): Tile | null } } };
-
 const proof = createHarnessProof({
     issue: 364,
     slug: CASE === 'toban' ? 'gutanoth-toban' : 'gutanoth-chasm'
 });
-
-function cheb(a: Tile, b: Tile): number {
-    if (a.level !== b.level) {
-        return 9999;
-    }
-    return Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
-}
-
-function teleCmd(t: Tile): string {
-    return `tele ${t.level},${t.x >> 6},${t.z >> 6},${t.x & 63},${t.z & 63}`;
-}
-
-async function teleArrive(page: Page, spot: Tile, maxDist = 3): Promise<void> {
-    for (let a = 0; a < 8; a++) {
-        if (page.isClosed()) {
-            throw new Error('page closed before tele');
-        }
-        await cheatQuiet(page, teleCmd(spot));
-        for (let p = 0; p < 25; p++) {
-            if (page.isClosed()) {
-                throw new Error('page closed during tele settle');
-            }
-            const t = await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.reader.worldTile());
-            if (t && cheb(t, spot) <= maxDist) {
-                await page.waitForTimeout(600);
-                return;
-            }
-            await page.waitForTimeout(200);
-        }
-    }
-    throw new Error(`tele ${spot.x},${spot.z} failed`);
-}
 
 const browser = await launchBrowser({ swiftshader: true });
 const page = await browser.newPage();
@@ -84,7 +49,7 @@ try {
     }
 
     console.log(`tele start ${START.x},${START.z} (no tele onto dig island)`);
-    await teleArrive(page, START, 2);
+    await teleportForRoute(page, START, 2);
 
     const res = await runLiveWalkProof(page, {
         dest: DIG,

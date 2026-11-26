@@ -8,6 +8,7 @@
 
 import type { Page } from 'playwright-core';
 import { deployIsolatedClient, fail, launchBrowser, logout } from './lib/harness.js';
+import { tryTeleport } from './lib/teleport.js';
 import { cheatQuiet, clearChatDialogs, mainlandAccount, maxmeAndClearDialogs, startScript, seedItemsToBank } from './tutorial/harness.js';
 
 const BASE = process.env.BASE ?? 'http://localhost:8890';
@@ -31,25 +32,6 @@ interface Abi {
         runner: { state: string; bot: { status?: string } | null; ctx?: { log?: { msg: string }[] } | null };
         registry: { get(n: string): unknown };
     };
-}
-
-function teleCmd(t: typeof SPOT): string {
-    return `tele ${t.level},${t.x >> 6},${t.z >> 6},${t.x & 63},${t.z & 63}`;
-}
-
-async function teleArrive(page: Page): Promise<void> {
-    for (let attempt = 0; attempt < 4; attempt++) {
-        await cheatQuiet(page, teleCmd(SPOT));
-        for (let probe = 0; probe < 12; probe++) {
-            const t = await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.reader.worldTile());
-            if (t && t.level === SPOT.level && Math.max(Math.abs(t.x - SPOT.x), Math.abs(t.z - SPOT.z)) <= 6) {
-                await page.waitForTimeout(700);
-                return;
-            }
-            await page.waitForTimeout(350);
-        }
-    }
-    fail(`shortfloat: could not tele the shop to ${SPOT.x},${SPOT.z}`);
 }
 
 const isolated = deployIsolatedClient('shortfloat');
@@ -107,7 +89,9 @@ try {
         }
     );
 
-    await teleArrive(page);
+    if (!(await tryTeleport(page, SPOT, 6, { settleMs: 700 }))) {
+        fail(`shortfloat: could not tele the shop to ${SPOT.x},${SPOT.z}`);
+    }
     await startScript(page, 'MarketMaker');
     await page.waitForTimeout(8_000);
 

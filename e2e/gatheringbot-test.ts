@@ -11,6 +11,7 @@
 //   BUDGET_S=180 bun e2e/gatheringbot-test.ts   # per-scenario seconds (default 150)
 import type { Page } from 'playwright-core';
 import { deployIsolatedClient, launchBrowser, parseArgs } from './lib/harness.js';
+import { tryTeleport } from './lib/teleport.js';
 import {
     cheatQuiet,
     mainlandAccount,
@@ -117,10 +118,6 @@ type Abi = {
 };
 
 // ── helpers ──────────────────────────────────────────────────────────────────
-
-function teleCheat(t: Tile): string {
-    return `tele ${t.level},${t.x >> 6},${t.z >> 6},${t.x & 63},${t.z & 63}`;
-}
 
 function chebyshev(a: Tile, b: Tile): number {
     return Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
@@ -512,25 +509,6 @@ async function clearInv(page: Page): Promise<void> {
     }
 }
 
-async function teleArrive(page: Page, spot: Tile, maxDist = 18): Promise<boolean> {
-    const cmd = teleCheat(spot);
-    for (let attempt = 0; attempt < 4; attempt++) {
-        // tutorial/harness cheatQuiet ignores a 3rd arg, fixed ~700ms settle per send.
-        await cheatQuiet(page, cmd);
-        for (let poll = 0; poll < 12; poll++) {
-            const t = await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.reader.worldTile());
-            if (t && t.level === spot.level && chebyshev(t, spot) <= maxDist) {
-                // Zone rebuild lags the tile update (docs/decisions/level-change-lag.md).
-                // Blank Locs/Npcs here is "not loaded yet", not "camp empty".
-                await page.waitForTimeout(600);
-                return true;
-            }
-            await page.waitForTimeout(350);
-        }
-    }
-    return false;
-}
-
 type SceneExpect = 'rocks' | 'trees' | 'fish' | 'any-loc' | 'shop' | 'bank' | 'skip';
 
 /** Poll until the expected resource class is visible near the player.
@@ -634,7 +612,7 @@ async function purgeBankTools(
         return;
     }
 
-    const arrived = await teleArrive(page, bankStand, 12);
+    const arrived = await tryTeleport(page, bankStand, 12);
     if (!arrived) {
         throw new Error(`purge ${label}: tele to bank ${bankStand.x},${bankStand.z} failed`);
     }
@@ -765,7 +743,7 @@ async function depositHeldToBank(
         return;
     }
 
-    const arrived = await teleArrive(page, bankStand, 12);
+    const arrived = await tryTeleport(page, bankStand, 12);
     if (!arrived) {
         throw new Error(`deposit ${label}: tele to bank ${bankStand.x},${bankStand.z} failed`);
     }
@@ -2854,7 +2832,7 @@ try {
                 }
             }
 
-            const arrived = await teleArrive(page, sc.start);
+            const arrived = await tryTeleport(page, sc.start, 18);
             if (!arrived) {
                 const t = await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.reader.worldTile());
                 throw new Error(`tele to ${sc.start.x},${sc.start.z} failed (at ${t ? `${t.x},${t.z},${t.level}` : '?'})`);

@@ -2,8 +2,8 @@
  *  setvar elenaquest 30, give Spade + Gas mask and equip the mask, tele to the garden stand (2566,3330), nothing teleports into West Ardougne, then walkResilient to the dig (2488,3308) through mud dig → sewer → pipe → manhole. */
 
 //   ~/redeploy.sh && HEADED=1 bun e2e/plague-pipe-366-live.ts
-import type { Page } from 'playwright-core';
 import { launchBrowser, parseArgs } from './lib/harness.js';
+import { cheb, teleportForRoute } from './lib/teleport.js';
 import { createHarnessProof } from './lib/harnessProof.js';
 import { runLiveWalkProof } from './lib/liveWalkProof.js';
 import {
@@ -23,42 +23,7 @@ const DIG = { x: 2488, z: 3308, level: 0 };
 const ARRIVAL = 2;
 const BUDGET_MS = 240_000;
 
-type Tile = { x: number; z: number; level: number };
-type Abi = { __rs2b0t: { reader: { worldTile(): Tile | null } } };
-
 const proof = createHarnessProof({ issue: 366, slug: 'plague-pipe' });
-
-function cheb(a: Tile, b: Tile): number {
-    if (a.level !== b.level) {
-        return 9999;
-    }
-    return Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
-}
-
-function teleCmd(t: Tile): string {
-    return `tele ${t.level},${t.x >> 6},${t.z >> 6},${t.x & 63},${t.z & 63}`;
-}
-
-async function teleArrive(page: Page, spot: Tile, maxDist = 3): Promise<void> {
-    for (let a = 0; a < 8; a++) {
-        if (page.isClosed()) {
-            throw new Error('page closed before tele');
-        }
-        await cheatQuiet(page, teleCmd(spot));
-        for (let p = 0; p < 25; p++) {
-            if (page.isClosed()) {
-                throw new Error('page closed during tele settle');
-            }
-            const t = await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.reader.worldTile());
-            if (t && cheb(t, spot) <= maxDist) {
-                await page.waitForTimeout(600);
-                return;
-            }
-            await page.waitForTimeout(200);
-        }
-    }
-    throw new Error(`tele ${spot.x},${spot.z} failed`);
-}
 
 const browser = await launchBrowser({ swiftshader: true });
 const page = await browser.newPage();
@@ -92,7 +57,7 @@ try {
     console.log('gave Spade + Gas mask (equip at pipe hop)');
 
     console.log(`tele garden ${GARDEN.x},${GARDEN.z}`);
-    await teleArrive(page, GARDEN, 2);
+    await teleportForRoute(page, GARDEN, 2);
 
     const res = await runLiveWalkProof(page, {
         dest: DIG,

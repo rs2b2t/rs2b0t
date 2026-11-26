@@ -7,7 +7,8 @@
 
 import type { Page } from 'playwright-core';
 import { deployIsolatedClient, launchBrowser, logout } from './lib/harness.js';
-import { cheatQuiet, clearChatDialogs, mainlandAccount, maxmeAndClearDialogs, startScript, seedItemsToBank } from './tutorial/harness.js';
+import { tryTeleport } from './lib/teleport.js';
+import { teleCheat, cheatQuiet, clearChatDialogs, mainlandAccount, maxmeAndClearDialogs, startScript, seedItemsToBank } from './tutorial/harness.js';
 
 const BASE = process.env.BASE ?? 'http://localhost:8890';
 /** Fixed, so the shop's bank and its takings survive a restart. */
@@ -55,25 +56,6 @@ function gp(n: number): string {
     return n.toLocaleString('en-US');
 }
 
-function teleCmd(t: { x: number; z: number; level: number }): string {
-    return `tele ${t.level},${t.x >> 6},${t.z >> 6},${t.x & 63},${t.z & 63}`;
-}
-
-async function teleArrive(page: Page, spot: typeof SPOT): Promise<void> {
-    for (let attempt = 0; attempt < 4; attempt++) {
-        await cheatQuiet(page, teleCmd(spot));
-        for (let probe = 0; probe < 12; probe++) {
-            const t = await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.reader.worldTile());
-            if (t && t.level === spot.level && Math.max(Math.abs(t.x - spot.x), Math.abs(t.z - spot.z)) <= 6) {
-                await page.waitForTimeout(700);
-                return;
-            }
-            await page.waitForTimeout(350);
-        }
-    }
-    throw new Error(`demo: could not tele the shop to ${spot.x},${spot.z}`);
-}
-
 function priceBook(): string {
     return JSON.stringify([{
         name: 'demo',
@@ -108,7 +90,7 @@ ${'='.repeat(78)}
 
   2. Get to the shop and give yourself something to trade with:
 
-       ::${teleCmd(SPOT)}
+       ::${teleCheat(SPOT)}
        ::give coins 500000
 ${gifts}
 
@@ -213,7 +195,9 @@ try {
         coinFloat: '200000'
     } as Record<string, string>);
 
-    await teleArrive(page, SPOT);
+    if (!(await tryTeleport(page, SPOT, 6, { settleMs: 700 }))) {
+        throw new Error(`demo: could not tele the shop to ${SPOT.x},${SPOT.z}`);
+    }
 
     if (!(await page.evaluate(() => Boolean((globalThis as never as Abi).rs2b0t.registry.get('MarketMaker'))))) {
         throw new Error('demo: MarketMaker is missing from the registry — the deployed bundle is stale');

@@ -9,6 +9,7 @@
 // The harness builds and deploys its own isolated client; no manual redeploy needed.
 import type { Page } from 'playwright-core';
 import { deployIsolatedClient, fail, launchBrowser, parseArgs } from './lib/harness.js';
+import { requireTeleport } from './lib/teleport.js';
 import { cheatQuiet, clearChatDialogs, mainlandAccount, maxmeAndClearDialogs, startScript, seedItemsToBank } from './tutorial/harness.js';
 
 const { base } = parseArgs(process.argv.slice(2), { base: process.env.BASE ?? 'http://localhost:8890' });
@@ -80,25 +81,6 @@ type Abi = {
 
 const t0 = Date.now();
 const at = (): string => `[${Math.round((Date.now() - t0) / 1000)}s]`;
-
-function teleCmd(t: Tile): string {
-    return `tele ${t.level},${t.x >> 6},${t.z >> 6},${t.x & 63},${t.z & 63}`;
-}
-
-async function teleArrive(page: Page, spot: Tile): Promise<void> {
-    for (let attempt = 0; attempt < 4; attempt++) {
-        await cheatQuiet(page, teleCmd(spot));
-        for (let probe = 0; probe < 12; probe++) {
-            const t = await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.reader.worldTile());
-            if (t && t.level === spot.level && Math.max(Math.abs(t.x - spot.x), Math.abs(t.z - spot.z)) <= 6) {
-                await page.waitForTimeout(700);
-                return;
-            }
-            await page.waitForTimeout(350);
-        }
-    }
-    fail(`tele to ${spot.x},${spot.z} failed`);
-}
 
 async function writeStorage(page: Page, entries: Record<string, string>): Promise<void> {
     await page.evaluate(map => {
@@ -309,7 +291,7 @@ try {
         { debugName: 'keyhalf2', displayName: 'Half of a key', qty: 20 },
         { debugName: 'coins', displayName: 'Coins', qty: 500000 }
     ], { x: 3185, z: 3440, level: 0 });
-    await teleArrive(makerPage, SPOT);
+    await requireTeleport(makerPage, SPOT, 6);
 
     await writeStorage(makerPage, {
         'rs2b0t:set:PriceBooks:books': BOOK,
@@ -329,7 +311,7 @@ try {
     await clearChatDialogs(custPage);
     await cheatQuiet(custPage, '~clearinv');
     await cheatQuiet(custPage, 'give coins 200000');
-    await teleArrive(custPage, SPOT);
+    await requireTeleport(custPage, SPOT, 6);
 
     if (!(await makerPage.evaluate(() => Boolean((globalThis as never as Abi).rs2b0t.registry.get('MarketMaker'))))) {
         fail('MarketMaker missing from the registry — the deployed bundle is stale');

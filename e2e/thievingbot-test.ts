@@ -8,6 +8,7 @@
 //   HEADED=1 SLOWMO=200 bun e2e/thievingbot-test.ts
 import type { Page } from 'playwright-core';
 import { fail, launchBrowser, parseArgs } from './lib/harness.js';
+import { tryTeleport } from './lib/teleport.js';
 import { cheatQuiet, mainlandAccount, startScript } from './tutorial/harness.js';
 
 const { base } = parseArgs(process.argv.slice(2), { base: process.env.BASE ?? 'http://localhost:8890' });
@@ -51,30 +52,6 @@ type Abi = {
         client: { ingame: boolean; sceneState: number };
     };
 };
-
-function teleCheat(t: Tile): string {
-    return `tele ${t.level},${t.x >> 6},${t.z >> 6},${t.x & 63},${t.z & 63}`;
-}
-
-function chebyshev(a: Tile, b: Tile): number {
-    return Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
-}
-
-async function teleArrive(page: Page, spot: Tile, maxDist = 18): Promise<boolean> {
-    const cmd = teleCheat(spot);
-    for (let attempt = 0; attempt < 4; attempt++) {
-        await cheatQuiet(page, cmd);
-        for (let poll = 0; poll < 12; poll++) {
-            const t = await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.reader.worldTile());
-            if (t && t.level === spot.level && chebyshev(t, spot) <= maxDist) {
-                await page.waitForTimeout(600);
-                return true;
-            }
-            await page.waitForTimeout(350);
-        }
-    }
-    return false;
-}
 
 async function seedItem(page: Page, debugName: string, displayName: string, qty = 1): Promise<void> {
     const cmd = `give ${debugName} ${qty}`;
@@ -253,7 +230,7 @@ try {
     await seedItem(page, 'lobster', 'Lobster', INV_FOOD);
     console.log(`  inv: ${INV_FOOD} cooked Lobster (no bank seed)`);
 
-    if (!(await teleArrive(page, GUARD_SPOT, 10))) {
+    if (!(await tryTeleport(page, GUARD_SPOT, 10))) {
         fail(`could not tele to Guard spot ${GUARD_SPOT.x},${GUARD_SPOT.z}`);
     }
     // Wait for Guards in scene after tele.

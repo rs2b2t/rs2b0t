@@ -4,8 +4,9 @@
 // then: HEADED=1 bun e2e/trapdoor-mines-live.ts
 import type { Page } from 'playwright-core';
 import { launchBrowser, parseArgs } from './lib/harness.js';
+import { cheb, teleportForRoute } from './lib/teleport.js';
 import { createHarnessProof } from './lib/harnessProof.js';
-import { cheatQuiet, mainlandAccount, maxmeAndClearDialogs } from './tutorial/harness.js';
+import { mainlandAccount, maxmeAndClearDialogs } from './tutorial/harness.js';
 
 const { base } = parseArgs(process.argv.slice(2), {
     base: process.env.BASE ?? 'http://localhost:8890'
@@ -46,32 +47,6 @@ const cases = [
 ] as const;
 
 const proof = createHarnessProof({ issue: 312, slug: 'trapdoor-mines' });
-
-function cheb(a: Tile, b: Tile): number {
-    if (a.level !== b.level) {
-        return 9999;
-    }
-    return Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
-}
-
-function teleCmd(t: Tile): string {
-    return `tele ${t.level},${t.x >> 6},${t.z >> 6},${t.x & 63},${t.z & 63}`;
-}
-
-async function teleArrive(page: Page, spot: Tile, maxDist = 8): Promise<void> {
-    for (let a = 0; a < 6; a++) {
-        await cheatQuiet(page, teleCmd(spot));
-        for (let p = 0; p < 16; p++) {
-            const t = await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.reader.worldTile());
-            if (t && cheb(t, spot) <= maxDist) {
-                await page.waitForTimeout(400);
-                return;
-            }
-            await page.waitForTimeout(200);
-        }
-    }
-    throw new Error(`tele ${spot.x},${spot.z} failed`);
-}
 
 async function walkTo(page: Page, dest: Tile, timeoutMs: number): Promise<{ walkOk: boolean; tile: Tile | null; logs: string[] }> {
     await page.evaluate(
@@ -139,7 +114,7 @@ try {
     for (const c of cases) {
         console.log(`\n══ ${c.id} ══`);
         try {
-            await teleArrive(page, c.start, 10);
+            await teleportForRoute(page, c.start, 10, { attempts: 6, polls: 16, pollMs: 200, settleMs: 400 });
             const down = await walkTo(page, c.under, 120_000);
             const tile = down.tile;
             if (!tile || cheb(tile, c.under) > 6) {

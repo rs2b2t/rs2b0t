@@ -9,6 +9,7 @@
 
 import type { Page } from 'playwright-core';
 import { deployIsolatedClient, launchBrowser, logout } from './lib/harness.js';
+import { tryTeleport } from './lib/teleport.js';
 import { cheatQuiet, clearChatDialogs, mainlandAccount, maxmeAndClearDialogs, startScript, seedItemsToBank } from './tutorial/harness.js';
 
 const BASE = process.env.BASE ?? 'http://localhost:8890';
@@ -193,25 +194,6 @@ function pick<T>(xs: readonly T[]): T {
 function sellPrice(mid: number): number {
     const buy = Math.max(1, Math.floor((mid * (200 - MARGIN)) / 200));
     return Math.max(buy + 1, Math.ceil((mid * (200 + MARGIN)) / 200));
-}
-
-function teleCmd(t: Tile): string {
-    return `tele ${t.level},${t.x >> 6},${t.z >> 6},${t.x & 63},${t.z & 63}`;
-}
-
-async function teleArrive(page: Page, spot: Tile, within = 6): Promise<boolean> {
-    for (let attempt = 0; attempt < 4; attempt++) {
-        await cheatQuiet(page, teleCmd(spot));
-        for (let probe = 0; probe < 12; probe++) {
-            const t = await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.reader.worldTile());
-            if (t && t.level === spot.level && Math.max(Math.abs(t.x - spot.x), Math.abs(t.z - spot.z)) <= within) {
-                await page.waitForTimeout(600);
-                return true;
-            }
-            await page.waitForTimeout(350);
-        }
-    }
-    return false;
 }
 
 async function writeStorage(page: Page, entries: Record<string, string>): Promise<void> {
@@ -612,7 +594,7 @@ try {
         'rs2b0t:set:MarketMaker:coinFloat': String(COIN_FLOAT)
     });
 
-    if (!(await teleArrive(shopPage, SPOT))) {
+    if (!(await tryTeleport(shopPage, SPOT, 6))) {
         throw new Error(`crowd: could not tele the shop to ${SPOT.x},${SPOT.z}`);
     }
     if (!(await shopPage.evaluate(() => Boolean((globalThis as never as Abi).rs2b0t.registry.get('MarketMaker'))))) {
@@ -651,7 +633,7 @@ try {
         await cheatQuiet(page, '~clearinv');
         await cheatQuiet(page, 'give coins 1000000');
         // Why: standing on the shop's own tile blocks it, so each customer takes a spot around it.
-        await teleArrive(page, { x: SPOT.x + (i % 3) - 1, z: SPOT.z - 2 - Math.floor(i / 3), level: SPOT.level }, 3);
+        await tryTeleport(page, { x: SPOT.x + (i % 3) - 1, z: SPOT.z - 2 - Math.floor(i / 3), level: SPOT.level }, 3);
         crowd.push({ name, page, sold: 0, bought: 0, refused: 0, busy: 0, walkouts: 0, gp: 0, lastSayMs: 0 });
     }
 

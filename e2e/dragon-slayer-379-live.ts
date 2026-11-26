@@ -4,6 +4,7 @@
 //   ~/redeploy.sh && HEADED=1 bun e2e/dragon-slayer-379-live.ts
 import type { Page } from 'playwright-core';
 import { launchBrowser, parseArgs } from './lib/harness.js';
+import { teleportForRoute } from './lib/teleport.js';
 import { createHarnessProof } from './lib/harnessProof.js';
 import {
     cheatQuiet,
@@ -74,23 +75,8 @@ type Abi = {
 
 const proof = createHarnessProof({ issue: 379, slug: 'dragon-slayer-stuck' });
 
-function teleCmd(t: Tile): string {
-    return `tele ${t.level},${t.x >> 6},${t.z >> 6},${t.x & 63},${t.z & 63}`;
-}
-
-async function teleArrive(page: Page, spot: Tile, maxDist = 10): Promise<void> {
-    for (let a = 0; a < 6; a++) {
-        await cheatQuiet(page, teleCmd(spot));
-        for (let p = 0; p < 16; p++) {
-            const t = await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.reader.worldTile());
-            if (t && Math.max(Math.abs(t.x - spot.x), Math.abs(t.z - spot.z)) <= maxDist && t.level === spot.level) {
-                await page.waitForTimeout(400);
-                return;
-            }
-            await page.waitForTimeout(200);
-        }
-    }
-    throw new Error(`tele ${spot.x},${spot.z} failed`);
+function teleArrive(page: Page, spot: Tile, maxDist = 10): Promise<void> {
+    return teleportForRoute(page, spot, maxDist, { attempts: 6, polls: 16, pollMs: 200, settleMs: 400 });
 }
 
 async function seedBankedMazeKey(page: Page): Promise<void> {
