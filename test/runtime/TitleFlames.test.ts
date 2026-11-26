@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, expect, jest, mock, spyOn, test } from 'bun:test';
+import { execFileSync } from 'node:child_process';
+import { join } from 'node:path';
 import BotClient from '#/bot/runtime/BotClient.js';
 import { RenderGate } from '#/bot/runtime/RenderGate.js';
 import Pix8 from '#/client/graphics/Pix8.js';
@@ -95,4 +97,15 @@ test('unloading while title progress is pending leaves no animation timer', asyn
     client.unloadTitle();
     await Promise.resolve();
     expect(clock.getTimerCount()).toBe(0);
+});
+
+test('byte grids preserve title panels and intensities through cooling-map rollover', () => {
+    const fixture = join(import.meta.dir, 'fixtures/titleFlames.ts');
+    const source = join(import.meta.dir, '../../src/client/shell/TitleFlames.ts');
+    const result = JSON.parse(execFileSync(process.execPath, ['--no-env-file', '--no-install', fixture, source, '1', '130'], { encoding: 'utf8' }));
+    expect(result.coolingCycle).toBe(512);
+    expect(result.draws).toBe(260);
+    expect(result.panels).toBe('56abddfe147d02237fb74da3019b27808b97b875f3822d939aa00e0873439e93');
+    expect(result.grids).toBe('b840131fcd9e9083b96fcff7ae3f171cfa10c900248a7bd5931d1cfc365655d6');
+    expect(result.bytes).toBe(128 * 1024);
 });
