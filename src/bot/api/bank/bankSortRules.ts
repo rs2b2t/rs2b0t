@@ -1,5 +1,7 @@
 // Why: kept free of client imports so scripts and tests pull it in without loading the adapter graph.
 
+import { HERBS } from '../../data/herbs.js';
+
 export type BankCategory =
     | 'coins' | 'runes' | 'staves' | 'ammunition' | 'weapons' | 'armour' | 'rangedArmour'
     | 'food' | 'potions' | 'jewellery' | 'herbs' | 'oresBarsGems' | 'logs' | 'supplies'
@@ -78,12 +80,9 @@ const RULES: readonly CategoryRule[] = [
     // Why: the strange plant's reward is an edible, so it belongs with the food rather than falling through to junk.
     { category: 'food', match: any('strange fruit') },
     { category: 'herbs', match: any(
-        'grimy', 'clean ', 'guam', 'marrentill', 'tarromin', 'harralander', 'ranarr',
-        'irit', 'avantoe', 'kwuarm', 'cadantine', 'dwarf weed', 'torstol',
-        'lantadyme', 'snapdragon', 'snake weed', 'ardrigal', 'sito foil',
-        'volencia moss', 'rogues purse',
+        'grimy', 'clean ', ...HERBS.map(herb => herb.key),
         'eye of newt', 'unicorn horn', 'limpwurt', 'snape grass', 'white berries',
-        'red spiders', 'chocolate dust', 'toadflax'
+        'red spiders', 'chocolate dust'
     ) },
     // Why: an unidentified herb of any kind is named "Herb", so only bankSortRank's id table tells them apart.
     { category: 'herbs', match: name => name === 'herb' },
