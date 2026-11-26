@@ -166,6 +166,29 @@ describe('editing a row', () => {
         panel.close();
     });
 
+    test.each([
+        { side: 'buy', derived: '90', otherPin: { sell: 120 } },
+        { side: 'sell', derived: '110', otherPin: { buy: 80 } }
+    ])('clears the $side pin while the book name has a pending edit', ({ side, derived, otherPin }) => {
+        const panel = openPinnedPanel();
+        const row = '[data-item="440"]';
+        const field = (role: string) => panel.root.querySelector<HTMLInputElement>(`${row} [data-role="${role}"]`)!;
+        field('sell').value = '120';
+        field('sell').dispatchEvent(new Event('change'));
+
+        panel.root.querySelector<HTMLButtonElement>('[data-action=rename]')!.click();
+        type(panel.root.querySelector<HTMLInputElement>('[data-role=book-name]')!, 'renamed');
+        panel.root.querySelector<HTMLButtonElement>(`${row} [data-action="clear-${side}"]`)!.click();
+
+        expect(field(side).value).toBe(derived);
+        sessionStorage.removeItem(boxKey('set:PriceBooks:books'));
+        expect(PriceBooks.names()).toEqual(['renamed']);
+        expect(PriceBooks.byName('renamed')!.rows.find(r => r.id === 440)).toEqual({
+            id: 440, mid: 100, cap: 0, buying: true, selling: true, ...otherPin
+        });
+        panel.close();
+    });
+
     test('refreshes the selection when clearing a pin in a deleted book', () => {
         const panel = openPinnedPanel();
         const book = PriceBooks.byName('seers')!;

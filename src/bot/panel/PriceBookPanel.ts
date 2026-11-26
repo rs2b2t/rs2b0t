@@ -741,6 +741,9 @@ export class PriceBookPanel {
             input.dataset.pinned = 'true';
             input.title = 'pinned override, click the dot to clear';
             const clear = this.action(`clear-${role}`, '●', () => {
+                if (this.renaming) {
+                    this.window.querySelector<HTMLInputElement>('[data-role=book-name]')?.blur();
+                }
                 const selected = this.selected;
                 input.removeEventListener('change', savePrice);
                 try {
