@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 
 import { Execution } from '#/bot/api/execution/Execution.js';
 import { EventSignal } from '#/bot/api/execution/EventSignal.js';
@@ -9,6 +9,7 @@ import { ScriptRunner } from '#/bot/runtime/ScriptRunner.js';
 import { SettingsBag } from '#/bot/runtime/Settings.js';
 import FlaxAIO from '#/bot/scripts/FlaxAIO/flaxaio.js';
 import { AscendTask, SpinTask } from '#/bot/scripts/FlaxAIO/spinning.js';
+import { stubProps } from '../../lib/stubSingletons.js';
 
 const original = {
     delayUntil: Execution.delayUntil,
@@ -131,14 +132,23 @@ test('logs the starting batch and spins through a pending event until the floor 
     await instance.onStart();
     Game.tile = () => ({ x: 0, z: 0, level: 1 });
     inv = [{ name: 'Flax', count: 4 }];
-    using animating = spyOn(Game, 'animating').mockReturnValue(true);
-    using menu = spyOn(ChatDialog, 'isMakeMenu').mockReturnValue(false);
-    using dialog = spyOn(ChatDialog, 'canContinue').mockReturnValue(false);
-    using pending = spyOn(EventSignal, 'pending').mockReturnValue(true);
-    using delay = spyOn(Execution, 'delayTicks').mockImplementation(async () => {
-        Game.tile = () => ({ x: 0, z: 0, level: 0 });
-    });
-    await new SpinTask(instance).execute();
-    expect(logs).toContain("riding the wheel with 4 'Flax'");
-    expect(delay.mock.calls).toEqual([[1]]);
+    const delays: number[] = [];
+    const restores = [
+        stubProps(Game, { animating: () => true }),
+        stubProps(ChatDialog, { isMakeMenu: () => false, canContinue: () => false }),
+        stubProps(EventSignal, { pending: () => true }),
+        stubProps(Execution, {
+            delayTicks: async ticks => {
+                delays.push(ticks);
+                Game.tile = () => ({ x: 0, z: 0, level: 0 });
+            }
+        })
+    ];
+    try {
+        await new SpinTask(instance).execute();
+        expect(logs).toContain("riding the wheel with 4 'Flax'");
+        expect(delays).toEqual([1]);
+    } finally {
+        for (const restore of restores.reverse()) restore();
+    }
 });
