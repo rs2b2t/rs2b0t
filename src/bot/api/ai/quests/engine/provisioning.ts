@@ -1,8 +1,9 @@
 // docs/reference/quest-provisioning.md
 import type { QuestStatus } from '../../../ui/questlog/Quests.js';
 import type { QuestItem } from '../types.js';
+import { waitStep } from './questSteps.js';
 import { cachedBankId, heldId } from './snapshotItems.js';
-import type { QuestSnapshot } from './types.js';
+import type { QuestSnapshot, QuestStep } from './types.js';
 
 export function planItemFromBank(
     snap: QuestSnapshot,
@@ -111,6 +112,13 @@ export function depositPlan(inv: Map<string, number>, keep: string[]): string[] 
 export function gpShort(snap: { inv: Map<string, number>; bankCoins: number }, estGp: number): number {
     const have = (snap.inv.get('coins') ?? 0) + snap.bankCoins;
     return Math.max(0, estGp - have);
+}
+
+export function buyOrWait(snap: Pick<QuestSnapshot, 'inv' | 'bankCoins'>, step: Extract<QuestStep, { kind: 'buy' }>) {
+    if (gpShort(snap, step.estGp) > 0) {
+        return waitStep(`need ~${step.estGp} gp for ${step.item}`);
+    }
+    return step;
 }
 
 export function floatWithdraw(
