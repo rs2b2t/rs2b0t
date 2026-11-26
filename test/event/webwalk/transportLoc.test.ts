@@ -4,18 +4,7 @@ import { findTransportLoc, matchesTransportLoc, transportLocValid } from '#/bot/
 import { reader } from '#/bot/adapter/ClientAdapter.js';
 import type { TransportInfo } from '#/bot/event/webwalk/PathFinder.js';
 
-const gate: TransportInfo = {
-    locName: 'Gate',
-    action: 'Open',
-    locX: 3312,
-    locZ: 3235,
-    locId: 3198
-};
-
-const loc = (id: number, x: number, z: number): { id: number; tile(): { x: number; z: number } } => ({
-    id,
-    tile: () => ({ x, z })
-});
+import { gate, loc, trapdoor } from './transportLoc.fixture.js';
 
 afterEach(() => mock.restore());
 
@@ -63,17 +52,9 @@ describe('matchesTransportLoc', () => {
     });
 
     test('openLocId matches the open trapdoor after transform (near placement tile)', () => {
-        const trap: TransportInfo = {
-            locName: 'Trapdoor',
-            action: 'Climb-down',
-            locX: 3097,
-            locZ: 3468,
-            locId: 1568, // closed map placement
-            openLocId: 1570 // trapdoor_open
-        };
-        expect(matchesTransportLoc(trap, loc(1568, 3097, 3468))).toBe(true);
-        expect(matchesTransportLoc(trap, loc(1570, 3097, 3468))).toBe(true);
-        expect(matchesTransportLoc(trap, loc(1570, 3096, 3468))).toBe(true); // open may shift
-        expect(matchesTransportLoc(trap, loc(1571, 3097, 3468))).toBe(false);
+        expect(matchesTransportLoc(trapdoor, loc(1568, 3097, 3468))).toBe(true);
+        expect(matchesTransportLoc(trapdoor, loc(1570, 3097, 3468))).toBe(true);
+        expect(matchesTransportLoc(trapdoor, loc(1570, 3096, 3468))).toBe(true); // open may shift
+        expect(matchesTransportLoc(trapdoor, loc(1571, 3097, 3468))).toBe(false);
     });
 });

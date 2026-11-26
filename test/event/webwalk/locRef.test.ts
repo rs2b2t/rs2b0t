@@ -12,18 +12,7 @@ import {
 } from '#/bot/event/webwalk/locRef.js';
 import type { TransportInfo } from '#/bot/event/webwalk/PathFinder.js';
 
-const gate: TransportInfo = {
-    locName: 'Gate',
-    action: 'Open',
-    locX: 3312,
-    locZ: 3235,
-    locId: 3198
-};
-
-const loc = (id: number, x: number, z: number) => ({
-    id,
-    tile: () => ({ x, z })
-});
+import { gate, loc, trapdoor } from './transportLoc.fixture.js';
 
 const snap = (
     id: number,
@@ -52,15 +41,7 @@ describe('LocRef placement identity', () => {
     });
 
     test('openLocId matches open transform near placement', () => {
-        const trap: TransportInfo = {
-            locName: 'Trapdoor',
-            action: 'Climb-down',
-            locX: 3097,
-            locZ: 3468,
-            locId: 1568,
-            openLocId: 1570
-        };
-        const ref = locRefFromTransport(trap);
+        const ref = locRefFromTransport(trapdoor);
         expect(matchesLocRef(ref, loc(1568, 3097, 3468))).toBe(true);
         expect(matchesLocRef(ref, loc(1570, 3096, 3468))).toBe(true);
         expect(matchesLocRef(ref, loc(1571, 3097, 3468))).toBe(false);
