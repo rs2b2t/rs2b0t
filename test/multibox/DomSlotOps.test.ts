@@ -1,5 +1,6 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, jest, test } from 'bun:test';
 import { DomSlotOps, orderedSlotElements } from '#/bot/multibox/DomSlotOps.js';
+import { renderRailTile } from '#/bot/multibox/RailTile.js';
 import type { SlotHandle } from '#/bot/multibox/types.js';
 import type { RosterClient } from '#/bot/multibox/RosterTypes.js';
 
@@ -16,9 +17,61 @@ afterEach(() => {
         handle.destroy();
     }
     document.body.innerHTML = '';
+    jest.useRealTimers();
 });
 
 describe('DomSlotOps', () => {
+    test.each(['missing', 'unreadable'])('a startup timeout (%s bridge) stops checks, admits the next frame and allows re-add', bridge => {
+        jest.useFakeTimers();
+        const clock = jest as typeof jest & { advanceTimersByTime(ms: number): void };
+        const rail = document.getElementById('rail')!;
+        const ops = new DomSlotOps(rail, document.getElementById('add')!, true, 1);
+        const account = { username: 'first', password: '' };
+        const first = ops.spawn(account);
+        const second = ops.spawn({ username: 'second', password: '' });
+        handles.push(first, second);
+        const [tile, queued] = orderedSlotElements(rail);
+        const nextFrame = queued.querySelector('iframe')!;
+        let checks = 0;
+        let unreadable = false;
+        Object.defineProperty(tile.querySelector('iframe')!.contentWindow!, 'rs2b0t', {
+            get() {
+                checks++;
+                if (unreadable) throw new DOMException('Frame unavailable', 'SecurityError');
+                return undefined;
+            }
+        });
+        clock.advanceTimersByTime(179_999);
+        expect(checks).toBeGreaterThan(0);
+        expect(nextFrame.hasAttribute('src')).toBe(false);
+        unreadable = bridge === 'unreadable';
+        clock.advanceTimersByTime(1);
+        expect(nextFrame.hasAttribute('src')).toBe(true);
+        const atDeadline = checks;
+        clock.advanceTimersByTime(1000);
+        renderRailTile(tile, {
+            ...first.status(), username: account.username, id: 1, focused: false,
+            mode: 'background', tab: 'Main', switchingWorld: null, targetWorld: 1
+        });
+        expect(checks - atDeadline).toBe(0);
+        expect(tile.querySelector('.mbx-script-status')!.textContent).toBe('Startup timed out');
+
+        first.destroy();
+        const retry = ops.spawn(account);
+        handles.push(retry);
+        nextFrame.dispatchEvent(new Event('mbx-client-initialized'));
+        const retryFrame = rail.querySelector<HTMLIFrameElement>('iframe[title="first"]')!;
+        Object.assign(retryFrame.contentWindow!, { rs2b0t: {
+            reader: { ingame: () => false, localPlayerName: () => null }, client: { constructor: { loopCycle: 0 } },
+            renderGate: { drawn: 0 }, runner: { state: 'idle' }
+        } });
+        clock.advanceTimersByTime(50);
+        expect(retry.status().ready).toBe(true);
+        clock.advanceTimersByTime(180_000);
+        expect(queued.dataset.startup).toBe('Startup timed out');
+        expect(retryFrame.closest<HTMLElement>('.mbx-slot')!.dataset.startup).toBeUndefined();
+    });
+
     test('queues a 61-profile launch and frees capacity on boot completion, removal and world reload', () => {
         const ops = new DomSlotOps(document.getElementById('rail')!, document.getElementById('add')!, true);
         for (let i = 0; i < 61; i++) handles.push(ops.spawn({ username: 'slot' + i, password: '' }));
