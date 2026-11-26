@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { CollisionFlag } from '#/client/dash3d/CollisionFlag.js';
-import { canReachLocal, canStepLocal, type FlagsAt } from '#/bot/event/webwalk/geometry/localReach.js';
+import { canReachLocal, canStepLocal, localReachProbe, type FlagsAt } from '#/bot/event/webwalk/geometry/localReach.js';
 
 function grid(rows: string[]): FlagsAt {
     return (lx, lz) => {
@@ -62,5 +62,48 @@ describe('canReachLocal', () => {
     test('maxSteps caps the search', () => {
         const g = grid(['.'.repeat(60)]);
         expect(canReachLocal(g, { lx: 0, lz: 0 }, { lx: 59, lz: 0 }, { maxSteps: 10 })).toBe(false);
+    });
+});
+
+describe('localReachProbe', () => {
+    test('matches independent searches at each budget in mixed candidate order', () => {
+        const from = { lx: 2, lz: 6 };
+        for (const wall of [false, true]) {
+            const flags: FlagsAt = (x, z) => {
+                if (x < 0 || z < 0 || x >= 12 || z >= 12) return null;
+                return wall && x === 5 && z !== 2 ? CollisionFlag.WALK_SCENERY : CollisionFlag._OPEN;
+            };
+            for (const maxSteps of [0, 1, 2, 7, 8, 64, 143, 1200]) {
+                const probe = localReachProbe(flags, from, maxSteps);
+                for (let i = 0; i < 144; i++) {
+                    const k = (i * 31) % 144;
+                    const to = { lx: k % 12, lz: Math.floor(k / 12) };
+                    expect(probe(to)).toBe(canReachLocal(flags, from, to, { maxSteps }));
+                }
+            }
+        }
+    });
+
+    test('later probes use discovery ranks after exhausting the budget', () => {
+        let reads = 0;
+        const probe = localReachProbe(() => { reads++; return CollisionFlag._OPEN; }, { lx: 5, lz: 5 }, 1);
+        expect(probe({ lx: 8, lz: 5 })).toBe(false);
+        const exhaustedReads = reads;
+        expect(probe({ lx: 4, lz: 5 })).toBe(true);
+        expect(probe({ lx: 6, lz: 5 })).toBe(false);
+        expect(reads).toBe(exhaustedReads);
+    });
+
+    test('a new decision observes a closed passage', () => {
+        let blocked = false;
+        const flags: FlagsAt = (x, z) => {
+            if (x < 0 || x > 2 || z !== 0) return null;
+            return blocked && x === 1 ? CollisionFlag.WALK_SCENERY : CollisionFlag._OPEN;
+        };
+        const from = { lx: 0, lz: 0 };
+        const to = { lx: 2, lz: 0 };
+        expect(localReachProbe(flags, from, 2)(to)).toBe(true);
+        blocked = true;
+        expect(localReachProbe(flags, from, 2)(to)).toBe(false);
     });
 });
