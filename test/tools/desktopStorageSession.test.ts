@@ -13,6 +13,11 @@ const cleanups: (() => void)[] = [];
 afterEach(() => { for (const cleanup of cleanups.splice(0).reverse()) cleanup(); });
 
 type Update = { version: number; changes: Record<string, string | null>; append?: string[] };
+type StorageReply = {
+    value?: string | string[] | boolean | null;
+    error?: string;
+    snapshot?: { version: number; data: Record<string, string> };
+};
 
 class Frame {
     url = 'http://localhost:8081/bot.html';
@@ -50,7 +55,7 @@ async function fixture() {
     await module.exports.prepareStorage(app).start('http://localhost:8081');
     cleanups.push(() => app.emit('quit'));
     const request = (frame: Frame, method: string, ...args: unknown[]) => {
-        const event = { sender: contents, senderFrame: frame, returnValue: undefined as unknown as { error?: string; snapshot?: { version: number; data: Record<string, string> } } };
+        const event = { sender: contents, senderFrame: frame, returnValue: undefined as unknown as StorageReply };
         ipcMain.emit('rs2b0t-storage', event, method, ...args);
         return event.returnValue;
     };
