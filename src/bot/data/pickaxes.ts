@@ -8,5 +8,3 @@ export function createPickaxes() {
         { id: 1265, name: 'Bronze pickaxe' }
     ] as const;
 }
-
-export const PICKAXES = createPickaxes();
