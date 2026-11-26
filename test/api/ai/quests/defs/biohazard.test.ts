@@ -4,6 +4,7 @@ import { BIO_STAGE } from '#/bot/api/ai/quests/defs/biohazard/journal.js';
 import { biohazard, decide } from '#/bot/api/ai/quests/defs/biohazard/index.js';
 import { FOOD } from '#/bot/api/ai/quests/defs/biohazard/supplies.js';
 import type { QuestSnapshot, QuestStep } from '#/bot/api/ai/quests/engine/types.js';
+import { ardougneSnapshot } from './ardougne-snapshot.fixture.js';
 
 const ARDOUGNE = { x: 2616, z: 3332, level: 0 };
 const WEST = { x: 2529, z: 3304, level: 0 };
@@ -15,22 +16,7 @@ const RIMMINGTON = { x: 2934, z: 3211, level: 0 };
 const PURSE = new Map([[BIO_ITEM.COINS.id, 2_000_000]]);
 
 function snapshot(o: Partial<QuestSnapshot> = {}): QuestSnapshot {
-    return {
-        journal: o.journal ?? 'inProgress',
-        inv: o.inv ?? new Map(),
-        invIds: o.invIds ?? new Map(),
-        worn: o.worn ?? new Set(),
-        wornIds: o.wornIds ?? new Set(),
-        noProgress: o.noProgress ?? 0,
-        bankCoins: o.bankCoins ?? 0,
-        stage: o.stage,
-        progress: o.progress,
-        bank: o.bank ?? new Map(),
-        bankIds: o.bankIds ?? PURSE,
-        bankKnown: o.bankKnown ?? true,
-        tile: o.tile === undefined ? ARDOUGNE : o.tile,
-        freeSlots: o.freeSlots ?? 28
-    };
+    return ardougneSnapshot(o, PURSE, ARDOUGNE, o.noProgress ?? 0);
 }
 
 const carrying = (...items: [{ id: number }, number][]): Map<number, number> =>
