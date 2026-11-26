@@ -211,11 +211,13 @@ test('pending and subsequent priority prefetches settle after worker load failur
     spyOn(console, 'error').mockImplementation(() => {});
     const loader = loaderFixture();
     loader.request(1, 0);
+    loader.request(2, 0);
     const pending = loader.prefetchPriority(1, 0, 2);
     failWorker(loader);
     await expect(pending).rejects.toThrow('Synthetic module load failure');
     await expect(loader.prefetchPriority(1, 0, 2)).rejects.toThrow('Synthetic module load failure');
     expect(loader.requests.size()).toBe(0);
+    expect(loader['pendingByArchive'].every(pending => pending.size === 0)).toBe(true);
     loader.request(1, 0);
     expect(loader.requests.size()).toBe(0);
     expect(loader.worker).toBeNull();
@@ -254,6 +256,48 @@ test('a healthy worker delivers the requested animation exactly once', async () 
     expect(loader.loop()).toMatchObject({ archive: 1, file: 0, data: Uint8Array.of(42) });
     expect(loader.remaining()).toBe(0);
     expect(loader.loop()).toBeNull();
+});
+
+test('requests stay distinct by archive and suppress duplicates until drained', () => {
+    const loader = loaderFixture();
+    const post = spyOn(WorkerFixture.prototype, 'postMessage');
+    const scan = spyOn(loader.requests, 'head');
+    loader.request(1, 0);
+    loader.request(1, 0);
+    loader.request(2, 0);
+    completeFile(loader, 2, 0, null);
+    completeFile(loader, 1, 0, null);
+    loader.request(2, 0);
+    expect(loader.remaining()).toBe(2);
+    expect(loader.loop()).toMatchObject({ archive: 2, file: 0 });
+    loader.request(2, 0);
+    loader.request(1, 0);
+    completeFile(loader, 2, 0, null);
+    expect(loader.loop()).toMatchObject({ archive: 1, file: 0 });
+    expect(loader.loop()).toMatchObject({ archive: 2, file: 0 });
+    expect(loader.remaining()).toBe(0);
+    expect(post.mock.calls.map(([message]) => message)).toEqual([
+        { type: 'request', archive: 1, file: 0 },
+        { type: 'request', archive: 2, file: 0 },
+        { type: 'request', archive: 2, file: 0 }
+    ]);
+    expect(scan).not.toHaveBeenCalled();
+});
+
+test('draining unsolicited completions preserves a later request for the same file', () => {
+    const loader = loaderFixture();
+    const post = spyOn(WorkerFixture.prototype, 'postMessage');
+    completeFile(loader, 93, 0, null);
+    completeFile(loader, 1, 0, null);
+    loader.request(1, 0);
+    expect(loader.loop()).toMatchObject({ archive: 93, file: 0 });
+    expect(loader.loop()).toMatchObject({ archive: 1, file: 0 });
+    loader.request(1, 0);
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(loader.remaining()).toBe(1);
+    completeFile(loader, 1, 0, null);
+    expect(loader.loop()).toMatchObject({ archive: 1, file: 0 });
+    expect(loader.remaining()).toBe(0);
 });
 
 test.each([
