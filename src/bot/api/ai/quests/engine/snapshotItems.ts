@@ -42,15 +42,15 @@ export function wornName(snap: QuestSnapshot, name: string): boolean {
 }
 
 export function heldItem(snap: QuestSnapshot, item: NamedItem): number {
-    return snap.invIds?.get(item.id) ?? 0;
+    return heldId(snap, item.id);
 }
 
 export function bankedItem(snap: QuestSnapshot, item: NamedItem): number {
-    return snap.bankIds?.get(item.id) ?? 0;
+    return cachedBankId(snap, item.id);
 }
 
 export function wornItem(snap: QuestSnapshot, item: NamedItem): boolean {
-    return snap.wornIds?.has(item.id) ?? false;
+    return wornId(snap, item.id);
 }
 
 export function heldOrBankedItem(snap: QuestSnapshot, item: NamedItem): number {
