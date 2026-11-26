@@ -13,7 +13,11 @@ Reflect.set(globalThis, 'rs2b0tDesktopStorage', {
     },
     removeItem: (key: string) => { data.delete(key); },
     keys: () => { keyReads++; return [...data.keys()]; },
-    compareAndSet: () => false,
+    compareAndSet(key, expected, value) {
+        if ((data.get(key) ?? null) !== expected) return false;
+        data.set(key, value);
+        return true;
+    },
     subscribe: listener => { notify = listener; }
 } satisfies DesktopStorage);
 await import('../../src/bot/panel/desktopStorage.js');

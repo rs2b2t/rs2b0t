@@ -1,4 +1,4 @@
-import { beginLegacySettingsCopy, commitDesktopSettings, desktopStorage, type DesktopStorage, isEncodedSettingKey, legacyStorageHost, setProfileMigrationKey } from '../runtime/desktopStorage.js';
+import { beginLegacySettingsCopy, commitDesktopSettings, desktopStorage, type DesktopStorage, isEncodedSettingKey, legacyCopyStorage, legacyStorageHost, setProfileMigrationKey } from '../runtime/desktopStorage.js';
 
 function dispatchChange(key: string, oldValue: string | null, newValue: string | null): void {
     window.dispatchEvent(new StorageEvent('storage', { key, oldValue, newValue }));
@@ -57,7 +57,10 @@ export function installDesktopStorage(shared: DesktopStorage): void {
     if (shared.applySettings) {
         const apply = shared.applySettings;
         storage[commitDesktopSettings] = changes => {
-            apply(changes);
+            if (apply(changes, true) === false) {
+                settings = undefined;
+                return false;
+            }
             if (settings) {
                 for (const [key, value] of Object.entries(changes)) {
                     if (value === null) settings.delete(key);
@@ -66,6 +69,18 @@ export function installDesktopStorage(shared: DesktopStorage): void {
             }
         };
     } else {
+        storage[legacyCopyStorage] = {
+            read: key => (shared.getItemFresh ?? shared.getItem)(key),
+            swap(key, expected, value) {
+                try {
+                    if (value !== null) return shared.compareAndSet(key, expected, value);
+                    if (expected === null || !shared.compareAndSet(key, expected, expected)) return false;
+                    return shared.removeItem(key, expected) !== false;
+                } finally {
+                    settings = undefined;
+                }
+            }
+        };
         storage[beginLegacySettingsCopy] = () => {
             let keys: Set<string> | undefined;
             // Why: preload queues each write's mirror between these two microtasks.

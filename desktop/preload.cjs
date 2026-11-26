@@ -32,10 +32,11 @@ const capabilities = call('snapshot');
 
 contextBridge.exposeInMainWorld('rs2b0tDesktopStorage', {
     getItem: key => snapshot.version >= 0 && key.startsWith('rs2b0t:') && key.includes(':set:') ? snapshot.data[key] ?? null : call('getItem', key),
+    getItemFresh: key => call('getItem', key),
     setItem: (key, value) => call('setItem', key, value),
-    removeItem: key => call('removeItem', key),
+    removeItem: (key, expected) => call('removeItem', key, expected),
     keys: () => snapshot.version >= 0 ? Object.keys(snapshot.data) : call('keys'),
-    ...(capabilities?.applySettings && { applySettings: changes => call('applySettings', changes) }),
+    ...(capabilities?.applySettings && { applySettings: (changes, checked) => call('applySettings', changes, checked ? snapshot.version : undefined) }),
     compareAndSet: (key, expected, value) => call('compareAndSet', key, expected, value),
     subscribe: callback => { listeners.add(callback); }
 });

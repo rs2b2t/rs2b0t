@@ -1,5 +1,5 @@
 import { isRosterScript } from './RosterTypes.js';
-import { boxKey, boxKeyTail, profileStorageKeys, readBoxItem, replaceBoxSettings } from '../runtime/box.js';
+import { boxKey, boxKeyTail, profileStorageKeys, readBoxItem, replaceBoxSettings, retrySettingsCopy } from '../runtime/box.js';
 import { storeKeys } from '../runtime/desktopStorage.js';
 
 function canonicalScript(script: string): string {
@@ -53,8 +53,10 @@ export function readScriptSettings(username: string, script: string): Record<str
 
 export function replaceScriptSettings(username: string, script: string, values: Record<string, string>, select = false): void {
     script = requireScript(script);
-    const previous = scriptEntries(username, script).map(({ suffix }) => suffix);
-    replaceBoxSettings(username, script, previous, values, select);
+    retrySettingsCopy(() => {
+        const previous = scriptEntries(username, script).map(({ suffix }) => suffix);
+        replaceBoxSettings(username, script, previous, values, select);
+    });
 }
 
 export function storedScripts(usernames: string[]): string[] {

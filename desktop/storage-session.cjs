@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const { join, resolve } = require('node:path');
 const { tmpdir } = require('node:os');
+const { isDeepStrictEqual } = require('node:util');
 const { createHash } = require('node:crypto');
 const { sharedStorage } = require('./shared-storage.cjs');
 
@@ -102,7 +103,14 @@ function prepareStorage(app) {
                     if (!valid(event.senderFrame) || !methods.has(method)) throw new Error('Invalid storage request');
                     register(event);
                     if (method === 'applySettings') {
-                        event.returnValue = { snapshot: refresh(event.senderFrame, store.applySettings(...args)) };
+                        const [changes, version] = args;
+                        let applied;
+                        const data = store.applySettings(changes, current => {
+                            if (version === undefined) return true;
+                            applied = version === snapshot.version && isDeepStrictEqual(snapshot.data, current);
+                            return applied;
+                        });
+                        event.returnValue = { value: applied, snapshot: refresh(event.senderFrame, data) };
                         return;
                     }
                     const value = method === 'snapshot' ? { applySettings: true } : store[method](...args);

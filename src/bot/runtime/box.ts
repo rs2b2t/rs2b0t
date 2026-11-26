@@ -1,5 +1,5 @@
 import { botFrameUrl } from '../../client/config/worlds.js';
-import { beginLegacySettingsCopy, commitDesktopSettings, desktopStorage, isEncodedSettingKey, setProfileMigrationKey, settingsStoragePrefix, storeKeys } from './desktopStorage.js';
+import { beginLegacySettingsCopy, commitDesktopSettings, desktopStorage, isEncodedSettingKey, legacyCopyStorage, setProfileMigrationKey, settingsStoragePrefix, storeKeys } from './desktopStorage.js';
 
 // docs/decisions/architecture.md#per-instance-storage
 // Why: same-origin multibox frames share sessionStorage, so `?box=<account>` namespaces each bot.
@@ -135,31 +135,63 @@ export function clearBoxItem(store: Storage, suffix: string, id: string, write =
     write(store, key, null);
 }
 
+class SettingsSnapshotChanged extends Error {}
+
+export function retrySettingsCopy<T>(copy: () => T): T {
+    try {
+        return copy();
+    } catch (error) {
+        if (!(error instanceof SettingsSnapshotChanged)) throw error;
+        return copy();
+    }
+}
+
 export function replaceBoxSettings(id: string, script: string, clearSuffixes: string[], values: Record<string, string>, select = false): void {
     const commit = localStorage[commitDesktopSettings];
     const discardMirrors = localStorage[beginLegacySettingsCopy]?.();
     const changes: Record<string, string | null> = {};
-    const undo: Array<{ store: Storage; key: string; value: string | null }> = [];
+    const legacy = localStorage[legacyCopyStorage];
+    const undo: Array<() => void> = [];
+    const mirrorKeys: string[] = [];
     function write(store: Storage, key: string, value: string | null): void {
-        if (commit && store === localStorage) {
-            changes[key] = value;
-            return;
-        }
-        const previous = store.getItem(key);
+        const bridge = store === localStorage ? legacy : undefined;
+        const previous = bridge ? bridge.read(key) : store.getItem(key);
         if (previous === value) return;
-        writeItem(store, key, value);
-        undo.push({ store, key, value: previous });
+        undo.push(() => {
+            if (bridge) bridge.swap(key, value, previous);
+            else if (store.getItem(key) === value) writeItem(store, key, previous);
+        });
+        if (bridge) {
+            mirrorKeys.push(key);
+            if (!bridge.swap(key, previous, value)) {
+                undo.pop();
+                throw new Error('Saved settings changed during copy.');
+            }
+        } else writeItem(store, key, value);
+    }
+    function stage(store: Storage, key: string, value: string | null): void {
+        if (store === localStorage && (commit || legacy)) changes[key] = value;
+        else write(store, key, value);
     }
     try {
         for (const store of [sessionStorage, localStorage]) {
-            for (const suffix of clearSuffixes) clearBoxItem(store, suffix, id, write);
-            for (const [key, value] of Object.entries(values)) write(store, boxKey(`set:${script}:${key}`, id), value);
-            if (select) write(store, boxKey('selectedScript', id), script);
+            for (const suffix of clearSuffixes) clearBoxItem(store, suffix, id, stage);
+            for (const [key, value] of Object.entries(values)) stage(store, boxKey(`set:${script}:${key}`, id), value);
+            if (select) stage(store, boxKey('selectedScript', id), script);
         }
-        commit?.(changes);
+        if (legacy) {
+            const entries = Object.entries(changes);
+            for (const [key, value] of entries) if (value === null) write(localStorage, key, null);
+            for (const [key, value] of entries) if (value !== null) write(localStorage, key, value);
+        }
+        if (commit?.(changes) === false) throw new SettingsSnapshotChanged('Saved settings changed during copy.');
     } catch (error) {
-        for (const { store, key, value } of undo.reverse()) writeItem(store, key, value);
-        discardMirrors?.(undo.filter(entry => entry.store === localStorage).map(entry => entry.key));
+        let rollbackError;
+        for (const restore of undo.reverse()) {
+            try { restore(); } catch (cause) { rollbackError = cause; }
+        }
+        discardMirrors?.(mirrorKeys);
+        if (rollbackError) throw rollbackError;
         throw error;
     }
 }

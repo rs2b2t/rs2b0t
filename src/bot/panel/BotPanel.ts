@@ -5,7 +5,7 @@ import { reader } from '../adapter/ClientAdapter.js';
 import type { BotHostImpl } from '../runtime/BotHost.js';
 import type { LogLine, ScriptContext } from '../runtime/ScriptContext.js';
 import { AutoRelogin } from '../runtime/AutoRelogin.js';
-import { boxId, boxKey, boxKeyTail, profileStorageKeys, wallLinkHref } from '../runtime/box.js';
+import { boxId, boxKey, boxKeyTail, profileStorageKeys, retrySettingsCopy, wallLinkHref } from '../runtime/box.js';
 import { Credentials } from '../runtime/Credentials.js';
 import { ScriptRegistry, type ScriptMeta } from '../runtime/ScriptRegistry.js';
 import { resolveDestination } from '../api/map/WalkDestinations.js';
@@ -260,9 +260,12 @@ export default class BotPanel {
 
     copyScriptSettings(name: string, values: Record<string, string>, select = false): void {
         this.assertScriptIdle();
-        const { name: script, keys } = this.validateSettings(name, values);
-        this.paramsModal.close();
-        SettingsStore.replace(script, keys, values, select);
+        const script = retrySettingsCopy(() => {
+            const { name: script, keys } = this.validateSettings(name, values);
+            this.paramsModal.close();
+            SettingsStore.replace(script, keys, values, select);
+            return script;
+        });
         if (select) {
             this.selectedScript = script;
             this.renderScriptSelection();

@@ -1,12 +1,19 @@
 export const commitDesktopSettings = Symbol('commitDesktopSettings');
 export const beginLegacySettingsCopy = Symbol.for('rs2b0t:beginLegacySettingsCopy');
-type ApplySettings = (changes: Record<string, string | null>) => void;
+type ApplySettings = (changes: Record<string, string | null>, checked?: boolean) => boolean | void;
+
+export const legacyCopyStorage = Symbol.for('rs2b0t:legacyCopyStorage');
+interface LegacyCopyStorage {
+    read(key: string): string | null;
+    swap(key: string, expected: string | null, value: string | null): boolean;
+}
 
 export interface DesktopStorage {
     applySettings?: ApplySettings;
+    getItemFresh?(key: string): string | null;
     getItem(key: string): string | null;
     setItem(key: string, value: string): void;
-    removeItem(key: string): void;
+    removeItem(key: string, expected?: string): boolean | void;
     keys(): string[];
     compareAndSet(key: string, expected: string | null, value: string): boolean;
     subscribe(callback: (key: string, oldValue: string | null, newValue: string | null) => void): void;
@@ -15,6 +22,7 @@ export interface DesktopStorage {
 declare global {
     interface Storage {
         [beginLegacySettingsCopy]?(): (restoredKeys: string[]) => void;
+        [legacyCopyStorage]?: LegacyCopyStorage;
         [commitDesktopSettings]?: ApplySettings;
     }
     interface Window {
@@ -25,7 +33,7 @@ declare global {
 export function legacyStorageHost(): Window | undefined {
     try {
         const top = globalThis.window?.top;
-        if (top && top !== window && top.localStorage[beginLegacySettingsCopy]) return top;
+        if (top && top !== globalThis.window && top.localStorage[beginLegacySettingsCopy]) return top;
     } catch {
         return undefined;
     }
