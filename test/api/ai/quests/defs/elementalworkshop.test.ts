@@ -1,3 +1,4 @@
+import { customName } from '../../../../lib/questSteps.js';
 import { describe, expect, test } from 'bun:test';
 import {
     COAL_NEED,
@@ -14,7 +15,7 @@ import {
     surfaceLoadout
 } from '#/bot/api/ai/quests/defs/elementalworkshop/index.js';
 import type { WorldTile } from '#/bot/adapter/ClientAdapter.js';
-import type { QuestProgress, QuestSnapshot, QuestStep } from '#/bot/api/ai/quests/engine/types.js';
+import type { QuestProgress, QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
 
 const SEERS: WorldTile = { x: 2725, z: 3491, level: 0 };
 const WORKSHOP: WorldTile = { x: 2716, z: 9888, level: 0 };
@@ -103,10 +104,6 @@ function realisticBank(): { bankIds: [number, number][]; bank: [string, number][
             ['coins', 50_000]
         ]
     };
-}
-
-function customName(step: QuestStep): string | null {
-    return step.kind === 'custom' ? step.name : null;
 }
 
 describe('Elemental Workshop journal parsing', () => {

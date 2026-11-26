@@ -2,8 +2,8 @@
  *  Content: web.rs2 oploc1 uses ~slash_checker (a wielded slash weapon) while oplocu accepts a knife, so doorCrossing uses Knife useOn when present and Slash otherwise; the cut is 50%, and the walker retries in the multi-door loop. */
 
 //   ~/redeploy.sh && HEADED=1 bun e2e/varrock-sewer-web-370-live.ts
-import type { Page } from 'playwright-core';
 import { launchBrowser, parseArgs } from './lib/harness.js';
+import { cheb, teleportForRoute } from './lib/teleport.js';
 import { createHarnessProof } from './lib/harnessProof.js';
 import { cheatQuiet, mainlandAccount, maxmeAndClearDialogs } from './tutorial/harness.js';
 
@@ -42,38 +42,6 @@ type Abi = {
 
 const proof = createHarnessProof({ issue: 370, slug: 'varrock-sewer-web' });
 
-function cheb(a: Tile, b: Tile): number {
-    if (a.level !== b.level) {
-        return 9999;
-    }
-    return Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
-}
-
-function teleCmd(t: Tile): string {
-    return `tele ${t.level},${t.x >> 6},${t.z >> 6},${t.x & 63},${t.z & 63}`;
-}
-
-async function teleArrive(page: Page, spot: Tile, maxDist = 3): Promise<void> {
-    for (let a = 0; a < 8; a++) {
-        if (page.isClosed()) {
-            throw new Error('page closed before tele');
-        }
-        await cheatQuiet(page, teleCmd(spot));
-        for (let p = 0; p < 25; p++) {
-            if (page.isClosed()) {
-                throw new Error('page closed during tele settle');
-            }
-            const t = await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.reader.worldTile());
-            if (t && cheb(t, spot) <= maxDist) {
-                await page.waitForTimeout(600);
-                return;
-            }
-            await page.waitForTimeout(200);
-        }
-    }
-    throw new Error(`tele ${spot.x},${spot.z} failed`);
-}
-
 const browser = await launchBrowser({ swiftshader: true });
 const page = await browser.newPage();
 page.on('console', msg => {
@@ -96,7 +64,7 @@ try {
 
     // Fixture only: north of the web. Do not tele into the closed west section.
     console.log(`tele to web north ${WEB_NORTH.x},${WEB_NORTH.z}`);
-    await teleArrive(page, WEB_NORTH, 2);
+    await teleportForRoute(page, WEB_NORTH, 2);
     const here = await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.reader.worldTile());
     console.log(`at ${JSON.stringify(here)}`);
 

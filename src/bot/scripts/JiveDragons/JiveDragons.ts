@@ -17,7 +17,8 @@ import { Prayer } from '../../api/prayer/Prayer.js';
 import { Npcs, type Npc } from '../../api/npcs/Npcs.js';
 import { ARROWS, BOWS, MELEE_WEAPONS, STAFFS } from '../../api/combat/equipment.js';
 import { bestMeleeWeapon, knownMeleeWeapon } from '../../api/combat/meleeWeapons.js';
-import { foodCount as foodCountIn, foodHealAmount, isEdibleFood, isFoodItem, shouldEatToUseFood } from '../../api/combat/food.js';
+import { foodCount as foodCountIn, isEdibleFood, isFoodItem } from '../../api/combat/food.js';
+import { eatSelectedFood, shouldEatNow } from '../../api/combat/eating.js';
 import { Equipment } from '../../api/equipment/Equipment.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Execution } from '../../api/execution/Execution.js';
@@ -26,7 +27,7 @@ import { GroundItems, type GroundItem } from '../../api/grounditems/GroundItems.
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { scriptFood, suppliesOf } from '../../api/loadout/loadoutPlan.js';
 import { LOADOUT_SETTING, selectedLoadout } from '../../api/loadout/loadoutSetting.js';
-import { Autocast } from '../../api/magic/Autocast.js';
+import { ArmAutocast } from '../../api/tasks/ArmAutocast.js';
 import { Skills } from '../../api/skills/Skills.js';
 import { Sustain } from '../../api/sustain/Sustain.js';
 import { ContinueDialog } from '../../api/tasks/ContinueDialog.js';
@@ -212,15 +213,7 @@ function hasFood(): boolean {
 
 /** Below the eat threshold with food in the pack. The fight loop reads a refused eat as an empty pack, so the food half of this is load-bearing. */
 function needEat(): boolean {
-    if (!hasFood()) {
-        return false;
-    }
-    return shouldEatToUseFood({
-        hp: Skills.effective('hitpoints'),
-        maxHp: Skills.level('hitpoints'),
-        heal: foodHealAmount(FOOD_NAME),
-        foodCount: foodCount()
-    });
+    return shouldEatNow(FOOD_NAME, foodCount());
 }
 
 function castsLeft(): number {
@@ -560,19 +553,9 @@ function slotAction(drop: GroundItem | null): SlotAction {
     return hpFrac() < 1 ? 'eat' : 'drop';
 }
 
-async function eatOnce(bot: JiveDragons): Promise<boolean> {
+function eatOnce(bot: JiveDragons): Promise<boolean> {
     const food = Inventory.items().find(i => isEdibleFood(i, FOOD_NAME));
-    if (!food) {
-        return false;
-    }
-    bot.setStatus(`eating ${food.name} (${Math.round(hpFrac() * 100)}% hp)`);
-    const before = Skills.effective('hitpoints');
-    const id = food.id;
-    const count = Inventory.countById(id);
-    if (!(await food.interact('Eat'))) {
-        return false;
-    }
-    return Execution.delayUntilTicks(() => Inventory.countById(id) < count || Skills.effective('hitpoints') > before, 2);
+    return eatSelectedFood(bot, food, 'bite');
 }
 
 // Why: a Take click walks on the scene's own collision and never opens a door, so a drop behind one dies silently on the click and the skip list swallows the pile behind it. The Heroes' Guild dragon drops inside its pen, on the far side of the gate.
@@ -918,28 +901,6 @@ class SetRetaliate implements Task {
             this.fails = 0;
             this.retryAt = Date.now() + ASSERT_RETRY_MS;
             this.bot.log(`could not turn auto-retaliate ${want ? 'on' : 'off'}. Retrying in ${ASSERT_RETRY_MS / 1000}s.`);
-        }
-    }
-}
-
-class ArmAutocast implements Task {
-    private fails = 0;
-    private retryAt = 0;
-    constructor(private readonly bot: JiveDragons) {}
-    validate(): boolean {
-        if (this.bot.solveClue?.ownsEquipment() || STYLE !== 'mage' || Autocast.armed() || Date.now() < this.retryAt || castsLeft() < 1) {
-            return false;
-        }
-        return Autocast.staffTabAttached() || (WEAPON !== '' && Equipment.contains(WEAPON));
-    }
-    async execute(): Promise<void> {
-        this.bot.setStatus(`arming autocast: ${SPELL}`);
-        if (await Autocast.arm(SPELL, m => this.bot.log(m))) {
-            this.fails = 0;
-        } else if (++this.fails >= ASSERT_BATCH) {
-            this.fails = 0;
-            this.retryAt = Date.now() + ASSERT_RETRY_MS;
-            this.bot.log(`WARNING: could not arm autocast for '${SPELL}'. Retrying in ${ASSERT_RETRY_MS / 1000}s.`);
         }
     }
 }
@@ -1346,7 +1307,12 @@ export default class JiveDragons extends HuntingBot implements CombatHost {
             this.gearEquip = new GearEquip(this),
             new SetAttackStyle(this),
             new SetRetaliate(this),
-            new ArmAutocast(this),
+            new ArmAutocast(this, {
+                enabled: () => !this.solveClue?.ownsEquipment() && STYLE === 'mage',
+                castsLeft,
+                spell: () => SPELL,
+                staff: () => WEAPON
+            }),
             new SipPotion(this),
             new PanicBank(this),
             new BuryBones(this),

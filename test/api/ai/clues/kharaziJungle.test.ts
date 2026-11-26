@@ -1,13 +1,10 @@
+import { loadStaticFinder } from '../../../lib/navigation.js';
 import fs from 'node:fs';
 import path from 'node:path';
 
 import { afterEach, describe, expect, test } from 'bun:test';
-import { gunzipSync } from 'fflate';
 
-import doors from '#/bot/event/webwalk/data/doors.json';
-import stairs from '#/bot/event/webwalk/data/stairEdges.json';
-import transports from '#/bot/event/webwalk/data/transports.json';
-import { PathFinder, type DoorEdgeData, type NavPoint, type TransportEdgeData } from '#/bot/event/webwalk/PathFinder.js';
+import { type NavPoint } from '#/bot/event/webwalk/PathFinder.js';
 import { Bank } from '#/bot/api/bank/Bank.js';
 import { Equipment } from '#/bot/api/equipment/Equipment.js';
 import { Game } from '#/bot/api/game/Game.js';
@@ -132,21 +129,11 @@ describe('cutting into the jungle', () => {
 const PACK_PATH = path.join(process.cwd(), 'out/collision.lcnav.gz');
 const HAS_COLLISION_PACK = fs.existsSync(PACK_PATH);
 
-function loadFinder(): PathFinder {
-    let bytes: Uint8Array = new Uint8Array(fs.readFileSync(PACK_PATH));
-    if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-        bytes = gunzipSync(bytes);
-    }
-    const built = new PathFinder(bytes);
-    built.addEdges(doors as DoorEdgeData[], transports as TransportEdgeData[], stairs as TransportEdgeData[]);
-    return built;
-}
-
 // Why: the feature rests on the band being the only thing in the way, so both halves are pinned: the
 // Why: pack cannot route in, and once the chop has landed the ordinary walker reaches every dig.
 describe.skipIf(!HAS_COLLISION_PACK)('the band is the only thing sealing the digs', () => {
     test('no dig routes from Karamja, and every one routes from the far side of the band', () => {
-        const finder = loadFinder();
+        const finder = loadStaticFinder(PACK_PATH);
         const fromMainland = KHARAZI_IDS.filter(id => finder.findPath(KARAMJA_MAINLAND, CLUE_DB[id]!.coord!, undefined, 4_000_000).ok);
         expect(fromMainland).toEqual([]);
         const fromJungle = KHARAZI_IDS.filter(id => finder.findPath(JUNGLE_LANDING, CLUE_DB[id]!.coord!, undefined, 4_000_000).ok);

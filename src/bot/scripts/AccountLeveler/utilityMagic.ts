@@ -1,6 +1,8 @@
 import { MARKET_PRICES } from '../../data/marketprices.js';
-import { ALCH_ITEMS, CUSTOM_ALCH_KEY, DEFAULT_ALCH_ITEMS, HIGH_ALCH_LEVEL, HIGH_ALCH_FIRES, customAlchItem, type AlchItem } from '../Alcher/AlcherLogic.js';
-import { FIRE_STAFF, MAGIC_REQUIRED, NATURE_RUNE, RECIPES, SUPERHEAT_FIRES, barsPerTrip, barsSmeltable, pickFireStaff } from '../Superheater/SuperheaterLogic.js';
+import { ALCH_ITEMS, CUSTOM_ALCH_KEY, DEFAULT_ALCH_ITEMS, HIGH_ALCH_LEVEL, HIGH_ALCH_FIRES, customAlchItem, type AlchItem } from '../../api/magic/alchemy.js';
+import { FIRE_STAFF, NATURE_RUNE, pickFireStaff } from '../../api/magic/fireStaves.js';
+import { barsPerTrip, MAGIC_REQUIRED, SUPERHEAT_FIRES } from '../../api/magic/superheat.js';
+import { barsSmeltable, RECIPES } from '../../data/smelting.js';
 import { purchaseBudget, shoppingReserve, supplyOffer } from './offers.js';
 import { requirementKey, stockOf, type ActivityPlan, type LevelerSnapshot, type Requirement } from './types.js';
 

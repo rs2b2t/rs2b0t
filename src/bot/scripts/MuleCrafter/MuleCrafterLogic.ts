@@ -1,5 +1,4 @@
-import { BANK_LOCATIONS } from '../../api/bank/BankLocations.js';
-import Tile from '../../geometry/Tile.js';
+export { bankTile } from '../../api/bank/BankLocations.js';
 import { type TradeItem } from '../../api/trade/Trade.js';
 import { RUNES, RUNE_OPTIONS, DEFAULT_RUNE, type RuneRoute, type RuneType } from '../../data/runeCraftLocations.js';
 
@@ -24,14 +23,6 @@ function normalizeName(name: string): string {
 
 export function parsePartnerNames(raw: string): string[] {
     return raw.split(',').map(normalizeName).filter(Boolean);
-}
-
-export function bankTile(bankName: string): Tile {
-    const loc = BANK_LOCATIONS.find(b => b.name === bankName);
-    if (!loc) {
-        throw new Error(`bankTile: unknown bank '${bankName}'`);
-    }
-    return loc.tile;
 }
 
 export function essencePerTrade(_invSize: number = 28, _holdsTalisman: boolean = true): number {

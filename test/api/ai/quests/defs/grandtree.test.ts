@@ -1,8 +1,9 @@
+import { customName, itemCounts, nameCounts, talkTarget } from '../../../../lib/questSteps.js';
 import { afterEach, describe, expect, test } from 'bun:test';
 
 import { GT_OBJ, GT_STAGE, GT_TILE, NARNODE_TRANSLATION } from '#/bot/api/ai/quests/defs/grandtree/areas.js';
 import { decide, grandtree } from '#/bot/api/ai/quests/defs/grandtree/index.js';
-import type { QuestSnapshot, QuestStep } from '#/bot/api/ai/quests/engine/types.js';
+import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
 import { QuestFood } from '#/bot/api/ai/quests/food.js';
 
 interface Options {
@@ -21,45 +22,20 @@ const STRONGHOLD = { x: 2466, z: 3497, level: 0 };
 const KARAMJA = { x: 2999, z: 3043, level: 0 };
 const CAVES = { x: 2491, z: 9864, level: 0 };
 
-function counts(names: string[]): Map<string, number> {
-    const out = new Map<string, number>();
-    for (const name of names) {
-        const key = name.toLowerCase();
-        out.set(key, (out.get(key) ?? 0) + 1);
-    }
-    return out;
-}
-
-function idCounts(ids: number[]): Map<number, number> {
-    const out = new Map<number, number>();
-    for (const id of ids) {
-        out.set(id, (out.get(id) ?? 0) + 1);
-    }
-    return out;
-}
-
 function snap(options: Options = {}): QuestSnapshot {
     return {
         journal: options.journal ?? 'inProgress',
-        inv: new Map([...counts(options.inv ?? []), ['mind rune', 150], ['air rune', 150]]),
-        invIds: idCounts(options.invIds ?? []),
+        inv: new Map([...nameCounts(options.inv ?? []), ['mind rune', 150], ['air rune', 150]]),
+        invIds: itemCounts(options.invIds ?? []),
         worn: new Set((options.worn ?? []).map(n => n.toLowerCase())),
         noProgress: 0,
         bankCoins: 2_000_000,
         stage: options.stage,
-        bank: counts(options.bank ?? []),
+        bank: nameCounts(options.bank ?? []),
         bankKnown: options.bankKnown ?? true,
         tile: options.tile ?? STRONGHOLD,
         freeSlots: options.freeSlots ?? 20
     };
-}
-
-function talkTarget(step: QuestStep): string | null {
-    return step.kind === 'talk' ? step.stop.npc : null;
-}
-
-function customName(step: QuestStep): string | null {
-    return step.kind === 'custom' ? step.name : null;
 }
 
 afterEach(() => {

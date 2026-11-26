@@ -2,9 +2,7 @@
  * Why: six levers control nine interlocking doors excluded from the nav graph; set bits mean down, and disjoint region bounds identify rooms. */
 
 //   bun tools/nav/ernest-basement-derive.ts
-import fs from 'node:fs';
-
-import { gunzipSync } from 'fflate';
+import { readCollisionPack } from '../lib/readCollisionPack.js';
 
 import { PathFinder } from '#/bot/event/webwalk/PathFinder.js';
 
@@ -19,11 +17,7 @@ for (let i = 0; i < args.length; i++) {
     }
 }
 
-let bytes: Uint8Array = new Uint8Array(fs.readFileSync(packPath));
-if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-    bytes = gunzipSync(bytes);
-}
-const finder = new PathFinder(bytes);
+const finder = new PathFinder(readCollisionPack(packPath));
 
 const A = 1 << 0, B = 1 << 1, C = 1 << 2, D = 1 << 3, E = 1 << 4, F = 1 << 5;
 /** True when the lever is down. */

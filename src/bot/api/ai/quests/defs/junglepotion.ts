@@ -1,4 +1,4 @@
-import { customStep, waitForJournal, waitStep } from '../engine/questSteps.js';
+import { customStep, journalStep, waitStep } from '../engine/questSteps.js';
 import { Modals } from '../../../ui/widgets/Modals.js';
 import { normalizeJournal as normalize } from '../journalText.js';
 import { Execution } from '../../../execution/Execution.js';
@@ -7,7 +7,7 @@ import Tile from '../../../../geometry/Tile.js';
 import { Traversal } from '../../../walking/Traversal.js';
 import { Inventory } from '../../../inventory/Inventory.js';
 import { Quests } from '../../../ui/questlog/Quests.js';
-import { QUESTS } from '../data/quests.js';
+import { questRecord } from '../data/quests.js';
 import type { QuestModule, QuestProgress, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { talkStrict } from '../exec/primitives.js';
 import { heldId, promptLoc, settleScene } from '../exec/prompts.js';
@@ -254,12 +254,8 @@ function handInHerb(log: (m: string) => void): Promise<boolean> {
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
-    if (snap.journal === 'complete') {
-        return { kind: 'done' };
-    }
-    if (snap.journal === 'unknown') {
-        return waitForJournal();
-    }
+    const journal = journalStep(snap.journal);
+    if (journal) return journal;
     // Why: a carried unid outranks the journal since it only exists once picked, which the journal can't render.
     // Why: at `found_snake_weed` with the unid held the journal writes no line, and every other `found_` stage writes the previous "go and pick it" line.
     const carried = JUNGLE_HERBS.find(h => (snap.invIds?.get(h.unidId) ?? 0) > 0);
@@ -318,7 +314,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const junglepotion: QuestModule = {
-    record: QUESTS.find(record => record.id === 'junglepotion')!,
+    record: questRecord('junglepotion'),
     bank: ARDOUGNE_BANK,
     ownsInventory: true,
     readProgress: readJungleProgress,

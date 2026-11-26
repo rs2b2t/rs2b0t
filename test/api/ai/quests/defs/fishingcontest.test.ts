@@ -1,10 +1,11 @@
+import { customName } from '../../../../lib/questSteps.js';
 import { describe, expect, test } from 'bun:test';
 
 import { FC_ID, FC_TILE, inCompound, nearestDwarf, nearestSpade } from '#/bot/api/ai/quests/defs/fishingcontest/areas.js';
 import { decide, fishingcontest } from '#/bot/api/ai/quests/defs/fishingcontest/index.js';
 import { FC_STAGE } from '#/bot/api/ai/quests/defs/fishingcontest/journal.js';
 import { ENTRY_FEE, WORM_TARGET } from '#/bot/api/ai/quests/defs/fishingcontest/supplies.js';
-import type { QuestSnapshot, QuestStep } from '#/bot/api/ai/quests/engine/types.js';
+import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
 
 interface Options {
     journal?: QuestSnapshot['journal'];
@@ -43,10 +44,6 @@ function snap(options: Options = {}): QuestSnapshot {
         bankKnown: options.bankKnown ?? true,
         freeSlots: 26
     };
-}
-
-function customName(step: QuestStep): string | null {
-    return step.kind === 'custom' ? step.name : null;
 }
 
 function without(id: number): Record<number, number> {

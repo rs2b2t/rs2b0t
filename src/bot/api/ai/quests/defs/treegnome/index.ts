@@ -1,5 +1,5 @@
-import { customStep as custom, talkTo, waitForJournal, waitStep } from '../../engine/questSteps.js';
-import { QUESTS } from '../../data/quests.js';
+import { customStep as custom, decideJournalStage, talkTo, waitStep } from '../../engine/questSteps.js';
+import { questRecord } from '../../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import type { NpcStop } from '../../exec/primitives.js';
 import { LOGS_WANTED, TG_ITEM, TG_NPC, TG_TILE, held, inStronghold, type TgItem } from './areas.js';
@@ -94,16 +94,10 @@ function chestBusiness(snap: QuestSnapshot, stage: number): boolean {
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
-    if (snap.journal === 'unknown') {
-        return waitForJournal();
-    }
-    if (snap.journal === 'complete') {
-        return { kind: 'done' };
-    }
-    const stage = snap.progress?.stage ?? snap.stage;
-    if (stage === undefined) {
-        return waitStep('Tree Gnome Village journal stage unavailable');
-    }
+    return decideJournalStage(snap, decideStage, 'Tree Gnome Village journal stage unavailable');
+}
+
+function decideStage(snap: QuestSnapshot, stage: number): QuestStep {
     if (inStronghold(snap.tile)) {
         return chestBusiness(snap, stage) ? TAKE_ORB : LEAVE;
     }
@@ -117,7 +111,7 @@ function warnReadiness(): string | null {
 }
 
 export const treegnome: QuestModule = {
-    record: QUESTS.find(record => record.id === 'tree')!,
+    record: questRecord('tree'),
     bank: TG_TILE.BANK,
     food: FOOD_FLOAT,
     tools: ['logs', 'axe', 'orb of protection', 'gnome amulet'],

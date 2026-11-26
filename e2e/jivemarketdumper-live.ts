@@ -4,6 +4,7 @@
 // Usage: HEADED=1 bun e2e/jivemarketdumper-live.ts [--base url] [--flood] [--minutes n] [--no-deploy]
 import type { Page } from 'playwright-core';
 import { deployIsolatedClient, fail, launchBrowser, requireSim, stopScript } from './lib/harness.js';
+import { requireTeleport } from './lib/teleport.js';
 import { cheatQuiet, clearChatDialogs, mainlandAccount, maxmeAndClearDialogs, startScript, seedItemsToBank } from './tutorial/harness.js';
 
 interface Args {
@@ -81,25 +82,6 @@ interface Snapshot {
 
 const fmt = (p: Point | null): string => (p ? `(${p.x},${p.z},${p.level})` : '(?)');
 
-function teleCmd(t: Point): string {
-    return `tele ${t.level},${t.x >> 6},${t.z >> 6},${t.x & 63},${t.z & 63}`;
-}
-
-async function teleArrive(page: Page, spot: Point): Promise<void> {
-    for (let attempt = 0; attempt < 4; attempt++) {
-        await cheatQuiet(page, teleCmd(spot));
-        for (let probe = 0; probe < 12; probe++) {
-            const t = await page.evaluate(() => (globalThis as never as { __rs2b0t: { reader: { worldTile(): Point | null } } }).__rs2b0t.reader.worldTile());
-            if (t && t.level === spot.level && Math.max(Math.abs(t.x - spot.x), Math.abs(t.z - spot.z)) <= 6) {
-                await page.waitForTimeout(700);
-                return;
-            }
-            await page.waitForTimeout(350);
-        }
-    }
-    fail(`tele to ${spot.x},${spot.z} failed`);
-}
-
 async function writeStorage(page: Page, entries: Record<string, string>): Promise<void> {
     await page.evaluate(map => {
         for (const [k, v] of Object.entries(map)) {
@@ -132,7 +114,7 @@ try {
     await clearChatDialogs(makerPage);
     await cheatQuiet(makerPage, '~clearinv');
     await seedItemsToBank(makerPage, [{ debugName: 'coins', displayName: 'Coins', qty: 500000 }], SPOT);
-    await teleArrive(makerPage, SPOT);
+    await requireTeleport(makerPage, SPOT, 6);
     await writeStorage(makerPage, {
         'rs2b0t:set:PriceBooks:books': BOOK,
         'rs2b0t:set:MarketMaker:priceBook': 'e2e',
@@ -158,7 +140,7 @@ try {
         { debugName: 'rune_chainbody', displayName: 'Rune chainbody', qty: 2 },
         ...(args.flood ? FLOOD_KINDS.map(debugName => ({ debugName, displayName: debugName.replaceAll('_', ' '), qty: 1 })) : [])
     ], SPOT);
-    await teleArrive(custPage, SPOT);
+    await requireTeleport(custPage, SPOT, 6);
     // Why: the dumper is given the maker's name and the bank it stands at, and nothing else; it never reads a price book.
     // Why: naming the bank rather than leaving it on Nearest is what proves the setting is honoured, since the maker's own bank is the one the takings have to reach.
     await writeStorage(custPage, { 'rs2b0t:set:JiveMarketDumper:maker': MAKER, 'rs2b0t:set:JiveMarketDumper:bank': 'Seers' });

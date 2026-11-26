@@ -2,8 +2,8 @@
 // Why: Lady Lumbridge is one-shot mid-quest, so post-complete access is Karamja volcano → dragonsecretdoor → climbing rope; nothing teleports onto the Crandor surface.
 
 //   ~/redeploy.sh && HEADED=1 bun e2e/crandor-ship-367-live.ts
-import type { Page } from 'playwright-core';
 import { launchBrowser, parseArgs } from './lib/harness.js';
+import { cheb, teleportForRoute } from './lib/teleport.js';
 import { createHarnessProof } from './lib/harnessProof.js';
 import { runLiveWalkProof } from './lib/liveWalkProof.js';
 import {
@@ -29,38 +29,6 @@ type Abi = {
 };
 
 const proof = createHarnessProof({ issue: 367, slug: 'crandor-ship' });
-
-function cheb(a: Tile, b: Tile): number {
-    if (a.level !== b.level) {
-        return 9999;
-    }
-    return Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
-}
-
-function teleCmd(t: Tile): string {
-    return `tele ${t.level},${t.x >> 6},${t.z >> 6},${t.x & 63},${t.z & 63}`;
-}
-
-async function teleArrive(page: Page, spot: Tile, maxDist = 3): Promise<void> {
-    for (let a = 0; a < 8; a++) {
-        if (page.isClosed()) {
-            throw new Error('page closed before tele');
-        }
-        await cheatQuiet(page, teleCmd(spot));
-        for (let p = 0; p < 25; p++) {
-            if (page.isClosed()) {
-                throw new Error('page closed during tele settle');
-            }
-            const t = await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.reader.worldTile());
-            if (t && cheb(t, spot) <= maxDist) {
-                await page.waitForTimeout(600);
-                return;
-            }
-            await page.waitForTimeout(200);
-        }
-    }
-    throw new Error(`tele ${spot.x},${spot.z} failed`);
-}
 
 const browser = await launchBrowser({ swiftshader: true });
 const page = await browser.newPage();
@@ -89,7 +57,7 @@ try {
     }
 
     console.log(`tele to volcano ${VOLCANO.x},${VOLCANO.z} (no tele onto Crandor)`);
-    await teleArrive(page, VOLCANO, 3);
+    await teleportForRoute(page, VOLCANO, 3);
     const here = await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.reader.worldTile());
     console.log(`at ${JSON.stringify(here)}`);
 

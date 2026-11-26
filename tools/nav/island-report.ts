@@ -6,11 +6,10 @@
 //   bun tools/nav/island-report.ts                    # islands >= 40 tiles
 //   bun tools/nav/island-report.ts --min 200 --top 30
 //   bun tools/nav/island-report.ts --json out/islands.json
+import { readCollisionPack } from '../lib/readCollisionPack.js';
 import fs from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-
-import { gunzipSync } from 'fflate';
 
 import doorsJson from '#/bot/event/webwalk/data/doors.json';
 import transportsJson from '#/bot/event/webwalk/data/transports.json';
@@ -43,11 +42,7 @@ const kx = (k: number): number => (k >> 14) & 0x3fff;
 const kz = (k: number): number => k & 0x3fff;
 const klevel = (k: number): number => (k >>> 28) & 0x3;
 
-let bytes: Uint8Array = new Uint8Array(fs.readFileSync(PACK));
-if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-    bytes = gunzipSync(bytes);
-}
-const finder = new PathFinder(bytes);
+const finder = new PathFinder(readCollisionPack(PACK));
 finder.addEdges(doorsJson as DoorEdgeData[], transportsJson as TransportEdgeData[], stairsJson as TransportEdgeData[]);
 
 interface LocAt {

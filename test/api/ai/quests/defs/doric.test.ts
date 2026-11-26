@@ -1,3 +1,4 @@
+import { customName } from '../../../../lib/questSteps.js';
 import { describe, expect, test } from 'bun:test';
 import { decide, decideForMiningLevel, doric, DORIC_ITEM, DORIC_PICKAXES, DORIC_STAGE, parseDoricJournal } from '#/bot/api/ai/quests/defs/doric.js';
 import type { QuestSnapshot, QuestStep } from '#/bot/api/ai/quests/engine/types.js';
@@ -56,10 +57,6 @@ function snap(options: SnapshotOptions = {}): QuestSnapshot {
         bankKnown: options.bankKnown ?? true,
         freeSlots: options.freeSlots ?? Math.max(0, 28 - inv.reduce((sum, item) => sum + item.qty, 0))
     };
-}
-
-function customName(step: QuestStep): string | null {
-    return step.kind === 'custom' ? step.name : null;
 }
 
 function expectCustom(step: QuestStep, purpose: RegExp): void {

@@ -2,6 +2,7 @@ import { reader } from '../../../adapter/ClientAdapter.js';
 import { driveDialog } from '../../ai/quests/exec/primitives.js';
 import { GameMessages } from '../../chatbox/gameMessages.js';
 import { Bank } from '../../bank/Bank.js';
+import { withdrawTo } from '../../bank/withdrawTo.js';
 import { depositAllExcept } from '../../bank/bankRules.js';
 import type { PotionPlan } from '../boostPotions.js';
 import { castsAvailable, runeWithdrawList } from '../CombatStyleLogic.js';
@@ -27,6 +28,8 @@ import { SPELL_TELEPORTS } from '../../../event/webwalk/teleportCatalog.js';
 import Tile from '../../../geometry/Tile.js';
 import { keyStatus, nextApproachIndex, shieldGate, type Style } from './logic.js';
 import { needsShield, type DragonSite } from './sites.js';
+
+export { withdrawTo };
 
 /** What supply and combat need from the bot, so neither imports JiveDragons.ts. */
 export interface JiveHost {
@@ -779,26 +782,6 @@ async function healUp(h: JiveHost, to: number): Promise<boolean> {
     }
     h.log(`healed ${from}% to ${Math.round(hpFrac() * 100)}% before heading back`);
     return true;
-}
-
-/** Top the pack up to `target` of `name`, returning how many arrived. */
-export async function withdrawTo(name: string, target: number): Promise<number> {
-    const start = Inventory.count(name);
-    for (let guard = 0; guard < 40 && Inventory.count(name) < target && !Inventory.isFull(); guard++) {
-        const before = Inventory.count(name);
-        const need = target - before;
-        if (need > 10 && (await Bank.withdrawX(name, need))) {
-            if (Inventory.count(name) > before) {
-                continue;
-            }
-            break;
-        }
-        await Bank.withdraw(name, need >= 10 ? 'Withdraw-10' : need >= 5 ? 'Withdraw-5' : 'Withdraw-1');
-        if (!(await Execution.delayUntil(() => Inventory.count(name) > before, 2500))) {
-            break;
-        }
-    }
-    return Inventory.count(name) - start;
 }
 
 /** Standing inside Velrak's cell, which is a dead end. */

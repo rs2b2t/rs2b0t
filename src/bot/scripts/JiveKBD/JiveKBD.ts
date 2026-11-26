@@ -4,7 +4,8 @@ import { HuntingBot, Parked } from '../../api/combat/hunting/HuntingBot.js';
 import { GameMessages } from '../../api/chatbox/gameMessages.js';
 import { castsAvailable } from '../../api/combat/CombatStyleLogic.js';
 import { STAFFS } from '../../api/combat/equipment.js';
-import { foodCount as foodCountIn, foodForms, foodHealAmount, isFoodItem, shouldEatToUseFood } from '../../api/combat/food.js';
+import { foodCount as foodCountIn, isFoodItem } from '../../api/combat/food.js';
+import { eatSelectedFood, shouldEatNow } from '../../api/combat/eating.js';
 import { Equipment } from '../../api/equipment/Equipment.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Execution } from '../../api/execution/Execution.js';
@@ -14,7 +15,7 @@ import { Inventory } from '../../api/inventory/Inventory.js';
 import { Npcs } from '../../api/npcs/Npcs.js';
 import { scriptFood } from '../../api/loadout/loadoutPlan.js';
 import { LOADOUT_SETTING } from '../../api/loadout/loadoutSetting.js';
-import { Autocast } from '../../api/magic/Autocast.js';
+import { ArmAutocast } from '../../api/tasks/ArmAutocast.js';
 import { Skills } from '../../api/skills/Skills.js';
 import { Sustain } from '../../api/sustain/Sustain.js';
 import { ContinueDialog } from '../../api/tasks/ContinueDialog.js';
@@ -115,15 +116,7 @@ function hasFood(): boolean {
 
 /** Below the eat threshold with food in the pack. The fight loop reads a refused eat as an empty pack, so the food half of this is load-bearing. */
 function needEat(): boolean {
-    if (!hasFood()) {
-        return false;
-    }
-    return shouldEatToUseFood({
-        hp: Skills.effective('hitpoints'),
-        maxHp: Skills.level('hitpoints'),
-        heal: foodHealAmount(FOOD_NAME),
-        foodCount: foodCount()
-    });
+    return shouldEatNow(FOOD_NAME, foodCount());
 }
 
 function castsLeft(): number {
@@ -200,20 +193,9 @@ function slotAction(drop: GroundItem | null): SlotAction {
     return hpFrac() < 1 ? 'eat' : 'drop';
 }
 
-async function eatOnce(bot: JiveKBD): Promise<boolean> {
-    const forms = foodForms(FOOD_NAME);
-    const food = Inventory.items().find(i => forms.includes((i.name ?? '').toLowerCase()));
-    if (!food) {
-        return false;
-    }
-    bot.setStatus(`eating ${food.name} (${Math.round(hpFrac() * 100)}% hp)`);
-    const before = Skills.effective('hitpoints');
-    const id = food.id;
-    const count = Inventory.countById(id);
-    if (!(await food.interact('Eat'))) {
-        return false;
-    }
-    return Execution.delayUntilTicks(() => Inventory.countById(id) < count || Skills.effective('hitpoints') > before, 2);
+function eatOnce(bot: JiveKBD): Promise<boolean> {
+    const food = Inventory.items().find(i => isFoodItem(i.name, FOOD_NAME));
+    return eatSelectedFood(bot, food, 'bite');
 }
 
 async function lootOnce(bot: JiveKBD): Promise<boolean> {
@@ -336,28 +318,6 @@ class GearEquip implements Task {
             this.fails = 0;
             this.retryAt = Date.now() + ASSERT_RETRY_MS;
             this.bot.log(`could not equip ${item}. Retrying in ${ASSERT_RETRY_MS / 1000}s.`);
-        }
-    }
-}
-
-class ArmAutocast implements Task {
-    private fails = 0;
-    private retryAt = 0;
-    constructor(private readonly bot: JiveKBD) {}
-    validate(): boolean {
-        if (Autocast.armed() || Date.now() < this.retryAt || castsLeft() < 1) {
-            return false;
-        }
-        return Autocast.staffTabAttached() || (WEAPON !== '' && Equipment.contains(WEAPON));
-    }
-    async execute(): Promise<void> {
-        this.bot.setStatus(`arming autocast: ${SPELL}`);
-        if (await Autocast.arm(SPELL, m => this.bot.log(m))) {
-            this.fails = 0;
-        } else if (++this.fails >= ASSERT_BATCH) {
-            this.fails = 0;
-            this.retryAt = Date.now() + ASSERT_RETRY_MS;
-            this.bot.log(`WARNING: could not arm autocast for '${SPELL}'. Retrying in ${ASSERT_RETRY_MS / 1000}s.`);
         }
     }
 }
@@ -498,7 +458,11 @@ export default class JiveKBD extends HuntingBot implements CombatHost, EntryHost
             new Eat(this),
             new CurePoison(this),
             new GearEquip(this),
-            new ArmAutocast(this),
+            new ArmAutocast(this, {
+                castsLeft,
+                spell: () => SPELL,
+                staff: () => WEAPON
+            }),
             new PanicBank(this),
             new FreeSlot(this),
             new BankRun(this),

@@ -35,6 +35,7 @@ describe('herb table — a known row per clean/unfinished id', () => {
         expect(HERB_OPTIONS).toHaveLength(HERBS.length);
         expect(HERB_OPTIONS).toContain('Guam leaf');
         expect(HERB_OPTIONS).toContain('Torstol');
+        expect(HERB_OPTIONS).not.toContain('Snake weed');
     });
 });
 
@@ -64,6 +65,7 @@ describe('herbByName — custom text matching', () => {
 
     test('unknown and blank names are null', () => {
         expect(herbByName('dragon stone')).toBeNull();
+        expect(herbByName('Snake weed')).toBeNull();
         expect(herbByName('  ')).toBeNull();
         expect(herbByName('')).toBeNull();
     });

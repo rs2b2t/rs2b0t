@@ -1,3 +1,4 @@
+import { getIndexedDefinition, loadDefinitionIndex } from '#/client/config/configArchive.js';
 import LruCache from '#/client/datastruct/LruCache.js';
 
 import AnimFrame from '#/client/dash3d/AnimFrame.js';
@@ -43,44 +44,17 @@ export default class NpcType {
     turnspeed: number = 32;
 
     static init(config: JagFile): void {
-        this.dat = new Packet(config.read('npc.dat'));
-        const idx: Packet = new Packet(config.read('npc.idx'));
-
-        this.numDefinitions = idx.g2();
-        this.idx = new Int32Array(this.numDefinitions);
-
-        let offset: number = 2;
-        for (let id: number = 0; id < this.numDefinitions; id++) {
-            this.idx[id] = offset;
-            offset += idx.g2();
-        }
-
-        this.recent = new TypedArray1d(20, null);
-        for (let id: number = 0; id < 20; id++) {
-            this.recent[id] = new NpcType();
-        }
+        loadDefinitionIndex(this, config, 'npc', 20);
     }
 
     static list(id: number): NpcType {
-        if (!this.recent || !this.idx || !this.dat) {
-            throw new Error();
-        }
+        return getIndexedDefinition(this, id, (recent, slot, dat) => {
+            const npc: NpcType = (recent[slot] = new NpcType());
+            npc.id = id;
+            npc.decode(dat);
 
-        for (let i: number = 0; i < 20; i++) {
-            const type: NpcType | null = this.recent[i];
-            if (type && type.id === id) {
-                return type;
-            }
-        }
-
-        this.recentPos = (this.recentPos + 1) % 20;
-
-        const npc: NpcType = (this.recent[this.recentPos] = new NpcType());
-        this.dat.pos = this.idx[id];
-        npc.id = id;
-        npc.decode(this.dat);
-
-        return npc;
+            return npc;
+        });
     }
 
     decode(dat: Packet): void {

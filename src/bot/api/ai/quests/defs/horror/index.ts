@@ -1,9 +1,9 @@
-import { customStep as custom, talkTo, waitForJournal, waitStep } from '../../engine/questSteps.js';
+import { customStep as custom, decideJournalStage, talkTo } from '../../engine/questSteps.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
-import { QUESTS } from '../../data/quests.js';
+import { questRecord } from '../../data/quests.js';
 import { hasFlag, type QuestModule, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import { talkThrough } from '../../exec/primitives.js';
 import { GUNNJORN, HD_ID, HD_ITEM, HD_QUEST, HD_STAGE, HD_TILE, LARRISSA } from './areas.js';
@@ -144,16 +144,10 @@ function reachTheCavern(snap: QuestSnapshot, atCavern: QuestStep): QuestStep {
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
-    if (snap.journal === 'unknown') {
-        return waitForJournal();
-    }
-    if (snap.journal === 'complete') {
-        return { kind: 'done' };
-    }
-    const stage = snap.progress?.stage ?? snap.stage;
-    if (stage === undefined) {
-        return waitStep('quest stage not readable');
-    }
+    return decideJournalStage(snap, decideStage);
+}
+
+function decideStage(snap: QuestSnapshot, stage: number): QuestStep {
     // Why: upkeep never runs inside a sealed pocket, or a mid-fight top-up walks you back out of the cavern.
     if (!sealedArea(snap.tile)) {
         const float = kit(snap, foodWant(snap, stage));
@@ -182,7 +176,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
 export const horror: QuestModule = {
     autoRetaliate: false,
-    record: QUESTS.find(r => r.id === 'horror')!,
+    record: questRecord('horror'),
     pray: { protect: 'melee', potions: 2 },
     // 4 kingdoms and a 10-bar barcrawl: pinning one booth costs a kingdom-crossing per leg.
     bank: 'nearest',

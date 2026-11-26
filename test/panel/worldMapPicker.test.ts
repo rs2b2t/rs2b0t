@@ -1,6 +1,6 @@
+import { readCollisionPack } from '../../tools/lib/readCollisionPack.js';
 import { describe, expect, test } from 'bun:test';
 import fs from 'node:fs';
-import { gunzipSync } from 'fflate';
 import { PathFinder } from '#/bot/event/webwalk/PathFinder.js';
 import { cappedSampleStep, nearestWalkable, sampleStep } from '#/bot/panel/WorldMapPicker.js';
 
@@ -8,11 +8,7 @@ const PACK_PATH = 'out/collision.lcnav.gz';
 const HAS_COLLISION_PACK = fs.existsSync(PACK_PATH);
 
 function loadPack(): PathFinder {
-    let bytes: Uint8Array = new Uint8Array(fs.readFileSync(PACK_PATH));
-    if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-        bytes = new Uint8Array(gunzipSync(bytes));
-    }
-    return new PathFinder(bytes as Uint8Array);
+    return new PathFinder(readCollisionPack(PACK_PATH));
 }
 
 describe('sampleStep', () => {

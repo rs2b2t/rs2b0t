@@ -3,9 +3,7 @@
 
 //   bun tools/nav/component-report.ts --seed 3019,9849,0 --seed 3019,9739,0
 //   bun tools/nav/component-report.ts --seeds-file tools/nav/mainland-routes.json
-import fs from 'node:fs';
-
-import { gunzipSync } from 'fflate';
+import { readCollisionPack } from '../lib/readCollisionPack.js';
 
 import { PathFinder, type NavPoint } from '#/bot/event/webwalk/PathFinder.js';
 import { loadDefaultNavEdges } from '#/bot/event/webwalk/loadTransportGraph.js';
@@ -41,11 +39,7 @@ if (seeds.length === 0) {
     );
 }
 
-let bytes: Uint8Array = new Uint8Array(fs.readFileSync(packPath));
-if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-    bytes = gunzipSync(bytes);
-}
-const finder = new PathFinder(bytes);
+const finder = new PathFinder(readCollisionPack(packPath));
 loadDefaultNavEdges(finder);
 
 console.log(`seeds: ${seeds.length}, maxExpansions ${maxExp}`);

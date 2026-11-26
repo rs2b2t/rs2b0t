@@ -1,7 +1,7 @@
 import { waitStep } from '../../engine/questSteps.js';
 import { Equipment } from '../../../../equipment/Equipment.js';
 import { foodForms } from '../../../../combat/food.js';
-import { ITEM_DB } from '../../../../../data/itemdb.js';
+import { ITEMS_BY_ID, ITEMS_BY_NAME } from '../../../../../data/itemIndex.js';
 import { armourChoice, armourWorn } from '../../armour.js';
 import { QuestFood } from '../../food.js';
 import { bankedName as banked, cachedBankId as bankedId, heldId, heldName as held, wornName as worn } from '../../engine/snapshotItems.js';
@@ -162,20 +162,22 @@ const buyAtJiminua = (item: string, qty: number): QuestStep => ({
     estGp: 150
 });
 
+const supplyNames = new Map([NET, KNIFE, PESTLE, TINDERBOX, SEAWEED].map(item => [item.id, item.name]));
+
+function supplyName(id: number): string | undefined {
+    return supplyNames.get(id) ?? ITEMS_BY_ID.get(id)?.name;
+}
+
 function clearSpace(snap: QuestSnapshot, removeFood = false): QuestStep | null {
     if (heldId(snap, TB_ID.RUM) > 0) return waitStep('make and deliver the Karamjan rum before leaving the island to bank');
-    const names = new Map<number, string>([
-        ...ITEM_DB.map(item => [item.id, item.name] as [number, string]),
-        ...[NET, KNIFE, PESTLE, TINDERBOX, SEAWEED].map(item => [item.id, item.name] as [number, string])
-    ]);
-    const inventory = [...snap.invIds ?? []].map(([id, count]) => ({ id, count, name: names.get(id) ?? null }));
+    const inventory = [...snap.invIds ?? []].map(([id, count]) => ({ id, count, name: supplyName(id) ?? null }));
     for (const [name, count] of snap.inv) {
-        const id = ITEM_DB.find(item => item.name.toLowerCase() === name)?.id;
+        const id = ITEMS_BY_NAME.get(name)?.[0]?.id;
         if (id !== undefined && !inventory.some(item => item.id === id)) inventory.push({ id, count, name });
     }
     const retained = retainLoadout(snap, inventory, QuestFood.name);
     const foods = new Set(foodNames().flatMap(foodForms));
-    const keepIds = retained.keepIds.filter(id => !removeFood || !foods.has(names.get(id)?.toLowerCase() ?? ''));
+    const keepIds = retained.keepIds.filter(id => !removeFood || !foods.has(supplyName(id)?.toLowerCase() ?? ''));
     const caps = retained.caps.filter(cap => keepIds.includes(cap.id));
     const expendable = inventory.some(item => !keepIds.includes(item.id)) || caps.length > 0;
     return expendable ? { kind: 'deposit', keep: [], keepIds, caps, bank: TB_TILE.ARDOUGNE_BANK, exactKeep: true } : null;

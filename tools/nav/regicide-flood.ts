@@ -3,9 +3,7 @@
 
 // bun tools/nav/regicide-flood.ts 2313,3215,0
 
-import fs from 'node:fs';
-
-import { gunzipSync } from 'fflate';
+import { readCollisionPack } from '../lib/readCollisionPack.js';
 
 import { PathFinder } from '#/bot/event/webwalk/PathFinder.js';
 
@@ -15,11 +13,7 @@ const ENGINE = process.env.ENGINE_DIR ?? `${process.env.HOME}/code/rs2b2t-engine
 const [sx, sz, slevel] = (process.argv[2] ?? '2313,3215,0').split(',').map(Number);
 const LIMIT = Number(process.argv[3] ?? 400_000);
 
-let bytes: Uint8Array = new Uint8Array(fs.readFileSync('out/collision.lcnav.gz'));
-if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-    bytes = gunzipSync(bytes);
-}
-const finder = new PathFinder(bytes);
+const finder = new PathFinder(readCollisionPack('out/collision.lcnav.gz'));
 
 const DIRS = [
     [0, 1, 0x1],

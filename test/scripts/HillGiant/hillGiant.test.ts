@@ -1,8 +1,8 @@
+import { readCollisionPack } from '../../../tools/lib/readCollisionPack.js';
 import fs from 'node:fs';
 import path from 'node:path';
 
 import { describe, expect, test } from 'bun:test';
-import { gunzipSync } from 'fflate';
 
 import {
     BIG_BONES,
@@ -40,11 +40,7 @@ describe.skipIf(!HAS_COLLISION_PACK)('HillGiant pit spots are reachable', () => 
     // Why: a spot can sit inside the pit's bounding box and still be walled off,
     // and an unreachable one wedges the bot in a retry loop that never ends.
     test('every pit spot can be pathed to from the bank', () => {
-        let bytes: Uint8Array = new Uint8Array(fs.readFileSync(PACK_PATH));
-        if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-            bytes = gunzipSync(bytes);
-        }
-        const finder = new PathFinder(bytes);
+        const finder = new PathFinder(readCollisionPack(PACK_PATH));
         loadDefaultNavEdges(finder);
 
         for (const spot of PIT_SPOTS) {

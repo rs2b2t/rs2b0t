@@ -1,14 +1,11 @@
+import { loadDefaultFinder, loadStaticFinder } from '../../lib/navigation.js';
 import { describe, expect, test } from 'bun:test';
-import { gunzipSync } from 'fflate';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { PathFinder, type TransportEdgeData } from '#/bot/event/webwalk/PathFinder.js';
+import type { TransportEdgeData } from '#/bot/event/webwalk/PathFinder.js';
 import { matchesTransportLoc } from '#/bot/event/webwalk/WalkExecutor.js';
-import { loadDefaultNavEdges } from '#/bot/event/webwalk/loadTransportGraph.js';
 import { emptyWorldStateData } from '#/bot/event/webwalk/worldStateData.js';
-import doorsJson from '#/bot/event/webwalk/data/doors.json';
-import stairsJson from '#/bot/event/webwalk/data/stairEdges.json';
 import transports from '#/bot/event/webwalk/data/transports.json';
 
 /** Edgeville dungeon surface trapdoor (#285). */
@@ -46,26 +43,6 @@ function findEdge(expected: typeof EDGEVILLE_TRAP | typeof DWARVEN_TRAP): Transp
 const PACK_PATH = path.join(process.cwd(), 'out/collision.lcnav.gz');
 /** Pack is gitignored, pack-dependent tests must skip, never silent-pass (#341). */
 const HAS_COLLISION_PACK = fs.existsSync(PACK_PATH);
-
-function loadPack(): PathFinder {
-    let bytes: Uint8Array = new Uint8Array(fs.readFileSync(PACK_PATH));
-    if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-        bytes = new Uint8Array(gunzipSync(bytes));
-    }
-    const finder = new PathFinder(bytes as Uint8Array);
-    finder.addEdges(doorsJson as never, transports as never, stairsJson as never);
-    return finder;
-}
-
-function loadDefaultPack(): PathFinder {
-    let bytes: Uint8Array = new Uint8Array(fs.readFileSync(PACK_PATH));
-    if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-        bytes = new Uint8Array(gunzipSync(bytes));
-    }
-    const finder = new PathFinder(bytes as Uint8Array);
-    loadDefaultNavEdges(finder);
-    return finder;
-}
 
 describe('Trapdoor closed/open metadata', () => {
     test('Edgeville and Dwarven Mine trapdoors pair closed locId with openLocId', () => {
@@ -108,7 +85,7 @@ describe('Trapdoor closed/open metadata', () => {
 
 describe('Dwarven Mine + Edgeville trapdoor paths', () => {
     test.skipIf(!HAS_COLLISION_PACK)('pack: surface near Dwarven trapdoor reaches underground landing', () => {
-        const finder = loadPack();
+        const finder = loadStaticFinder(PACK_PATH);
         const edge = findEdge(DWARVEN_TRAP);
         expect(edge).toBeDefined();
         expect(finder.walkable(DWARVEN_TRAP.from.x, DWARVEN_TRAP.from.z, 0)).toBe(true);
@@ -129,7 +106,7 @@ describe('Dwarven Mine + Edgeville trapdoor paths', () => {
     });
 
     test.skipIf(!HAS_COLLISION_PACK)('pack: Edgeville dungeon field still exits via ladder after trapdoor metadata', () => {
-        const finder = loadPack();
+        const finder = loadStaticFinder(PACK_PATH);
         const field = { x: 3111, z: 9937, level: 0 };
         const falador = { x: 2965, z: 3378, level: 0 };
         const route = finder.findPath(field, falador);
@@ -144,7 +121,7 @@ describe('Dwarven Mine + Edgeville trapdoor paths', () => {
     });
 
     test.skipIf(!HAS_COLLISION_PACK)('pack: Miner can bank the Edgeville Dungeon Mine without a Brass key', () => {
-        const finder = loadDefaultPack();
+        const finder = loadDefaultFinder(PACK_PATH);
         const bank = { x: 3094, z: 3493, level: 0 };
         const mine = { x: 3132, z: 9874, level: 0 };
         const state = emptyWorldStateData(true);

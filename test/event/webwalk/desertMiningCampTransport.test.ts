@@ -1,5 +1,5 @@
+import { loadDefaultFinder } from '../../lib/navigation.js';
 import { describe, expect, test } from 'bun:test';
-import { gunzipSync } from 'fflate';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -7,8 +7,8 @@ import rawDoors from '#/bot/event/webwalk/data/doors.json';
 import { SPECIAL_CROSSINGS, specialCrossingForTransport } from '#/bot/event/webwalk/data/specialCrossings.js';
 import { arrivalDialogueResolved, shouldSceneStepToTile } from '#/bot/event/webwalk/exec/specialCrossing.js';
 import { DESERT_MINING_CAMP_REPLACED_DOOR_IDS, DESERT_MINING_CAMP_SCRIPTED_DOOR_IDS } from '#/bot/event/webwalk/desertMiningCampDoors.js';
-import { allDoorRows, allTransportRows, loadDefaultNavEdges } from '#/bot/event/webwalk/loadTransportGraph.js';
-import { PathFinder, type DoorEdgeData, type TransportEdgeData } from '#/bot/event/webwalk/PathFinder.js';
+import { allDoorRows, allTransportRows } from '#/bot/event/webwalk/loadTransportGraph.js';
+import { type DoorEdgeData, type TransportEdgeData } from '#/bot/event/webwalk/PathFinder.js';
 import { meetsRequires } from '#/bot/event/webwalk/requires.js';
 import { specialRequiresAt } from '#/bot/event/webwalk/specialRequires.js';
 import { desertMiningCampEdges } from '#/bot/event/webwalk/travelCatalog.js';
@@ -16,16 +16,6 @@ import { emptyWorldStateData, worldStateFromData } from '#/bot/event/webwalk/wor
 
 const PACK_PATH = path.join(process.cwd(), 'out/collision.lcnav.gz');
 const HAS_COLLISION_PACK = fs.existsSync(PACK_PATH);
-
-function loadFinder(): PathFinder {
-    let bytes = new Uint8Array(fs.readFileSync(PACK_PATH));
-    if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-        bytes = new Uint8Array(gunzipSync(bytes));
-    }
-    const finder = new PathFinder(bytes);
-    loadDefaultNavEdges(finder);
-    return finder;
-}
 
 function edge(debugName: string): TransportEdgeData {
     const found = desertMiningCampEdges().find(candidate => candidate.debugName === debugName);
@@ -157,7 +147,7 @@ describe('Desert Mining Camp shared transports', () => {
     });
 
     test.skipIf(!HAS_COLLISION_PACK)('rejects the server staging tile before the real mine landing', () => {
-        const finder = loadFinder();
+        const finder = loadDefaultFinder(PACK_PATH);
         const deepMine = { x: 3323, z: 9458, level: 0 };
         const options = { state: completeData, useTeleportCatalog: false } as const;
         expect(finder.findPath({ x: 3278, z: 9426, level: 0 }, deepMine, options).ok).toBe(false);
@@ -165,7 +155,7 @@ describe('Desert Mining Camp shared transports', () => {
     });
 
     test.skipIf(!HAS_COLLISION_PACK)('uses the exact wrought-gate row as the south component', () => {
-        const finder = loadFinder();
+        const finder = loadDefaultFinder(PACK_PATH);
         const south = { x: 3322, z: 9448, level: 0 };
         const north = { x: 3322, z: 9449, level: 0 };
         const deepMine = { x: 3323, z: 9458, level: 0 };
@@ -294,7 +284,7 @@ describe('Desert Mining Camp shared transports', () => {
     });
 
     test.skipIf(!HAS_COLLISION_PACK)('attaches the Metal-key gate to both inside-origin path edges', () => {
-        const finder = loadFinder();
+        const finder = loadDefaultFinder(PACK_PATH);
         const withoutKey = emptyWorldStateData(true);
 
         for (const z of [3028, 3029]) {

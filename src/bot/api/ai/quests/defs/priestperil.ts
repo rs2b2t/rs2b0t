@@ -1,4 +1,4 @@
-import { customStep, talkTo, waitForJournal } from '../engine/questSteps.js';
+import { customStep, journalStep, talkTo } from '../engine/questSteps.js';
 import { findSceneTarget } from '../exec/prompts.js';
 import { Execution } from '../../../execution/Execution.js';
 import { Game } from '../../../game/Game.js';
@@ -14,7 +14,7 @@ import { Bank } from '../../../bank/Bank.js';
 import { driveDialog, gotoNpc, isUnderground, talkThrough, walkWithHops, type LadderHop, type NpcStop } from '../exec/primitives.js';
 import { executeStep, openBankLeg } from '../exec/steps.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
-import { QUESTS } from '../data/quests.js';
+import { questRecord } from '../data/quests.js';
 
 const GOLDEN_KEY_ID = 2944;
 const IRON_KEY_ID = 2945;
@@ -538,12 +538,8 @@ function gatherBucket(): QuestStep {
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
-    if (snap.journal === 'complete') {
-        return { kind: 'done' };
-    }
-    if (snap.journal === 'unknown') {
-        return waitForJournal();
-    }
+    const journal = journalStep(snap.journal);
+    if (journal) return journal;
     if (snap.journal === 'notStarted') {
         return talkTo(ROALD);
     }
@@ -563,7 +559,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const priestperil: QuestModule = {
-    record: QUESTS.find(r => r.id === 'priestperil')!,
+    record: questRecord('priestperil'),
     bank: new Tile(3253, 3420, 0),
     food: 8,
     grind: ['temple guardian', 'monk of zamorak'],

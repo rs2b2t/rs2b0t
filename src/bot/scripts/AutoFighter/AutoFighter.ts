@@ -14,7 +14,7 @@ import {
     type MeleeCombatStyle
 } from '../../api/combat/CombatStyle.js';
 import { attackRangeFor, bodyOrigin, gapTo } from '../../api/combat/hunting/logic.js';
-import { Autocast } from '../../api/magic/Autocast.js';
+import { ArmAutocast } from '../../api/tasks/ArmAutocast.js';
 import { castsAvailable, runeWithdrawList } from '../../api/combat/CombatStyleLogic.js';
 import { foodHealAmount } from '../../api/combat/food.js';
 import { Special } from '../../api/combat/Special.js';
@@ -23,6 +23,7 @@ import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { Skills } from '../../api/skills/Skills.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Equipment } from '../../api/equipment/Equipment.js';
+import { withdrawTo } from '../../api/bank/withdrawTo.js';
 import { Bank } from '../../api/bank/Bank.js';
 import { BankTeleport, BANK_TELEPORT_OPTIONS, bankTeleportSupplies } from '../../api/bank/BankTeleport.js';
 import { dragonMeleeStyle } from '../../api/combat/dragonStyle.js';
@@ -482,7 +483,13 @@ export default class AutoFighter extends TaskBot {
             this.solveClue!,
             new BankRun(this),
             new SetAttackStyle(this),
-            new ArmAutocast(this),
+            new ArmAutocast(this, {
+                enabled: () => STYLE === 'mage',
+                castsLeft,
+                spell: () => SPELL,
+                warning: () => `WARNING: could not arm autocast for '${SPELL}' — retrying in 60s (check spell/level, and that a staff is wielded).`,
+                label: 'Arm autocast'
+            }),
             new ArmSpecial(this),
             this.fight,
             new ReturnToAnchor(this)
@@ -972,25 +979,6 @@ async function restockFood(): Promise<void> {
     await Bank.withdrawX(FOOD, count);
 }
 
-async function withdrawTo(name: string, target: number): Promise<number> {
-    const start = Inventory.count(name);
-    for (let guard = 0; guard < 40 && Inventory.count(name) < target && !Inventory.isFull(); guard++) {
-        const before = Inventory.count(name);
-        const need = target - before;
-        if (need > 10 && (await Bank.withdrawX(name, need))) {
-            if (Inventory.count(name) > before) {
-                continue;
-            }
-            break;
-        }
-        await Bank.withdraw(name, need >= 10 ? 'Withdraw-10' : need >= 5 ? 'Withdraw-5' : 'Withdraw-1');
-        if (!(await Execution.delayUntil(() => Inventory.count(name) > before, 2500))) {
-            break;
-        }
-    }
-    return Inventory.count(name) - start;
-}
-
 class SetAttackStyle implements Task {
     readonly label = 'Set attack style';
     private fails = 0;
@@ -1030,32 +1018,6 @@ class SetAttackStyle implements Task {
             this.fails = 0;
             this.retryAt = Date.now() + 60_000;
             this.bot.log(`could not set the ${STYLE} attack style (combat tab not ready?) — retrying in 60s`);
-        }
-    }
-}
-
-class ArmAutocast implements Task {
-    readonly label = 'Arm autocast';
-    private fails = 0;
-    private retryAt = 0;
-    constructor(private bot: AutoFighter) {}
-    validate(): boolean {
-        if (STYLE !== 'mage' || Autocast.armed() || Date.now() < this.retryAt) {
-            return false;
-        }
-        if (castsLeft() < 1) {
-            return false;
-        }
-        return Autocast.staffTabAttached();
-    }
-    async execute(): Promise<void> {
-        this.bot.setStatus(`arming autocast: ${SPELL}`);
-        if (await Autocast.arm(SPELL, m => this.bot.log(m))) {
-            this.fails = 0;
-        } else if (++this.fails >= 5) {
-            this.fails = 0;
-            this.retryAt = Date.now() + 60_000;
-            this.bot.log(`WARNING: could not arm autocast for '${SPELL}' — retrying in 60s (check spell/level, and that a staff is wielded).`);
         }
     }
 }

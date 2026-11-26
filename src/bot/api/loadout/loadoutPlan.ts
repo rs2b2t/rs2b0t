@@ -1,5 +1,5 @@
 import type { SettingsBag } from '../../runtime/Settings.js';
-import { ITEM_DB } from '../../data/itemdb.js';
+import { ITEMS_BY_NAME } from '../../data/itemIndex.js';
 import { selectedLoadout } from './loadoutSetting.js';
 import type { CarryEntry, Loadout } from './loadouts.js';
 
@@ -7,7 +7,7 @@ import type { CarryEntry, Loadout } from './loadouts.js';
 export function foodOf(loadout: Loadout | null, fallback: string): string {
     for (const entry of loadout?.carry ?? []) {
         const wanted = entry.item.toLowerCase();
-        const record = ITEM_DB.find(r => r.name.toLowerCase() === wanted);
+        const record = ITEMS_BY_NAME.get(wanted)?.[0];
         if (record?.consumable === 'eat') {
             return record.name;
         }

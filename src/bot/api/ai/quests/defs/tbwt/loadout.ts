@@ -1,4 +1,4 @@
-import { ITEM_DB } from '../../../../../data/itemdb.js';
+import { retainGearAndFood, unnotedCounts, type PackItem } from '../../engine/retainLoadout.js';
 import { foodForms } from '../../../../combat/food.js';
 import { QuestFood } from '../../food.js';
 import { flagValue, hasFlag, type QuestSnapshot } from '../../engine/types.js';
@@ -79,37 +79,13 @@ export function loadout(snap: QuestSnapshot) {
     return { phase, tools, caps, food: FOOD_TARGET, minFree, spear, potions, deliverCatch, compact };
 }
 
-export interface PackItem { id: number; name: string | null; count: number; noted?: boolean }
-const equipment = new Map(ITEM_DB.filter(item => item.slot).map(item => [item.id, item]));
+export type { PackItem } from '../../engine/retainLoadout.js';
+
 export function retainLoadout(snap: QuestSnapshot, inventory: PackItem[], configured: string | null) {
-    const ids = new Map<number, number>();
-    for (const item of inventory) if (!item.noted) ids.set(item.id, (ids.get(item.id) ?? 0) + item.count);
+    const ids = unnotedCounts(inventory);
     const plan = loadout({ ...snap, invIds: ids });
-    const foods = new Set(foodFormsForQuest(configured));
-    const keepIds: number[] = [];
-    const caps: { id: number; qty: number }[] = [];
-    const names = new Map(inventory.map(item => [item.id, item.name?.toLowerCase()]));
-    const occupied = new Set(ITEM_DB.filter(item => item.slot && (snap.wornIds?.has(item.id) || snap.worn.has(item.name.toLowerCase()))).map(item => item.slot));
-    const retained = new Map<number, number>();
-    let slots = 0;
-    for (const [id, count] of ids) {
-        if (foods.has(names.get(id) ?? '')) continue;
-        const gear = equipment.get(id);
-        const spareSpear = TB_SPEARS.some(s => s.id === id || s.kpId === id);
-        const limit = plan.caps.get(id) ?? (gear?.slot && !occupied.has(gear.slot) && !spareSpear ? gear.slot === 'quiver' ? Infinity : 1 : 0);
-        const qty = Math.min(count, limit);
-        if (qty <= 0) continue;
-        retained.set(id, qty);
-        slots += id === TB_ID.COINS || gear?.slot === 'quiver' ? 1 : qty;
-        if (gear?.slot) occupied.add(gear.slot);
-    }
-    let food = Math.min(plan.food, Math.max(0, 28 - slots - plan.minFree));
-    for (const [id, count] of ids) {
-        const edible = foods.has(names.get(id) ?? '');
-        const qty = edible ? Math.min(count, food) : retained.get(id) ?? 0;
-        if (edible) food -= qty;
-        if (qty > 0) keepIds.push(id);
-        if (qty < count && qty > 0) caps.push({ id, qty });
-    }
-    return { keepIds, caps };
+    return retainGearAndFood(snap, inventory, ids, {
+        caps: plan.caps, foods: new Set(foodFormsForQuest(configured)), foodLimit: plan.food, reserve: plan.minFree,
+        excludeGear: id => TB_SPEARS.some(spear => spear.id === id || spear.kpId === id)
+    });
 }

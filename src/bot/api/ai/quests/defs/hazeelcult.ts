@@ -1,4 +1,4 @@
-import { customStep as custom, waitForJournal, waitStep } from '../engine/questSteps.js';
+import { customStep as custom, journalStep, waitStep } from '../engine/questSteps.js';
 import { Modals } from '../../../ui/widgets/Modals.js';
 import { normalizeJournal as normalize } from '../journalText.js';
 // docs/QUESTS.md
@@ -13,7 +13,7 @@ import { ChatDialog } from '../../../ui/dialogue/ChatDialog.js';
 import { Quests } from '../../../ui/questlog/Quests.js';
 import { Reach } from '../../../walking/Reach.js';
 import { Traversal } from '../../../walking/Traversal.js';
-import { QUESTS } from '../data/quests.js';
+import { questRecord } from '../data/quests.js';
 import { hasFlag, type QuestModule, type QuestProgress, type QuestSnapshot, type QuestStep } from '../engine/types.js';
 import { gotoNpc, isUnderground, talkStrict, walkWithHops, type LadderHop, type NpcStop } from '../exec/primitives.js';
 import { driveChoice, driveUntil, heldId, settleScene } from '../exec/prompts.js';
@@ -477,12 +477,8 @@ function armourLeg(snap: QuestSnapshot): QuestStep {
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
-    if (snap.journal === 'complete') {
-        return { kind: 'done' };
-    }
-    if (snap.journal === 'unknown') {
-        return waitForJournal();
-    }
+    const journal = journalStep(snap.journal);
+    if (journal) return journal;
     const progress = snap.progress;
     if (progress === undefined) {
         return waitStep('Hazeel Cult journal stage unavailable');
@@ -508,7 +504,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const hazeelcult: QuestModule = {
-    record: QUESTS.find(r => r.id === 'hazeelcult')!,
+    record: questRecord('hazeelcult'),
     bank: BANK,
     hops: HOPS,
     food: 6,

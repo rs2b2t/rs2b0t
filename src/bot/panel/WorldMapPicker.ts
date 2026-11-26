@@ -1,6 +1,6 @@
 /** Tile-setting picker backed by collision.lcnav.gz, with an optional worldmap basemap. */
 // Why: paint only runs on input or a setting change, coalesced into one requestAnimationFrame, and basemap rebuild is manual, so opening the picker never spins MapView.
-import { gunzipSync } from 'fflate';
+import { decodeCollisionPack } from '../event/webwalk/decodeCollisionPack.js';
 import { PathFinder } from '../event/webwalk/PathFinder.js';
 import { WALK_DESTINATIONS } from '../api/map/WalkDestinations.js';
 import { Game } from '../api/game/Game.js';
@@ -62,10 +62,7 @@ async function loadFinder(): Promise<PathFinder> {
             if (!res.ok) {
                 throw new Error(`collision pack HTTP ${res.status}`);
             }
-            let bytes: Uint8Array = new Uint8Array(await res.arrayBuffer());
-            if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-                bytes = Uint8Array.from(gunzipSync(bytes));
-            }
+            const bytes = decodeCollisionPack(new Uint8Array(await res.arrayBuffer()));
             return new PathFinder(bytes);
         })().catch(err => {
             finderPromise = null;

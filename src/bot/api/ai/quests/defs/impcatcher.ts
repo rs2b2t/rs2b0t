@@ -1,4 +1,4 @@
-import { customStep, talkTo, waitForJournal, waitStep } from '../engine/questSteps.js';
+import { customStep, journalStep, talkTo, waitStep } from '../engine/questSteps.js';
 import { EventSignal } from '../../../execution/EventSignal.js';
 import { Execution } from '../../../execution/Execution.js';
 import { Game } from '../../../game/Game.js';
@@ -10,7 +10,7 @@ import { Sustain } from '../../../sustain/Sustain.js';
 import { Traversal } from '../../../walking/Traversal.js';
 import type { GroundItem } from '../../../model/GroundItem.js';
 import Tile from '../../../../geometry/Tile.js';
-import { QUESTS } from '../data/quests.js';
+import { questRecord } from '../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import type { NpcStop } from '../exec/primitives.js';
 
@@ -416,12 +416,8 @@ export function gatherBead(snap: QuestSnapshot): QuestStep {
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
-    if (snap.journal === 'complete') {
-        return { kind: 'done' };
-    }
-    if (snap.journal === 'unknown') {
-        return waitForJournal();
-    }
+    const journal = journalStep(snap.journal);
+    if (journal) return journal;
     // Why: the imp drop table is unconditional, so beads can be farmed before talking to Mizgog.
     // Why: the strip is 625 of walking and 2 ship fares from him, so gathering first pays that once.
     if (missingBeads(snap).length > 0) {
@@ -431,7 +427,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const impcatcher: QuestModule = {
-    record: QUESTS.find(record => record.id === 'imp')!,
+    record: questRecord('imp'),
     // Why: the strip is south of Ardougne and the hand-in is at the Wizards' Tower, so the useful bank depends on the leg.
     bank: 'nearest',
     // Why: the engine restores its coin float every provisioning tick, which turns the 30-coin fare into a round trip across the sea.

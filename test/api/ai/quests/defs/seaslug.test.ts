@@ -1,9 +1,10 @@
+import { customName, itemCounts, nameCounts } from '../../../../lib/questSteps.js';
 import { describe, expect, test } from 'bun:test';
 
 import { SS_OBJ, SS_TILE } from '#/bot/api/ai/quests/defs/seaslug/areas.js';
 import { decide, seaslug, sourcePaste, torchStep } from '#/bot/api/ai/quests/defs/seaslug/index.js';
 import { SS_STAGE, parseSeaSlugJournal } from '#/bot/api/ai/quests/defs/seaslug/journal.js';
-import type { QuestSnapshot, QuestStep } from '#/bot/api/ai/quests/engine/types.js';
+import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
 
 const CAROLINE_LINE = '@str@I have spoken to Caroline and agreed to help.||';
 const PASTE_LINE = '@str@I gave Holgart the Swamp Paste and his boat is now|@str@ready to take me to the Fishing Platform.||';
@@ -61,43 +62,23 @@ const ON_DECK = { x: 2782, z: 3276, level: 0 };
 const UPPER_DECK = { x: 2784, z: 3286, level: 1 };
 const ON_ISLAND = { x: 2797, z: 3320, level: 0 };
 
-function idCounts(ids: number[]): Map<number, number> {
-    const out = new Map<number, number>();
-    for (const id of ids) {
-        out.set(id, (out.get(id) ?? 0) + 1);
-    }
-    return out;
-}
-
-function counts(names: string[]): Map<string, number> {
-    const out = new Map<string, number>();
-    for (const name of names) {
-        out.set(name.toLowerCase(), (out.get(name.toLowerCase()) ?? 0) + 1);
-    }
-    return out;
-}
-
 function snap(options: Options = {}): QuestSnapshot {
     const stage = options.stage ?? SS_STAGE.STARTED;
     const progress = 'progress' in options ? options.progress : { stage, flags: new Set<string>() };
     return {
         journal: options.journal ?? 'inProgress',
         inv: new Map(),
-        invIds: idCounts(options.invIds ?? []),
+        invIds: itemCounts(options.invIds ?? []),
         worn: new Set(),
         noProgress: 0,
         bankCoins: 2_000_000,
         stage: progress?.stage,
         progress,
-        bank: counts(options.bank ?? []),
+        bank: nameCounts(options.bank ?? []),
         bankKnown: options.bankKnown ?? true,
         tile: (options.tile ?? ON_SHORE) as QuestSnapshot['tile'],
         freeSlots: 28
     };
-}
-
-function customName(step: QuestStep): string | null {
-    return step.kind === 'custom' ? step.name : null;
 }
 
 describe('Sea Slug journal parsing', () => {

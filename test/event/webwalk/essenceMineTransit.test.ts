@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { segmentPack } from '../../lib/syntheticCollisionPack.js';
 
 import { PathFinder, type NavPoint, type TransportEdgeData } from '#/bot/event/webwalk/PathFinder.js';
 import { allTransportRows } from '#/bot/event/webwalk/loadTransportGraph.js';
@@ -8,67 +9,10 @@ import { emptyWorldStateData } from '#/bot/event/webwalk/worldStateData.js';
 // Why: scripts own the wizard teleport, so entry is blacklisted (random over 22 pads) rather than modelled in the nav graph.
 // Exit stays on the graph behind `essenceExitReturn`, landing on the entry wizard's return stand ±2 (`map_findsquare` r=2).
 
-const DX = [0, 1, 0, -1, 1, 1, -1, -1] as const;
-const DZ = [1, 0, -1, 0, 1, -1, -1, 1] as const;
-
-function key(x: number, z: number): string {
-    return `${x}|${z}`;
-}
-
-/** A pack holding the listed segments, walked out tile by tile and joined to neighbours. */
-function packOf(segments: [NavPoint, NavPoint][]): Uint8Array {
-    const tiles = new Set<string>();
-    for (const [from, to] of segments) {
-        let { x, z } = from;
-        tiles.add(key(x, z));
-        while (x !== to.x || z !== to.z) {
-            x += Math.sign(to.x - x);
-            z += Math.sign(to.z - z);
-            tiles.add(key(x, z));
-        }
-    }
-    const bySquare = new Map<string, [number, number][]>();
-    for (const tile of tiles) {
-        const [x, z] = tile.split('|').map(Number);
-        const squareKey = key(x >> 6, z >> 6);
-        const square = bySquare.get(squareKey) ?? [];
-        square.push([x, z]);
-        bySquare.set(squareKey, square);
-    }
-
-    const perSquare = 3 + 4096 + 512;
-    const bytes = new Uint8Array(10 + bySquare.size * perSquare);
-    bytes.set([0x4c, 0x43, 0x4e, 0x56, 1, 1]);
-    new DataView(bytes.buffer).setUint16(8, bySquare.size, true);
-
-    let pos = 10;
-    for (const [squareKey, squareTiles] of bySquare) {
-        const [mx, mz] = squareKey.split('|').map(Number);
-        bytes[pos++] = mx;
-        bytes[pos++] = mz;
-        bytes[pos++] = 1;
-        const exits = bytes.subarray(pos, pos + 4096);
-        pos += 4096;
-        const walk = bytes.subarray(pos, pos + 512);
-        pos += 512;
-
-        for (const [x, z] of squareTiles) {
-            const index = (x & 63) * 64 + (z & 63);
-            walk[index >> 3] |= 1 << (index & 7);
-            for (let direction = 0; direction < DX.length; direction++) {
-                if (tiles.has(key(x + DX[direction], z + DZ[direction]))) {
-                    exits[index] |= 1 << direction;
-                }
-            }
-        }
-    }
-    return bytes;
-}
-
 const PORTAL_STAND = { x: 2932, z: 4816, level: 0 } as const;
 
 function finderOver(segments: [NavPoint, NavPoint][]): PathFinder {
-    const finder = new PathFinder(packOf(segments));
+    const finder = new PathFinder(segmentPack(segments));
     finder.addEdges([], allTransportRows() as TransportEdgeData[]);
     return finder;
 }

@@ -1,10 +1,11 @@
+import { customName, itemCounts } from '../../../../lib/questSteps.js';
 import { describe, expect, test } from 'bun:test';
 
 import { MURDER_OBJ, SUSPECTS, suspectOrder } from '#/bot/api/ai/quests/defs/murder/areas.js';
 import { decide, murder, sourcePot } from '#/bot/api/ai/quests/defs/murder/index.js';
 import { MURDER_STAGE, POISON_PROVED, THREAD_FOUND, parseMurderJournal } from '#/bot/api/ai/quests/defs/murder/journal.js';
 import { accused, heldThread } from '#/bot/api/ai/quests/defs/murder/state.js';
-import type { QuestProgress, QuestSnapshot, QuestStep } from '#/bot/api/ai/quests/engine/types.js';
+import type { QuestProgress, QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
 
 const NOT_STARTED =
     '@dbl@I can start this quest by speaking to one of the @dre@Guards@dbl@ at|'
@@ -51,14 +52,6 @@ interface SnapshotOptions {
     progress?: QuestProgress | undefined;
 }
 
-function idCounts(ids: number[]): Map<number, number> {
-    const result = new Map<number, number>();
-    for (const id of ids) {
-        result.set(id, (result.get(id) ?? 0) + 1);
-    }
-    return result;
-}
-
 function snap(options: SnapshotOptions = {}): QuestSnapshot {
     const progress = 'progress' in options
         ? options.progress
@@ -66,14 +59,14 @@ function snap(options: SnapshotOptions = {}): QuestSnapshot {
     return {
         journal: options.journal ?? 'inProgress',
         inv: new Map(),
-        invIds: idCounts(options.invIds ?? []),
+        invIds: itemCounts(options.invIds ?? []),
         worn: new Set(),
         noProgress: 0,
         bankCoins: 2_000_000,
         stage: progress?.stage,
         progress,
         bank: new Map(),
-        bankIds: idCounts(options.bankIds ?? []),
+        bankIds: itemCounts(options.bankIds ?? []),
         bankKnown: options.bankKnown ?? true,
         freeSlots: 28
     };
@@ -88,10 +81,6 @@ const FRANK = SUSPECTS[5];
 
 /** A pack that has cleared every hurdle before the named one. */
 const POT = MURDER_OBJ.POT;
-
-function customName(step: QuestStep): string | null {
-    return step.kind === 'custom' ? step.name : null;
-}
 
 describe('Murder Mystery journal parsing', () => {
     test('reads the not-started page as stage 0', () => {

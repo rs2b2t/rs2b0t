@@ -1,4 +1,4 @@
-import { ITEM_DB } from '#/bot/data/itemdb.js';
+import { ITEMS_BY_NAME } from '#/bot/data/itemIndex.js';
 
 export const GUARDIAN_WEAPON_IDS: readonly number[] = [1231, 1215, 1305];
 export const SUPERANTI = [
@@ -26,7 +26,7 @@ export function superantiDoses(items: readonly KitItem[]): number {
 }
 
 export function rangedWeaponId(name: string): number | undefined {
-    return ITEM_DB.find(item => item.slot === 'righthand' && item.name.toLowerCase() === name.toLowerCase())?.id;
+    return ITEMS_BY_NAME.get(name.toLowerCase())?.find(item => item.slot === 'righthand')?.id;
 }
 
 export function hardClueKit(kit: HardKitSnapshot, minimumSharks = MIN_SHARKS, needsAntipoison = true): HardKitStatus {

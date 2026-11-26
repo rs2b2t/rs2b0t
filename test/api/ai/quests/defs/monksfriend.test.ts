@@ -1,3 +1,4 @@
+import { customName, itemCounts, nameCounts } from '../../../../lib/questSteps.js';
 import { describe, expect, test } from 'bun:test';
 
 import {
@@ -53,42 +54,21 @@ interface SnapshotOptions {
     bankKnown?: boolean;
 }
 
-function counts(names: string[]): Map<string, number> {
-    const result = new Map<string, number>();
-    for (const name of names) {
-        const key = name.toLowerCase();
-        result.set(key, (result.get(key) ?? 0) + 1);
-    }
-    return result;
-}
-
-function idCounts(ids: number[]): Map<number, number> {
-    const result = new Map<number, number>();
-    for (const id of ids) {
-        result.set(id, (result.get(id) ?? 0) + 1);
-    }
-    return result;
-}
-
 function snap(options: SnapshotOptions = {}): QuestSnapshot {
     const stage = 'stage' in options ? options.stage : MF_STAGE.NOT_STARTED;
     return {
         journal: options.journal ?? 'inProgress',
-        inv: counts(options.inv ?? []),
-        invIds: idCounts(options.invIds ?? []),
+        inv: nameCounts(options.inv ?? []),
+        invIds: itemCounts(options.invIds ?? []),
         worn: new Set(),
         noProgress: 0,
         bankCoins: 2_000_000,
         stage,
         progress: stage === undefined ? undefined : { stage, flags: new Set() },
-        bank: counts(options.bank ?? []),
+        bank: nameCounts(options.bank ?? []),
         bankKnown: options.bankKnown ?? true,
         freeSlots: 28
     };
-}
-
-function customName(step: QuestStep): string | null {
-    return step.kind === 'custom' ? step.name : null;
 }
 
 function talkTo(step: QuestStep): string | null {

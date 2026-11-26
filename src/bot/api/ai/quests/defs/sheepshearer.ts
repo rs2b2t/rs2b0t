@@ -1,9 +1,9 @@
-import { talkTo, waitForJournal } from '../engine/questSteps.js';
+import { journalStep, talkTo } from '../engine/questSteps.js';
 import Tile from '../../../../geometry/Tile.js';
 import type { NpcStop } from '../exec/primitives.js';
 import { gatherWool, type WoolSites } from '../exec/wool.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
-import { QUESTS } from '../data/quests.js';
+import { questRecord } from '../data/quests.js';
 
 const FRED: NpcStop = {
     npc: 'Fred the Farmer', anchor: new Tile(3189, 3273, 0), leash: 6,
@@ -23,8 +23,8 @@ export function gatherBalls(snap: QuestSnapshot, need: number): QuestStep {
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
-    if (snap.journal === 'complete') { return { kind: 'done' }; }
-    if (snap.journal === 'unknown') { return waitForJournal(); }
+    const journal = journalStep(snap.journal);
+    if (journal) return journal;
     if (snap.journal === 'notStarted') { return talkTo(FRED); }
     if ((snap.inv.get('ball of wool') ?? 0) > 0) {
         return talkTo(FRED);
@@ -33,7 +33,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const sheepshearer: QuestModule = {
-    record: QUESTS.find(r => r.id === 'sheep')!,
+    record: questRecord('sheep'),
     bank: new Tile(3093, 3243, 0),
     coinFloat: 0,
     tools: ['shears', 'wool'],

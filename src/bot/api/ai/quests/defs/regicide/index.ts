@@ -1,7 +1,7 @@
 import { customStep as custom, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { GameMessages } from '../../../../chatbox/gameMessages.js';
 import { Skills } from '../../../../skills/Skills.js';
-import { QUESTS } from '../../data/quests.js';
+import { questRecord } from '../../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { formatTile } from '../../engine/trace.js';
 import { BOW_IDS, drawGear, meleeCarried, wearGear } from '../upass/supplies.js';
@@ -314,7 +314,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const regicide: QuestModule = {
-    record: QUESTS.find(record => record.id === 'regicide')!,
+    record: questRecord('regicide'),
     bank: RG_TILE.ARDOUGNE_BANK,
     ownsInventory: true,
     readProgress: readRegicideProgress,

@@ -1,7 +1,7 @@
 // docs/QUESTS.md
-import { customStep as custom, talkTo, waitForJournal, waitStep } from '../../engine/questSteps.js';
+import { customStep as custom, journalStep, talkTo, waitStep } from '../../engine/questSteps.js';
 import { prepareStrikes, STRIKE_RUNES } from '../../strike.js';
-import { QUESTS } from '../../data/quests.js';
+import { questRecord } from '../../data/quests.js';
 import { heldId as held } from '../../engine/snapshotItems.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { FOOD_FLOAT, QuestFood } from '../../food.js';
@@ -88,8 +88,8 @@ function invasionPlans(snap: QuestSnapshot): QuestStep {
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
-    if (snap.journal === 'complete') { return { kind: 'done' }; }
-    if (snap.journal === 'unknown') { return waitForJournal(); }
+    const journal = journalStep(snap.journal);
+    if (journal) return journal;
     const stage = snap.stage;
     if (stage === undefined) { return waitStep('The Grand Tree journal stage unavailable'); }
 
@@ -165,7 +165,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
 export const grandtree: QuestModule = {
     autoRetaliate: snap => !inCaves(snap.tile),
-    record: QUESTS.find(r => r.id === 'grandtree')!,
+    record: questRecord('grandtree'),
     bank: 'nearest',
     hops: GT_HOPS,
     food: FOOD_FLOAT,

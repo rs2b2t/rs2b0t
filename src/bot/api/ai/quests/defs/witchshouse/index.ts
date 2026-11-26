@@ -1,6 +1,6 @@
 import { customStep as custom, talkTo, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { prepareStrikes, STRIKE_CASTS, STRIKE_RUNES } from '../../strike.js';
-import { QUESTS } from '../../data/quests.js';
+import { questRecord } from '../../data/quests.js';
 import { bankedId, heldId, type QuestModule, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import { FALADOR_WEST_BANK, BOY, EXPERIMENT_NAMES, FIRE_STAVES, SHOP_GP, THESSALIA, WH_NAME, WH_OBJ, WYDIN, ZAFF, inGarden, inShed } from './areas.js';
 import { fountainKey, killExperiment, takeBall, leaveGarden } from './garden.js';
@@ -121,7 +121,7 @@ function where(snap: QuestSnapshot): string {
 
 export const witchshouse: QuestModule = {
     autoRetaliate: false,
-    record: QUESTS.find(r => r.id === 'ball')!,
+    record: questRecord('ball'),
     bank: FALADOR_WEST_BANK,
     pray: { protect: 'melee', potions: 2 },
     food: WH_FOOD,

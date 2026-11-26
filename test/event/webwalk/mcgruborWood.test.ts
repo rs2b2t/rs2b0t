@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { collisionPack } from '../../lib/syntheticCollisionPack.js';
 
 import doors from '#/bot/event/webwalk/data/doors.json';
 import transports from '#/bot/event/webwalk/data/transports.json';
@@ -11,60 +12,11 @@ const GATE_LEAVES = [
     { x: 2650, z: 3469, level: 0 }
 ] as const;
 
-const DIRS = [
-    [0, 1],
-    [1, 0],
-    [0, -1],
-    [-1, 0],
-    [1, 1],
-    [1, -1],
-    [-1, -1],
-    [-1, 1]
-] as const;
-
-type Point = readonly [x: number, z: number];
-
-/**
- * The wood's east fence, cut down to the two tiles either side of the Loose
- * Railing. Neither island touches the other, so only a curated edge joins them.
- */
 function railingPack(): Uint8Array {
-    const islands: Point[][] = [
-        [
-            [2659, 3500],
-            [2660, 3500],
-            [2661, 3500]
-        ],
-        [
-            [2662, 3500],
-            [2663, 3500],
-            [2664, 3500]
-        ]
-    ];
-
-    const bytes = new Uint8Array(10 + (3 + 4096 + 512));
-    bytes.set([0x4c, 0x43, 0x4e, 0x56, 1, 1]);
-    new DataView(bytes.buffer).setUint16(8, 1, true);
-    bytes[10] = 2661 >> 6;
-    bytes[11] = 3500 >> 6;
-    bytes[12] = 1;
-    const exits = bytes.subarray(13, 13 + 4096);
-    const walk = bytes.subarray(13 + 4096, 13 + 4096 + 512);
-
-    for (const island of islands) {
-        const tiles = new Set(island.map(([x, z]) => `${x}|${z}`));
-        for (const [x, z] of island) {
-            const index = (x & 63) * 64 + (z & 63);
-            walk[index >> 3] |= 1 << (index & 7);
-            for (let direction = 0; direction < DIRS.length; direction++) {
-                const [dx, dz] = DIRS[direction];
-                if (tiles.has(`${x + dx}|${z + dz}`)) {
-                    exits[index] |= 1 << direction;
-                }
-            }
-        }
-    }
-    return bytes;
+    return collisionPack(
+        [{ x: 2659, z: 3500 }, { x: 2660, z: 3500 }, OUTSIDE],
+        [INSIDE, { x: 2663, z: 3500 }, { x: 2664, z: 3500 }]
+    );
 }
 
 describe("McGrubor's Wood gate", () => {

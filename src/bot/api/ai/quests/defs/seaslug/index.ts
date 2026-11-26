@@ -1,6 +1,6 @@
 // docs/QUESTS.md
-import { customStep, talkTo, waitForJournal, waitStep } from '../../engine/questSteps.js';
-import { QUESTS } from '../../data/quests.js';
+import { customStep, journalStep, talkTo, waitStep } from '../../engine/questSteps.js';
+import { questRecord } from '../../data/quests.js';
 import { heldId as held } from '../../engine/snapshotItems.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import {
@@ -69,8 +69,8 @@ export function torchStep(snap: QuestSnapshot): QuestStep {
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
-    if (snap.journal === 'complete') { return { kind: 'done' }; }
-    if (snap.journal === 'unknown') { return waitForJournal(); }
+    const journal = journalStep(snap.journal);
+    if (journal) return journal;
     if (snap.journal === 'notStarted') { return talkTo(CAROLINE); }
 
     const progress = snap.progress;
@@ -111,7 +111,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const seaslug: QuestModule = {
-    record: QUESTS.find(r => r.id === 'seaslug')!,
+    record: questRecord('seaslug'),
     bank: SS_TILE.BANK,
     tools: ['torch', 'damp sticks', 'dry sticks', 'broken glass', 'swamp paste', 'coins'],
     readProgress: readSeaSlugProgress,

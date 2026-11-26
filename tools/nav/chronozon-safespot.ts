@@ -2,13 +2,10 @@
  * Why: the x=3082 passage is sealed; seed inside the chamber since exitMask cannot cross the gates. */
 
 //   bun tools/nav/chronozon-safespot.ts
-import fs from 'node:fs';
-import { gunzipSync } from 'fflate';
+import { readCollisionPack } from '../lib/readCollisionPack.js';
 import { PathFinder } from '#/bot/event/webwalk/PathFinder.js';
 
-let bytes: Uint8Array = new Uint8Array(fs.readFileSync('out/collision.lcnav.gz'));
-if (bytes[0] === 0x1f && bytes[1] === 0x8b) bytes = gunzipSync(bytes);
-const finder = new PathFinder(bytes);
+const finder = new PathFinder(readCollisionPack('out/collision.lcnav.gz'));
 
 const SPAWN = { x: 3087, z: 9937 };
 const SIZE = 3;

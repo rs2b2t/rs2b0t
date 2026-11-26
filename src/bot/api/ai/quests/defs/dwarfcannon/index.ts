@@ -1,6 +1,6 @@
 import { customStep as custom, talkTo, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { Skills } from '../../../../skills/Skills.js';
-import { QUESTS } from '../../data/quests.js';
+import { questRecord } from '../../data/quests.js';
 import { heldId } from '../../engine/snapshotItems.js';
 import { hasFlag, type QuestModule, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import { CAVE_HOPS, COMMANDER, COMMANDER_INSPECT, FALADOR_WEST_BANK, MC_FOOD_TARGET, MC_OBJ, NULODION } from './areas.js';
@@ -78,7 +78,7 @@ function warnDwarfCannonReadiness(): string | null {
 // Why: the quest buys nothing, and a float would walk to the pinned bank on every activation, which from the goblin cave is a route that doesn't exist and costs 90s to prove.
 
 export const dwarfcannon: QuestModule = {
-    record: QUESTS.find(r => r.id === 'mcannon')!,
+    record: questRecord('mcannon'),
     bank: FALADOR_WEST_BANK,
     hops: [...CAVE_HOPS],
     food: MC_FOOD_TARGET,

@@ -1,5 +1,5 @@
 import { customStep as custom, talkTo, waitForJournal, waitStep } from '../../engine/questSteps.js';
-import { QUESTS } from '../../data/quests.js';
+import { questRecord } from '../../data/quests.js';
 import { FOOD_FLOAT, QuestFood } from '../../food.js';
 import { gpShort } from '../../engine/provisioning.js';
 import { bankedName as banked, heldName as held, wornName as worn } from '../../engine/snapshotItems.js';
@@ -210,7 +210,7 @@ export function decide(snap: QuestSnapshot, food: string | null = selectedFood()
 }
 
 export const holygrail: QuestModule = {
-    record: QUESTS.find(r => r.id === 'grail')!,
+    record: questRecord('grail'),
     // Why: the quest crosses Camelot, Entrana, Seers', Draynor, Karamja and the Goblin Village, so no one bank is near enough to pin.
     bank: 'nearest',
     resumeAt: tile => tile.level >= 0 && tile.level <= 2 && inFisherRealm(tile),

@@ -3,7 +3,7 @@ import { Game } from '../../../../game/Game.js';
 import { clearSpace, fitSupplies, foodCount, WATCHTOWER_FOODS } from './loadout.js';
 import { QuestFood } from '../../food.js';
 import { dragonBankPending, huntDragonBones, inDragonLair, leaveDragonLair, refreshDragonBank } from './bones.js';
-import { QUESTS } from '../../data/quests.js';
+import { questRecord } from '../../data/quests.js';
 import { flagValue, hasFlag, type QuestModule, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import { CRYSTALS, RELIC_PARTS, WT_ITEM, WT_TILE, watchtowerArea, type WatchtowerArea } from './areas.js';
 import {
@@ -497,7 +497,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
 export const watchtower: QuestModule = {
     autoRetaliate: snap => !inDragonLair(snap.tile) && watchtowerArea(snap.tile) !== 'enclave',
-    record: QUESTS.find(record => record.id === 'itwatchtower')!,
+    record: questRecord('itwatchtower'),
     bank: WT_TILE.YANILLE_BANK,
     ownsInventory: true,
     resumeAt: tile => inDragonLair(tile) || escapePocket(watchtowerArea(tile), 'yanille') !== null,

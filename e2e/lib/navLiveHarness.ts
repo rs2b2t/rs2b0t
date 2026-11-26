@@ -3,7 +3,8 @@
 import type { Page } from 'playwright-core';
 
 import { setSettings } from './harness.js';
-import { cheatQuiet } from '../tutorial/harness.js';
+import { cheb } from './teleport.js';
+import { cheatQuiet, teleCheat as teleCmd } from '../tutorial/harness.js';
 
 // Shared pacing
 
@@ -126,16 +127,7 @@ export function pathPaintFlagsFromEnv(opts?: {
 
 // Geometry and placement
 
-export function cheb(a: NavTile, b: NavTile): number {
-    if (a.level !== b.level) {
-        return 9999;
-    }
-    return Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
-}
-
-export function teleCmd(t: NavTile): string {
-    return `tele ${t.level},${t.x >> 6},${t.z >> 6},${t.x & 63},${t.z & 63}`;
-}
+export { cheb, teleCmd };
 
 /**
  * Cheat-tele the character to `spot` (engine `tele` command).

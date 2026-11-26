@@ -80,7 +80,4 @@ export const FIELD_ARRIVE = 3;
 
 /** Prefer flax within this Chebyshev distance before considering farther plants. */
 export const LOCAL_PICK_RADIUS = 4;
-/** Reachable-tile BFS cap when detecting a flax enclosure. */
-export const POCKET_CAP = 40;
-/** Flax to drop so we can pick a path through solid plants. */
-export const CARVE_DROP = 5;
+export { CARVE_DROP, POCKET_CAP } from '../../api/acquisition/flaxPocket.js';

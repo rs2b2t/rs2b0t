@@ -1,3 +1,4 @@
+import { loadDefinitions } from '#/client/config/configArchive.js';
 import SeqType from '#/client/config/SeqType.js';
 
 import LruCache from '#/client/datastruct/LruCache.js';
@@ -12,7 +13,7 @@ export default class SpotType {
     static list: SpotType[] = [];
     static modelCache: LruCache<Model> = new LruCache(30);
 
-    id: number = 0;
+    constructor(public id: number = 0) {}
 
     model: number = 0;
     anim: number = -1;
@@ -26,19 +27,7 @@ export default class SpotType {
     contrast: number = 0;
 
     static init(config: JagFile): void {
-        const dat: Packet = new Packet(config.read('spotanim.dat'));
-
-        this.numDefinitions = dat.g2();
-        this.list = new Array(this.numDefinitions);
-
-        for (let id: number = 0; id < this.numDefinitions; id++) {
-            if (!this.list[id]) {
-                this.list[id] = new SpotType();
-            }
-
-            this.list[id].id = id;
-            this.list[id].decode(dat);
-        }
+        loadDefinitions(this, config, 'spotanim.dat');
     }
 
     decode(dat: Packet): void {

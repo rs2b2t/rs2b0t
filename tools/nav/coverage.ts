@@ -1,5 +1,4 @@
-import fs from 'node:fs';
-import { gunzipSync } from 'fflate';
+import { readCollisionPack } from '../lib/readCollisionPack.js';
 import { PathFinder, type NavPoint } from '../../src/bot/event/webwalk/PathFinder.js';
 import { loadDefaultNavEdges } from '../../src/bot/event/webwalk/loadTransportGraph.js';
 import { NAV_TARGETS } from '../../src/bot/event/webwalk/data/navTargets.js';
@@ -16,9 +15,7 @@ const anchor: NavPoint = anchorArg
     ? { x: Number(anchorArg.split(',')[0]), z: Number(anchorArg.split(',')[1]), level: 0 }
     : { x: 3221, z: 3218, level: 0 };
 
-let bytes: Uint8Array = new Uint8Array(fs.readFileSync(packPath));
-if (bytes[0] === 0x1f && bytes[1] === 0x8b) { bytes = gunzipSync(bytes); }
-const finder = new PathFinder(bytes);
+const finder = new PathFinder(readCollisionPack(packPath));
 loadDefaultNavEdges(finder);
 
 const rc: ReachChecker = {

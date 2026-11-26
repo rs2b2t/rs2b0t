@@ -1,10 +1,8 @@
+import { loadDefaultFinder } from '../../lib/navigation.js';
 import { describe, expect, test } from 'bun:test';
-import { gunzipSync } from 'fflate';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { PathFinder } from '#/bot/event/webwalk/PathFinder.js';
-import { loadDefaultNavEdges } from '#/bot/event/webwalk/loadTransportGraph.js';
 import { emptyWorldStateData } from '#/bot/event/webwalk/worldStateData.js';
 import doors from '#/bot/event/webwalk/data/doors.json';
 
@@ -18,16 +16,6 @@ const GATE_LEAVES = [
 const PACK_PATH = path.join(process.cwd(), 'out/collision.lcnav.gz');
 const HAS_COLLISION_PACK = fs.existsSync(PACK_PATH);
 
-function loadPack(): PathFinder {
-    let bytes: Uint8Array = new Uint8Array(fs.readFileSync(PACK_PATH));
-    if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-        bytes = new Uint8Array(gunzipSync(bytes));
-    }
-    const finder = new PathFinder(bytes);
-    loadDefaultNavEdges(finder);
-    return finder;
-}
-
 describe('CowKiller East Ardougne route', () => {
     test('the map-derived two-leaf pen gate remains in the door graph', () => {
         for (const leaf of GATE_LEAVES) {
@@ -36,7 +24,7 @@ describe('CowKiller East Ardougne route', () => {
     });
 
     test.skipIf(!HAS_COLLISION_PACK)('the East Ardougne bank and cow anchor are walkable both ways through the gate', () => {
-        const finder = loadPack();
+        const finder = loadDefaultFinder(PACK_PATH);
         const state = emptyWorldStateData(true);
 
         expect(finder.walkable(FIELD.x, FIELD.z, FIELD.level)).toBe(true);

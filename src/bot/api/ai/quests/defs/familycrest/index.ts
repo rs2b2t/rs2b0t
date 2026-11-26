@@ -1,4 +1,4 @@
-import { customStep as custom, talkTo, waitForJournal, waitStep } from '../../engine/questSteps.js';
+import { customStep as custom, decideJournalStage, talkTo, waitStep } from '../../engine/questSteps.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Reach } from '../../../../walking/Reach.js';
 import { Traversal } from '../../../../walking/Traversal.js';
@@ -6,7 +6,7 @@ import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
 import { Npcs } from '../../../../npcs/Npcs.js';
 import type Tile from '../../../../../geometry/Tile.js';
-import { QUESTS } from '../../data/quests.js';
+import { questRecord } from '../../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { driveChoice, settleScene } from '../../exec/prompts.js';
 import type { NpcStop } from '../../exec/primitives.js';
@@ -272,16 +272,10 @@ const WILDERNESS_KEEP = [
 
 /** Pure decide over journal stage plus held items. */
 export function decide(snap: QuestSnapshot): QuestStep {
-    if (snap.journal === 'complete') {
-        return { kind: 'done' };
-    }
-    if (snap.journal === 'unknown') {
-        return waitForJournal();
-    }
-    const stage = snap.progress?.stage ?? snap.stage;
-    if (stage === undefined) {
-        return waitStep('Family Crest stage unavailable');
-    }
+    return decideJournalStage(snap, decideStage, 'Family Crest stage unavailable');
+}
+
+function decideStage(snap: QuestSnapshot, stage: number): QuestStep {
     if (stage >= FC_STAGE.COMPLETE) {
         return { kind: 'done' };
     }
@@ -496,7 +490,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
 export const familycrest: QuestModule = {
     autoRetaliate: snap => !inChronozonLair(snap.tile),
-    record: QUESTS.find(r => r.id === 'crest')!,
+    record: questRecord('crest'),
     bank: 'nearest',
     ownsInventory: true,
     tools: ['coins', 'ruby', 'ring mould', 'necklace mould', 'antipoison'],

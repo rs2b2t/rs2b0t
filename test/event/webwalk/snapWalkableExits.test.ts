@@ -1,11 +1,10 @@
+import { loadDefaultFinder } from '../../lib/navigation.js';
 import fs from 'node:fs';
 import path from 'node:path';
 
 import { describe, expect, test } from 'bun:test';
-import { gunzipSync } from 'fflate';
 
 import { PathFinder, type NavPoint } from '#/bot/event/webwalk/PathFinder.js';
-import { loadDefaultNavEdges } from '#/bot/event/webwalk/loadTransportGraph.js';
 import { richTransportQuestMap } from '#/bot/event/webwalk/transportQuestReqs.js';
 import { emptyWorldStateData, type WorldStateData } from '#/bot/event/webwalk/worldStateData.js';
 
@@ -23,13 +22,7 @@ function loadFinder(): PathFinder | null {
     if (!fs.existsSync(packPath)) {
         return null;
     }
-    let bytes: Uint8Array = new Uint8Array(fs.readFileSync(packPath));
-    if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-        bytes = new Uint8Array(gunzipSync(bytes));
-    }
-    const finder = new PathFinder(bytes);
-    loadDefaultNavEdges(finder);
-    return finder;
+    return loadDefaultFinder(packPath);
 }
 
 function kitted(): WorldStateData {

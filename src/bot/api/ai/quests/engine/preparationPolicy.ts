@@ -1,7 +1,7 @@
 import { IKOV_BOWS, IKOV_OBJ } from '../defs/ikov/areas.js';
 import { IKOV_STAGE } from '../defs/ikov/journal.js';
 import { FOOD_FLOAT } from '../food.js';
-import { ITEM_DB } from '../../../../data/itemdb.js';
+import { ITEMS_BY_NAME } from '../../../../data/itemIndex.js';
 import { UNTRADEABLE_IDS } from '../../../../data/untradeable.js';
 import type { QuestPreparationRequest } from './preparationTypes.js';
 import type { QuestModule, QuestProgress, QuestSnapshot } from './types.js';
@@ -52,7 +52,7 @@ const ORDINARY_SUPPLIES = new Set(['coins', ...Object.values(SUPPLIES).flat().ma
 
 function ordinaryItem(name: string): boolean {
     if (ORDINARY_SUPPLIES.has(name.toLowerCase())) return true;
-    const matches = ITEM_DB.filter(item => item.name.toLowerCase() === name.toLowerCase());
+    const matches = ITEMS_BY_NAME.get(name.toLowerCase()) ?? [];
     return matches.length === 1 && !UNTRADEABLE_IDS.includes(matches[0]!.id);
 }
 

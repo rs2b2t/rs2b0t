@@ -1,3 +1,4 @@
+import { customName, itemCounts } from '../../../../lib/questSteps.js';
 import { describe, expect, test } from 'bun:test';
 
 import {
@@ -63,14 +64,6 @@ interface SnapshotOptions {
     progress?: QuestProgress | undefined;
 }
 
-function idCounts(ids: number[]): Map<number, number> {
-    const result = new Map<number, number>();
-    for (const id of ids) {
-        result.set(id, (result.get(id) ?? 0) + 1);
-    }
-    return result;
-}
-
 function snap(options: SnapshotOptions = {}): QuestSnapshot {
     const progress =
         'progress' in options
@@ -79,7 +72,7 @@ function snap(options: SnapshotOptions = {}): QuestSnapshot {
     return {
         journal: options.journal ?? 'inProgress',
         inv: new Map(),
-        invIds: idCounts(options.invIds ?? []),
+        invIds: itemCounts(options.invIds ?? []),
         worn: new Set(),
         noProgress: 0,
         bankCoins: 2_000_000,
@@ -91,10 +84,6 @@ function snap(options: SnapshotOptions = {}): QuestSnapshot {
         tile: options.tile === undefined ? { x: 2638, z: 3321, level: 0 } : options.tile,
         freeSlots: 28
     };
-}
-
-function customName(step: QuestStep): string | null {
-    return step.kind === 'custom' ? step.name : null;
 }
 
 function npcName(step: QuestStep): string | null {

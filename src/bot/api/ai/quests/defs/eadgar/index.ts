@@ -1,7 +1,7 @@
 import { talkTo, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
 import { Skills } from '../../../../skills/Skills.js';
-import { QUESTS } from '../../data/quests.js';
+import { questRecord } from '../../data/quests.js';
 import { flagValue, hasFlag, type QuestModule, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import { TROLL_QUEST } from '../trollstronghold/journal.js';
 import {
@@ -220,7 +220,7 @@ function observe(snap: QuestSnapshot, step: QuestStep): readonly string[] {
 }
 
 export const eadgar: QuestModule = {
-    record: QUESTS.find(r => r.id === 'eadgar')!,
+    record: questRecord('eadgar'),
     bank: 'nearest',
     grind: ['Chicken'],
     tools: [

@@ -3,7 +3,7 @@ import { customStep, talkTo, waitForJournal, waitStep } from '../../engine/quest
 import { Game } from '../../../../game/Game.js';
 import { Equipment } from '../../../../equipment/Equipment.js';
 import { Skills } from '../../../../skills/Skills.js';
-import { QUESTS } from '../../data/quests.js';
+import { questRecord } from '../../data/quests.js';
 import { heldId as held } from '../../engine/snapshotItems.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { talkStrict } from '../../exec/primitives.js';
@@ -280,7 +280,7 @@ export function decide(snap: QuestSnapshot, fletchingLevel?: number): QuestStep 
 }
 
 export const ikov: QuestModule = {
-    record: QUESTS.find(r => r.id === IKOV_ID)!,
+    record: questRecord(IKOV_ID),
     // Why: the quest touches Ardougne, Catherby, Seers and the temple, so no one booth is close to every leg.
     bank: 'nearest',
     // Why: Winelda's 20 unstackable roots plus coins and the pendant leave 7 slots for the float.

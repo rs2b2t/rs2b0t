@@ -4,6 +4,7 @@
 //   ~/redeploy.sh && HEADED=1 bun e2e/clue-shantay-pass-live.ts
 import type { Page } from 'playwright-core';
 import { launchBrowser, parseArgs } from './lib/harness.js';
+import { cheb, teleportForRoute } from './lib/teleport.js';
 import { createHarnessProof } from './lib/harnessProof.js';
 import { cheatQuiet, mainlandAccount, maxmeAndClearDialogs } from './tutorial/harness.js';
 
@@ -55,30 +56,8 @@ type Abi = {
 
 const proof = createHarnessProof({ issue: 371, slug: 'clue-shantay-pass' });
 
-function cheb(a: Tile, b: Tile): number {
-    if (a.level !== b.level) {
-        return 9999;
-    }
-    return Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
-}
-
-function teleCmd(t: Tile): string {
-    return `tele ${t.level},${t.x >> 6},${t.z >> 6},${t.x & 63},${t.z & 63}`;
-}
-
-async function teleArrive(page: Page, spot: Tile, maxDist = 12): Promise<void> {
-    for (let a = 0; a < 6; a++) {
-        await cheatQuiet(page, teleCmd(spot));
-        for (let p = 0; p < 20; p++) {
-            const t = await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.reader.worldTile());
-            if (t && cheb(t, spot) <= maxDist) {
-                await page.waitForTimeout(400);
-                return;
-            }
-            await page.waitForTimeout(200);
-        }
-    }
-    throw new Error(`tele ${spot.x},${spot.z} failed`);
+function teleArrive(page: Page, spot: Tile, maxDist = 12): Promise<void> {
+    return teleportForRoute(page, spot, maxDist, { attempts: 6, polls: 20, pollMs: 200, settleMs: 400 });
 }
 
 /**

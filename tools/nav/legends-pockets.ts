@@ -1,19 +1,14 @@
 // Why: the Legends pockets' bounding boxes overlap, so the tile sets are flooded from the baked pack.
 
 /** Emit `defs/legends/pockets.ts` as z-indexed x runs: `bun tools/nav/legends-pockets.ts > src/bot/api/ai/quests/defs/legends/pockets.ts`. */
-import fs from 'node:fs';
-import { gunzipSync } from 'fflate';
+import { readCollisionPack } from '../lib/readCollisionPack.js';
 
 import doorsJson from '../../src/bot/event/webwalk/data/doors.json';
 import stairsJson from '../../src/bot/event/webwalk/data/stairEdges.json';
 import transportsJson from '../../src/bot/event/webwalk/data/transports.json';
 import { PathFinder, type DoorEdgeData, type NavPoint } from '../../src/bot/event/webwalk/PathFinder.js';
 
-let bytes: Uint8Array = new Uint8Array(fs.readFileSync('out/collision.lcnav.gz'));
-if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-    bytes = gunzipSync(bytes);
-}
-const finder = new PathFinder(bytes);
+const finder = new PathFinder(readCollisionPack('out/collision.lcnav.gz'));
 finder.addEdges(doorsJson as DoorEdgeData[], transportsJson as never, stairsJson);
 
 const DX = [0, 1, 0, -1, 1, 1, -1, -1];

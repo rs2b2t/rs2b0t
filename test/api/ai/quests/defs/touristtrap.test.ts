@@ -1,3 +1,4 @@
+import { customName } from '../../../../lib/questSteps.js';
 import { afterEach, describe, expect, test } from 'bun:test';
 import {
     decide,
@@ -11,7 +12,7 @@ import {
     type SurfaceRescueOperations
 } from '#/bot/api/ai/quests/defs/touristtrap.js';
 import type { WorldTile } from '#/bot/adapter/ClientAdapter.js';
-import type { QuestSnapshot, QuestStep } from '#/bot/api/ai/quests/engine/types.js';
+import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
 import { QuestFood } from '#/bot/api/ai/quests/food.js';
 import { EventSignal } from '#/bot/api/execution/EventSignal.js';
 import { GameMessages } from '#/bot/api/chatbox/gameMessages.js';
@@ -98,10 +99,6 @@ afterEach(() => {
     EventSignal.setInterrupt(null);
     GameMessages.reset();
 });
-
-function customName(step: QuestStep): string | null {
-    return step.kind === 'custom' ? step.name : null;
-}
 
 describe('Tourist Trap journal stage parsing', () => {
     const fixtures = [
