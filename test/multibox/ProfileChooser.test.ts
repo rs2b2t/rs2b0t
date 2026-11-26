@@ -76,12 +76,23 @@ describe('ProfileChooser', () => {
         expect(chooser.el.hidden).toBe(true);
     });
 
-    test('the delete button removes the profile without loading it', async () => {
+    test('the delete button reports a failed write and keeps the row available for retry', async () => {
         await vault.upsert({ username: 'alice', password: 'a' });
         const { chooser, loaded } = make();
         chooser.open();
-        (chooser.el.querySelector('.mbx-profile-del') as HTMLElement).click();
+        const write = localStorage.setItem;
+        Object.defineProperty(localStorage, 'setItem', { configurable: true, value: () => { throw new Error('storage full'); } });
+        try {
+            chooser.el.querySelector<HTMLButtonElement>('.mbx-profile-del')!.click();
+            await waitFor(() => chooser.el.querySelector('[role=status]')!.textContent === 'storage full');
+            expect(chooser.el.querySelector('.mbx-profile-name')?.textContent).toBe('alice');
+            expect(chooser.el.hidden).toBe(false);
+        } finally {
+            Object.defineProperty(localStorage, 'setItem', { configurable: true, value: write });
+        }
+        chooser.el.querySelector<HTMLButtonElement>('.mbx-profile-del')!.click();
         await waitFor(() => chooser.el.querySelector('.mbx-chooser-empty') !== null);
+        expect(chooser.el.querySelector('[role=status]')!.textContent).toBe('');
         expect(vault.list()).toEqual([]);
         expect(loaded).toEqual([]);
         expect(chooser.el.hidden).toBe(false);

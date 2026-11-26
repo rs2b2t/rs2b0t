@@ -1,6 +1,7 @@
 import type { LoginCoordinationRegistry } from '../runtime/LoginCoordination.js';
 import '../panel/desktopStorage.js';
 import { resolveWorldNumber, type WorldNumber } from '../../client/config/worlds.js';
+import { installVisibilityTableCache } from '../../client/dash3d/VisibilityTable.js';
 import { supportsWorldRouting } from '../../client/config/target.js';
 import { BUILD_INFO, formatBuildInfo } from '../runtime/buildInfo.js';
 import { installNavWorkerPool, type NavPoolHost } from '../event/webwalk/NavWorkerClient.js';
@@ -25,6 +26,7 @@ import type { Account } from './types.js';
 type DesktopWall = Window & { rs2b0tLoginCoordinator?: LoginCoordinationRegistry & { parallelism: number } };
 
 if (typeof window !== 'undefined') {
+    installVisibilityTableCache(window);
     installWorkerClockHub(window);
     installNavWorkerPool(window as Window & NavPoolHost, (window as DesktopWall).rs2b0tLoginCoordinator?.parallelism);
 }
@@ -101,10 +103,8 @@ function boot(): void {
             if (!recoveringTabs) return vault.saveTabState(customTabs, tabByUser, activeTab, change, previousTabs ?? customTabs);
         }).catch(err => {
             console.error('[rs2b0t] failed to save tab state', err);
-            if (change && 'to' in change) {
-                recoveringTabs = true;
-                refreshSavedAccounts();
-            }
+            recoveringTabs = true;
+            refreshSavedAccounts();
         });
     }
 
@@ -418,18 +418,18 @@ function boot(): void {
         for (const tab of controller.tabs().slice(1)) {
             if (!tabs.includes(tab)) controller.removeTab(tab);
         }
-        controller.setTabState(tabs, activeTab ?? (tabsHydrated ? controller.activeTab() : vault.tabState().activeTab));
+        const selected = activeTab ?? (tabsHydrated ? controller.activeTab() : vault.tabState().activeTab);
+        const current = controller.tabs().slice(1);
+        if (selected !== controller.activeTab() || current.length !== tabs.length || current.some((tab, i) => tab !== tabs[i])) {
+            controller.setTabState(tabs, selected);
+        }
         tabsHydrated = true;
         renderRail();
     }
 
     function loadImportedProfiles(): void {
         const live = new Set(controller.snapshot().map(slot => slot.username));
-        for (const p of vault.list()) {
-            if (!live.has(p.username)) {
-                controller.add(p);
-            }
-        }
+        controller.addGroup(vault.list().filter(profile => !live.has(profile.username)));
         renderRail();
     }
 
@@ -445,7 +445,12 @@ function boot(): void {
             applyBoxStorage(data.storage, [...previous, ...data.profiles.map(p => p.username)]);
         },
         onImported: data => {
-            syncSavedGroups(data.activeTab);
+            const imported = new Set(data.profiles.map(p => normalizeUsername(p.username)));
+            if (controller.snapshot().some(slot => !imported.has(normalizeUsername(slot.username)))) {
+                applySavedGroups();
+            } else {
+                syncSavedGroups(data.activeTab);
+            }
             loadImportedProfiles();
         }
     });

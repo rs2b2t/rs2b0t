@@ -178,7 +178,7 @@ export class ProfileVault {
     private persistGeneration = 0;
     private lastResetGeneration = 0;
     private worldTail = Promise.resolve();
-    private pendingImport: Promise<void> | null = null;
+    private pendingReplacement: Promise<void> | null = null;
 
     private sharedTail = Promise.resolve();
     private sharedTabs: string[] = [];
@@ -313,7 +313,7 @@ export class ProfileVault {
     }
 
     async unlock(pass: string): Promise<boolean> {
-        if (this.pendingImport) return this.afterImport(() => this.unlock(pass));
+        if (this.pendingReplacement) return this.afterReplacement(() => this.unlock(pass));
         if (this.shared) return this.enqueueShared(() => this.unlockStored(pass));
         return this.unlockStored(pass);
     }
@@ -377,9 +377,9 @@ export class ProfileVault {
         return { profiles: this.list(), ...this.tabState() };
     }
 
-    private afterImport<T>(change: () => Promise<T>): Promise<T> {
+    private afterReplacement<T>(change: () => Promise<T>): Promise<T> {
         const generation = this.persistGeneration;
-        return this.pendingImport!.then(() => {
+        return this.pendingReplacement!.then(() => {
             if (generation !== this.persistGeneration) throw new Error('Vault changed before the accounts were saved.');
             return change();
         });
@@ -391,7 +391,7 @@ export class ProfileVault {
             this.adoptGroupState();
             return;
         }
-        if (this.pendingImport) return this.afterImport(() => this.replaceAll(data));
+        if (this.pendingReplacement) return this.afterReplacement(() => this.replaceAll(data));
         this.assertUnlocked();
         const profiles = profilesFrom(data.profiles);
         if (profiles.length !== data.profiles.length) {
@@ -399,20 +399,25 @@ export class ProfileVault {
         }
         assertTabStateValid(data.tabs, data.activeTab, profiles);
         const payload = { profiles, tabs: [...data.tabs], activeTab: data.activeTab };
+        return this.persistReplacement(() => payload);
+    }
+
+    private async persistReplacement(build: () => VaultPayload): Promise<void> {
         const generation = this.persistGeneration;
         const write = Promise.all([this.worldTail, this.persistTail]).then(async () => {
             if (generation !== this.persistGeneration) return;
+            const payload = build();
             await this.persist(undefined, payload);
             if (generation !== this.persistGeneration) return;
-            this.cache = profiles;
+            this.cache = payload.profiles;
             this.customTabs = payload.tabs;
             this.active = payload.activeTab;
         });
-        this.pendingImport = write.catch(() => {});
+        this.pendingReplacement = write.catch(() => {});
         try {
             await write;
         } finally {
-            this.pendingImport = null;
+            this.pendingReplacement = null;
         }
     }
 
@@ -426,7 +431,7 @@ export class ProfileVault {
             }
             return;
         }
-        if (this.pendingImport) return this.afterImport(() => this.upsert(p));
+        if (this.pendingReplacement) return this.afterReplacement(() => this.upsert(p));
         if (p.world !== undefined) {
             assertWorld(p.world);
         }
@@ -461,7 +466,7 @@ export class ProfileVault {
 
     async setWorld(username: string, world: WorldNumber): Promise<void> {
         if (this.shared) return this.sharedChange(draft => draft.setWorld(username, world));
-        if (this.pendingImport) return this.afterImport(() => this.setWorld(username, world));
+        if (this.pendingReplacement) return this.afterReplacement(() => this.setWorld(username, world));
         assertWorld(world);
         const generation = this.persistGeneration;
         const change = this.worldTail.then(async () => {
@@ -498,7 +503,7 @@ export class ProfileVault {
             if (tab !== MAIN_TAB && !this.sharedTabs.includes(tab)) this.sharedTabs.push(tab);
             return;
         }
-        if (this.pendingImport) return this.afterImport(() => this.assignGroup(usernames, tab));
+        if (this.pendingReplacement) return this.afterReplacement(() => this.assignGroup(usernames, tab));
         const saved = new Set(this.assertUnlocked().map(p => p.username));
         if (usernames.some(username => !saved.has(username))) throw new Error('Only saved profiles can be grouped.');
         const tabs = [...this.customTabs];
@@ -508,14 +513,17 @@ export class ProfileVault {
 
     async remove(username: string): Promise<void> {
         if (this.shared) return this.sharedChange(draft => draft.remove(username));
-        if (this.pendingImport) return this.afterImport(() => this.remove(username));
-        this.cache = this.assertUnlocked().filter(x => x.username !== username);
-        await this.persist();
+        if (this.pendingReplacement) return this.afterReplacement(() => this.remove(username));
+        return this.persistReplacement(() => ({
+            profiles: this.assertUnlocked().filter(p => p.username !== username),
+            tabs: this.customTabs,
+            activeTab: this.active
+        }));
     }
 
     async reorder(usernames: string[]): Promise<void> {
         if (this.shared) return this.sharedChange(draft => draft.reorder(usernames));
-        if (this.pendingImport) return this.afterImport(() => this.reorder(usernames));
+        if (this.pendingReplacement) return this.afterReplacement(() => this.reorder(usernames));
         const all = this.assertUnlocked();
         const byUsername = new Map(all.map(profile => [profile.username, profile]));
         const seen = new Set<string>();
@@ -543,7 +551,7 @@ export class ProfileVault {
     }
 
     async saveTabState(tabs: string[], tabByUser: ReadonlyMap<string, string>, activeTab: string, change?: TabChange, previousTabs?: string[]): Promise<void> {
-        if (this.pendingImport) return this.afterImport(() => this.saveTabState(tabs, tabByUser, activeTab, change, previousTabs));
+        if (this.pendingReplacement) return this.afterReplacement(() => this.saveTabState(tabs, tabByUser, activeTab, change, previousTabs));
         const requested = tabs.map(tab => tab.trim());
         assertTabStateValid(requested, activeTab, []);
         for (const [username, tab] of tabByUser) {

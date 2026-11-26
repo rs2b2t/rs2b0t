@@ -36,6 +36,29 @@ describe('ProfileVault', () => {
         expect(v2.list()).toEqual([{ username: 'alice', password: 'hunter2', tab: 'Main' }]);
     });
 
+    test('a failed delete keeps the profile through a tab save and a successful retry stays deleted', async () => {
+        const storage = quotaLimitedStorage();
+        const v = new ProfileVault(storage);
+        const profile: Profile = { username: 'alice', password: 'a', world: 2 };
+        await v.setup('pw');
+        await v.upsert(profile);
+
+        storage.failNextWrite = true;
+        await expect(v.remove('alice')).rejects.toThrow('storage full');
+        expect(v.list()).toEqual([{ ...profile, tab: 'Main' }]);
+        await v.saveTabState(['miners'], new Map([['alice', 'miners']]), 'miners');
+        const reopened = new ProfileVault(storage);
+        expect(await reopened.unlock('pw')).toBe(true);
+        expect(reopened.list()).toEqual([{ ...profile, tab: 'miners' }]);
+
+        const retry = v.remove('alice');
+        const save = v.saveTabState(['miners'], new Map(), 'Main');
+        await Promise.all([retry, save]);
+        expect(v.list()).toEqual([]);
+        expect(await reopened.unlock('pw')).toBe(true);
+        expect(reopened.snapshot()).toEqual({ profiles: [], tabs: ['miners'], activeTab: 'Main' });
+    });
+
     test('stored blob never contains plaintext', async () => {
         const v = new ProfileVault();
         await v.setup('pw');

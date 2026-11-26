@@ -1,9 +1,10 @@
 import { expect, spyOn, test } from 'bun:test';
 import { VaultPrompt } from '#/bot/multibox/VaultPrompt.js';
 import { type Profile, ProfileVault, vault } from '#/bot/multibox/ProfileVault.js';
-import { serializeProfileFile } from '#/bot/multibox/ProfileTransfer.js';
+import { serializeProfileFile, type ProfileSnapshot } from '#/bot/multibox/ProfileTransfer.js';
 import { SettingsPanel } from '#/bot/multibox/SettingsPanel.js';
 import { ResourcePanel } from '#/bot/multibox/ResourcePanel.js';
+import { DomSlotOps } from '#/bot/multibox/DomSlotOps.js';
 import { DiagSampler } from '#/bot/multibox/DiagSampler.js';
 import { FreezeWatch } from '#/bot/runtime/diag/FreezeWatch.js';
 import type { MultiBoxController } from '#/bot/multibox/MultiBoxController.js';
@@ -99,6 +100,54 @@ async function withWall(mode: 'local' | 'proxy', check: (wall: Wall) => Promise<
     }
 }
 
+test.each([0, 4])('settings import applies modes once with %i profiles already loaded', async loaded => {
+    await withWall('local', async wall => {
+        const profiles = Array.from({ length: 24 }, (_, i) => ({
+            username: `fixture${i}`, password: 'fixture', tab: i % 2 === 0 ? 'Main' : 'Fleet'
+        }));
+        const file = (count: number) => serializeProfileFile({
+            profiles: profiles.slice(0, count), tabs: ['Fleet'], activeTab: 'Main', storage: {}
+        });
+        const modeCalls: string[] = [];
+        const spawn = DomSlotOps.prototype.spawn;
+        const spawning = spyOn(DomSlotOps.prototype, 'spawn').mockImplementation(function (this: DomSlotOps, account) {
+            const handle = spawn.call(this, account);
+            const apply = handle.setRenderMode.bind(handle);
+            handle.setRenderMode = mode => {
+                modeCalls.push(account.username);
+                apply(mode);
+            };
+            return handle;
+        });
+        const open = spyOn(SettingsPanel.prototype, 'open');
+        try {
+            document.getElementById('mbx-settings')!.click();
+            const panel = open.mock.contexts[0] as SettingsPanel;
+            if (loaded) await panel.importText(file(loaded));
+            expect(wall.slots()).toHaveLength(loaded);
+            modeCalls.length = 0;
+            const all = file(profiles.length);
+            await panel.importText(all);
+            const slots = wall.slots();
+            expect(slots.map(slot => [slot.username, slot.tab])).toEqual(profiles.map(p => [p.username, p.tab]));
+            expect(slots.filter(slot => slot.focused).map(slot => slot.username)).toEqual(['fixture22']);
+            expect(modeCalls).toHaveLength(24);
+            expect(modeCalls).toEqual(profiles.map(profile => profile.username));
+
+            modeCalls.length = 0;
+            spawning.mockClear();
+            await panel.importText(all);
+            expect(panel.el.querySelector('#mbx-settings-error')!.textContent).toBe('');
+            expect(spawning).not.toHaveBeenCalled();
+            expect(modeCalls).toHaveLength(0);
+            expect(wall.slots()).toEqual(slots);
+        } finally {
+            open.mockRestore();
+            spawning.mockRestore();
+        }
+    });
+});
+
 test('overlapping settings imports remove the superseded profile settings from both stores', async () => {
     await withWall('local', async () => {
         const open = spyOn(SettingsPanel.prototype, 'open');
@@ -159,6 +208,18 @@ function submitChooserProfile(username: string, password: string): void {
     document.querySelector('.mbx-chooser-form')!.dispatchEvent(new Event('submit', { cancelable: true }));
 }
 
+async function importSettings(data: ProfileSnapshot): Promise<void> {
+    const open = spyOn(SettingsPanel.prototype, 'open');
+    try {
+        document.getElementById('mbx-settings')!.click();
+        const panel = open.mock.contexts[0] as SettingsPanel;
+        await panel.importText(serializeProfileFile(data));
+        expect(panel.el.hidden).toBe(true);
+    } finally {
+        open.mockRestore();
+    }
+}
+
 test('settings import moves an already loaded profile to its imported group', async () => {
     await withWall('local', async wall => {
         await vault.assignGroup(['alice'], 'Old');
@@ -168,26 +229,62 @@ test('settings import moves an already loaded profile to its imported group', as
         const [loaded] = wall.slots();
         expect(loaded.tab).toBe('Old');
 
-        const open = spyOn(SettingsPanel.prototype, 'open');
+        await importSettings({
+            profiles: [{ username: 'alice', password: 'a', tab: 'Fleet' }],
+            tabs: ['Fleet'], activeTab: 'Fleet', storage: {}
+        });
+        await vault.refresh();
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('test-passphrase')).toBe(true);
+        expect(reopened.list().map(p => p.tab)).toEqual(['Fleet']);
+        expect(reopened.tabState()).toEqual({ tabs: ['Fleet'], activeTab: 'Fleet' });
+        expect(wall.slots()[0]).toMatchObject({ id: loaded.id, tab: 'Fleet' });
+        expect(wall.controller.tabs()).toEqual(['Main', 'Fleet']);
+        expect(wall.controller.activeTab()).toBe('Fleet');
+    });
+});
+
+test('settings import preserves the group and selection of an omitted live slot', async () => {
+    await withWall('local', async wall => {
+        await vault.saveTabState(['Work'], new Map([['alice', 'Work']]), 'Work');
+        document.getElementById('mbx-add')!.click();
+        await waitFor(() => !!chooserRow('alice'));
+        await loadChooserRow('alice');
+        const [loaded] = wall.slots();
+        const profiles = [{ username: 'bob', password: 'b', tab: 'Fleet' }];
+        await importSettings({ profiles, tabs: ['Fleet'], activeTab: 'Fleet', storage: {} });
+
+        expect(wall.slots()).toMatchObject([{ id: loaded.id, tab: 'Work' }, { username: 'bob', tab: 'Fleet' }]);
+        expect(wall.controller.activeTab()).toBe('Work');
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('test-passphrase')).toBe(true);
+        expect(reopened.snapshot()).toEqual({ profiles, tabs: ['Fleet'], activeTab: 'Fleet' });
+    });
+});
+
+test('a rejected group creation restores the wall and allows a retry', async () => {
+    await withWall('local', async wall => {
+        document.getElementById('mbx-add')!.click();
+        await waitFor(() => !!chooserRow('alice'));
+        await loadChooserRow('alice');
+        const [loaded] = wall.slots();
+        const lock = spyOn(navigator.locks, 'request').mockRejectedValueOnce(new Error('write denied'));
         try {
-            document.getElementById('mbx-settings')!.click();
-            const panel = open.mock.contexts[0] as SettingsPanel;
-            await panel.importText(serializeProfileFile({
-                profiles: [{ username: 'alice', password: 'a', tab: 'Fleet' }],
-                tabs: ['Fleet'], activeTab: 'Fleet', storage: {}
-            }));
-            expect(panel.el.hidden).toBe(true);
-            await vault.refresh();
-            const reopened = new ProfileVault();
-            expect(await reopened.unlock('test-passphrase')).toBe(true);
-            expect(reopened.list().map(p => p.tab)).toEqual(['Fleet']);
-            expect(reopened.tabState()).toEqual({ tabs: ['Fleet'], activeTab: 'Fleet' });
-            expect(wall.slots()[0]).toMatchObject({ id: loaded.id, tab: 'Fleet' });
-            expect(wall.controller.tabs()).toEqual(['Main', 'Fleet']);
-            expect(wall.controller.activeTab()).toBe('Fleet');
+            expect(wall.addTab('Mining')).toBe(true);
+            expect(wall.setSlotTab(loaded.id, 'Mining')).toBe(true);
+            await waitFor(() => !wall.controller.tabs().includes('Mining'));
+            expect(wall.slots()[0].tab).toBe('Main');
         } finally {
-            open.mockRestore();
+            lock.mockRestore();
         }
+
+        expect(wall.addTab('Mining')).toBe(true);
+        expect(wall.setSlotTab(loaded.id, 'Mining')).toBe(true);
+        await waitFor(() => vault.list()[0].tab === 'Mining');
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('test-passphrase')).toBe(true);
+        expect(reopened.tabState().tabs).toEqual(['Mining']);
+        expect(reopened.list()[0].tab).toBe('Mining');
     });
 });
 
