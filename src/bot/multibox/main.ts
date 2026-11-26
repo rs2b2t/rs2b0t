@@ -121,40 +121,28 @@ function boot(): void {
         orderWrite = orderWrite.then(() => vault.saveActiveTab(tab)).catch(err => console.error('[rs2b0t] failed to save active tab', err));
     }
 
-    function savedWallTabs(): string[] {
-        return controller.tabs().slice(1).filter(tab => !wallOnlyTabs.has(tab));
-    }
-
     function persistTabState(previousTabs: string[], selected?: string, moved: SlotSnapshot[] = [], replaced?: TabReplacement): void {
         if (vault.status() !== 'unlocked') {
             return;
         }
-        const tabs = controller.tabs().slice(1);
-        const tabByUser = new Map<string, string>();
-        if (moved.length) {
-            const saved = savedUsernames();
-            for (const slot of moved) {
-                const username = saved.get(slot.username);
-                if (username === undefined) continue;
-                tabByUser.set(username, slot.tab);
-                wallOnlyTabs.delete(slot.tab);
-            }
-        }
-        wallOnlyTabs = new Set(tabs.filter(tab => wallOnlyTabs.has(tab)));
-        const customTabs = tabs.filter(tab => !wallOnlyTabs.has(tab));
-        const activeTab = selected === controller.activeTab() && !wallOnlyTabs.has(selected) ? selected : undefined;
+        const customTabs = controller.tabs().slice(1);
+        const tabByUser = new Map(moved.map(slot => [slot.username, slot.tab]));
+        const activeTab = selected === controller.activeTab() ? selected : undefined;
         orderWrite = orderWrite.then(() => vault.saveTabState(customTabs, tabByUser, activeTab, replaced, previousTabs)).catch(err => console.error('[rs2b0t] failed to save tab state', err));
     }
 
     function mutateTabs(action: () => boolean, movedIds?: () => number[], replaced?: TabReplacement) {
         return afterTabRestore(() => {
-            const previousTabs = savedWallTabs();
+            let previousTabs = controller.tabs().slice(1);
             const previousActive = controller.activeTab();
             const ids = new Set(movedIds?.());
             const changed = action();
             if (changed) {
                 const active = controller.activeTab();
-                if (active !== previousActive) wallOnlyTabs.delete(active);
+                if (active !== previousActive && wallOnlyTabs.delete(active)) {
+                    previousTabs = previousTabs.filter(tab => tab !== active);
+                }
+                wallOnlyTabs = new Set(controller.tabs().filter(tab => wallOnlyTabs.has(tab)));
                 const slots = controller.snapshot();
                 renderRail(slots);
                 const moved = ids.size ? slots.filter(slot => ids.has(slot.id)) : [];
@@ -359,7 +347,7 @@ function boot(): void {
                 const saved = vault.list().find(profile => profile.username === p.username);
                 const current = controller.snapshot().find(s => s.id === slot.id);
                 if (saved && current && current.tab !== saved.tab) {
-                    persistTabState(savedWallTabs(), selected !== previousActive ? selected : undefined, [current]);
+                    persistTabState(controller.tabs().slice(1), selected !== previousActive ? selected : undefined, [current]);
                     return;
                 }
             }

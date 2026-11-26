@@ -1,3 +1,4 @@
+import { indexByUsername } from './MultiBoxController.js';
 import { desktopStorage } from '../runtime/desktopStorage.js';
 import type { WorldNumber } from '../../client/config/worlds.js';
 
@@ -535,10 +536,10 @@ export class ProfileVault {
 
     async saveTabState(tabs: string[], tabByUser: ReadonlyMap<string, string>, activeTab?: string, replaced?: TabReplacement, previousTabs?: string[]): Promise<void> {
         if (this.pendingReplacement) return this.afterReplacement(() => this.saveTabState(tabs, tabByUser, activeTab, replaced, previousTabs));
-        if (this.shared || (this.storage && previousTabs)) {
+        if (this.shared || previousTabs) {
             const requested = tabs.map(tab => tab.trim());
             assertTabStateValid(requested, activeTab ?? MAIN_TAB, []);
-            return this.sharedChange(async draft => {
+            const save = async (draft: ProfileVault) => {
                 const previous = previousTabs ?? this.sharedTabs;
                 const removed = new Set(previous.filter(tab => !requested.includes(tab)));
                 const merged = draft.customTabs.filter(tab => !removed.has(tab));
@@ -548,8 +549,10 @@ export class ProfileVault {
                     let index = 0;
                     for (let slot = 0; slot < merged.length; slot++) if (ordered.includes(merged[slot])) merged[slot] = ordered[index++];
                 }
+                const assignments = draft.resolveSlotTabs(tabByUser);
+                const destinations = new Set(assignments.values());
                 for (const [index, tab] of requested.entries()) {
-                    if (previous.includes(tab) || merged.includes(tab)) continue;
+                    if (merged.includes(tab) || (previous.includes(tab) && !destinations.has(tab))) continue;
                     const next = requested.slice(index + 1).find(candidate => merged.includes(candidate));
                     merged.splice(next ? merged.indexOf(next) : merged.length, 0, tab);
                 }
@@ -557,12 +560,24 @@ export class ProfileVault {
                     if (tab !== MAIN_TAB && !requested.includes(tab)) throw new Error(`tab '${tab}' is not in the tab list`);
                 }
                 const active = activeTab ?? draft.active;
-                await draft.saveTabState(merged, tabByUser, merged.includes(active) ? active : MAIN_TAB, replaced);
-            }).then(() => {
-                this.sharedTabs = requested;
-            });
+                await draft.applyTabState(merged, assignments, replaced ? 'all' : 'first', merged.includes(active) ? active : MAIN_TAB, replaced);
+            };
+            await (this.storage ? this.sharedChange(save) : save(this));
+            this.sharedTabs = requested;
+            return;
         }
         return this.applyTabState(tabs, new Map(tabByUser), replaced ? 'all' : 'first', activeTab, replaced);
+    }
+
+    private resolveSlotTabs(tabByUser: ReadonlyMap<string, string>): Map<string, string> {
+        const assignments = new Map<string, string>();
+        if (!tabByUser.size) return assignments;
+        const saved = indexByUsername(this.assertUnlocked().map(p => [p.username, p.username] as const));
+        for (const [username, tab] of tabByUser) {
+            const match = saved.get(username);
+            if (match !== undefined) assignments.set(match, tab);
+        }
+        return assignments;
     }
 
     private async applyTabState(tabs: string[], assignments: Map<string, string>, matches: 'first' | 'all', activeTab?: string, replaced?: TabReplacement): Promise<void> {

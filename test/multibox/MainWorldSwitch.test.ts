@@ -1,4 +1,4 @@
-import { expect, spyOn, test } from 'bun:test';
+import { expect, mock, spyOn, test } from 'bun:test';
 import { VaultPrompt } from '#/bot/multibox/VaultPrompt.js';
 import { ProfileVault, vault } from '#/bot/multibox/ProfileVault.js';
 import { serializeProfileFile } from '#/bot/multibox/ProfileTransfer.js';
@@ -283,6 +283,61 @@ test('a mixed import keeps an omitted slot in Work and saves a reused slot moved
                 profiles: [{ ...saved, tab: 'Work' }], tabs: ['Fleet', 'Work'], activeTab: 'Fleet'
             });
         } finally {
+            saves.mockRestore();
+        }
+    });
+});
+
+test.each([
+    { match: 'only the normalized username matches', rows: ['fixture'], expected: ['Work'], tabs: ['Fleet', 'Work'] },
+    { match: 'both spellings exist', rows: ['fixture', 'Fixture'], expected: ['Fleet', 'Work'], tabs: ['Fleet', 'Work'] },
+    { match: 'the slot is absent', rows: ['other'], expected: ['Fleet'], tabs: ['Fleet'] }
+])('a stale wall preserves the replacement roster on a move when $match', async ({ rows, expected, tabs }) => {
+    await withWall('local', async wall => {
+        const loaded = { username: 'Fixture', password: 'fixture', tab: 'Fleet' };
+        await openSettings().importText(serializeProfileFile({
+            profiles: [loaded], tabs: ['Fleet', 'Work'], activeTab: 'Fleet', storage: {}
+        }));
+        const [slot] = wall.slots();
+        const other = new ProfileVault();
+        expect(await other.unlock('test-passphrase')).toBe(true);
+        const profiles = rows.map(username => ({ ...loaded, username }));
+        const backup = { profiles, tabs, activeTab: 'Fleet' };
+        await other.replaceAll(backup);
+
+        const saves = spyOn(vault, 'saveTabState');
+        try {
+            expect(await wall.setSlotTab(slot.id, 'Work')).toBe(true);
+            await saves.mock.results[0].value;
+            const reopened = new ProfileVault();
+            expect(await reopened.unlock('test-passphrase')).toBe(true);
+            expect(reopened.snapshot()).toEqual({ ...backup, profiles: profiles.map((p, i) => ({ ...p, tab: expected[i] })) });
+        } finally {
+            saves.mockRestore();
+        }
+    });
+});
+
+test('moving a slot retries its destination after the tab creation write fails', async () => {
+    await withWall('local', async wall => {
+        const profile = { username: 'fixture', password: 'fixture', tab: 'Fleet' };
+        await openSettings().importText(serializeProfileFile({ profiles: [profile], tabs: ['Fleet'], activeTab: 'Fleet', storage: {} }));
+        const [slot] = wall.slots();
+        const saves = spyOn(vault, 'saveTabState');
+        const write = localStorage.setItem;
+        const failOnce = mock(write.bind(localStorage)).mockImplementationOnce(() => { throw new Error('fixture storage full'); });
+        try {
+            Object.defineProperty(localStorage, 'setItem', { configurable: true, value: failOnce });
+            expect(await wall.addTab('Work')).toBe(true);
+            await expect(saves.mock.results[0].value).rejects.toThrow('fixture storage full');
+
+            expect(await wall.setSlotTab(slot.id, 'Work')).toBe(true);
+            await saves.mock.results[1].value;
+            const reopened = new ProfileVault();
+            expect(await reopened.unlock('test-passphrase')).toBe(true);
+            expect(reopened.snapshot()).toEqual({ profiles: [{ ...profile, tab: 'Work' }], tabs: ['Fleet', 'Work'], activeTab: 'Fleet' });
+        } finally {
+            Object.defineProperty(localStorage, 'setItem', { configurable: true, value: write });
             saves.mockRestore();
         }
     });
