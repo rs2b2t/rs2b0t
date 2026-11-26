@@ -4,7 +4,8 @@ import { CB_ID, CB_STAGE } from '#/bot/api/ai/quests/defs/chompybird/areas.js';
 import { CookState } from '#/bot/api/ai/quests/defs/chompybird/cook.js';
 import { ChestState } from '#/bot/api/ai/quests/defs/chompybird/hunt.js';
 import { decide } from '#/bot/api/ai/quests/defs/chompybird/index.js';
-import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
+
+import { snap } from './chompybird.fixture.js';
 
 // Why: the quest is killed and restarted from any point, so every reachable (stage, pack) pair has to
 // name a next move rather than a wait, a wait with nothing to resolve it parks the queue after fifteen ticks.
@@ -37,23 +38,15 @@ const PACKS: readonly { name: string; invIds: [number, number][] }[] = [
 ];
 
 /** An established account: the bank holds every tool this quest can fall back on. */
-function snap(stage: number, invIds: [number, number][]): QuestSnapshot {
-    return {
-        journal: stage === CB_STAGE.NOT_STARTED ? 'notStarted' : 'inProgress',
-        inv: new Map([['coins', 2000], ['trout', 6], ['bronze axe', 1]]),
-        invIds: new Map([[CB_ID.FEATHER, 48], ...invIds]),
-        worn: new Set(['rune scimitar', 'rune chainbody', 'rune platelegs', 'rune full helm', 'rune kiteshield']),
-        wornIds: new Set<number>(),
-        noProgress: 0,
-        bankCoins: 2_000_000,
+function resumeSnapshot(stage: number, invIds: [number, number][]) {
+    return snap({
         stage,
-        progress: { stage, flags: new Set<string>() },
-        bank: new Map([['coins', 2_000_000], ['bronze axe', 1], ['lobster', 40]]),
-        bankIds: new Map([[CB_ID.FEATHER, 500], [CB_ID.KNIFE, 1], [CB_ID.CHISEL, 1], [CB_ID.BELLOWS_EMPTY, 1]]),
-        bankKnown: true,
-        tile: { x: 2630, z: 2981, level: 0 },
+        invIds,
+        worn: ['rune scimitar', 'rune chainbody', 'rune platelegs', 'rune full helm', 'rune kiteshield'],
+        bank: [['coins', 2_000_000], ['bronze axe', 1], ['lobster', 40]],
+        bankIds: [[CB_ID.FEATHER, 500], [CB_ID.KNIFE, 1], [CB_ID.CHISEL, 1], [CB_ID.BELLOWS_EMPTY, 1]],
         freeSlots: 18
-    };
+    });
 }
 
 describe('big chompy bird hunting resumes from anywhere', () => {
@@ -64,7 +57,7 @@ describe('big chompy bird hunting resumes from anywhere', () => {
                     test(`stage ${stage}, ${pack.name}, chest ${chestRefused ? 'refused' : 'untried'}, kids ${kidsAsked ? 'asked' : 'unasked'}`, () => {
                         ChestState.refused = chestRefused;
                         CookState.kidsAsked = kidsAsked;
-                        const step = decide(snap(stage, pack.invIds));
+                        const step = decide(resumeSnapshot(stage, pack.invIds));
                         expect(step.kind).not.toBe('wait');
                         expect(step.kind).not.toBe('done');
                     });
