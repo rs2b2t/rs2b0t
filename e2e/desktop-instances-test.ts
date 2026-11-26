@@ -12,6 +12,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { _electron, type ElectronApplication } from 'playwright-core';
 
+import { ownedService, releaseOnExit } from './lib/ownedService.mjs';
+
 if (process.versions.bun) {
     const child = Bun.spawn(['node', import.meta.path], { stdin: 'inherit', stdout: 'inherit', stderr: 'inherit' });
     process.exit(await child.exited);
@@ -68,7 +70,8 @@ async function launchProxy() {
 async function launchDesktop(port: number, profile: string) {
     const env: Record<string, string> = Object.fromEntries(Object.entries({ ...process.env, B0T_PROFILE_DIR: profile, B0T_RUNTIME_DIR: join(builds.get(port)!, 'electron') }).filter((entry): entry is [string, string] => entry[1] !== undefined));
     delete env.ELECTRON_RUN_AS_NODE;
-    const app = await _electron.launch({ executablePath, args: [join(root, 'desktop'), `--server=http://localhost:${port}/multibox.html`], env });
+    const app = await _electron.launch({ ...ownedService(executablePath, env), args: [join(root, 'desktop'), `--server=http://localhost:${port}/multibox.html`] });
+    releaseOnExit(app.process());
     apps.push(app);
     const paths = await app.evaluate(({ app }) => ({ userData: app.getPath('userData'), sessionData: app.getPath('sessionData') }));
     assert.notEqual(paths.userData, profile);
@@ -98,7 +101,8 @@ app.whenReady().then(() => {
 });
 app.on('window-all-closed', () => app.quit());`
     );
-    const app = await _electron.launch({ executablePath, args: [seedMain], env: { B0T_PROFILE_DIR: profile } });
+    const app = await _electron.launch({ ...ownedService(executablePath, { B0T_PROFILE_DIR: profile }), args: [seedMain] });
+    releaseOnExit(app.process());
     apps.push(app);
     const page = await app.firstWindow();
     await page.waitForLoadState();
