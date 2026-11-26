@@ -66,10 +66,9 @@ function writeItem(state, key, value) {
     }
     if (value === null) {
         delete state.data[key];
-        const removed = state.deletedDuringSettingsMigration;
-        if (removed && !removed.includes(key)) removed.push(key);
-        for (const migration of Object.values(state.panelMigrations ?? {})) {
-            if (!migration.removed.includes(key)) migration.removed.push(key);
+        const removals = Object.values(state.panelMigrations ?? {}).map(migration => migration.removed);
+        for (const removed of [state.deletedDuringSettingsMigration, state.deletedDuringProfileRetry, ...removals]) {
+            if (removed && !removed.includes(key)) removed.push(key);
         }
     } else state.data[key] = value;
 }
@@ -116,6 +115,7 @@ function sharedStorage(dir) {
                 }
             }
             const result = change(state);
+            if (!state.retryProfileOrigin) delete state.deletedDuringProfileRetry;
             if (state.panelMigrations && !Object.keys(state.panelMigrations).length) delete state.panelMigrations;
             fs.writeFileSync(temporary, JSON.stringify(state), { mode: 0o600 });
             fs.renameSync(temporary, file);
@@ -176,7 +176,10 @@ function sharedStorage(dir) {
                 if (state.initialized && !recover && !state.seededWithoutProfiles) return false;
                 if (!state.initialized && !profileKeys.some(key => key in state.data)) state.seededWithoutProfiles = true;
                 migrateProfiles(state.data, [values ?? {}, fallback ?? {}], { firstMigration: !state.initialized, recover });
-                if (values && profileOrigin === state.retryProfileOrigin) delete state.retryProfileOrigin;
+                if (values && profileOrigin === state.retryProfileOrigin) {
+                    if (state.deletedDuringProfileRetry) importSettings(state.pendingPanelSettings ?? state.data, values, state.deletedDuringProfileRetry);
+                    delete state.retryProfileOrigin;
+                }
                 if (profileKeys.some(key => key in state.data && !isEmptyRoster(state.data[key]))) {
                     delete state.seededWithoutProfiles;
                     delete state.retryProfileOrigin;
@@ -186,7 +189,11 @@ function sharedStorage(dir) {
                     const hasSettings = Object.keys(state.data).some(key => !profileKeys.includes(key));
                     if (state.initialized || !fallback || !hasSettings) throw readError;
                 }
-                if (values === null && state.seededWithoutProfiles) state.retryProfileOrigin = profileOrigin;
+                if (values === null && state.seededWithoutProfiles) {
+                    const removed = state.retryProfileOrigin === profileOrigin ? state.deletedDuringProfileRetry : undefined;
+                    state.retryProfileOrigin = profileOrigin;
+                    state.deletedDuringProfileRetry = migration ? [...new Set([...(removed ?? []), ...migration.removed])] : removed;
+                }
                 if (state.initialized) return false;
                 if (fallback === null) {
                     state.deletedDuringSettingsMigration = [];

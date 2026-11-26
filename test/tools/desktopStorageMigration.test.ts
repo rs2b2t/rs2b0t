@@ -224,6 +224,35 @@ test('a failed configured read after another launch seeded settings retries the 
     expect(await launch(custom)).toEqual(profiles);
 });
 
+test('a configured-origin retry recovers panel settings and preserves edits and deletions across the failed read', async () => {
+    const script = 'rs2b0t:fixture-0:selectedScript';
+    const ore = 'rs2b0t:fixture-0:set:Miner:ore';
+    const tree = 'rs2b0t:set:Woodcutter:tree';
+    const bait = 'rs2b0t:set:Fisher:bait';
+    const method = 'rs2b0t:set:Fisher:method';
+    let unreadable = true;
+    const { launch, openPanel, store } = fixture({
+        [original]: { [tree]: 'Willow', [bait]: 'Worm' },
+        [custom]: { [accounts]: JSON.stringify(profiles), [script]: 'Miner', [ore]: 'Tin', [tree]: 'Oak', [bait]: 'Fly', [method]: 'Net' }
+    }, origin => {
+        if (origin === custom && unreadable) throw new Error('Unreadable 8082 fixture');
+    });
+    const ready = Promise.withResolvers<void>();
+    const pending = launch(custom, false, ready.promise);
+    expect(await launch(original)).toEqual([]);
+    store.removeItem(bait);
+    ready.resolve();
+    expect(await pending).toEqual([]);
+    store.setItem(tree, 'Yew');
+    store.removeItem(method);
+
+    unreadable = false;
+    expect(await launch(custom)).toEqual(profiles);
+    await openPanel();
+    expect([script, ore, tree, bait, method].map(key => store.getItem(key))).toEqual(['Miner', 'Tin', 'Yew', null, null]);
+    expect(await launch(custom)).toEqual(profiles);
+});
+
 test('a panel opened by an overlapping first launch preserves a deleted setting', async () => {
     const ore = 'rs2b0t:set:Miner:ore';
     const { launch, openPanel, store } = fixture({ [original]: { [ore]: 'Tin' } });

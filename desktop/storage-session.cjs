@@ -74,7 +74,8 @@ function prepareStorage(app, serverUrl) {
                     const entries = source === legacyOrigin
                         ? 'Object.entries(localStorage).filter(([key]) => key.startsWith("rs2b0t:"))'
                         : `${JSON.stringify(profileKeys)}.map(key => [key, localStorage[key]])`;
-                    if (!initialized && source !== legacyOrigin) return await hidden.webContents.executeJavaScript(`(() => {
+                    const readPanelSettings = !initialized || (automaticRetry && source === retryProfileOrigin);
+                    if (readPanelSettings && source !== legacyOrigin) return await hidden.webContents.executeJavaScript(`(() => {
                         const values = Object.fromEntries(${entries});
                         for (const key of Object.keys(localStorage)) {
                             if (!key.startsWith("rs2b0t:") || (!key.includes(":set:") && !key.endsWith(":selectedScript"))) continue;
