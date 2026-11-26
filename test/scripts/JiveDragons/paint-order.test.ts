@@ -4,6 +4,7 @@ import { ClueExecutor } from '#/bot/api/ai/clues/ClueExecutor.js';
 import { JIVE_BYLINE } from '#/bot/paint/jive.js';
 import { paintState, resolveDock } from '#/bot/paint/paintLogic.js';
 import JiveDragons from '#/bot/scripts/JiveDragons/JiveDragons.js';
+import { installMidClue } from './paint.fixture.js';
 import { restoreSafety, safetyScenario } from './safety.fixture.js';
 
 /** Keep module-level clue settings from leaking into later paint tests. */
@@ -77,17 +78,7 @@ test('a mid-clue Clue section renders after a dragon safety scenario', async () 
     const worldTile = reader.worldTile;
     await safetyScenario('dragons');
     await restoreSafety();
-    reader.worldTile = () => ({ x: 3200, z: 3200, level: 0 });
-    ClueExecutor.current = {
-        clueId: 1,
-        name: 'hard clue',
-        step: 'dig at the crate behind the bank',
-        leg: 2,
-        attempt: 2,
-        startedAt: Date.now(),
-        target: { x: 3180, z: 3210, level: 0 },
-        startDist: 40
-    };
+    installMidClue();
     try {
         const { drawn, rows } = paintSection('Clue');
         expect(drawn.map(d => d.text).join('|')).toContain('hard clue');
