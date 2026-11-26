@@ -714,7 +714,7 @@ export class PriceBookPanel {
     }
 
     /** A pinned cell holds an override; clicking the pin clears it back to the derived price. */
-    private priceCell(role: string, value: number, pinned: boolean, onChange: (value: number) => void): HTMLElement {
+    private priceCell(role: string, value: number, pinned: boolean, onChange: (value: number | null) => void): HTMLElement {
         const cell = el('span', 'rs2b0t-pricebook-cell');
         const input = el('input', 'rs2b0t-loadout-qty');
         // Why: the box shows 1.25M, which a number input will not hold, so it takes text and parses it back.
@@ -722,10 +722,6 @@ export class PriceBookPanel {
         input.inputMode = 'numeric';
         input.dataset.role = role;
         input.value = formatPrice(value);
-        if (pinned) {
-            input.dataset.pinned = 'true';
-            input.title = 'pinned override, click the dot to clear';
-        }
         input.addEventListener('change', () => {
             const parsed = parsePrice(input.value);
             if (parsed === null) {
@@ -736,6 +732,19 @@ export class PriceBookPanel {
             onChange(parsed);
         });
         cell.appendChild(input);
+        if (pinned) {
+            input.dataset.pinned = 'true';
+            input.title = 'pinned override, click the dot to clear';
+            const clear = this.action(`clear-${role}`, '●', () => {
+                input.focus({ preventScroll: true });
+                onChange(null);
+            });
+            clear.type = 'button';
+            clear.classList.add('rs2b0t-pricebook-unpin');
+            clear.title = `Clear pinned ${role} price`;
+            clear.setAttribute('aria-label', clear.title);
+            cell.appendChild(clear);
+        }
         return cell;
     }
 

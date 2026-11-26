@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { PriceBooks } from '#/bot/api/market/bookStore.js';
 import { resetLiveCatalog } from '#/bot/api/market/catalog.js';
 import { PriceBookPanel } from '#/bot/panel/PriceBookPanel.js';
+import { boxKey } from '#/bot/runtime/box.js';
 import { parseOrderbookFile } from '#/bot/api/market/orderbook-format.js';
 import { resetObjCatalog } from '#/bot/adapter/ClientAdapter.js';
 import ObjType from '#/client/config/ObjType.js';
@@ -132,6 +133,43 @@ describe('filtering the book', () => {
 
 // Why: every edit commits through the store and rebuilds the panel, which used to drop the table back to the first row.
 describe('editing a row', () => {
+    test.each([
+        { side: 'buy', other: 'sell', pin: '250', derived: '90', afterMid: '180', afterSpread: '160' },
+        { side: 'sell', other: 'buy', pin: '80', derived: '110', afterMid: '220', afterSpread: '240' }
+    ])('clears the $side pin and resumes derived pricing', ({ side, other, pin, derived, afterMid, afterSpread }) => {
+        const panel = openPanel();
+        const row = '[data-item="440"]';
+        const field = (role: string) => panel.root.querySelector<HTMLInputElement>(`${row} input[data-role="${role}"]`)!;
+        const clear = () => panel.root.querySelector<HTMLButtonElement>(`${row} button[data-action="clear-${side}"]`);
+        const change = (input: HTMLInputElement, value: string) => {
+            input.value = value;
+            input.dispatchEvent(new Event('change'));
+        };
+
+        change(field('buy'), '80');
+        change(field('sell'), '250');
+        expect(clear()).not.toBeNull();
+        clear()!.click();
+        expect(clear()).toBeNull();
+        expect(field(side).value).toBe(derived);
+        expect(field(other).value).toBe(pin);
+
+        const key = boxKey('set:PriceBooks:books');
+        const [book] = JSON.parse(localStorage.getItem(key)!);
+        expect(book.rows.find((r: { id: number }) => r.id === 440)).toEqual({
+            id: 440, mid: 100, cap: 0, buying: true, selling: true, [other]: Number(pin)
+        });
+        panel.close();
+        sessionStorage.removeItem(key);
+        panel.open('seers');
+        change(field('mid'), '200');
+        expect(field(side).value).toBe(afterMid);
+        change(panel.root.querySelector<HTMLInputElement>('[data-role=margin]')!, '40');
+        expect(field(side).value).toBe(afterSpread);
+        expect(field(other).value).toBe(pin);
+        panel.close();
+    });
+
     test('leaves the table where it was scrolled to', () => {
         const panel = openPanel();
         table(panel).scrollTop = 140;
