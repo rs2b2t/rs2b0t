@@ -420,7 +420,7 @@ function boot(): void {
         renderRail();
     }
 
-    const pendingWipe = new Set<string>();
+    const pendingWipeKey = 'rs2b0t:pending-profile-wipe';
     const settings = new SettingsPanel({
         ensureUnlocked: () => ensureUnlocked(),
         snapshot: () => ({
@@ -429,11 +429,27 @@ function boot(): void {
                 window.confirm(`Older versions shared "${suffix}" between standalone settings and profile "set". Include it in this profile backup?`))
         }),
         replaceAll: async data => {
-            const previous = vault.list().map(p => p.username);
-            await vault.replaceAll(data);
-            for (const user of [...previous, ...data.profiles.map(p => p.username), ...Object.keys(data.storage)]) pendingWipe.add(user);
-            applyBoxStorage(data.storage, [...pendingWipe]);
-            pendingWipe.clear();
+            const saved = localStorage.getItem(pendingWipeKey);
+            const pending: unknown = saved === null ? [] : JSON.parse(saved);
+            if (!Array.isArray(pending) || pending.some(user => typeof user !== 'string' || !user)) {
+                throw new Error('Invalid pending profile restore.');
+            }
+            const wipe = [...new Set<string>([
+                ...pending,
+                ...vault.list().map(p => p.username),
+                ...data.profiles.map(p => p.username),
+                ...Object.keys(data.storage)
+            ])];
+            localStorage.setItem(pendingWipeKey, JSON.stringify(wipe));
+            try {
+                await vault.replaceAll(data);
+            } catch (error) {
+                if (saved === null) localStorage.removeItem(pendingWipeKey);
+                else localStorage.setItem(pendingWipeKey, saved);
+                throw error;
+            }
+            applyBoxStorage(data.storage, wipe);
+            localStorage.removeItem(pendingWipeKey);
         },
         onImported: data => {
             applyImportedTabs(data);
