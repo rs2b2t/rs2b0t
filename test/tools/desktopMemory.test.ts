@@ -8,6 +8,7 @@ test.each(['', 'OtherFeature', 'OtherFeature,V8CppGCEnableLargerCage'])('desktop
     let startupFeatures = '';
     runInNewContext(readFileSync(new URL('../../desktop/main.cjs', import.meta.url), 'utf8'), {
         __dirname: '/desktop',
+        process: { argv: [], env: {} },
         require: (name: string) => {
             if (name === 'node:path') return { join };
             if (name === './storage-session.cjs') return { prepareStorage: () => ({}) };

@@ -7,8 +7,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runInNewContext } from 'node:vm';
 
-const require = createRequire(import.meta.url);
-const { sharedStorage } = require('../../desktop/shared-storage.cjs');
+const sessionModule = new URL('../../desktop/storage-session.cjs', import.meta.url);
+const require = createRequire(sessionModule);
+const { sharedStorage } = require('./shared-storage.cjs');
 const cleanups: (() => void)[] = [];
 afterEach(() => { for (const cleanup of cleanups.splice(0).reverse()) cleanup(); });
 
@@ -38,14 +39,14 @@ async function fixture() {
     child.framesInSubtree = [child, nested];
     const contents = Object.assign(new EventEmitter(), { mainFrame: main, isDestroyed: () => false });
     let watch!: (event: string, file: string) => void;
-    const module = { exports: {} as { prepareStorage: (app: unknown) => { start: (url: string) => Promise<void> } } };
-    runInNewContext(readFileSync(new URL('../../desktop/storage-session.cjs', import.meta.url), 'utf8'), {
+    const module = { exports: {} as { prepareStorage: (app: unknown, url: string) => { start: () => Promise<void> } } };
+    runInNewContext(readFileSync(sessionModule, 'utf8'), {
         module, URL, process: { env: { B0T_PROFILE_DIR: directory, B0T_RUNTIME_DIR: directory } },
         require: (name: string) => name === 'electron' ? { ipcMain, webContents: { getAllWebContents: () => [contents] } }
             : name === 'node:fs' ? { ...fs, watch: (_dir: string, callback: typeof watch) => { watch = callback; return { close() {} }; } }
-                : name === './shared-storage.cjs' ? { sharedStorage } : require(name)
+                : require(name)
     });
-    await module.exports.prepareStorage(app).start('http://localhost:8081');
+    await module.exports.prepareStorage(app, 'http://localhost:8081').start();
     cleanups.push(() => app.emit('quit'));
     const request = (frame: Frame, method: string, ...args: unknown[]) => {
         const event = { sender: contents, senderFrame: frame, returnValue: undefined as unknown as { error?: string; snapshot?: { version: number; data: Record<string, string> } } };

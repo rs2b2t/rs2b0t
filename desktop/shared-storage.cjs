@@ -3,6 +3,10 @@ const { join } = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { lockSync } = require('proper-lockfile');
 
+const legacyOrigin = 'http://localhost:8081';
+const migratedOrigins = state => state.migratedOrigins ?? (state.initialized ? [legacyOrigin] : []);
+const profileKeys = ['rs2b0t:multibox:profiles', 'rs2b0t:multibox:accounts'];
+
 function sharedStorage(dir) {
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
     const file = join(dir, 'storage.json');
@@ -39,7 +43,7 @@ function sharedStorage(dir) {
         }
     }
     return {
-        initialized: () => read().initialized,
+        initialized: (origin = legacyOrigin) => migratedOrigins(read()).includes(origin),
         snapshot: () => read().data,
         getItem: key => (valid(key) ? (read().data[key] ?? null) : null),
         keys: () => Object.keys(read().data),
@@ -63,16 +67,20 @@ function sharedStorage(dir) {
                     delete state.data[key];
                 });
         },
-        seed(values) {
+        seed(values, origin = legacyOrigin) {
             update(state => {
-                if (state.initialized) return;
+                const origins = migratedOrigins(state);
+                if (origins.includes(origin)) return;
+                const hasProfiles = profileKeys.some(key => key in state.data);
                 for (const [key, value] of Object.entries(values)) {
+                    if (hasProfiles && profileKeys.includes(key)) continue;
                     if (valid(key) && typeof value === 'string' && !(key in state.data)) state.data[key] = value;
                 }
+                state.migratedOrigins = [...origins, origin];
                 state.initialized = true;
             });
         }
     };
 }
 
-module.exports = { sharedStorage };
+module.exports = { sharedStorage, legacyOrigin };

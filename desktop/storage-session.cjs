@@ -2,9 +2,10 @@ const fs = require('node:fs');
 const { join, resolve } = require('node:path');
 const { tmpdir } = require('node:os');
 const { createHash } = require('node:crypto');
-const { sharedStorage } = require('./shared-storage.cjs');
+const { sharedStorage, legacyOrigin } = require('./shared-storage.cjs');
 
-function prepareStorage(app) {
+function prepareStorage(app, serverUrl) {
+    const origin = new URL(serverUrl).origin;
     const directory = process.env.B0T_PROFILE_DIR ? resolve(process.env.B0T_PROFILE_DIR) : app.getPath('userData');
     const cacheRoot = process.env.B0T_RUNTIME_DIR ?? tmpdir();
     fs.mkdirSync(cacheRoot, { recursive: true });
@@ -12,7 +13,8 @@ function prepareStorage(app) {
     const storeDir = join(directory, 'Shared Storage');
     const store = sharedStorage(storeDir);
     const legacy = join(directory, 'Local Storage');
-    if (!store.initialized() && fs.existsSync(legacy)) {
+    const origins = fs.existsSync(legacy) ? [...new Set([origin, legacyOrigin])].filter(url => /^https?:\/\//.test(url) && !store.initialized(url)) : [];
+    if (origins.length) {
         const fingerprint = () => {
             const hash = createHash('sha256');
             for (const name of fs.readdirSync(legacy, { recursive: true }).sort()) {
@@ -45,22 +47,22 @@ function prepareStorage(app) {
         fs.rmSync(runtime, { recursive: true, force: true });
     });
     return {
-        async start(serverUrl) {
+        async start() {
             const { BrowserWindow, ipcMain, session, net } = require('electron');
-            if (!store.initialized()) {
-                const migrationUrl = 'http://localhost:8081/__rs2b0t_profile_migration__';
-                session.defaultSession.protocol.handle('http', request => (request.url === migrationUrl ? new Response('<!doctype html><title>Profile migration</title>') : net.fetch(request, { bypassCustomProtocolHandlers: true })));
+            for (const source of origins) {
+                const migrationUrl = source + '/__rs2b0t_profile_migration__';
+                const scheme = new URL(source).protocol.slice(0, -1);
+                session.defaultSession.protocol.handle(scheme, request => (request.url === migrationUrl ? new Response('<!doctype html><title>Profile migration</title>') : net.fetch(request, { bypassCustomProtocolHandlers: true })));
                 const hidden = new BrowserWindow({ show: false });
                 try {
                     await hidden.loadURL(migrationUrl);
                     const entries = await hidden.webContents.executeJavaScript('Object.fromEntries(Object.entries(localStorage).filter(([key]) => key.startsWith("rs2b0t:")))');
-                    store.seed(entries);
+                    store.seed(entries, source);
                 } finally {
                     hidden.destroy();
-                    session.defaultSession.protocol.unhandle('http');
+                    session.defaultSession.protocol.unhandle(scheme);
                 }
             }
-            const origin = new URL(serverUrl).origin;
             const clients = new Map();
             const tracked = new WeakSet();
             const valid = frame => frame && !frame.isDestroyed() && !frame.detached && new URL(frame.url).origin === origin;

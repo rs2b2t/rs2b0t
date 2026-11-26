@@ -3,7 +3,7 @@
 const { app, BrowserWindow, Menu, powerSaveBlocker } = require('electron');
 const { join } = require('node:path');
 const { prepareStorage } = require('./storage-session.cjs');
-const storage = prepareStorage(app);
+const storage = prepareStorage(app, serverUrl());
 let starting = true;
 let loginCoordinator;
 
@@ -57,7 +57,7 @@ function createWindow(index, count) {
 
 app.whenReady()
     .then(async () => {
-        await storage.start(serverUrl());
+        await storage.start();
         // Why: macOS App Nap can suspend the app while bots are running.
         powerSaveBlocker.start('prevent-app-suspension');
 
