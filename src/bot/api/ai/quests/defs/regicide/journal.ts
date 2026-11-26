@@ -1,6 +1,5 @@
-import { Modals } from '../../../../ui/widgets/Modals.js';
+import { questProgressAt, readQuestJournal } from '../../journalReader.js';
 import { normalizeJournal as normalize } from '../../journalText.js';
-import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 
 // Why: these are the `%regicide_quest` values themselves, so `--stage N` in the harness and the module's stage are one scale.
@@ -80,15 +79,6 @@ export function parseRegicideJournal(lines: readonly string[] | string): QuestPr
     return { stage: hit[1], flags };
 }
 
-export async function readRegicideProgress(): Promise<QuestProgress | undefined> {
-    const status = Quests.status(REGICIDE);
-    if (status === 'complete') {
-        return { stage: RG_STAGE.COMPLETE, flags: new Set() };
-    }
-    if (status !== 'inProgress' && status !== 'notStarted') {
-        return undefined;
-    }
-    const progress = parseRegicideJournal(await Quests.journal(REGICIDE));
-    await Modals.closeIfOpen();
-    return progress ?? (status === 'notStarted' ? { stage: RG_STAGE.NOT_STARTED, flags: new Set() } : undefined);
+export function readRegicideProgress(): Promise<QuestProgress | undefined> {
+    return readQuestJournal(REGICIDE, RG_STAGE, parseRegicideJournal, questProgressAt, undefined, { readNotStarted: true });
 }

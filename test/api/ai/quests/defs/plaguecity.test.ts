@@ -3,6 +3,7 @@ import { PC_ITEM } from '#/bot/api/ai/quests/defs/plaguecity/areas.js';
 import { PC_STAGE } from '#/bot/api/ai/quests/defs/plaguecity/journal.js';
 import { decide, plaguecity } from '#/bot/api/ai/quests/defs/plaguecity/index.js';
 import type { QuestSnapshot, QuestStep } from '#/bot/api/ai/quests/engine/types.js';
+import { ardougneSnapshot } from './ardougne-snapshot.fixture.js';
 
 const EAST = { x: 2616, z: 3332, level: 0 };
 const WEST = { x: 2540, z: 3305, level: 0 };
@@ -11,22 +12,7 @@ const SEWER = { x: 2530, z: 9703, level: 0 };
 const PURSE = new Map([[PC_ITEM.COINS.id, 100_000]]);
 
 function snapshot(o: Partial<QuestSnapshot> = {}): QuestSnapshot {
-    return {
-        journal: o.journal ?? 'inProgress',
-        inv: o.inv ?? new Map(),
-        invIds: o.invIds ?? new Map(),
-        worn: o.worn ?? new Set(),
-        wornIds: o.wornIds ?? new Set(),
-        noProgress: 0,
-        bankCoins: o.bankCoins ?? 0,
-        stage: o.stage,
-        progress: o.progress,
-        bank: o.bank ?? new Map(),
-        bankIds: o.bankIds ?? PURSE,
-        bankKnown: o.bankKnown ?? true,
-        tile: o.tile === undefined ? EAST : o.tile,
-        freeSlots: o.freeSlots ?? 28
-    };
+    return ardougneSnapshot(o, PURSE, EAST, 0);
 }
 
 const carrying = (...items: [{ id: number }, number][]): Map<number, number> =>
