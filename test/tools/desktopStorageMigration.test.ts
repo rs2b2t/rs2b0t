@@ -316,6 +316,75 @@ test('explicit recovery finishes on the configured origin when 8081 is unreadabl
     expect(reads).toEqual([custom]);
 });
 
+test.each<[string, boolean]>([['ordinary startup', false], ['explicit recovery', true]])(
+    'first migration during %s keeps the 8081 script selection', async (_, recover) => {
+        const script = 'rs2b0t:fixture-0:selectedScript';
+        const { launch, store } = fixture({
+            [custom]: { [accounts]: JSON.stringify(profiles) },
+            [original]: { [script]: 'Fisher' }
+        });
+        expect(await launch(custom, recover)).toEqual(profiles);
+        expect(await launch(custom)).toEqual(profiles);
+        expect(store.getItem(script)).toBe('Fisher');
+    }
+);
+
+test('an unreadable configured origin still opens the 8081 roster', async () => {
+    let unreadable = true;
+    const configured = [{ username: 'custom', password: 'fixture' }];
+    const { launch, store } = fixture({
+        [original]: { [accounts]: JSON.stringify(profiles) },
+        [custom]: { [accounts]: JSON.stringify(configured) }
+    }, origin => {
+        if (origin === custom && unreadable) throw new Error('Unreadable 8082 fixture');
+    });
+    expect(await launch(custom)).toEqual(profiles);
+    unreadable = false;
+    expect(await launch(custom)).toEqual(profiles);
+    store.removeItem(accounts);
+    expect(await launch(custom)).toEqual([]);
+    expect(await launch(custom, true)).toEqual(configured);
+});
+
+test('an unreadable 8081 opens the configured roster and retries missing settings on relaunch', async () => {
+    const script = 'rs2b0t:fixture-0:selectedScript';
+    const edited = 'rs2b0t:set:Miner:ore';
+    const removed = 'rs2b0t:set:Fisher:method';
+    let unreadable = true;
+    const { launch, store, rendererStorage } = fixture({
+        [custom]: { [accounts]: JSON.stringify(profiles), [removed]: 'Fly fishing' },
+        [original]: { [accounts]: JSON.stringify(profiles), [script]: 'Fisher', [edited]: 'Tin', [removed]: 'Bait' }
+    }, origin => {
+        if (origin === original && unreadable) throw new Error('Unreadable 8081 fixture');
+    });
+    expect(await launch(custom)).toEqual(profiles);
+    store.setItem(edited, 'Gold');
+    store.removeItem(removed);
+    expect(await launch(custom)).toEqual(profiles);
+    store.removeItem(accounts);
+    unreadable = false;
+    expect(await launch(custom)).toEqual([]);
+    expect(store.getItem(script)).toBe('Fisher');
+    expect(store.getItem(edited)).toBe('Gold');
+    expect(store.getItem(removed)).toBeNull();
+    expect(rendererStorage()[removed]).toBeUndefined();
+    store.removeItem(script);
+    expect(await launch(custom)).toEqual([]);
+    expect(store.getItem(script)).toBeNull();
+});
+
+test('a read failure with no usable roster leaves the first migration retryable', async () => {
+    let unreadable = true;
+    const { launch, store } = fixture({ [custom]: { [accounts]: JSON.stringify(profiles) } }, origin => {
+        if (origin === custom && unreadable) throw new Error('Unreadable 8082 fixture');
+    });
+    await expect(launch(custom)).rejects.toMatchObject({ cause: { message: 'Unreadable 8082 fixture' } });
+    expect(store.initialized()).toBe(false);
+    unreadable = false;
+    expect(await launch(custom)).toEqual(profiles);
+    expect(await launch(custom)).toEqual(profiles);
+});
+
 test('first migration skips an empty configured roster across two launches', async () => {
     const { launch, store } = fixture({ [custom]: { [vault]: '[]' }, [original]: { [accounts]: JSON.stringify(profiles) } });
     const first = await launch(custom);

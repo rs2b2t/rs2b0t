@@ -14,7 +14,9 @@ function prepareStorage(app, serverUrl) {
     const store = sharedStorage(storeDir);
     const legacy = join(directory, 'Local Storage');
     const recover = process.env.B0T_RECOVER_LEGACY_PROFILES === '1';
-    const migrate = fs.existsSync(legacy) && (recover || !store.initialized());
+    const hasLegacy = fs.existsSync(legacy);
+    const { initialized, retrySettings } = hasLegacy ? store.migrationStatus() : {};
+    const migrate = hasLegacy && (recover || !initialized || retrySettings);
     if (migrate) {
         const fingerprint = () => {
             const hash = createHash('sha256');
@@ -55,24 +57,31 @@ function prepareStorage(app, serverUrl) {
                 const migrationUrl = source + '/__rs2b0t_profile_migration__';
                 const scheme = new URL(source).protocol.slice(0, -1);
                 session.defaultSession.protocol.handle(scheme, request => (request.url === migrationUrl ? new Response('<!doctype html><title>Profile migration</title>') : net.fetch(request, { bypassCustomProtocolHandlers: true })));
-                const hidden = new BrowserWindow({ show: false });
+                let hidden;
                 try {
+                    hidden = new BrowserWindow({ show: false });
                     await hidden.loadURL(migrationUrl);
                     const entries = source === legacyOrigin
                         ? 'Object.entries(localStorage).filter(([key]) => key.startsWith("rs2b0t:"))'
                         : `${JSON.stringify(profileKeys)}.map(key => [key, localStorage[key]])`;
                     return await hidden.webContents.executeJavaScript(`Object.fromEntries(${entries})`);
                 } finally {
-                    hidden.destroy();
+                    hidden?.destroy();
                     session.defaultSession.protocol.unhandle(scheme);
                 }
             }
             if (migrate) {
-                const values = /^https?:\/\//.test(origin) ? await readLegacy(origin) : {};
-                const needsFallback = origin !== legacyOrigin && !(recover && savedProfileKey(values));
-                const fallback = needsFallback ? await readLegacy(legacyOrigin) : {};
-                const firstMigration = store.seed(values, { fallback, recover });
-                if (recover && !firstMigration) {
+                let readError;
+                function failed(error) {
+                    readError = error;
+                    return null;
+                }
+                const readConfigured = (!initialized || recover) && origin !== legacyOrigin && /^https?:\/\//.test(origin);
+                const values = readConfigured ? await readLegacy(origin).catch(failed) : {};
+                const needsFallback = !initialized || retrySettings || !savedProfileKey(values ?? {});
+                const fallback = needsFallback ? await readLegacy(legacyOrigin).catch(failed) : undefined;
+                const firstMigration = store.seed(values ?? {}, { fallback, recover, readError });
+                if ((recover || retrySettings) && !firstMigration) {
                     // Why: the panel also imports settings from the temporary Chromium copy.
                     await session.defaultSession.clearStorageData({ storages: ['localstorage'] });
                 }
