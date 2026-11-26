@@ -567,6 +567,33 @@ type SettingChangeListener = (name: string, key: string, value: string) => void;
 
 export type DraftValues = Pick<ReadonlyMap<string, string>, 'get'>;
 
+function withBakePreferenceTransaction(id: string, commit: () => boolean): Promise<boolean> {
+    return new Promise((resolve, reject) => {
+        const open = indexedDB.open('rs2b0t-bake-preferences', 1);
+        open.onupgradeneeded = () => open.result.createObjectStore('preferences');
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+            const db = open.result;
+            try {
+                const tx = db.transaction('preferences', 'readwrite');
+                tx.onabort = () => reject(tx.error);
+                // Why: the readwrite transaction serializes picker commits across windows until this callback returns.
+                tx.objectStore('preferences').getKey(id).onsuccess = () => {
+                    try {
+                        resolve(commit());
+                    } catch (err) {
+                        reject(err);
+                    }
+                };
+            } catch (err) {
+                reject(err);
+            } finally {
+                db.close();
+            }
+        };
+    });
+}
+
 class SettingsStoreImpl {
     private urlParams: URLSearchParams | null = typeof location !== 'undefined' ? new URLSearchParams(location.search) : null;
     /** Same-tab subscribers (open modals). `storage` events only fire across tabs. */
@@ -628,30 +655,40 @@ class SettingsStoreImpl {
         return hasLocal ? localStorage.getItem(storageKey(MAP_PICKER_SETTINGS_NS, key)) : null;
     }
 
+    rememberRebuildConfirmation(expected: string | null): boolean {
+        const key = 'skipRebuildConfirm';
+        return this.commitMapPickerPreference(storageKey(MAP_PICKER_SETTINGS_NS, key), key, 'true', expected);
+    }
+
+    private commitMapPickerPreference(id: string, key: string, value: string, expected: string | null): boolean {
+        const previous = hasSession ? sessionStorage.getItem(id) : null;
+        if (hasSession) sessionStorage.setItem(id, value);
+        let saved = false;
+        try {
+            if (desktopStorage) {
+                if (!desktopStorage.compareAndSet(id, expected, value)) return false;
+            } else if (hasLocal) {
+                if (localStorage.getItem(id) !== expected) return false;
+                localStorage.setItem(id, value);
+            }
+            saved = true;
+        } finally {
+            if (!saved && hasSession && previous !== value) {
+                if (previous === null) sessionStorage.removeItem(id);
+                else sessionStorage.setItem(id, previous);
+            }
+        }
+        this.notify(MAP_PICKER_SETTINGS_NS, key, value);
+        return true;
+    }
+
     async saveBakePreference(key: string, value: string, expected: string | null): Promise<boolean> {
         const id = storageKey(MAP_PICKER_SETTINGS_NS, key);
-        const commit = (): boolean => {
-            const previous = hasSession ? sessionStorage.getItem(id) : null;
-            if (hasSession) sessionStorage.setItem(id, value);
-            let saved = false;
-            try {
-                if (desktopStorage) {
-                    if (!desktopStorage.compareAndSet(id, expected, value)) return false;
-                } else if (hasLocal) {
-                    if (localStorage.getItem(id) !== expected) return false;
-                    localStorage.setItem(id, value);
-                }
-                saved = true;
-            } finally {
-                if (!saved && hasSession && previous !== value) {
-                    if (previous === null) sessionStorage.removeItem(id);
-                    else sessionStorage.setItem(id, previous);
-                }
-            }
-            this.notify(MAP_PICKER_SETTINGS_NS, key, value);
-            return true;
-        };
-        if (hasLocal && !desktopStorage) return navigator.locks.request(id, commit);
+        const commit = () => this.commitMapPickerPreference(id, key, value, expected);
+        if (hasLocal && !desktopStorage) {
+            if (typeof globalThis.navigator?.locks?.request === 'function') return navigator.locks.request(id, commit);
+            return withBakePreferenceTransaction(id, commit);
+        }
         return commit();
     }
 

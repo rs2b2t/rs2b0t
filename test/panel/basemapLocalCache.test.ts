@@ -75,6 +75,40 @@ describe('client CRC key format (unit of /crc)', () => {
 
 describe('map picker bake settings drafts', () => {
     const originalLocks = Object.getOwnPropertyDescriptor(navigator, 'locks');
+    const originalIndexedDB = Object.getOwnPropertyDescriptor(globalThis, 'indexedDB');
+
+    function disableWebLocks(): void {
+        Object.defineProperty(navigator, 'locks', { value: undefined });
+        const stores = new Set<string>();
+        let writer = Promise.resolve();
+        const db = {
+            close() {},
+            createObjectStore(name: string) { stores.add(name); },
+            transaction(name: string, mode: IDBTransactionMode) {
+                expect(stores.has(name)).toBe(true);
+                expect(mode).toBe('readwrite');
+                const store = {
+                    getKey() {
+                        const read = { onsuccess: () => {} };
+                        writer = writer.then(() => read.onsuccess());
+                        return read;
+                    }
+                };
+                return { objectStore: () => store };
+            }
+        };
+        Object.defineProperty(globalThis, 'indexedDB', { configurable: true, value: {
+            open() {
+                const request = { result: db, onupgradeneeded: () => {}, onsuccess: () => {} };
+                queueMicrotask(() => {
+                    if (!stores.size) request.onupgradeneeded();
+                    request.onsuccess();
+                });
+                return request;
+            }
+        } });
+    }
+
     beforeEach(() => {
         const held = new Map<string, Promise<void>>();
         Object.defineProperty(navigator, 'locks', { configurable: true, value: {
@@ -96,6 +130,8 @@ describe('map picker bake settings drafts', () => {
     afterEach(() => {
         if (originalLocks) Object.defineProperty(navigator, 'locks', originalLocks);
         else Reflect.deleteProperty(navigator, 'locks');
+        if (originalIndexedDB) Object.defineProperty(globalThis, 'indexedDB', originalIndexedDB);
+        else Reflect.deleteProperty(globalThis, 'indexedDB');
         sessionStorage.clear();
         localStorage.clear();
     });
@@ -250,6 +286,55 @@ describe('map picker bake settings drafts', () => {
 
                 expect(stored('skipRebuildConfirm')).toEqual({ local: 'true', session: 'true' });
                 expect(skip.checked).toBe(true);
+            });
+        } finally {
+            bake.mockRestore();
+        }
+    });
+
+    test("a rejected Don't ask again preference still runs the confirmed rebuild", async () => {
+        const bake = spyOn(basemapRegen, 'regenerateBasemap').mockResolvedValue(rebuiltMap());
+        const setItem = localStorage.setItem;
+        try {
+            await withPicker(async () => {
+                openSettings();
+                clickRebuild(true);
+                document.querySelector<HTMLInputElement>('.rs2b0t-confirm-dont-ask-check')!.click();
+                Object.defineProperty(localStorage, 'setItem', { configurable: true, value() {
+                    throw new DOMException('storage full', 'QuotaExceededError');
+                } });
+                document.querySelector<HTMLButtonElement>('.rs2b0t-confirm-yes')!.click();
+                await new Promise<void>(resolve => setImmediate(resolve));
+
+                expect(bake).toHaveBeenCalledTimes(1);
+                expect(document.querySelector('.rs2b0t-modal [role="alert"]')?.textContent).toContain("Don't ask before rebuild");
+                expect(stored('skipRebuildConfirm')).toEqual({ local: null, session: null });
+                expect(bakeCheckbox("Don't ask before rebuild").checked).toBe(false);
+                clickRebuild(true);
+                document.querySelector<HTMLButtonElement>('.rs2b0t-confirm-no')!.click();
+                expect(bake).toHaveBeenCalledTimes(1);
+            });
+        } finally {
+            Object.defineProperty(localStorage, 'setItem', { value: setItem });
+            bake.mockRestore();
+        }
+    });
+
+    test("Don't ask again keeps a newer preference saved while confirmation is open", async () => {
+        const bake = spyOn(basemapRegen, 'regenerateBasemap').mockResolvedValue(rebuiltMap());
+        try {
+            await withPicker(async () => {
+                openSettings();
+                clickRebuild(true);
+                document.querySelector<HTMLInputElement>('.rs2b0t-confirm-dont-ask-check')!.click();
+                localStorage.setItem('rs2b0t:set:MapPicker:skipRebuildConfirm', 'false');
+                document.querySelector<HTMLButtonElement>('.rs2b0t-confirm-yes')!.click();
+                await new Promise<void>(resolve => setImmediate(resolve));
+
+                expect(bake).toHaveBeenCalledTimes(1);
+                expect(stored('skipRebuildConfirm')).toEqual({ local: 'false', session: null });
+                expect(bakeCheckbox("Don't ask before rebuild").checked).toBe(false);
+                expect(document.querySelector('[role="alert"]')?.textContent).toContain("Kept newer preferences: Don't ask before rebuild");
             });
         } finally {
             bake.mockRestore();
@@ -561,7 +646,8 @@ describe('map picker bake settings drafts', () => {
         }
     });
 
-    test.skipIf(!!desktopStorage)('only one overlapping browser commit can replace the same expected value', async () => {
+    test.skipIf(!!desktopStorage).each([true, false])('only one overlapping browser commit can replace the same expected value (Web Locks: %p)', async hasLocks => {
+        if (!hasLocks) disableWebLocks();
         const id = 'rs2b0t:set:MapPicker:bakeBorders';
         const getItem = localStorage.getItem;
         let peer: Promise<boolean> | undefined;
@@ -582,24 +668,30 @@ describe('map picker bake settings drafts', () => {
         }
     });
 
-    test.skipIf(!!desktopStorage)('an unavailable browser lock leaves the preference retryable', async () => {
-        const locks = navigator.locks;
+    test.skipIf(!!desktopStorage)('without Web Locks rebuild saves edits and keeps a competing save', async () => {
         SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'skipRebuildConfirm', 'true');
-        const bake = spyOn(basemapRegen, 'regenerateBasemap').mockResolvedValue(rebuiltMap());
+        const first = Promise.withResolvers<ReturnType<typeof rebuiltMap>>();
+        const bake = spyOn(basemapRegen, 'regenerateBasemap').mockReturnValueOnce(first.promise).mockResolvedValue(rebuiltMap());
         try {
             await withPicker(async () => {
+                disableWebLocks();
                 openSettings();
+                bakeCheckbox('Stamp labels into rebuild').click();
                 bakeCheckbox('Map-square borders').click();
-                Object.defineProperty(navigator, 'locks', { value: undefined });
                 clickRebuild(true);
-                await new Promise<void>(resolve => setImmediate(resolve));
-                expect(stored('bakeBorders')).toEqual({ local: null, session: null });
-                expect(document.querySelector('[role="alert"]')?.textContent).toMatch(/Map-square borders.*retry/i);
-
-                Object.defineProperty(navigator, 'locks', { value: locks });
-                clickRebuild(true);
+                localStorage.setItem('rs2b0t:set:MapPicker:bakeLabels', 'false');
+                first.resolve(rebuiltMap());
                 await new Promise<void>(resolve => setImmediate(resolve));
                 expect(stored('bakeBorders')).toEqual({ local: 'true', session: 'true' });
+                expect(stored('bakeLabels')).toEqual({ local: 'false', session: null });
+                expect(document.querySelector('[role="alert"]')?.textContent).toMatch(/Kept newer preferences: Stamp labels/);
+
+                bakeCheckbox('Map-square borders').click();
+                clickRebuild(true);
+                await new Promise<void>(resolve => setImmediate(resolve));
+                expect(stored('bakeBorders')).toEqual({ local: 'false', session: 'false' });
+                expect(bake).toHaveBeenLastCalledWith(prefs());
+                expect(document.querySelector('[role="alert"]')).toBeNull();
             });
         } finally {
             bake.mockRestore();

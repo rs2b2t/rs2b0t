@@ -967,15 +967,17 @@ export class WorldMapPicker {
 
             // Manual rebuild only, behind an in-app Yes/No with Don't ask again.
             rebuildBtn.addEventListener('click', () => {
-                if (rebuildBtn.disabled || !getMapPickerShowBasemap()) {
+                if (closed || rebuildBtn.disabled || !getMapPickerShowBasemap()) {
                     return;
                 }
                 void (async () => {
+                    const warnings: string[] = [];
+                    const confirmKey = 'skipRebuildConfirm';
                     const skip = new SettingsBag(
                         SettingsStore.resolve(MAP_PICKER_SETTINGS_NS, MAP_PICKER_SETTINGS)
-                    ).bool('skipRebuildConfirm', false);
-
+                    ).bool(confirmKey, false);
                     if (!skip) {
+                        const expected = SettingsStore.durableBakePreference(confirmKey);
                         const answer = await showConfirmDialog({
                             title: BASEMAP_REGEN_TITLE,
                             body: BASEMAP_REGEN_BODY,
@@ -984,17 +986,20 @@ export class WorldMapPicker {
                             cancelLabel: 'No',
                             zIndex: 1300
                         });
-                        if (!answer.confirmed) {
+                        if (!answer.confirmed || closed) {
                             return;
                         }
                         if (answer.dontAskAgain) {
-                            SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'skipRebuildConfirm', 'true');
-                            settingsModal.refreshCheckboxes(['skipRebuildConfirm']);
+                            const label = MAP_PICKER_SETTINGS[confirmKey].label;
+                            try {
+                                if (!SettingsStore.rememberRebuildConfirmation(expected)) {
+                                    warnings.push(`Kept newer preferences: ${label}.`);
+                                }
+                            } catch {
+                                warnings.push(`Could not save: ${label}.`);
+                            }
+                            settingsModal.refreshCheckboxes([confirmKey]);
                         }
-                    }
-
-                    if (closed) {
-                        return;
                     }
                     rebuildBtn.disabled = true;
                     rebuildError.remove();
@@ -1037,7 +1042,6 @@ export class WorldMapPicker {
                         setBasemapAttr('ready');
                         status.textContent = `basemap rebuilt (${next.manifest.fingerprint})`;
                         status.style.color = '#8ab4f8';
-                        const warnings: string[] = [];
                         if (conflicts.length) warnings.push(`Kept newer preferences: ${conflicts.join(', ')}.`);
                         if (failed.size) {
                             for (const [key, edit] of failed) {
@@ -1054,7 +1058,7 @@ export class WorldMapPicker {
                             return;
                         }
                         const msg = err instanceof Error ? err.message : String(err);
-                        showRebuildError(`rebuild failed: ${msg}`);
+                        showRebuildError([`rebuild failed: ${msg}`, ...warnings].join(' '));
                     } finally {
                         if (!closed) {
                             rebuildBtn.disabled = false;
