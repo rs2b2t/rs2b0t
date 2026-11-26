@@ -84,7 +84,14 @@ function prepareStorage(app, serverUrl) {
                 const values = readConfigured ? await readLegacy(origin).catch(failed) : {};
                 const needsFallback = !initialized || retrySettings || !savedProfileKey(values ?? {});
                 const fallback = needsFallback ? await readLegacy(legacyOrigin).catch(failed) : undefined;
-                const firstMigration = (!settingsOnly || fallback !== null) && store.seed(values ?? {}, { fallback, recover, readError });
+                let firstMigration = false;
+                if (!settingsOnly || fallback !== null) {
+                    try {
+                        firstMigration = store.seed(values ?? {}, { fallback, recover, readError });
+                    } catch (error) {
+                        if (!settingsOnly) throw error;
+                    }
+                }
                 if ((recover || retrySettings) && !firstMigration) {
                     // Why: the panel also imports settings from the temporary Chromium copy.
                     await session.defaultSession.clearStorageData({ storages: ['localstorage'] });

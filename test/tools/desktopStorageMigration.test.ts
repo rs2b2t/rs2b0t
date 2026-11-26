@@ -378,11 +378,15 @@ test('an unreadable 8081 opens the configured roster and retries missing setting
         expect(await launch(custom)).toEqual(profiles);
         expect(writes.mock.calls.some(([file]) => inStore(file))).toBe(false);
         expect(rendererStorage()).toEqual({});
+        unreadable = false;
+        expect(await launch(custom)).toEqual(profiles);
+        expect(writes.mock.calls.some(([file]) => inStore(file))).toBe(true);
+        expect(store.getItem(script)).toBeNull();
+        expect(rendererStorage()).toEqual({});
     } finally {
         writes.mockRestore();
     }
     store.removeItem(accounts);
-    unreadable = false;
     expect(await launch(custom)).toEqual([]);
     expect(store.getItem(script)).toBe('Fisher');
     expect(store.getItem(edited)).toBe('Gold');
