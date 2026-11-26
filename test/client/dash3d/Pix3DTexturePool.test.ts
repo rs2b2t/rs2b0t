@@ -48,33 +48,39 @@ for (const lowMem of [true, false]) {
         expect(renderer['getTexels'](20)?.[0]).toBe(0x00f800);
     });
 
-    for (const missing of ['texture', 'palette']) {
-        test(`repeated draw with missing ${missing} after rebuild (lowMem=${lowMem})`, async () => {
+    for (const rebuild of [false, true]) {
+        test.each(['texture', 'palette'])(`repeated draw with missing %s (lowMem=${lowMem}, rebuild=${rebuild})`, async missing => {
             const renderer = await loadRenderer(lowMem);
+            renderer.clearTexels();
+            renderer.initPool(20);
             const palette = Int32Array.of(0, 0xf80000);
             const texture = new Pix8(64, 64, palette);
             texture.data.fill(1);
-            renderer.textures[0] = texture;
-            renderer.texPal[0] = palette;
+            renderer.textures[17] = texture;
+            renderer.texPal[17] = palette;
 
             const previous2D = { ...Pix2D };
             const pixels = new Int32Array(16);
-            const draw = () => renderer.textureTriangle(0, 4, 0, 0, 0, 4, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 0);
+            const draw = (id: number) => renderer.textureTriangle(0, 4, 0, 0, 0, 4, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, id);
             try {
                 Pix2D.setPixels(pixels, 4, 4);
                 renderer.setRenderClipping();
-                draw();
+                draw(17);
                 expect(pixels[0]).toBe(0xf80000);
 
-                renderer.clearTexels();
-                renderer.initPool(20);
-                if (missing === 'texture') renderer.textures[0] = null;
-                else renderer.texPal[0] = null;
+                if (rebuild) {
+                    renderer.clearTexels();
+                    renderer.initPool(20);
+                } else {
+                    renderer.pushTexture(17);
+                }
+                if (missing === 'texture') renderer.texPal[0] = palette;
+                else renderer.textures[0] = texture;
                 pixels.fill(0xffffff);
-                draw();
+                draw(0);
                 expect(pixels[0]).toBe(0xffffff);
-                draw();
-                expect(pixels[0]).toBe(0);
+                draw(0);
+                expect(pixels[0]).toBe(rebuild ? 0 : 0xf80000);
             } finally {
                 Object.assign(Pix2D, previous2D);
             }
