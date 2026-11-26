@@ -13,6 +13,7 @@ import { ScriptRunner } from '#/bot/runtime/ScriptRunner.js';
 import { SettingsBag } from '#/bot/runtime/Settings.js';
 import JiveChests from '#/bot/scripts/JiveChests/JiveChests.js';
 import { CHEST_STAND } from '#/bot/scripts/JiveChests/logic.js';
+import { depositMatching } from '../../fixtures/bank.js';
 
 const KEY = 989;
 const STONE = 1631;
@@ -100,11 +101,7 @@ function fixture(pack: InvItemSnapshot[] = [], floor: GroundItemSnapshot[] = [],
     });
     spyOn(Bank, 'depositAllMatching').mockImplementation(async match => {
         if (state.depositFailures-- > 0) return;
-        state.pack = state.pack.filter(i => {
-            if (!match(i.name!, i.id)) return true;
-            state.bank.set(i.id, (state.bank.get(i.id) ?? 0) + i.count);
-            return false;
-        });
+        state.pack = depositMatching(state.pack, state.bank, match);
         reindex();
     });
     spyOn(Bank, 'withdrawX').mockImplementation(async (name, count) => {
