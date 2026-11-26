@@ -16,6 +16,20 @@ export function normalizeUsername(username: string): string {
     return hash === 0n ? '' : JString.toRawUsername(hash);
 }
 
+export function indexByUsername<T>(entries: Iterable<readonly [string, T]>) {
+    const exact = new Map<string, T>();
+    const firstByIdentity = new Map<string, T>();
+    for (const [username, value] of entries) {
+        if (!exact.has(username)) exact.set(username, value);
+        const identity = normalizeUsername(username);
+        if (identity && !firstByIdentity.has(identity)) firstByIdentity.set(identity, value);
+    }
+    return {
+        get: (username: string) => exact.get(username) ?? firstByIdentity.get(normalizeUsername(username)),
+        firstByIdentity
+    };
+}
+
 interface Slot {
     id: number;
     account: Account;
@@ -65,12 +79,40 @@ export class MultiBoxController {
         return this.snap(slot);
     }
 
-    addGroup(accounts: Account[]): void {
+    restoreProfiles(profiles: Account[], tabs: string[], activeTab: string, loadMissing = true): void {
+        const savedProfiles = indexByUsername(profiles.map(p => [p.username, p] as const));
+        const knownTabs = new Set([MAIN_TAB, ...tabs]);
+        const retained = new Set<string>();
+        let modesChanged = this.active !== activeTab;
+        for (const slot of this.slots) {
+            const saved = savedProfiles.get(slot.account.username);
+            if (!saved) {
+                retained.add(slot.tab);
+                continue;
+            }
+            const tab = saved.tab ?? MAIN_TAB;
+            const next = knownTabs.has(tab) ? tab : MAIN_TAB;
+            if (slot.tab !== next) {
+                slot.tab = next;
+                modesChanged = true;
+            }
+            savedProfiles.firstByIdentity.delete(normalizeUsername(slot.account.username));
+        }
+        for (const tab of this.customTabs) {
+            if (retained.has(tab)) knownTabs.add(tab);
+            else if (!knownTabs.has(tab)) this.lastFocusByTab.delete(tab);
+        }
+        this.customTabs = [...knownTabs].slice(1);
+        this.active = activeTab;
+        this.addGroup(loadMissing ? [...savedProfiles.firstByIdentity.values()] : [], modesChanged);
+    }
+
+    addGroup(accounts: Account[], modesChanged = false): void {
         const before = this.slots.length;
         try {
             for (const account of accounts) this.addSlot(account);
         } finally {
-            if (this.slots.length !== before) this.applyModes();
+            if (modesChanged || this.slots.length !== before) this.applyModes();
         }
     }
 
