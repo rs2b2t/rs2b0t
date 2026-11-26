@@ -1,6 +1,6 @@
 // RuneScape experience curve, for "how far to the next level" readouts.
 
-import { buildExperienceThresholds, MAX_LEVEL } from '#/client/shell/Skill.js';
+import { buildExperienceThresholds, MAX_LEVEL } from '#/shared/experience.js';
 
 import { fmtDuration, fmtXpHr, paintSkillShort } from './paintLogic.js';
 
