@@ -63,6 +63,17 @@ function namedItem(count: number): InvItemSnapshot {
     };
 }
 
+function readyBank(inventory: () => InvItemSnapshot[]): void {
+    (reader as any).bankComId = () => 5382;
+    (reader as any).bankSideItems = inventory;
+    (reader as any).inventory = inventory;
+    (reader as any).inventorySize = () => 28;
+    (reader as any).modals = () => ({ main: 5292, side: 5063, chat: -1 });
+    (reader as any).countDialogOpen = () => true;
+    (Execution as any).delayTicks = async () => {};
+    (Execution as any).delayUntil = async (condition: () => boolean) => condition();
+}
+
 describe('Bank exact-ID helpers', () => {
     test('uses fixed quantities by ID without a count dialog, including noted items and colliding names', async () => {
         for (const [quantity, operation] of [[1, 1], [5, 2], [10, 3]] as const) {
@@ -238,17 +249,6 @@ describe('Bank exact-ID helpers', () => {
 });
 
 describe('Bank named Withdraw-X', () => {
-    function readyBank(inventory: () => InvItemSnapshot[]): void {
-        (reader as any).bankComId = () => 5382;
-        (reader as any).bankSideItems = inventory;
-        (reader as any).inventory = inventory;
-        (reader as any).inventorySize = () => 28;
-        (reader as any).modals = () => ({ main: 5292, side: 5063, chat: -1 });
-        (reader as any).countDialogOpen = () => true;
-        (Execution as any).delayTicks = async () => {};
-        (Execution as any).delayUntil = async (condition: () => boolean) => condition();
-    }
-
     test('uses fixed 1/5/10 operations without opening a count dialog', async () => {
         for (const [quantity, operation] of [[1, 1], [5, 2], [10, 3]] as const) {
             let inventory: InvItemSnapshot[] = [];
@@ -316,17 +316,6 @@ describe('Bank named Withdraw-X', () => {
 });
 
 describe('Bank.withdrawLoad', () => {
-    function readyBank(inventory: () => InvItemSnapshot[]): void {
-        (reader as any).bankComId = () => 5382;
-        (reader as any).bankSideItems = inventory;
-        (reader as any).inventory = inventory;
-        (reader as any).inventorySize = () => 28;
-        (reader as any).modals = () => ({ main: 5292, side: 5063, chat: -1 });
-        (reader as any).countDialogOpen = () => true;
-        (Execution as any).delayTicks = async () => {};
-        (Execution as any).delayUntil = async (condition: () => boolean) => condition();
-    }
-
     test('uses Withdraw-All when the op exists', async () => {
         let inventory: InvItemSnapshot[] = [];
         const allItem = (): InvItemSnapshot => ({
