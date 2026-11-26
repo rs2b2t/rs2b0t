@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
+import process from 'node:process';
 import { pathToFileURL } from 'node:url';
 import { collisionPack } from '../../test/lib/syntheticCollisionPack.ts';
 
@@ -34,12 +35,12 @@ for (let i = 10; i < v1.length; i += 3 + v1Level) {
 assert.equal(offset, pack.length);
 
 function measureConstruction(Finder, count) {
-    global.gc();
+    globalThis.gc();
     const before = process.memoryUsage().heapUsed;
     const start = performance.now();
     const held = Array.from({ length: count }, () => new Finder(pack));
     const ms = performance.now() - start;
-    global.gc();
+    globalThis.gc();
     const mib = (process.memoryUsage().heapUsed - before) / 2 ** 20;
     for (const finder of held) assert.equal(finder.mapsquares, 3);
     return { ms, mib };
