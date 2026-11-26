@@ -8,6 +8,7 @@ import {
     BURNTMEAT_TALK,
     EADGAR_TALK,
     ER_ITEM,
+    type EadgarItem,
     SANFEW_FINISH,
     SANFEW_START,
     TEGID_ROBE,
@@ -82,31 +83,15 @@ function sourceRobe(snap: QuestSnapshot): QuestStep | null {
     return talkTo(TEGID_ROBE);
 }
 
-/** The parrot Eadgar wants back in hand before it can be hidden. */
-function parrotInHand(snap: QuestSnapshot): QuestStep | null {
-    if (held(snap, ER_ITEM.DRUNK_PARROT) > 0) {
+function replacementItemInHand(snap: QuestSnapshot, item: EadgarItem): QuestStep | null {
+    if (held(snap, item) > 0) {
         return null;
     }
     if (!snap.bankKnown) {
         return scanBank(snap);
     }
-    if (banked(snap, ER_ITEM.DRUNK_PARROT) > 0) {
-        return withdraw(snap, [{ name: ER_ITEM.DRUNK_PARROT.name, id: ER_ITEM.DRUNK_PARROT.id, qty: 1 }]);
-    }
-    // Eadgar replaces the item when neither inventory nor bank has one.
-    return talkTo(EADGAR_TALK);
-}
-
-// Why: Burntmeat consumes only the carried dummy, and Eadgar supplies replacements.
-function fakeManInHand(snap: QuestSnapshot): QuestStep | null {
-    if (held(snap, ER_ITEM.FAKE_MAN) > 0) {
-        return null;
-    }
-    if (!snap.bankKnown) {
-        return scanBank(snap);
-    }
-    if (banked(snap, ER_ITEM.FAKE_MAN) > 0) {
-        return withdraw(snap, [{ name: ER_ITEM.FAKE_MAN.name, id: ER_ITEM.FAKE_MAN.id, qty: 1 }]);
+    if (banked(snap, item) > 0) {
+        return withdraw(snap, [{ name: item.name, id: item.id, qty: 1 }]);
     }
     return talkTo(EADGAR_TALK);
 }
@@ -159,7 +144,9 @@ export function decide(snap: QuestSnapshot): QuestStep {
         case EADGAR_STAGE.NEEDS_PARROT:
             return prep() ?? sourceAxe(snap) ?? sourceParrot(snap) ?? guardedTalk(EADGAR_TALK);
         case EADGAR_STAGE.EXPLAINED_PLAN:
-            return prep() ?? parrotInHand(snap) ?? guarded('hide the parrot under the prison rack', hideParrot);
+            return prep()
+                ?? replacementItemInHand(snap, ER_ITEM.DRUNK_PARROT)
+                ?? guarded('hide the parrot under the prison rack', hideParrot);
         case EADGAR_STAGE.HID_PARROT:
         case EADGAR_STAGE.NEEDS_ITEMS:
             return prep(scarecrowSlots(snap, stage) > SCARECROW_SLOT_SLACK ? SCARECROW_FOOD_TARGET : undefined)
@@ -173,7 +160,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         case EADGAR_STAGE.GOT_PARROT_BACK:
             return prep() ?? guardedTalk(EADGAR_TALK);
         case EADGAR_STAGE.GOT_FAKE_MAN:
-            return prep() ?? fakeManInHand(snap) ?? guardedTalk(BURNTMEAT_TALK);
+            return prep() ?? replacementItemInHand(snap, ER_ITEM.FAKE_MAN) ?? guardedTalk(BURNTMEAT_TALK);
         case EADGAR_STAGE.GOT_BURNT_MEAT:
             return prep()
                 ?? sourceStoreroomKey(snap)

@@ -1,5 +1,6 @@
-import { describe, expect, test } from 'bun:test';
-import { locHullHeight, resolveLocModelExtents } from '#/bot/adapter/ClientAdapter.js';
+import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
+import { locHullHeight, reader, resolveLocModelExtents } from '#/bot/adapter/ClientAdapter.js';
+import { SettingsBag, SettingsStore } from '#/bot/runtime/Settings.js';
 import Model from '#/client/dash3d/Model.js';
 import ModelSource from '#/client/dash3d/ModelSource.js';
 import { PathPublish, formatHopLabel } from '#/bot/event/webwalk/pathPublish.js';
@@ -8,11 +9,46 @@ import {
     buildPathQuads,
     hullFillFromStroke,
     liveTransportLoc,
+    paintNavPath,
     projectPathTiles,
     projectTileQuad,
     selectDrawIndices,
     strokeLocHull
 } from '#/bot/event/webwalk/pathOverlay.js';
+
+describe('paintNavPath labels only', () => {
+    afterEach(() => {
+        mock.restore();
+        PathPublish.clear();
+    });
+
+    test.each([true, false])('projects only visible captions (showText=%s)', showText => {
+        const tiles = Array.from({ length: 64 }, (_, x) => ({
+            x, z: 10, level: 0, kind: 'teleport',
+            transport: x === 3 || x === 44,
+            label: x === 3 ? 'Exit' : x === 44 ? 'Enter' : undefined
+        }));
+        PathPublish.set(tiles, 4);
+        spyOn(SettingsStore, 'globalBag').mockReturnValue(new SettingsBag({ showNavPath: true, navPathShowText: showText }));
+        spyOn(reader, 'attached').mockReturnValue(true);
+        spyOn(reader, 'worldTile').mockReturnValue(tiles[4]!);
+        const project = spyOn(reader, 'overlayPosWorld').mockImplementation((x, z, _height, u = 0, v = 0) => ({ x: x + u, y: z + v }));
+        const captions: [string, number, number, number][] = [];
+        const ctx = {
+            save() {}, restore() {}, beginPath() {}, rect() {}, clip() {},
+            globalAlpha: 1,
+            fillText(text: string, x: number, y: number) {
+                captions.push([text, x, y, this.globalAlpha]);
+            }
+        };
+        paintNavPath(ctx as unknown as CanvasRenderingContext2D, { labelsOnly: true });
+        expect(captions).toEqual(showText ? [
+            ['Exit', 4.5, 5.5, 0.45], ['Exit', 3.5, 4.5, 0.45],
+            ['Enter', 45.5, 5.5, 1], ['Enter', 44.5, 4.5, 1]
+        ] : []);
+        expect(project).toHaveBeenCalledTimes(showText ? 8 : 0);
+    });
+});
 
 describe('PathPublish', () => {
     test('set update clear', () => {
