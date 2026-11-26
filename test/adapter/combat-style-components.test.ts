@@ -3,6 +3,8 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { readSelectButtonLabelsByVarp } from '#/bot/adapter/ClientAdapter.js';
 import IfType, { ButtonType, ComponentType } from '#/client/config/IfType.js';
 
+import { component, installComponents } from '../fixtures/if-type.js';
+
 const COM_MODE_VARP = 43;
 const originalInterfaces = IfType.list;
 
@@ -51,20 +53,8 @@ function installLayout(entries: LayoutEntry[]): number {
     panel.childX = children.map(child => child.x);
     panel.childY = children.map(child => child.y);
 
-    IfType.list = [];
-    IfType.list[root.id] = root;
-    IfType.list[panel.id] = panel;
-    for (const child of children) {
-        IfType.list[child.com.id] = child.com;
-    }
+    installComponents([root, panel, ...children.map(child => child.com)]);
     return root.id;
-}
-
-function component(id: number, type: ComponentType): IfType {
-    const result = new IfType();
-    result.id = id;
-    result.type = type;
-    return result;
 }
 
 describe('combat interface metadata', () => {

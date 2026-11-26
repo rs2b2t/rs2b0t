@@ -4,14 +4,9 @@ import { attach, detach, reader } from '#/bot/adapter/ClientAdapter.js';
 import IfType, { ComponentType } from '#/client/config/IfType.js';
 import { ServerProt } from '#/client/io/ServerProt.js';
 
-const originalInterfaces = IfType.list;
+import { component, installComponents } from '../fixtures/if-type.js';
 
-function component(id: number, type: ComponentType): IfType {
-    const result = new IfType();
-    result.id = id;
-    result.type = type;
-    return result;
-}
+const originalInterfaces = IfType.list;
 
 function installBankInterfaces(): void {
     const inventoryRoot = component(300, ComponentType.TYPE_LAYER);
@@ -35,10 +30,7 @@ function installBankInterfaces(): void {
     sideInv.linkObjNumber = new Int32Array(28);
     side.children = [sideInv.id];
 
-    IfType.list = [];
-    for (const value of [main, mainInv, side, sideInv, inventoryRoot, inventory]) {
-        IfType.list[value.id] = value;
-    }
+    installComponents([main, mainInv, side, sideInv, inventoryRoot, inventory]);
 }
 
 function fakeClient() {
