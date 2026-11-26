@@ -16,7 +16,7 @@ import sys
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Callable, Iterable
 
 
 def load_enrichment_module():
@@ -107,23 +107,30 @@ def parse_locs(data: bytes) -> Iterable[tuple[int, int, int, int, int, int]]:
         loc_delta = reader.gsmart()
 
 
-def load_effective_placements(engine: Path) -> list[EffectivePlacement]:
-    archive_path = engine / "data" / "pack" / ".cache" / "maps-server.zip"
-    if not archive_path.exists():
-        raise SystemExit(f"Missing {archive_path}; build the LostCity engine maps first")
+def decode_placements(names: Iterable[str], read: Callable[[str], bytes]) -> list[EffectivePlacement]:
     placements: list[EffectivePlacement] = []
-    with zipfile.ZipFile(archive_path) as archive:
-        map_names = sorted(name for name in archive.namelist() if re.fullmatch(r"m\d+_\d+", name))
-        for map_name in map_names:
-            mx, mz = map(int, map_name[1:].split("_"))
-            land = parse_land(archive.read(map_name))
-            for loc_id, local_x, local_z, raw_level, shape, angle in parse_locs(archive.read(f"l{mx}_{mz}")):
-                linked_below = land[packed_index(local_x, local_z, 1)] & 2
-                level = raw_level - 1 if linked_below else raw_level
-                if level < 0:
-                    continue
-                placements.append(EffectivePlacement(loc_id, mx * 64 + local_x, mz * 64 + local_z, level, shape, angle))
+    for map_name in sorted(name for name in names if re.fullmatch(r"m\d+_\d+", name)):
+        mx, mz = map(int, map_name[1:].split("_"))
+        land = parse_land(read(map_name))
+        for loc_id, local_x, local_z, raw_level, shape, angle in parse_locs(read(f"l{mx}_{mz}")):
+            linked_below = land[packed_index(local_x, local_z, 1)] & 2
+            level = raw_level - 1 if linked_below else raw_level
+            if level < 0:
+                continue
+            placements.append(EffectivePlacement(loc_id, mx * 64 + local_x, mz * 64 + local_z, level, shape, angle))
     return placements
+
+
+def load_effective_placements(engine: Path) -> list[EffectivePlacement]:
+    pack = engine / "data" / "pack"
+    archive_path = pack / ".cache" / "maps-server.zip"
+    maps = pack / "server" / "maps"
+    if archive_path.exists():
+        with zipfile.ZipFile(archive_path) as archive:
+            return decode_placements(archive.namelist(), archive.read)
+    if maps.is_dir():
+        return decode_placements((p.name for p in maps.iterdir() if p.is_file()), lambda name: (maps / name).read_bytes())
+    raise SystemExit(f"Missing {archive_path} and {maps}; build the LostCity engine maps first")
 
 
 class CollisionPack:
