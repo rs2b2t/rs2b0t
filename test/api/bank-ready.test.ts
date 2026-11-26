@@ -44,8 +44,10 @@ describe('Bank.backpackReady', () => {
     function openBank(): void {
         (reader as any).bankComId = () => 5382;
         (reader as any).modals = () => ({ main: 5292, side: 2005, chat: -1 });
-        (reader as any).inventorySize = () => 28;
+        (reader as any).inventorySize = () => 0;
+        (reader as any).inventory = () => [];
         (reader as any).inventorySnapshotReady = () => true;
+        (reader as any).bankSideItems = () => [];
         (reader as any).bankSideSnapshotReady = () => true;
         (Execution as any).delayTicks = async () => {};
         (Execution as any).delayUntil = async (condition: () => boolean) => condition();
@@ -53,26 +55,18 @@ describe('Bank.backpackReady', () => {
 
     test('rejects an empty side view when the pre-open backpack had Cake', async () => {
         openBank();
-        (reader as any).inventory = () => [];
-        (reader as any).inventorySize = () => 0;
-        (reader as any).bankSideItems = () => [];
 
         expect(await Bank.backpackReady([item()])).toBe(false);
     });
 
     test('accepts a genuinely empty full side snapshot', async () => {
         openBank();
-        (reader as any).inventorySize = () => 0;
-        (reader as any).inventory = () => [];
-        (reader as any).bankSideItems = () => [];
 
         expect(await Bank.backpackReady([])).toBe(true);
     });
 
     test('accepts an expected bank-side backpack when the modal hides normal inventory', async () => {
         openBank();
-        (reader as any).inventorySize = () => 0;
-        (reader as any).inventory = () => [];
         (reader as any).bankSideItems = () => [item()];
 
         expect(await Bank.backpackReady([item()])).toBe(true);
@@ -80,18 +74,12 @@ describe('Bank.backpackReady', () => {
 
     test('rejects an unloaded bank-side backpack when an expected item is known', async () => {
         openBank();
-        (reader as any).inventorySize = () => 0;
-        (reader as any).inventory = () => [];
-        (reader as any).bankSideItems = () => [];
 
         expect(await Bank.backpackReady([item()])).toBe(false);
     });
 
     test('rejects an empty side view until its full snapshot arrives', async () => {
         openBank();
-        (reader as any).inventorySize = () => 0;
-        (reader as any).inventory = () => [];
-        (reader as any).bankSideItems = () => [];
         (reader as any).bankSideSnapshotReady = () => false;
 
         expect(await Bank.backpackReady([])).toBe(false);
@@ -99,8 +87,6 @@ describe('Bank.backpackReady', () => {
 
     test('accepts matching slots and rejects stale counts', async () => {
         openBank();
-        (reader as any).inventorySize = () => 0;
-        (reader as any).inventory = () => [];
         (reader as any).bankSideItems = () => [{ ...item(), comId: 2006, ops: ['Deposit-1'] }];
         expect(await Bank.backpackReady([item()])).toBe(true);
 
