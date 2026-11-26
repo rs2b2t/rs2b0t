@@ -1,4 +1,5 @@
 import Tile from '../../../../../geometry/Tile.js';
+import { inWestArdougne } from '../../../../map/regions.js';
 import type { QuestSnapshot } from '../../engine/types.js';
 
 export {
@@ -302,7 +303,7 @@ export function upassArea(tile: QuestSnapshot['tile']): UpassArea {
         return 'unknown';
     }
     // Why: West Ardougne is sealed behind the wall with the Plague City sewer pipe the only way in, so it's its own region.
-    return level === 0 && x >= 2433 && x <= 2556 && z >= 3266 && z <= 3334 ? 'westardougne' : 'mainland';
+    return inWestArdougne(tile) ? 'westardougne' : 'mainland';
 }
 
 /** The trapped rectangle of the spiked grid: `inzone(upass_grid_col5, upass_grid_col1 + (1,0,9))`. */
