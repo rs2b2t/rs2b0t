@@ -722,7 +722,7 @@ export class PriceBookPanel {
         input.inputMode = 'numeric';
         input.dataset.role = role;
         input.value = formatPrice(value);
-        input.addEventListener('change', () => {
+        const savePrice = (): void => {
             const parsed = parsePrice(input.value);
             if (parsed === null) {
                 // Why: an unreadable edit would store NaN, so the box goes back to the old value.
@@ -730,12 +730,14 @@ export class PriceBookPanel {
                 return;
             }
             onChange(parsed);
-        });
+        };
+        input.addEventListener('change', savePrice);
         cell.appendChild(input);
         if (pinned) {
             input.dataset.pinned = 'true';
             input.title = 'pinned override, click the dot to clear';
             const clear = this.action(`clear-${role}`, '●', () => {
+                input.removeEventListener('change', savePrice);
                 input.focus({ preventScroll: true });
                 onChange(null);
             });

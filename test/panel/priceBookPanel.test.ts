@@ -147,7 +147,19 @@ describe('editing a row', () => {
 
         const editing = field(edit);
         type(editing, pending);
-        editing.addEventListener('blur', () => editing.dispatchEvent(new Event('change')), { once: true });
+        let changed = false;
+        const commitPending = () => {
+            if (changed) return;
+            changed = true;
+            editing.dispatchEvent(new Event('change'));
+        };
+        editing.addEventListener('blur', commitPending, { once: true });
+        const editor = panel.root.querySelector<HTMLElement>('.rs2b0t-pricebook')!;
+        const replaceChildren = editor.replaceChildren.bind(editor);
+        editor.replaceChildren = (...nodes) => {
+            if (document.activeElement === editing) commitPending();
+            replaceChildren(...nodes);
+        };
         const clear = panel.root.querySelector<HTMLButtonElement>(`${row} [data-action="clear-${side}"]`)!;
         if (clear.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))) {
             clear.focus();
