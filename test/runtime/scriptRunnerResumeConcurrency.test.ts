@@ -50,7 +50,7 @@ async function frame(): Promise<void> {
 
 afterEach(async () => {
     ScriptRunner.stop('test teardown');
-    wedged?.release?.();
+    wedged?.pending.resolve();
     wedged = null;
     for (let i = 0; i < 10 && ScriptRunner.state === 'stopping'; i++) {
         await settle();
@@ -90,13 +90,16 @@ test('a resume does not start a second loop on top of the one still parked', asy
 /** Parks on a promise the scheduler does not own, so no waiter is registered (#580). */
 class WedgedLoopBot extends LoopingBot {
     entries = 0;
-    release: (() => void) | null = null;
+    stops = 0;
+    readonly pending = Promise.withResolvers<void>();
 
-    override async loop(): Promise<void> {
+    override loop(): Promise<void> {
         this.entries++;
-        await new Promise<void>(resolve => {
-            this.release = resolve;
-        });
+        return this.pending.promise;
+    }
+
+    override onStop(): void {
+        this.stops++;
     }
 }
 
@@ -123,4 +126,34 @@ test('a resume still frees a loop wedged on a promise the scheduler does not own
     await frame();
 
     expect(bot.entries).toBe(2);
+});
+
+test('a late rejection from an abandoned loop leaves the next run resumable', async () => {
+    const previous = new WedgedLoopBot();
+    wedged = previous;
+    ScriptRunner.start({ name: 'Previous run', description: '', create: () => previous });
+    await settle();
+    await frame();
+    expect(previous.entries).toBe(1);
+
+    ScriptRunner.pause();
+    ScriptRunner.resume();
+    ScriptRunner.stop('replace run');
+    expect(ScriptRunner.state).toBe('stopped');
+
+    const current = new WedgedLoopBot();
+    wedged = current;
+    ScriptRunner.start({ name: 'Current run', description: '', create: () => current });
+    await settle();
+    await frame();
+    expect(current.entries).toBe(1);
+
+    previous.pending.reject(new Error('previous loop failed'));
+    await settle();
+    ScriptRunner.pause();
+    ScriptRunner.resume();
+    await frame();
+
+    expect(current.entries).toBe(2);
+    expect(current.stops).toBe(0);
 });
