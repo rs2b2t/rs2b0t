@@ -84,7 +84,9 @@ test('each viewport, frustum and pitch change preserves the original table', asy
         return table;
     });
     expect(new Set(tables).size).toBe(inputs.length);
-    tile.resetVisCalc(...startup);
-    expect(tile['visBacking'] === tables[0]).toBe(true);
+    for (const [i, args] of inputs.entries()) {
+        tile.resetVisCalc(...args);
+        expect(tile['visBacking'] === tables[i]).toBe(true);
+    }
     expect(tables[0]).toEqual(expected[0]);
 });
