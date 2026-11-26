@@ -1,5 +1,5 @@
 import { questProgressAt, readQuestJournal, type JournalCache } from '../../journalReader.js';
-import { normalizeJournal } from '../../journalText.js';
+import { matchJournal, normalizeJournal } from '../../journalText.js';
 import type { QuestProgress } from '../../engine/types.js';
 import { DIG_NAME } from './areas.js';
 
@@ -58,25 +58,16 @@ function countOf(text: string, needle: string): number {
 
 export function parseDigsiteJournal(lines: readonly string[] | string): QuestProgress | undefined {
     const text = normalize(lines);
-    if (text.length === 0) {
+    const progress = matchJournal(text, STAGES, FLAGS);
+    if (!progress) {
         return undefined;
-    }
-    const hit = STAGES.find(([needle]) => text.includes(needle));
-    if (!hit) {
-        return undefined;
-    }
-    const flags = new Set<string>();
-    for (const [needle, flag] of FLAGS) {
-        if (text.includes(needle)) {
-            flags.add(flag);
-        }
     }
     // Why: both answered lines read the same, so two of them is proof of both even if the pair ordering ever changes.
     if (countOf(text, ANSWERED_LINE) >= 2) {
-        flags.add('green-answered');
-        flags.add('orange-answered');
+        progress.flags.add('green-answered');
+        progress.flags.add('orange-answered');
     }
-    return { stage: hit[1], flags };
+    return progress;
 }
 
 /** A failed read doesn't mean the quest went backwards. */
