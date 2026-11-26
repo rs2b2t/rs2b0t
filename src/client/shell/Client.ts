@@ -532,6 +532,7 @@ export class Client extends GameShell {
     private reportAbuseComId: number = -1;
 
     private minimapState: number = 0;
+    private disabledMinimapCleared = false;
     private minimapLevel: number = -1;
     private activeMapFunctionCount: number = 0;
     private activeMapFunctionX: Int32Array = new Int32Array(1000);
@@ -2202,6 +2203,7 @@ export class Client extends GameShell {
         this.areaChat = new PixMap(479, 96);
 
         this.areaMap = new PixMap(172, 156);
+        this.disabledMinimapCleared = false;
         Pix2D.cls();
         this.mapback?.plotSprite(0, 0);
 
@@ -11455,7 +11457,7 @@ export class Client extends GameShell {
         this.areaMap?.setPixels();
 
         if (this.minimapState == 2) {
-            if (this.mapback !== null) {
+            if (!this.disabledMinimapCleared && this.mapback !== null) {
                 const mask = this.mapback.data;
                 const pixels = Pix2D.pixels;
                 const len = mask.length;
@@ -11464,6 +11466,7 @@ export class Client extends GameShell {
                         pixels[i] = 0;
                     }
                 }
+                this.disabledMinimapCleared = true;
             }
 
             this.compass?.scanlineRotatePlotSprite(0, 0, 33, 33, 25, 25, this.orbitCameraYaw, 256, this.compassMaskLineOffsets, this.compassMaskLineLengths);
@@ -11472,6 +11475,7 @@ export class Client extends GameShell {
             return;
         }
 
+        this.disabledMinimapCleared = false;
         const angle: number = (this.orbitCameraYaw + this.macroMinimapAngle) & 0x7ff;
         const playerMapX = (this.localPlayer.x / 32) | 0;
         const playerMapZ = (this.localPlayer.z / 32) | 0;
