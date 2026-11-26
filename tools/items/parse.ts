@@ -1,4 +1,4 @@
-import { blocks, field } from '../lib/content.js';
+import { blocks, field, readObjMetadata } from '../lib/content.js';
 import { SLOTS, type ItemRecord, type Slot } from '#/bot/api/loadout/types.js';
 
 export interface ParsedItem {
@@ -34,13 +34,14 @@ export function parseItemDefs(text: string): Record<string, ParsedItem> {
         if (!slot && !consumable) {
             continue;
         }
+        const { name, cost, members } = readObjMetadata(b);
         out[b.id] = {
-            name: field(b.lines, 'name') ?? b.id,
+            name,
             slot,
             twoHanded: slot === 'righthand' && field(b.lines, 'wearpos2') === 'lefthand',
             consumable,
-            cost: Number(field(b.lines, 'cost') ?? '1'),
-            members: field(b.lines, 'members') === 'yes'
+            cost,
+            members
         };
     }
     return out;

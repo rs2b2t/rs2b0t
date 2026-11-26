@@ -30,3 +30,11 @@ export function field(lines: string[], key: string): string | undefined {
     const prefix = `${key}=`;
     return lines.find(l => l.startsWith(prefix))?.slice(prefix.length);
 }
+
+export function readObjMetadata({ id, lines }: Block): { name: string; cost: number; members: boolean } {
+    return {
+        name: field(lines, 'name') ?? id,
+        cost: Number(field(lines, 'cost') ?? '1'),
+        members: field(lines, 'members') === 'yes'
+    };
+}
