@@ -1,6 +1,6 @@
 import { findSceneTarget } from '../../exec/prompts.js';
 import { Execution } from '../../../../execution/Execution.js';
-import type Tile from '../../../../../geometry/Tile.js';
+import { ARDRIGAL, SNAKE_WEED, type JungleHerb } from '../../data/jungleHerbs.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
 import { Locs } from '../../../../locs/Locs.js';
 import { Traversal } from '../../../../walking/Traversal.js';
@@ -65,19 +65,9 @@ export async function smeltGoldBar(log: (m: string) => void): Promise<boolean> {
     );
 }
 
-export interface JungleHerb {
-    /** Every unid renders "Unidentified herb", so the pick is proved by id. */
-    unidId: number;
-    id: number;
-    name: string;
-    loc: string;
-    stand: Tile;
-}
+export type { JungleHerb } from '../../data/jungleHerbs.js';
 
-export const BRAVERY_HERBS: readonly JungleHerb[] = [
-    { unidId: LQ_ID.UNID_SNAKE_WEED, id: LQ_ID.SNAKE_WEED, name: 'Snake weed', loc: 'Marshy jungle vine', stand: LQ_TILE.SNAKE_WEED },
-    { unidId: LQ_ID.UNID_ARDRIGAL, id: LQ_ID.ARDRIGAL, name: 'Ardrigal', loc: 'Palm tree', stand: LQ_TILE.ARDRIGAL }
-];
+export const BRAVERY_HERBS: readonly JungleHerb[] = [{ ...SNAKE_WEED }, { ...ARDRIGAL }];
 
 /** Search a herb's own loc until the unid is in the pack. */
 export function pickHerb(herb: JungleHerb): (log: (m: string) => void) => Promise<boolean> {
