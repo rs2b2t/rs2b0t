@@ -75,6 +75,41 @@ test('counts flax without counting toadflax', async () => {
     expect(bot.fibreCount()).toBe(3);
 });
 
+test('credits the full decrease and waits six more idle ticks after progress', async () => {
+    const bot = await start();
+    tile = new Tile(2711, 3471, 1);
+    inventory = [item(1737, 'Wool', 4)];
+    const counts = [4, 4, 4, 4, 4, 2, 2, 2, 2, 2, 2, 2];
+    const credits: number[] = [];
+    let ticks = 0;
+    restores.push(
+        stubProps(Game, { animating: () => true }),
+        stubProps(bot, { recordSpun: amount => { credits.push(amount); } }),
+        stubProps(Execution, { delayTicks: async amount => {
+            expect(amount).toBe(1);
+            expect(ticks).toBeLessThan(counts.length);
+            inventory = [item(1737, 'Wool', counts[ticks++])];
+        } })
+    );
+    await bot.loop();
+    expect(credits).toEqual([2]);
+    expect(ticks).toBe(counts.length);
+});
+
+test('a pending event stops spinning before another tick', async () => {
+    const bot = await start();
+    tile = new Tile(2711, 3471, 1);
+    inventory = [item(1737, 'Wool', 4)];
+    let ticks = 0;
+    restores.push(
+        stubProps(Game, { animating: () => true }),
+        stubProps(EventSignal, { pending: () => ticks >= 1 }),
+        stubProps(Execution, { delayTicks: async () => { ticks++; } })
+    );
+    await bot.loop();
+    expect(ticks).toBe(1);
+});
+
 test('withdraws raw wool when balls of wool come first in the bank', async () => {
     const bot = await start();
     bank = [item(1759, 'Ball of wool', 100), item(1737, 'Wool', 28)];
