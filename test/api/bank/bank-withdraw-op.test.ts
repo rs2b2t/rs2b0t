@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { withdrawOp } from '#/bot/api/bank/bankOps.js';
+import { withdrawOp, withdrawXOpIndex } from '#/bot/api/bank/bankOps.js';
 
 describe('withdrawOp', () => {
     const spaceOps = ['Withdraw 1', 'Withdraw 5', 'Withdraw 10', 'Withdraw All', null];
@@ -35,5 +35,15 @@ describe('withdrawOp', () => {
         expect(withdrawOp(['Examine', 'Withdraw 5'], 'any')).toBe('Withdraw 5');
         expect(withdrawOp(['Examine', null], 'any')).toBeNull();
         expect(withdrawOp(['Examine', null], 'all')).toBeNull();
+    });
+});
+
+describe('withdrawXOpIndex', () => {
+    test('returns the first matching one-based slot, counting null slots', () => {
+        expect(withdrawXOpIndex([null, 'Withdraw 1', null, 'withdraw X', 'Withdraw-X'])).toBe(4);
+    });
+
+    test('returns -1 when the menu has no Withdraw-X', () => {
+        expect(withdrawXOpIndex([null, 'Withdraw All'])).toBe(-1);
     });
 });
