@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import Model from '#/client/dash3d/Model.js';
 import Pix3D from '#/client/dash3d/Pix3D.js';
-import Pix2D from '#/client/graphics/Pix2D.js';
+import { withPixelViewport } from './pixelViewport.fixture.js';
 
 function triangles(count: number): Model {
     const model = new Model();
@@ -39,19 +39,16 @@ test('61 idle model modules allocate no face ID rows', async () => {
 });
 
 function withViewport(draw: (pixels: Int32Array) => void): void {
-    const previous2D = { ...Pix2D };
     const previous3D = { scanline: Pix3D.scanline, originX: Pix3D.originX, originY: Pix3D.originY, hclip: Pix3D.hclip, trans: Pix3D.trans };
     const colour = Pix3D.colourTable[1];
-    const pixels = new Int32Array(128 * 68);
     try {
-        Pix2D.setPixels(pixels, 128, 68);
-        Pix3D.setRenderClipping();
-        Pix3D.colourTable[1] = 1;
-        Pix3D.trans = 0;
-        draw(pixels);
+        withPixelViewport(Pix3D, 128, 68, pixels => {
+            Pix3D.colourTable[1] = 1;
+            Pix3D.trans = 0;
+            draw(pixels);
+        });
     } finally {
         Pix3D.colourTable[1] = colour;
-        Object.assign(Pix2D, previous2D);
         Object.assign(Pix3D, previous3D);
     }
 }
