@@ -1,7 +1,6 @@
-import { useBakeSettingsLocks } from '../fixtures/bakeSettingsLocks.js';
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import * as basemapRegen from '#/bot/panel/basemapRegen.js';
-import { prefsKeyFromBakePrefs } from '#/bot/panel/basemapLocalCache.js';
+import * as localCache from '#/bot/panel/basemapLocalCache.js';
 import { WorldMapPicker } from '#/bot/panel/WorldMapPicker.js';
 import {
     prefsFingerprint,
@@ -48,12 +47,12 @@ function countStorageWrites(action: () => void): number {
 describe('prefsKeyFromBakePrefs', () => {
     test('matches basemapRegen prefsFingerprint', () => {
         const p = prefs({ labels: true, borders: true });
-        expect(prefsKeyFromBakePrefs(p)).toBe(prefsFingerprint(p));
-        expect(prefsKeyFromBakePrefs(p)).toBe('LBnikmf');
+        expect(localCache.prefsKeyFromBakePrefs(p)).toBe(prefsFingerprint(p));
+        expect(localCache.prefsKeyFromBakePrefs(p)).toBe('LBnikmf');
     });
 
     test('default bake prefs fingerprint is terrain-only (nothing stamped)', () => {
-        expect(prefsKeyFromBakePrefs(prefs())).toBe('lbnikmf');
+        expect(localCache.prefsKeyFromBakePrefs(prefs())).toBe('lbnikmf');
     });
 });
 
@@ -74,8 +73,6 @@ describe('client CRC key format (unit of /crc)', () => {
 });
 
 describe('map picker bake settings drafts', () => {
-    useBakeSettingsLocks();
-
     beforeEach(() => {
         sessionStorage.clear();
         localStorage.clear();
@@ -423,125 +420,92 @@ describe('map picker bake settings drafts', () => {
         });
     });
 
-    test.each([false, true])('a quota error restores both storage layers (previous values present: %p)', async seeded => {
+    test('a rebuild persists both submitted fields and keeps a later edit for the next rebuild', async () => {
         SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'skipRebuildConfirm', 'true');
-        const labels = 'rs2b0t:set:MapPicker:bakeLabels';
-        const borders = 'rs2b0t:set:MapPicker:bakeBorders';
-        if (seeded) {
-            sessionStorage.setItem(labels, 'false');
-            localStorage.setItem(labels, '0');
-            sessionStorage.setItem(borders, '0');
-        }
-        const before = [stored('bakeLabels'), stored('bakeBorders')];
-        const bake = spyOn(basemapRegen, 'regenerateBasemap').mockResolvedValue(rebuiltMap());
-        const setItem = localStorage.setItem;
-        Object.defineProperty(localStorage, 'setItem', {
-            configurable: true,
-            value: (id: string, value: string) => {
-                if (id === borders) throw new DOMException('storage full', 'QuotaExceededError');
-                setItem.call(localStorage, id, value);
-            }
-        });
+        const first = Promise.withResolvers<ReturnType<typeof rebuiltMap>>();
+        const bake = spyOn(basemapRegen, 'regenerateBasemap').mockReturnValueOnce(first.promise).mockResolvedValue(rebuiltMap());
         try {
             await withPicker(async () => {
                 openSettings();
-                bakeCheckbox('Stamp labels into rebuild').click();
+                const labels = bakeCheckbox('Stamp labels into rebuild');
+                labels.click();
                 bakeCheckbox('Map-square borders').click();
                 clickRebuild(true);
+                labels.click();
+                first.resolve(rebuiltMap());
                 await new Promise<void>(resolve => setImmediate(resolve));
-                expect(document.querySelector('.rs2b0t-walkmap-status')?.textContent).toContain('rebuild failed: storage full');
-                escapeSettings();
-                expect([stored('bakeLabels'), stored('bakeBorders')]).toEqual(before);
+                expect(stored('bakeLabels').local).toBe('true');
+                expect(stored('bakeBorders').local).toBe('true');
+                expect(labels.checked).toBe(false);
+
+                clickRebuild(true);
+                await new Promise<void>(resolve => setImmediate(resolve));
+                expect(bake).toHaveBeenLastCalledWith(prefs({ borders: true }));
+                expect(stored('bakeLabels').local).toBe('false');
             });
         } finally {
-            Object.defineProperty(localStorage, 'setItem', { value: setItem });
             bake.mockRestore();
         }
     });
 
-    test("a quota error preserves another tab's label save during the batch", async () => {
+    test.each([null, '0'])('Retry saves only the field rejected by durable storage (previous value %p)', async previous => {
+        SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'skipRebuildConfirm', 'true');
         const labels = 'rs2b0t:set:MapPicker:bakeLabels';
         const borders = 'rs2b0t:set:MapPicker:bakeBorders';
+        if (previous !== null) SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'bakeBorders', previous);
+        const peerSession = new Storage();
         const setItem = localStorage.setItem;
-        Object.defineProperty(localStorage, 'setItem', {
-            configurable: true,
-            value: (id: string, value: string) => {
-                if (id === borders) {
-                    expect(localStorage.getItem(labels)).toBe('false');
-                    setItem.call(localStorage, labels, 'true');
-                    throw new DOMException('storage full', 'QuotaExceededError');
-                }
-                setItem.call(localStorage, id, value);
-            }
-        });
-        try {
-            const edits = new Map([['bakeLabels', 'false'], ['bakeBorders', 'true']]);
-            await expect(async () => SettingsStore.saveBatch(MAP_PICKER_SETTINGS_NS, edits)).toThrow('storage full');
-            expect(stored('bakeLabels')).toEqual({ local: 'true', session: null });
-            expect(stored('bakeBorders')).toEqual({ local: null, session: null });
-            sessionStorage.clear();
-            expect(resolveBasemapBakePrefs().labels).toBe(true);
-        } finally {
-            Object.defineProperty(localStorage, 'setItem', { value: setItem });
-        }
-    });
-
-    test.each([null, '0'])('a save arriving after the rollback comparison survives restoration of %p', async previous => {
-        const labels = 'rs2b0t:set:MapPicker:bakeLabels';
-        const borders = 'rs2b0t:set:MapPicker:bakeBorders';
-        if (previous !== null) localStorage.setItem(labels, previous);
-        const { setItem, removeItem } = localStorage;
-        let competingSave: Promise<void> | undefined;
-        const saveLabels = () => {
-            competingSave = Promise.resolve(SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'bakeLabels', 'true'));
+        const peerSave = (value: string) => {
+            peerSession.setItem(labels, value);
+            setItem.call(localStorage, labels, value);
         };
-        Object.defineProperties(localStorage, {
-            setItem: { configurable: true, value(id: string, value: string) {
-                if (id === borders) throw new DOMException('storage full', 'QuotaExceededError');
-                if (id === labels && value === previous) saveLabels();
-                setItem.call(localStorage, id, value);
-            } },
-            removeItem: { configurable: true, value(id: string) {
-                if (id === labels) saveLabels();
-                removeItem.call(localStorage, id);
-            } }
-        });
-        try {
-            const edits = new Map([['bakeLabels', 'false'], ['bakeBorders', 'true']]);
-            await expect(async () => SettingsStore.saveBatch(MAP_PICKER_SETTINGS_NS, edits)).toThrow('storage full');
-            expect(competingSave).toBeDefined();
-            await competingSave;
-            sessionStorage.clear();
-            expect(resolveBasemapBakePrefs().labels).toBe(true);
-            expect(stored('bakeBorders')).toEqual({ local: null, session: null });
-        } finally {
-            Object.defineProperties(localStorage, { setItem: { value: setItem }, removeItem: { value: removeItem } });
-        }
-    });
-
-    test('an incomplete quota rollback still restores the session copy', async () => {
-        const labels = 'rs2b0t:set:MapPicker:bakeLabels';
-        const borders = 'rs2b0t:set:MapPicker:bakeBorders';
-        await SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'bakeLabels', 'false');
-        const setItem = localStorage.setItem;
-        Object.defineProperty(localStorage, 'setItem', {
-            configurable: true,
-            value: (id: string, value: string) => {
-                if (id === borders) setItem.call(localStorage, 'other-tab', 'x');
-                const usedByOtherKeys = [labels, borders, 'other-tab']
-                    .filter(key => key !== id)
-                    .reduce((size, key) => size + (localStorage.getItem(key)?.length ?? 0), 0);
-                if (usedByOtherKeys + value.length > 5) throw new DOMException('storage full', 'QuotaExceededError');
-                setItem.call(localStorage, id, value);
+        const writes: string[] = [];
+        let full = true;
+        Object.defineProperty(localStorage, 'setItem', { configurable: true, value(id: string, value: string) {
+            writes.push(id);
+            if (id === borders && full) {
+                peerSave('true');
+                throw new DOMException('storage full', 'QuotaExceededError');
             }
-        });
+            setItem.call(localStorage, id, value);
+        } });
+        const next = rebuiltMap();
+        const bake = spyOn(basemapRegen, 'regenerateBasemap').mockResolvedValue(next);
+        const crc = spyOn(localCache, 'fetchClientCrcKey').mockResolvedValue('test-crc');
+        const cache = spyOn(localCache, 'saveRegeneratedBasemapLocally').mockResolvedValue();
         try {
-            const edits = new Map([['bakeLabels', 'true'], ['bakeBorders', 'true']]);
-            await expect(async () => SettingsStore.saveBatch(MAP_PICKER_SETTINGS_NS, edits)).toThrow(/storage full.*rollback incomplete/i);
-            expect(stored('bakeLabels')).toEqual({ local: 'true', session: 'false' });
-            expect(stored('bakeBorders')).toEqual({ local: null, session: null });
-            expect(localStorage.getItem('other-tab')).toBe('x');
+            await withPicker(async () => {
+                openSettings();
+                bakeCheckbox('Stamp labels into rebuild').click();
+                const checkbox = bakeCheckbox('Map-square borders');
+                checkbox.click();
+                bakeCheckbox('NPC dots').click();
+                clickRebuild(true);
+                await new Promise<void>(resolve => setImmediate(resolve));
+
+                expect(stored('bakeLabels').local).toBe('true');
+                expect(stored('bakeBorders')).toEqual({ local: previous, session: previous });
+                expect(stored('bakeNpcs').local).toBe('true');
+                expect(checkbox.checked).toBe(true);
+                const alert = () => document.querySelector('.rs2b0t-modal [role="alert"]')?.textContent;
+                expect(alert()).toContain('Map-square borders');
+                expect(cache).toHaveBeenCalledWith('test-crc', prefs({ labels: true, borders: true, npcs: true }), next.manifest, next.image);
+
+                peerSave('false');
+                writes.length = 0;
+                full = false;
+                clickRebuild(true);
+                await new Promise<void>(resolve => setImmediate(resolve));
+                expect(writes).toEqual([borders]);
+                expect(alert()).toBeUndefined();
+                escapeSettings();
+                sessionStorage.clear();
+                expect(resolveBasemapBakePrefs()).toEqual(prefs({ borders: true, npcs: true }));
+            });
         } finally {
+            cache.mockRestore();
+            crc.mockRestore();
+            bake.mockRestore();
             Object.defineProperty(localStorage, 'setItem', { value: setItem });
         }
     });
@@ -594,9 +558,9 @@ describe('map picker bake settings drafts', () => {
 
 describe('prefs fingerprint invalidation shape', () => {
     test('prefsKey changes when any bake layer flips', () => {
-        const a = prefsKeyFromBakePrefs(prefs());
-        const b = prefsKeyFromBakePrefs(prefs({ labels: true }));
-        const c = prefsKeyFromBakePrefs(prefs({ freemap: true }));
+        const a = localCache.prefsKeyFromBakePrefs(prefs());
+        const b = localCache.prefsKeyFromBakePrefs(prefs({ labels: true }));
+        const c = localCache.prefsKeyFromBakePrefs(prefs({ freemap: true }));
         expect(a).not.toBe(b);
         expect(a).not.toBe(c);
         expect(b).not.toBe(c);

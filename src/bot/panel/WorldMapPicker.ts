@@ -702,7 +702,6 @@ export class WorldMapPicker {
             /** Coalesce paints to one frame, pan must not full-redraw on every mousemove. */
             let paintRaf = 0;
             let closed = false;
-            const lifetime = new AbortController();
 
             const paintNow = (): void => {
                 if (closed) {
@@ -890,7 +889,6 @@ export class WorldMapPicker {
 
             const cleanup = (): void => {
                 closed = true;
-                lifetime.abort();
                 if (paintRaf !== 0) {
                     cancelAnimationFrame(paintRaf);
                     paintRaf = 0;
@@ -952,6 +950,15 @@ export class WorldMapPicker {
                 });
             });
 
+            const showRebuildError = (message: string): void => {
+                status.textContent = message;
+                status.style.color = '#f88';
+                if (settingsModal.isOpen()) {
+                    rebuildError.textContent = message;
+                    rebuildBtn.after(rebuildError);
+                }
+            };
+
             // Manual rebuild only, behind an in-app Yes/No with Don't ask again.
             rebuildBtn.addEventListener('click', () => {
                 if (rebuildBtn.disabled || !getMapPickerShowBasemap()) {
@@ -994,10 +1001,14 @@ export class WorldMapPicker {
                         if (closed) {
                             return;
                         }
-                        await SettingsStore.saveBatch(MAP_PICKER_SETTINGS_NS, submitted, lifetime.signal);
-                        if (closed) return;
+                        const failed: string[] = [];
                         for (const [key, value] of submitted) {
-                            if (bakeEdits.get(key) === value) bakeEdits.delete(key);
+                            try {
+                                SettingsStore.saveBakePreference(key, value);
+                                if (bakeEdits.get(key) === value) bakeEdits.delete(key);
+                            } catch {
+                                failed.push(MAP_PICKER_SETTINGS[key].label ?? key);
+                            }
                         }
                         settingsModal.refreshCheckboxes(submitted.keys());
                         const crcKey = await fetchClientCrcKey();
@@ -1014,18 +1025,16 @@ export class WorldMapPicker {
                         setBasemapAttr('ready');
                         status.textContent = `basemap rebuilt (${next.manifest.fingerprint})`;
                         status.style.color = '#8ab4f8';
+                        if (failed.length) {
+                            showRebuildError(`Basemap rebuilt. Could not save: ${failed.join(', ')}. Rebuild to retry.`);
+                        }
                         requestPaint();
                     } catch (err) {
                         if (closed) {
                             return;
                         }
                         const msg = err instanceof Error ? err.message : String(err);
-                        status.textContent = `rebuild failed: ${msg}`;
-                        status.style.color = '#f88';
-                        if (settingsModal.isOpen()) {
-                            rebuildError.textContent = status.textContent;
-                            rebuildBtn.after(rebuildError);
-                        }
+                        showRebuildError(`rebuild failed: ${msg}`);
                     } finally {
                         if (!closed) {
                             rebuildBtn.disabled = false;

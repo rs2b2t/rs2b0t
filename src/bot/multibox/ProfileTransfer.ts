@@ -1,4 +1,3 @@
-import { withBakeSettingsLock } from '../runtime/bakeSettingsLock.js';
 import type { Profile } from './ProfileVault.js';
 import { desktopStorage } from '../runtime/desktopStorage.js';
 
@@ -92,11 +91,7 @@ export function collectBoxStorage(usernames: string[]): BoxStorageMap {
     return out;
 }
 
-export function applyBoxStorage(storage: BoxStorageMap, wipe: string[]): void | Promise<void> {
-    return withBakeSettingsLock(() => replaceBoxStorage(storage, wipe));
-}
-
-function replaceBoxStorage(storage: BoxStorageMap, wipe: string[]): void {
+export function applyBoxStorage(storage: BoxStorageMap, wipe: string[]): void {
     const users = [...new Set([...wipe, ...Object.keys(storage)])];
     const stores: Storage[] = [];
     if (typeof localStorage !== 'undefined') {

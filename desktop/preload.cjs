@@ -33,7 +33,6 @@ call('snapshot');
 contextBridge.exposeInMainWorld('rs2b0tDesktopStorage', {
     getItem: key => snapshot.version >= 0 && key.startsWith('rs2b0t:') && key.includes(':set:') ? snapshot.data[key] ?? null : call('getItem', key),
     setItem: (key, value) => call('setItem', key, value),
-    setItems: entries => call('setItems', entries),
     removeItem: key => call('removeItem', key),
     keys: () => snapshot.version >= 0 ? Object.keys(snapshot.data) : call('keys'),
     compareAndSet: (key, expected, value) => call('compareAndSet', key, expected, value),

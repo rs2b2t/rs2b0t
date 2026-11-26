@@ -49,14 +49,6 @@ function sharedStorage(dir) {
                 state.data[key] = value;
             });
         },
-        setItems(entries) {
-            update(state => {
-                for (const [key, value] of entries) {
-                    if (!valid(key) || typeof value !== 'string') throw new Error('Invalid saved setting');
-                    state.data[key] = value;
-                }
-            });
-        },
         compareAndSet(key, expected, value) {
             if (!valid(key) || typeof value !== 'string') throw new Error('Invalid saved setting');
             return update(state => {

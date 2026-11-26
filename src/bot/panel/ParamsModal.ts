@@ -9,6 +9,7 @@ export default class ParamsModal {
     private titleEl: HTMLElement;
     private bodyEl: HTMLElement;
     private scriptName = '';
+    private dialogVersion = 0;
     private startButton: HTMLButtonElement;
     private onStart: (() => void) | null = null;
     private schema: SettingsSchema = {};
@@ -110,10 +111,11 @@ export default class ParamsModal {
         }
         this.onStart = opts?.onStart ?? null;
         this.startButton.hidden = !this.onStart;
-        if (opts?.footerButton) this.startButton.after(opts.footerButton);
+        this.dialogVersion++;
         this.scriptName = scriptName;
         this.schema = schema;
         this.openTitle = opts?.title ?? null;
+        if (opts?.footerButton) this.startButton.after(opts.footerButton);
         this.openIntro = opts?.intro ?? null;
         this.onCloseCb = opts?.onClose ?? null;
         this.showGlobalExtra = opts?.showGlobalExtra ?? scriptName === 'Global';
@@ -127,6 +129,7 @@ export default class ParamsModal {
         if (!this.isOpen()) {
             return;
         }
+        this.dialogVersion++;
         this.backdrop.style.display = 'none';
         this.backdrop.style.zIndex = '';
         this.openIntro = null;
@@ -251,14 +254,29 @@ export default class ParamsModal {
             row.appendChild(help);
         }
 
-        const current = valueOf(key);
-        const control = renderControl(def, current, raw => {
-            if (this.draft?.keys.has(key)) this.draft.values.set(key, raw);
-            else SettingsStore.save(this.scriptName, key, raw);
+        const changed = () => {
             this.onChanged(key);
-            if (deps.has(key)) {
-                this.render();
-            }
+            if (deps.has(key)) this.render();
+        };
+        const draft = this.draft;
+        if (draft?.keys.has(key)) {
+            const version = this.dialogVersion;
+            const control = renderControl(def, valueOf(key), raw => {
+                if (version !== this.dialogVersion) return;
+                draft.values.set(key, raw);
+                changed();
+            }, { disabled }, valueOf);
+            control.classList.add('rs2b0t-param-control');
+            row.appendChild(control);
+            return row;
+        }
+
+        const current = SettingsStore.displayString(this.scriptName, key, def);
+        const dialogVersion = this.dialogVersion;
+        const control = renderControl(def, current, raw => {
+            if (dialogVersion !== this.dialogVersion) return;
+            SettingsStore.save(this.scriptName, key, raw);
+            changed();
         }, { disabled, registerRefresh: refresh => this.refreshers.push(refresh) }, valueOf);
         control.classList.add('rs2b0t-param-control');
 
