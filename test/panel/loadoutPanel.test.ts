@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from 'bun:test';
+import { beforeEach, describe, expect, jest, spyOn, test } from 'bun:test';
 import { LoadoutPanel } from '#/bot/panel/LoadoutPanel.js';
 import { Loadouts } from '#/bot/api/loadout/loadoutStore.js';
 
@@ -15,6 +15,37 @@ function openPanel(): LoadoutPanel {
 }
 
 describe('LoadoutPanel', () => {
+    test('render replaces a pending icon retry and reopen uses the remaining attempts', () => {
+        Loadouts.save([{ name: 'melee', worn: { righthand: 'Rune scimitar' }, carry: [] }]);
+        const panel = new LoadoutPanel();
+        const fill = spyOn(panel, 'fillIcons');
+        const clock = jest as typeof jest & { advanceTimersByTime(ms: number): void };
+        clock.useFakeTimers();
+        try {
+            panel.open();
+            expect(fill).toHaveBeenCalledTimes(1);
+            clock.advanceTimersByTime(250);
+            panel.open();
+            expect(fill).toHaveBeenCalledTimes(2);
+            clock.advanceTimersByTime(499);
+            expect(fill).toHaveBeenCalledTimes(2);
+            clock.advanceTimersByTime(1);
+            expect(fill).toHaveBeenCalledTimes(3);
+
+            panel.close();
+            clock.advanceTimersByTime(500);
+            expect(fill).toHaveBeenCalledTimes(3);
+            fill.mockClear();
+            panel.open();
+            expect(fill).toHaveBeenCalledTimes(1);
+            clock.advanceTimersByTime(6_000);
+            expect(fill).toHaveBeenCalledTimes(12);
+        } finally {
+            panel.close();
+            clock.useRealTimers();
+        }
+    });
+
     test('renders one cell per equipment slot', () => {
         const panel = openPanel();
         expect(panel.root.querySelectorAll('[data-slot]').length).toBe(11);
