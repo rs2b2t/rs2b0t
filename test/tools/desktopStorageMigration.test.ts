@@ -148,6 +148,27 @@ test.each([accounts, 'rs2b0t:multibox:profiles'])('recovery preserves newer save
     expect(store.getItem('rs2b0t:multibox:profiles')).toBeNull();
 });
 
+test.each<[string, boolean, boolean]>([
+    ['ordinary launch', false, true],
+    ['explicit recovery', true, true],
+    ['explicit recovery without Chromium storage', true, false]
+])('%s with empty shared profiles and populated shared accounts', async (_, recover, hasLegacy) => {
+    const older = [{ username: 'older', password: 'fixture' }];
+    const { launch, storeDir, store } = fixture(hasLegacy ? { [custom]: { [accounts]: JSON.stringify(older) } } : undefined);
+    const data = { [vault]: '[]', [accounts]: JSON.stringify(profiles) };
+    writeFileSync(join(storeDir, 'storage.json'), JSON.stringify({ initialized: true, data }));
+
+    await launch(custom, recover);
+    const expected = recover ? profiles.map(profile => ({ ...profile, tab: 'Main' })) : [];
+    const current = new ProfileVault(store);
+    await current.setup('fixture');
+    expect(current.list()).toEqual(expected);
+    await launch(custom);
+    const reopened = new ProfileVault(store);
+    expect(await reopened.unlock('fixture')).toBe(true);
+    expect(reopened.list()).toEqual(expected);
+});
+
 test('explicit recovery leaves an existing vault intact', async () => {
     const current = JSON.stringify({ v: 1, iter: 310000, salt: 'fixture', iv: 'fixture', ct: 'current' });
     const { launch, storeDir, store } = fixture({ [custom]: { [vault]: 'older', [accounts]: JSON.stringify(profiles) } });

@@ -4,7 +4,8 @@ const { randomUUID } = require('node:crypto');
 const { lockSync } = require('proper-lockfile');
 
 const vaultKey = 'rs2b0t:multibox:profiles';
-const profileKeys = [vaultKey, 'rs2b0t:multibox:accounts'];
+const accountsKey = 'rs2b0t:multibox:accounts';
+const profileKeys = [vaultKey, accountsKey];
 
 function isEmptyRoster(value) {
     return typeof value === 'string' && /^[ \t\r\n]*\[[ \t\r\n]*\][ \t\r\n]*$/.test(value);
@@ -29,6 +30,11 @@ function hasSavedProfiles(key, raw) {
 }
 
 function migrateProfiles(data, sources, { firstMigration, recover }) {
+    if (recover && !firstMigration && isEmptyRoster(data[vaultKey]) && hasSavedProfiles(accountsKey, data[accountsKey])) {
+        data[vaultKey] = data[accountsKey];
+        delete data[accountsKey];
+        return;
+    }
     if (profileKeys.some(key => key in data && (firstMigration || !isEmptyRoster(data[key])))) return;
     let selected = [];
     for (const source of sources) {
