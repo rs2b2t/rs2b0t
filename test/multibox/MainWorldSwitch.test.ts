@@ -16,6 +16,8 @@ interface Wall {
     controller: MultiBoxController;
     add(account: Account): SlotSnapshot;
     addTab(name: string): boolean;
+    renameTab(from: string, to: string): boolean;
+    setSlotTab(id: number, tab: string): boolean;
     importProfiles(profiles: Profile[]): Promise<number>;
     slots(): SlotSnapshot[];
     setWorld(id: number, world: WorldNumber): Promise<boolean>;
@@ -262,6 +264,54 @@ test('a stale chooser re-saves and loads a profile in its remotely created group
         expect(await reopened.unlock('test-passphrase')).toBe(true);
         expect(reopened.list().find(p => p.username === 'fleet1')).toEqual({ username: 'fleet1', password: 'updated', world: 2, tab: 'Fleet' });
         expect(wall.slots()[0].tab).toBe('Fleet');
+    });
+});
+
+test('a stale wall renames only the current members of a group', async () => {
+    await withWall('local', async wall => {
+        await vault.assignGroup(['alice', 'bob'], 'Original');
+        document.getElementById('mbx-add')!.click();
+        await waitFor(() => !!chooserRow('alice'));
+        await loadChooserRow('alice');
+
+        const other = new ProfileVault();
+        expect(await other.unlock('test-passphrase')).toBe(true);
+        await other.assignGroup(['alice', 'bob'], 'Remote');
+        await other.upsert({ username: 'carol', password: 'fixture' });
+        await other.assignGroup(['carol'], 'Original');
+
+        const key = 'rs2b0t:multibox:profiles';
+        const before = localStorage.getItem(key);
+        expect(wall.renameTab('Original', 'Renamed')).toBe(true);
+        await waitFor(() => localStorage.getItem(key) !== before);
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('test-passphrase')).toBe(true);
+        expect(reopened.list().map(p => [p.username, p.tab])).toEqual([
+            ['alice', 'Remote'], ['bob', 'Remote'], ['carol', 'Renamed']
+        ]);
+        expect(reopened.tabState().tabs.sort()).toEqual(['Remote', 'Renamed']);
+    });
+});
+
+test('a chooser re-save can move a profile back to its original group', async () => {
+    await withWall('local', async wall => {
+        await vault.assignGroup(['alice'], 'Original');
+        document.getElementById('mbx-add')!.click();
+        await waitFor(() => !!chooserRow('alice'));
+        const other = new ProfileVault();
+        expect(await other.unlock('test-passphrase')).toBe(true);
+        await other.assignGroup(['alice'], 'Remote');
+        submitChooserProfile('alice', 'updated');
+        await waitFor(() => vault.tabState().activeTab === 'Remote');
+        expect(wall.slots()[0].tab).toBe('Remote');
+
+        const key = 'rs2b0t:multibox:profiles';
+        const before = localStorage.getItem(key);
+        expect(wall.setSlotTab(wall.slots()[0].id, 'Original')).toBe(true);
+        await waitFor(() => localStorage.getItem(key) !== before);
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('test-passphrase')).toBe(true);
+        expect(reopened.list()[0]).toEqual({ username: 'alice', password: 'updated', world: 1, tab: 'Original' });
     });
 });
 
