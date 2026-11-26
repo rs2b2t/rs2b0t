@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, spyOn, test } from 'bun:test';
 
 import ClientStream from '#/client/io/ClientStream.js';
 
@@ -57,15 +57,23 @@ describe('ClientStream server liveness', () => {
     });
 
     test('later sends keep pushing the silence window forward', () => {
-        const socket = fakeSocket();
-        const stream = new ClientStream(socket as unknown as WebSocket);
+        const clock = spyOn(performance, 'now').mockReturnValue(100);
+        try {
+            const socket = fakeSocket();
+            const stream = new ClientStream(socket as unknown as WebSocket);
 
-        deliver(socket, [1]);
-        const first = stream.msSinceData;
-        deliver(socket, [2]);
-        const second = stream.msSinceData;
+            clock.mockReturnValue(110);
+            deliver(socket, [1]);
+            clock.mockReturnValue(135);
+            expect(stream.msSinceData).toBe(25);
 
-        expect(second).toBeLessThanOrEqual(first);
-        expect(stream.available).toBe(2);
+            deliver(socket, [2]);
+            expect(stream.msSinceData).toBe(0);
+            clock.mockReturnValue(145);
+            expect(stream.msSinceData).toBe(10);
+            expect(stream.available).toBe(2);
+        } finally {
+            clock.mockRestore();
+        }
     });
 });

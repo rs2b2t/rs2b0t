@@ -22,11 +22,15 @@ export async function navPackForWorker(packUrl: URL): Promise<{ pack: ArrayBuffe
 }
 
 function sharedPack(packUrl: URL): Promise<SharedArrayBuffer | null> {
-    if (!host) {
+    const owner = host;
+    if (!owner) {
         console.warn('[rs2b0t] nav pack NOT shared: no page registered, so every bot holds its own 12 MB copy. The entrypoint must call setNavPackHost.');
         return Promise.resolve(null);
     }
-    return (host[HOST_KEY] ??= decompressShared(packUrl));
+    return (owner[HOST_KEY] ??= decompressShared(packUrl).catch(err => {
+        delete owner[HOST_KEY];
+        throw err;
+    }));
 }
 
 async function decompressShared(packUrl: URL): Promise<SharedArrayBuffer | null> {
