@@ -1,5 +1,6 @@
 import { reader } from '../../adapter/ClientAdapter.js';
 import { Bank } from '../../api/bank/Bank.js';
+import { openBankAccess } from '../../api/bank/Banking.js';
 import { BANK_LOCATIONS, nearestBank, type BankLocation } from '../../api/bank/BankLocations.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
@@ -167,9 +168,7 @@ export default class JiveMarketDumper extends TaskBot {
         }
         this.setStatus('opening the bank');
         const log = (m: string) => this.log(`  ${m}`);
-        const opened = this.bank?.npcAccess
-            ? await Bank.openNpcAccess(this.bank.npcAccess, log)
-            : await Bank.openNearestAccess(this.bank?.access ?? BOOTH, log);
+        const opened = await openBankAccess(this.bank, BOOTH, log);
         if (opened) {
             return true;
         }
