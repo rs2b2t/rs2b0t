@@ -8,6 +8,7 @@ import { Traversal } from '../../../walking/Traversal.js';
 import { Inventory } from '../../../inventory/Inventory.js';
 import { Quests } from '../../../ui/questlog/Quests.js';
 import { questRecord } from '../data/quests.js';
+import { ARDRIGAL, SNAKE_WEED, type JungleHerb } from '../data/jungleHerbs.js';
 import type { QuestModule, QuestProgress, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { talkStrict } from '../exec/primitives.js';
 import { heldId, promptLoc, settleScene } from '../exec/prompts.js';
@@ -21,32 +22,24 @@ export const TRUFITUS = new Tile(2809, 3086, 0);
 const ARDOUGNE_BANK = new Tile(2616, 3332, 0);
 
 /** Trufitus wants each herb picked fresh and cleaned, so both ids matter. */
-interface JungleHerb {
+interface JunglePotionHerb extends JungleHerb {
     key: string;
-    /** Display name after Identify, what Trufitus accepts. */
-    name: string;
-    id: number;
-    /** Every unid renders as "Unidentified herb", so pick these out by id. */
-    unidId: number;
-    loc: string;
     op: string;
     at: Tile;
-    /** Walkable tile the loc can be clicked from. */
-    stand: Tile;
     underground?: boolean;
 }
 
-export const JUNGLE_HERBS: readonly JungleHerb[] = [
+export const JUNGLE_HERBS: readonly JunglePotionHerb[] = [
     {
-        key: 'snake weed', name: 'Snake weed', id: 1526, unidId: 1525,
-        loc: 'Marshy jungle vine', op: 'Search',
-        at: new Tile(2760, 3014, 0), stand: new Tile(2761, 3015, 0)
+        key: 'snake weed', name: SNAKE_WEED.name, id: SNAKE_WEED.id, unidId: SNAKE_WEED.unidId,
+        loc: SNAKE_WEED.loc, op: 'Search',
+        at: new Tile(2760, 3014, 0), stand: Tile.from(SNAKE_WEED.stand)
     },
     {
-        key: 'ardrigal', name: 'Ardrigal', id: 1528, unidId: 1527,
-        loc: 'Palm tree', op: 'Search',
+        key: 'ardrigal', name: ARDRIGAL.name, id: ARDRIGAL.id, unidId: ARDRIGAL.unidId,
+        loc: ARDRIGAL.loc, op: 'Search',
         // The palm is 2x2 over (2870-2871, 3115-3116); only its west side is open.
-        at: new Tile(2870, 3115, 0), stand: new Tile(2869, 3115, 0)
+        at: new Tile(2870, 3115, 0), stand: Tile.from(ARDRIGAL.stand)
     },
     {
         key: 'sito foil', name: 'Sito foil', id: 1530, unidId: 1529,
@@ -102,7 +95,7 @@ export const JP_STAGE = {
 } as const;
 
 /** Herb index by stage: both the `get_` and `found_` stage point at the same herb. */
-export function herbForStage(stage: number): JungleHerb | null {
+export function herbForStage(stage: number): JunglePotionHerb | null {
     if (stage < JP_STAGE.GET_SNAKE_WEED || stage > JP_STAGE.FOUND_ROGUES_PURSE) {
         return null;
     }
@@ -194,7 +187,7 @@ async function leavePothole(log: (m: string) => void): Promise<boolean> {
     return ok;
 }
 
-function pickHerb(herb: JungleHerb): (log: (m: string) => void) => Promise<boolean> {
+function pickHerb(herb: JunglePotionHerb): (log: (m: string) => void) => Promise<boolean> {
     return async log => {
         // Only the unid proves a fresh pick; a clean herb from an earlier run doesn't advance the stage and Trufitus refuses it.
         if (heldId(herb.unidId) > 0) {
@@ -218,7 +211,7 @@ function pickHerb(herb: JungleHerb): (log: (m: string) => void) => Promise<boole
     };
 }
 
-function identifyHerb(herb: JungleHerb): (log: (m: string) => void) => Promise<boolean> {
+function identifyHerb(herb: JunglePotionHerb): (log: (m: string) => void) => Promise<boolean> {
     return async log => {
         if (heldId(herb.id) > 0) {
             return true;

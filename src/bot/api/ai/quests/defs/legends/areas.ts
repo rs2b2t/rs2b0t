@@ -1,4 +1,5 @@
 import Tile from '../../../../../geometry/Tile.js';
+import { ARDRIGAL, SNAKE_WEED } from '../../data/jungleHerbs.js';
 import type { QuestSnapshot } from '../../engine/types.js';
 
 export const LEGENDS_QUEST = 'Legends Quest';
@@ -105,10 +106,10 @@ export const LQ_ID = {
     STEEL_PICKAXE: 1269,
     IRON_PICKAXE: 1267,
 
-    SNAKE_WEED: 1526,
-    ARDRIGAL: 1528,
-    UNID_SNAKE_WEED: 1525,
-    UNID_ARDRIGAL: 1527,
+    SNAKE_WEED: SNAKE_WEED.id,
+    ARDRIGAL: ARDRIGAL.id,
+    UNID_SNAKE_WEED: SNAKE_WEED.unidId,
+    UNID_ARDRIGAL: ARDRIGAL.unidId,
     VIAL: 229,
     VIAL_WATER: 227,
 
@@ -186,8 +187,8 @@ export const LQ_ITEM = {
     GOLD_BAR: 'Gold bar',
     CHISEL: 'Chisel',
 
-    SNAKE_WEED: 'Snake weed',
-    ARDRIGAL: 'Ardrigal',
+    SNAKE_WEED: SNAKE_WEED.name,
+    ARDRIGAL: ARDRIGAL.name,
     VIAL: 'Vial',
     VIAL_WATER: 'Vial of water',
 
@@ -429,8 +430,8 @@ export const LQ_TILE = {
     /** Tai Bwo Wannai's anvil, the golden bowl is a gold bar used on one. */
     ANVIL: new Tile(2790, 3102, 0),
 
-    SNAKE_WEED: new Tile(2761, 3015, 0),
-    ARDRIGAL: new Tile(2869, 3115, 0)
+    SNAKE_WEED: SNAKE_WEED.stand,
+    ARDRIGAL: ARDRIGAL.stand
 } as const;
 
 /** The 7 carved rocks, in the order the gems are named on them. */
