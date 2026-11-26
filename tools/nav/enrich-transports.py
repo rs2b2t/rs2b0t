@@ -36,6 +36,7 @@ class Placement:
 
 SECTION_RE = re.compile(r"^\[([^\]]+)]\s*$")
 MAP_FILE_RE = re.compile(r"^m(\d+)_(\d+)\.jm2$")
+LEVEL_ONE_FLAGS_RE = re.compile(r"^1\s+(\d+)\s+(\d+):.*\bf(\d+)\b")
 LOC_LINE_RE = re.compile(
     r"^(\d+)\s+(\d+)\s+(\d+):\s+(\d+)\s+(\d+)(?:\s+(\d+))?\s*$"
 )
@@ -102,24 +103,34 @@ def load_placements(content: Path) -> tuple[list[Placement], dict[tuple[int, int
         if not match:
             continue
         mx, mz = map(int, match.groups())
-        in_locs = False
+        bridged_tiles: set[tuple[int, int]] = set()
+        loc_lines: list[str] = []
+        section = ""
         for raw in path.read_text(encoding="utf-8").splitlines():
-            if raw == "==== LOC ====":
-                in_locs = True
-                continue
-            if in_locs and raw.startswith("==== "):
-                break
-            if not in_locs:
-                continue
+            if raw.startswith("==== "):
+                section = raw
+            elif section == "==== MAP ====":
+                flags = LEVEL_ONE_FLAGS_RE.match(raw)
+                if flags:
+                    x, z, value = map(int, flags.groups())
+                    if value & 2:
+                        bridged_tiles.add((x, z))
+            elif section == "==== LOC ====":
+                loc_lines.append(raw)
+        for raw in loc_lines:
             loc = LOC_LINE_RE.match(raw)
             if not loc:
                 continue
-            level, local_x, local_z, loc_id, shape, angle = loc.groups()
+            raw_level, local_x, local_z, loc_id, shape, angle = loc.groups()
+            x, z = int(local_x), int(local_z)
+            level = int(raw_level) - 1 if (x, z) in bridged_tiles else int(raw_level)
+            if level < 0:
+                continue
             placement = Placement(
                 loc_id=int(loc_id),
-                x=mx * 64 + int(local_x),
-                z=mz * 64 + int(local_z),
-                level=int(level),
+                x=mx * 64 + x,
+                z=mz * 64 + z,
+                level=level,
                 shape=int(shape),
                 angle=int(angle or 0),
             )
@@ -141,8 +152,6 @@ def candidates_near(
     point: dict[str, int],
     radius: int = 4,
 ) -> Iterable[tuple[int, Placement]]:
-    # Map bridge flags can move a location down more than one effective level
-    # in stacked/instanced map areas, so inspect every raw map level.
     levels = range(4)
     for level in levels:
         for dx in range(-radius, radius + 1):

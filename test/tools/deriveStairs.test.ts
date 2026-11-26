@@ -180,6 +180,25 @@ test('alternative handlers on the same scripted tile bind the placed staircase',
     runEnricher(['--check']);
 });
 
+test('a level-one staircase binds to a ground-floor script only on a bridged tile', () => {
+    placeStairs('1 5 9: 1 10\n');
+    const from = { x: 3205, z: 3209, level: 0 };
+    const edge = { from, to: { ...from, level: 1 }, locName: 'Stairs', action: 'Climb-up', kind: 'stair' };
+    const loc = { ...from, debugName: 'stairs', action: edge.action };
+    writeFileSync(out, JSON.stringify([{ ...edge, scriptedLocs: [loc] }]));
+    const map = join(root, 'content/maps/m50_50.jm2');
+    const placements = readFileSync(map, 'utf8');
+    writeFileSync(map, '==== MAP ====\n1 5 9: f1\n1 6 9: f2\n' + placements);
+    expect(runEnricher([], 1).stderr.toString()).toContain('Missing scripted placement for stairs (Climb-up) at (3205, 3209, 0)');
+
+    writeFileSync(map, '==== MAP ====\n1 5 9: h1 f3\n' + placements);
+    runEnricher();
+    expect(JSON.parse(readFileSync(out, 'utf8'))).toEqual([
+        { ...edge, locX: 3205, locZ: 3209, locId: 1, debugName: 'stairs', options: ['Climb-up'] }
+    ]);
+    runEnricher(['--check']);
+});
+
 test('a scripted open trapdoor binds to its exact closed placement and passes --check', () => {
     placeStairs('0 5 9: 1 10\n0 6 9: 2 10\n', '1=trapdoor\n2=trapdoor_open\n',
         '[trapdoor]\nname=Trapdoor\nop1=Open\n[trapdoor_open]\nname=Trapdoor\nop1=Climb-down\n');
