@@ -2,6 +2,7 @@ import type { WorldTile } from '../adapter/ClientAdapter.js';
 import type { BankLocation } from '../api/bank/BankLocations.js';
 import Tile from '../geometry/Tile.js';
 import { COOKING_SURFACE_LOCS } from './cookSurfaceLocs.js';
+import { findCookSurface } from './cookSurfaceSearch.js';
 import type { CookSurfaceKind, CookSurfaceLoc } from './cookSurfaceTypes.js';
 import { cookSurfaceForFishCamp, rangeStandFromLoc } from './cookingRanges.js';
 
@@ -46,35 +47,10 @@ export interface CookLocation {
     verified: boolean;
 }
 
-function cheb(a: WorldTile, b: WorldTile): number {
-    return Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
-}
-
-/** Closest cookable loc to `origin`, ovens first so the lower burn rate wins ties. */
+/** Prefer an oven within the radius, then the closest loc of the same kind. */
 export function nearestCookSurface(origin: WorldTile, maxCheb = MAX_SURFACE_CHEB): CookSurfaceLoc | null {
-    let best: { surface: CookSurfaceLoc; d: number } | null = null;
-    for (const surface of COOKING_SURFACE_LOCS) {
-        if (surface.level !== origin.level) {
-            continue;
-        }
-        const d = cheb(origin, surface);
-        if (d > maxCheb) {
-            continue;
-        }
-        if (!best || betterSurface(surface, d, best)) {
-            best = { surface, d };
-        }
-    }
-    return best?.surface ?? null;
-}
-
-function betterSurface(surface: CookSurfaceLoc, d: number, cur: { surface: CookSurfaceLoc; d: number }): boolean {
-    const oven = surface.kind === 'oven';
-    const curOven = cur.surface.kind === 'oven';
-    if (oven !== curOven) {
-        return oven;
-    }
-    return d < cur.d;
+    const best = findCookSurface(COOKING_SURFACE_LOCS, origin, maxCheb, surface => surface.kind === 'oven' ? 0 : 1);
+    return best?.entry ?? null;
 }
 
 function derivePlan(surface: CookSurfaceLoc): CookSurfacePlan {
