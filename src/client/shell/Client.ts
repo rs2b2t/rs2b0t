@@ -77,6 +77,8 @@ import WordPack from '#/client/wordfilter/WordPack.js';
 
 import JagFX from '#/client/sound/JagFX.js';
 
+import { buildExperienceThresholds } from '#/shared/experience.js';
+
 const MAX_PLAYER_COUNT = 2048;
 const LOCAL_PLAYER_INDEX = 2047;
 
@@ -133,21 +135,13 @@ export class Client extends GameShell {
     static CHARSET: string = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!\"£$%^&*()-_=+[{]};:'@#~,<.>/?\\| ";
 
     static readbit = new Int32Array(32);
-    static levelExperience: number[] = [];
+    static levelExperience: number[] = buildExperienceThresholds();
 
     static {
         let n = 2;
         for (let bit = 0; bit < 32; bit++) {
             Client.readbit[bit] = n - 1;
             n += n;
-        }
-
-        let acc: number = 0;
-        for (let i: number = 0; i < 99; i++) {
-            const level: number = i + 1;
-            const delta: number = (level + Math.pow(2.0, level / 7.0) * 300.0) | 0;
-            acc += delta;
-            Client.levelExperience[i] = (acc / 4) | 0;
         }
     }
 
