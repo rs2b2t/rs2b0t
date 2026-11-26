@@ -1326,7 +1326,6 @@ export class Client extends GameShell {
         this.onDemand = null;
 
         this.unloadTitle();
-        this.drawArea = null;
     }
 
     async onDemandLoop() {
@@ -1601,7 +1600,6 @@ export class Client extends GameShell {
             return;
         }
 
-        this.drawArea = null;
         this.areaChat = null;
         this.areaMap = null;
         this.areaSide = null;
@@ -2197,7 +2195,6 @@ export class Client extends GameShell {
 
         this.unloadTitle();
 
-        this.drawArea = null;
         this.imageTitle2 = null;
         this.imageTitle3 = null;
         this.imageTitle4 = null;
