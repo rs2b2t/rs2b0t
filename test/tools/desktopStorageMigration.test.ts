@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from 'bun:test';
+import { afterEach, expect, spyOn, test } from 'bun:test';
 import { createCipheriv, pbkdf2Sync, randomBytes } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, type CopySyncOptions } from 'node:fs';
@@ -358,7 +358,7 @@ test('an unreadable 8081 opens the configured roster and retries missing setting
     const edited = 'rs2b0t:set:Miner:ore';
     const removed = 'rs2b0t:set:Fisher:method';
     let unreadable = true;
-    const { launch, store, rendererStorage } = fixture({
+    const { launch, store, storeDir, rendererStorage } = fixture({
         [custom]: { [accounts]: JSON.stringify(profiles), [removed]: 'Fly fishing' },
         [original]: { [accounts]: JSON.stringify(profiles), [script]: 'Fisher', [edited]: 'Tin', [removed]: 'Bait' }
     }, origin => {
@@ -367,7 +367,20 @@ test('an unreadable 8081 opens the configured roster and retries missing setting
     expect(await launch(custom)).toEqual(profiles);
     store.setItem(edited, 'Gold');
     store.removeItem(removed);
-    expect(await launch(custom)).toEqual(profiles);
+    const fs: typeof import('node:fs') = require('node:fs');
+    const write = fs.writeFileSync;
+    const inStore = (file: Parameters<typeof write>[0]) => typeof file === 'string' && dirname(file) === storeDir;
+    const writes = spyOn(fs, 'writeFileSync').mockImplementation((file, ...args) => {
+        if (inStore(file)) throw Object.assign(new Error('Fixture disk full'), { code: 'ENOSPC' });
+        write(file, ...args);
+    });
+    try {
+        expect(await launch(custom)).toEqual(profiles);
+        expect(writes.mock.calls.some(([file]) => inStore(file))).toBe(false);
+        expect(rendererStorage()).toEqual({});
+    } finally {
+        writes.mockRestore();
+    }
     store.removeItem(accounts);
     unreadable = false;
     expect(await launch(custom)).toEqual([]);

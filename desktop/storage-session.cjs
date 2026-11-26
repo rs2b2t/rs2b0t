@@ -16,9 +16,9 @@ function prepareStorage(app, serverUrl) {
     const recover = process.env.B0T_RECOVER_LEGACY_PROFILES === '1';
     const hasLegacy = fs.existsSync(legacy);
     const { initialized, retrySettings } = hasLegacy ? store.migrationStatus() : {};
+    const settingsOnly = initialized && !recover;
     let copied = false;
     if (hasLegacy && (recover || !initialized || retrySettings)) {
-        const settingsOnly = initialized && !recover;
         const destination = join(runtime, 'Local Storage');
         const fingerprint = () => {
             const hash = createHash('sha256');
@@ -80,11 +80,11 @@ function prepareStorage(app, serverUrl) {
                     readError = error;
                     return null;
                 }
-                const readConfigured = (!initialized || recover) && origin !== legacyOrigin && /^https?:\/\//.test(origin);
+                const readConfigured = !settingsOnly && origin !== legacyOrigin && /^https?:\/\//.test(origin);
                 const values = readConfigured ? await readLegacy(origin).catch(failed) : {};
                 const needsFallback = !initialized || retrySettings || !savedProfileKey(values ?? {});
                 const fallback = needsFallback ? await readLegacy(legacyOrigin).catch(failed) : undefined;
-                const firstMigration = store.seed(values ?? {}, { fallback, recover, readError });
+                const firstMigration = (!settingsOnly || fallback !== null) && store.seed(values ?? {}, { fallback, recover, readError });
                 if ((recover || retrySettings) && !firstMigration) {
                     // Why: the panel also imports settings from the temporary Chromium copy.
                     await session.defaultSession.clearStorageData({ storages: ['localstorage'] });
