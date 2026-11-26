@@ -10,6 +10,7 @@ import { Skills } from '../../api/skills/Skills.js';
 import { Paint } from '../../paint/Paint.js';
 import { ContinueDialog } from '../../api/tasks/ContinueDialog.js';
 import { Locs } from '../../api/locs/Locs.js';
+import { climbLadder } from '../../api/locs/climbLadder.js';
 import { walkOpening } from '../../event/webwalk/walkOpening.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
@@ -35,20 +36,6 @@ export const SETTINGS: SettingsSchema = {
     obstacle: { type: 'string', default: 'door', label: 'Openable obstacles (contains)', help: 'the house door on the bank route' },
     leashRadius: { type: 'number', default: 8, min: 2, max: 20, label: 'Wheel/ladder search radius (tiles)' }
 };
-
-async function climbLadder(name: string, op: string, log: (m: string) => void): Promise<boolean> {
-    const ladder = Locs.query().name(name).action(op).nearest();
-    if (!ladder) {
-        log(`no '${name}' offering '${op}' nearby`);
-        return false;
-    }
-    const before = Game.tile()?.level;
-    await ladder.interact(op);
-    return Execution.delayUntil(() => {
-        const t = Game.tile();
-        return t !== null && t.level !== before;
-    }, 8000);
-}
 
 export default class FlaxSpinner extends TaskBot {
     override loopDelay = 600;
