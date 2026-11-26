@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import type Pix3D from '#/client/dash3d/Pix3D.js';
-import Pix2D from '#/client/graphics/Pix2D.js';
 import Pix8 from '#/client/graphics/Pix8.js';
+import { withPixelViewport } from './pixelViewport.fixture.js';
 
 let moduleId = 0;
 async function loadRenderer(lowMem: boolean): Promise<typeof Pix3D> {
@@ -78,11 +78,7 @@ for (const lowMem of [true, false]) {
         expect(buffers(renderer).size).toBe(0);
         const palette = setTexture(renderer, 0, 0xf80000);
         setTexture(renderer, 1, 0x0000ff);
-        const previous2D = { ...Pix2D };
-        const pixels = new Int32Array(16);
-        try {
-            Pix2D.setPixels(pixels, 4, 4);
-            renderer.setRenderClipping();
+        withPixelViewport(renderer, 4, 4, pixels => {
             draw(renderer, 0);
             expect(pixels[0]).toBe(0xf80000);
             expect(buffers(renderer).size).toBe(1);
@@ -100,9 +96,7 @@ for (const lowMem of [true, false]) {
             expect(pixels[0]).toBe(0x0000ff);
             expect(buffers(renderer).size).toBe(2);
             for (const id of [0, 1]) expect(original.has(renderer.activeTexels[id]!.buffer)).toBe(true);
-        } finally {
-            Object.assign(Pix2D, previous2D);
-        }
+        });
     });
 
     test(`the 21st texture reuses the oldest of 20 buffers (lowMem=${lowMem})`, async () => {
@@ -133,11 +127,7 @@ for (const lowMem of [true, false]) {
             renderer.initPool(20);
             const palette = setTexture(renderer, 17, 0xf80000);
 
-            const previous2D = { ...Pix2D };
-            const pixels = new Int32Array(16);
-            try {
-                Pix2D.setPixels(pixels, 4, 4);
-                renderer.setRenderClipping();
+            withPixelViewport(renderer, 4, 4, pixels => {
                 draw(renderer, 17);
                 expect(pixels[0]).toBe(0xf80000);
 
@@ -154,9 +144,7 @@ for (const lowMem of [true, false]) {
                 expect(pixels[0]).toBe(0xffffff);
                 draw(renderer, 0);
                 expect(pixels[0]).toBe(rebuild ? 0 : 0xf80000);
-            } finally {
-                Object.assign(Pix2D, previous2D);
-            }
+            });
         });
     }
 
