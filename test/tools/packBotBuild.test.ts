@@ -11,15 +11,14 @@ const artifacts = [...['botclient', 'ondemandworker', 'navworker', 'multibox'].f
 const repo = join(import.meta.dir, '../..');
 
 function setupPackager(root: string) {
-    for (const dir of ['tools', 'public-bot', 'out', 'engine/public']) {
+    for (const dir of ['tools/map', 'public-bot', 'out', 'engine/public']) {
         mkdirSync(join(root, dir), { recursive: true });
     }
     for (const file of ['tools/pack-rs2b0t.sh', 'public-bot/bot.html', 'public-bot/multibox.html']) {
         copyFileSync(join(repo, file), join(root, file));
     }
-    for (const file of ['collision.lcnav.gz', 'worldmap-basemap.manifest.json']) {
-        writeFileSync(join(root, 'out', file), '');
-    }
+    writeFileSync(join(root, 'out/collision.lcnav.gz'), '');
+    writeFileSync(join(root, 'tools/map/build-basemap.ts'), '');
 }
 
 function pack(root: string, outDir?: string) {
@@ -50,6 +49,7 @@ for (const outDir of [undefined, 'alt']) {
                 join(root, 'tools/bun'),
                 `#!/bin/sh
 set -e
+[ "$1" = tools/map/build-basemap.ts ] && exit 0
 [ "$*" = "run build:bot" ] || { echo "unexpected bun command: $*" >&2; exit 1; }
 dir=\${B0T_OUT_DIR:-out}
 mkdir -p "$dir"

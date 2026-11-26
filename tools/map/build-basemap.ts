@@ -2,12 +2,10 @@
  * Input order: --jag, $ENGINE/data/pack/mapview, out/, then a 2004scape download. */
 
 // Usage:
-//   bun tools/map/build-basemap.ts [--engine DIR] [--jag PATH] [--out DIR] [--revision TAG]
+//   bun tools/map/build-basemap.ts [--engine DIR] [--jag PATH] [--out DIR] [--revision TAG] [--if-needed]
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-
-import { GlobalRegistrator } from '@happy-dom/global-registrator';
 
 import {
     BASEMAP_MANIFEST_NAME,
@@ -26,6 +24,7 @@ type BakeArgs = {
     outDir: string;
     revision: string;
     fetchUrl: string;
+    ifNeeded: boolean;
 };
 
 function parseArgs(): BakeArgs {
@@ -35,6 +34,7 @@ function parseArgs(): BakeArgs {
     let outDir = 'out';
     let revision = '274';
     let fetchUrl = 'https://2004.lostcity.rs/worldmap.jag';
+    let ifNeeded = false;
     for (let i = 0; i < args.length; i++) {
         const a = args[i];
         if (a === '--engine') {
@@ -47,9 +47,11 @@ function parseArgs(): BakeArgs {
             revision = args[++i];
         } else if (a === '--fetch-url') {
             fetchUrl = args[++i];
+        } else if (a === '--if-needed') {
+            ifNeeded = true;
         } else if (a === '--help' || a === '-h') {
             console.log(
-                'usage: bun tools/map/build-basemap.ts [--engine DIR] [--jag PATH] [--out DIR] [--revision TAG]'
+                'usage: bun tools/map/build-basemap.ts [--engine DIR] [--jag PATH] [--out DIR] [--revision TAG] [--if-needed]'
             );
             process.exit(0);
         } else {
@@ -57,7 +59,21 @@ function parseArgs(): BakeArgs {
             process.exit(2);
         }
     }
-    return { engine, jag, outDir, revision, fetchUrl };
+    return { engine, jag, outDir, revision, fetchUrl, ifNeeded };
+}
+
+function hasCurrentBake(outDir: string): boolean {
+    try {
+        const manifest: BasemapManifest = JSON.parse(fs.readFileSync(path.join(outDir, BASEMAP_MANIFEST_NAME), 'utf8'));
+        return (
+            manifest.schema === BASEMAP_SCHEMA &&
+            [manifest.basemapUrl, manifest.keyOverlayUrl, manifest.labelsOverlayUrl].every(
+                url => typeof url === 'string' && fs.statSync(path.join(outDir, url)).isFile()
+            )
+        );
+    } catch {
+        return false;
+    }
 }
 
 async function resolveJag(opts: ReturnType<typeof parseArgs>): Promise<{ bytes: Uint8Array; source: string }> {
@@ -87,7 +103,8 @@ function fingerprint(jag: Uint8Array): string {
     return createHash('sha256').update(jag).update(SCHEMA_TAG).digest('hex').slice(0, 16);
 }
 
-function installCanvasMock(): void {
+async function installCanvasMock(): Promise<void> {
+    const { GlobalRegistrator } = await import('@happy-dom/global-registrator');
     GlobalRegistrator.register();
 
     const el = document.createElement('canvas');
@@ -192,7 +209,7 @@ type BakeResult = {
 };
 
 async function bake(jagBytes: Uint8Array): Promise<BakeResult> {
-    installCanvasMock();
+    await installCanvasMock();
 
     (globalThis as { __basemapJag?: Uint8Array }).__basemapJag = jagBytes;
 
@@ -326,6 +343,7 @@ async function bake(jagBytes: Uint8Array): Promise<BakeResult> {
 
 async function main(): Promise<void> {
     const opts = parseArgs();
+    if (opts.ifNeeded && hasCurrentBake(opts.outDir)) return;
     const started = performance.now();
 
     const { bytes, source } = await resolveJag(opts);

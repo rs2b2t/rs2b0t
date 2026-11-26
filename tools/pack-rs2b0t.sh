@@ -20,7 +20,7 @@ TARGET=prod PROD_RSAN="$PROD_RSAN" B0T_OUT_DIR=out bun run build:bot
 # the nav worker needs the baked collision pack; build it once if absent
 [ -f out/collision.lcnav.gz ] || bun tools/nav/build-collision.ts --engine "$ENGINE"
 # classic basemap for the map picker; copied below only when the bake produced one
-[ -f out/worldmap-basemap.manifest.json ] || bun tools/map/build-basemap.ts --engine "$ENGINE"
+bun tools/map/build-basemap.ts --if-needed --engine "$ENGINE"
 
 DEST="$ENGINE/public/rs2b0t"
 mkdir -p "$DEST/bot"

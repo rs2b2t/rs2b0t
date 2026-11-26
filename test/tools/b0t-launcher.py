@@ -46,6 +46,8 @@ if sys.argv[1:]==['run','build:bot']:
     out=pathlib.Path(os.environ.get('B0T_OUT_DIR',root/'out')); out.mkdir(parents=True,exist_ok=True)
     (out/'botclient.js').write_text((root/'source').read_text())
     sys.exit(0)
+if sys.argv[1:2]==['tools/map/build-basemap.ts']:
+    sys.exit(0)
 assert sys.argv[1:]==['tools/live-proxy.ts'],sys.argv
 port=int(os.environ['PORT']); listener=socket.socket()
 while True:

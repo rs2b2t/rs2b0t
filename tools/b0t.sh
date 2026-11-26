@@ -225,10 +225,7 @@ if [ ! -f "$RUN_DIR/out/collision.lcnav.gz" ]; then
     echo "→ collision pack missing — baking it from the engine map cache…"
     bun tools/nav/build-collision.ts --engine "${ENGINE_DIR:-$HOME/code/rs2b2t-engine}" --out "$RUN_DIR/out/collision.lcnav"
 fi
-if [ ! -f "$RUN_DIR/out/worldmap-basemap.manifest.json" ]; then
-    echo "→ worldmap basemap missing — baking from worldmap.jag…"
-    bun tools/map/build-basemap.ts --engine "${ENGINE_DIR:-$HOME/code/rs2b2t-engine}" --out "$RUN_DIR/out"
-fi
+bun tools/map/build-basemap.ts --if-needed --engine "${ENGINE_DIR:-$HOME/code/rs2b2t-engine}" --out "$RUN_DIR/out"
 echo "  instance build: $RUN_DIR"
 
 reap_proxy() {

@@ -18,18 +18,7 @@ if [ ! -f out/collision.lcnav.gz ]; then
     bun tools/nav/build-collision.ts --engine "$ENGINE"
 fi
 
-# classic worldmap basemap + Key overlays (schema >= 2: terrain + key/multi/free)
-need_basemap=0
-if [ ! -f out/worldmap-basemap.manifest.json ]; then
-    need_basemap=1
-elif ! grep -q '"schema": 2' out/worldmap-basemap.manifest.json 2>/dev/null; then
-    need_basemap=1
-elif ! ls out/worldmap-key.*.png >/dev/null 2>&1; then
-    need_basemap=1
-fi
-if [ "$need_basemap" = 1 ]; then
-    bun tools/map/build-basemap.ts --engine "$ENGINE"
-fi
+bun tools/map/build-basemap.ts --if-needed --engine "$ENGINE"
 
 cp out/client.js out/client.js.map out/ondemandworker.js out/ondemandworker.js.map \
    out/tinymidipcm.wasm "$ENGINE/public/client/"
