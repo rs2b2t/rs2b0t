@@ -5,7 +5,7 @@ import Pix8 from '#/client/graphics/Pix8.js';
 import PixFont from '#/client/graphics/PixFont.js';
 import JagFile from '#/client/io/JagFile.js';
 import Packet from '#/client/io/Packet.js';
-import { TypedArray1d, TypedArray2d } from '#/client/util/Arrays.js';
+import { TypedArray1d, TypedArray2d, Uint8Array2d } from '#/client/util/Arrays.js';
 import { downloadUrl, sleep } from '#/client/util/JsUtil.js';
 import { canvas, saveDataURL } from '#/client/graphics/Canvas.js';
 import PixMap from '#/client/graphics/PixMap.js';
@@ -49,14 +49,14 @@ export class MapView extends GameShell {
     floorcol1: number[] = [0];
     floorcol2: number[] = [0];
 
-    floort1: number[][] = [];
+    floort1: Uint8Array[] = [];
 
     floort2: number[][] = [];
-    floorsr: number[][] = [];
+    floorsr: Uint8Array[] = [];
 
-    locWall: number[][] = [];
-    locMapscene: number[][] = [];
-    locMapfunction: number[][] = [];
+    locWall: Uint8Array[] = [];
+    locMapscene: Uint8Array[] = [];
+    locMapfunction: Uint8Array[] = [];
 
     objPos: boolean[][] = [];
 
@@ -166,18 +166,18 @@ export class MapView extends GameShell {
         }
 
         const underlay: Packet = new Packet(worldmap.read('underlay.dat'));
-        this.floort1 = new TypedArray2d(this.mapWidth, this.mapHeight, 0);
+        this.floort1 = new Uint8Array2d(this.mapWidth, this.mapHeight);
         this.loadUnderlay(underlay);
 
         const overlay: Packet = new Packet(worldmap.read('overlay.dat'));
         this.floort2 = new TypedArray2d(this.mapWidth, this.mapHeight, 0);
-        this.floorsr = new TypedArray2d(this.mapWidth, this.mapHeight, 0);
+        this.floorsr = new Uint8Array2d(this.mapWidth, this.mapHeight);
         this.loadOverlay(overlay);
 
         const loc: Packet = new Packet(worldmap.read('loc.dat'));
-        this.locWall = new TypedArray2d(this.mapWidth, this.mapHeight, 0);
-        this.locMapscene = new TypedArray2d(this.mapWidth, this.mapHeight, 0);
-        this.locMapfunction = new TypedArray2d(this.mapWidth, this.mapHeight, 0);
+        this.locWall = new Uint8Array2d(this.mapWidth, this.mapHeight);
+        this.locMapscene = new Uint8Array2d(this.mapWidth, this.mapHeight);
+        this.locMapfunction = new Uint8Array2d(this.mapWidth, this.mapHeight);
         this.loadLoc(loc);
 
         try {
