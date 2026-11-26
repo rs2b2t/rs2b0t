@@ -787,10 +787,6 @@ export class Client extends GameShell {
             data = undefined;
         }
 
-        if (data) {
-            return new JagFile(data);
-        }
-
         let loops = 0;
         while (!data) {
             await this.drawProgress(`Requesting ${displayName}`, progress);
@@ -833,7 +829,7 @@ export class Client extends GameShell {
             }
         }
 
-        return new JagFile(data);
+        return new JagFile(data, this.searchParams.has('box') ? crc : undefined);
     }
 
     override async maininit() {

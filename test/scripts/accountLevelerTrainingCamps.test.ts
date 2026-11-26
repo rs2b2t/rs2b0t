@@ -1,6 +1,4 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { Glob } from 'bun';
 import { expect, test } from 'bun:test';
 import { gunzipSync } from 'fflate';
 import { COMBAT_CAMPS } from '#/bot/scripts/AccountLeveler/combat.js';
@@ -8,6 +6,7 @@ import { PathFinder } from '#/bot/event/webwalk/PathFinder.js';
 import { loadDefaultNavEdges } from '#/bot/event/webwalk/loadTransportGraph.js';
 import { emptyWorldStateData } from '#/bot/event/webwalk/worldStateData.js';
 import { resolveDangerZones } from '#/bot/event/webwalk/data/dangerZones.js';
+import { hasContentSource, sourceWorld } from '../lib/contentWorld.js';
 
 const additions = [
     { id: 'varrock-west-guards', npcIds: [9], maxThreat: 28 },
@@ -29,44 +28,8 @@ const additions = [
     { id: 'ardougne-moss-giants', npcIds: [112], maxThreat: 42 },
     { id: 'wilderness-hobgoblins', npcIds: [122], maxThreat: 28 },
 ];
-const content = resolve('../rs2b2t-content');
-const hasSource = existsSync(`${content}/pack/npc.pack`);
 const hasNav = existsSync('out/collision.lcnav.gz');
-type NpcConfig = Record<string, string>;
-interface Spawn { id: number; x: number; z: number; level: number }
-
-function sourceWorld() {
-    const configs = new Map<string, NpcConfig>();
-    for (const file of new Glob('scripts/**/*.npc').scanSync({ cwd: content })) {
-        for (const block of readFileSync(`${content}/${file}`, 'utf8').matchAll(/^\[([^\]]+)\]\n(.*?)(?=^\[|$(?![\s\S]))/gms)) {
-            const values = Object.fromEntries(block[2].split('\n').filter(line => line.includes('=')).map(line => {
-                const index = line.indexOf('=');
-                return [line.slice(0, index), line.slice(index + 1)];
-            }));
-            configs.set(block[1], { ...configs.get(block[1]), ...values, params: block[2].split('\n').filter(line => line.startsWith('param=')).join('\n') });
-        }
-    }
-    const npcs = new Map<number, NpcConfig>();
-    for (const line of readFileSync(`${content}/pack/npc.pack`, 'utf8').split('\n')) {
-        const [id, key] = line.split('=');
-        if (key) npcs.set(Number(id), { ...configs.get(key), key });
-    }
-    const spawns: Spawn[] = [];
-    for (const file of new Glob('maps/*.jm2').scanSync({ cwd: content })) {
-        const square = /m(\d+)_(\d+)\.jm2/.exec(file)!;
-        const section = readFileSync(`${content}/${file}`, 'utf8').split('==== NPC ====')[1]?.split('====')[0] ?? '';
-        for (const match of section.matchAll(/^(\d+) (\d+) (\d+): (\d+)$/gm)) {
-            spawns.push({ id: Number(match[4]), x: Number(square[1]) * 64 + Number(match[2]), z: Number(square[2]) * 64 + Number(match[3]), level: Number(match[1]) });
-        }
-    }
-    const attackOverrides = new Set<string>();
-    for (const file of new Glob('scripts/**/*.rs2').scanSync({ cwd: content })) {
-        for (const match of readFileSync(`${content}/${file}`, 'utf8').matchAll(/\[(?:opnpc2|apnpc2),([^\]]+)\]/g)) attackOverrides.add(match[1]);
-    }
-    return { npcs, spawns, attackOverrides };
-}
-
-const world = hasSource ? sourceWorld() : null;
+const world = hasContentSource ? sourceWorld() : null;
 const finder = hasNav ? new PathFinder(gunzipSync(readFileSync('out/collision.lcnav.gz'))) : null;
 if (finder) loadDefaultNavEdges(finder);
 const state = { ...emptyWorldStateData(), members: true, skills: { agility: 1 }, items: { Coins: 200 }, entranaRestrictedGear: true, canSlashWeb: false };
@@ -93,7 +56,7 @@ const variants: Record<number, [number, number]> = {
     112: [42, 60], 117: [28, 35], 122: [28, 29], 1076: [37, 40], 1077: [37, 40]
 };
 
-test.skipIf(!hasSource).each(additions)('source verifies ordinary variants and nearby threats at $id', ({ id, npcIds, maxThreat }) => {
+test.skipIf(!hasContentSource).each(additions)('source verifies ordinary variants and nearby threats at $id', ({ id, npcIds, maxThreat }) => {
     const camp = COMBAT_CAMPS.find(camp => camp.id === id);
     expect(camp, id).toBeDefined();
     if (!camp) return;
@@ -114,7 +77,7 @@ test.skipIf(!hasSource).each(additions)('source verifies ordinary variants and n
     }
 });
 
-test.skipIf(!hasSource || !hasNav).each(additions)('real routes reach $id and target spawns without restricted doors', ({ id }) => {
+test.skipIf(!hasContentSource || !hasNav).each(additions)('real routes reach $id and target spawns without restricted doors', ({ id }) => {
     const camp = COMBAT_CAMPS.find(camp => camp.id === id);
     expect(camp, id).toBeDefined();
     if (!camp) return;

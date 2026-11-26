@@ -14,9 +14,9 @@ import {
     TB_TINSAY
 } from '#/bot/api/ai/quests/defs/tbwt/areas.js';
 import { decide, tbwt } from '#/bot/api/ai/quests/defs/tbwt/index.js';
-import { TB_FLAG } from '#/bot/api/ai/quests/defs/tbwt/journal.js';
 import { QUEST_DEFS } from '#/bot/api/ai/quests/defs/index.js';
 import type { QuestSnapshot, QuestStep } from '#/bot/api/ai/quests/engine/types.js';
+import { progressFlags, type ProgressOptions } from './tbwt-progress.fixture.js';
 
 afterEach(() => spyOn(Skills, 'level').mockRestore());
 
@@ -30,15 +30,9 @@ const DOSE2 = TB_POTIONS[2]!;
 /** The kit a 70-ranged account with a stocked bank ends up in. */
 const KIT = ['Maple shortbow', 'Adamant arrow', ...TB_ARMOUR];
 
-interface Options {
+interface Options extends ProgressOptions {
     journal?: QuestSnapshot['journal'];
     main?: number;
-    lubufu?: number;
-    tiadeche?: number;
-    tamayu?: number;
-    tinsay?: number;
-    agility?: boolean;
-    spear?: boolean;
     invIds?: [number, number][];
     /** Leave the pack short, so the supply pass is what answers. */
     bare?: boolean;
@@ -60,18 +54,7 @@ const FULL_PACK: [number, number][] = [
 
 function snap(options: Options = {}): QuestSnapshot {
     const main = options.main ?? TB_MAIN.STARTED;
-    const flags = new Set<string>([
-        `${TB_FLAG.LUBUFU}:${options.lubufu ?? TB_LUBUFU.UNKNOWN}`,
-        `${TB_FLAG.TIADECHE}:${options.tiadeche ?? TB_TIADECHE.UNKNOWN}`,
-        `${TB_FLAG.TAMAYU}:${options.tamayu ?? TB_TAMAYU.UNKNOWN}`,
-        `${TB_FLAG.TINSAY}:${options.tinsay ?? TB_TINSAY.UNKNOWN}`
-    ]);
-    if (options.agility) {
-        flags.add(TB_FLAG.AGILITY);
-    }
-    if (options.spear) {
-        flags.add(TB_FLAG.SPEAR);
-    }
+    const flags = progressFlags(options);
     const ids = new Map<number, number>(options.bare ? (options.invIds ?? []) : [...FULL_PACK, ...(options.invIds ?? [])]);
     const inv = new Map<string, number>(options.bare ? [] : [
         [TB_NAME.COINS.toLowerCase(), 500],
