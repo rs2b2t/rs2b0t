@@ -121,18 +121,22 @@ export default class TitleFlames {
 
         const startedAt = performance.now();
         let timer: ReturnType<typeof setTimeout> | undefined;
+        let dueAt = Infinity;
         const schedule = () => {
-            clearTimeout(timer);
             const now = performance.now();
             const delay = gate.delayUntilDraw(now, lastDrawAt);
+            if (delay === 0 && now >= dueAt) return;
+            clearTimeout(timer);
+            dueAt = Infinity;
             if (!Number.isFinite(delay)) return;
             const elapsed = now - startedAt;
             const nextTick = Math.floor(elapsed / FLAME_TICK_MS) + 1;
             const eligibleTick = Math.ceil((elapsed + delay) / FLAME_TICK_MS);
-            const wait = Math.max(nextTick, eligibleTick) * FLAME_TICK_MS - elapsed;
-            timer = setTimeout(tick, Math.min(0x7fffffff, Math.ceil(wait)));
+            dueAt = startedAt + Math.max(nextTick, eligibleTick) * FLAME_TICK_MS;
+            timer = setTimeout(tick, Math.min(0x7fffffff, Math.ceil(dueAt - now)));
         };
         const tick = () => {
+            dueAt = Infinity;
             const now = performance.now();
             if (gate.delayUntilDraw(now, lastDrawAt) === 0) {
                 lastDrawAt = now;

@@ -156,6 +156,21 @@ test('standalone client keeps its 35 ms title animation', async () => {
     client.unloadTitle();
 });
 
+test('a rail switch queued before a due flame tick preserves that draw', () => {
+    const flames = new TitleFlames([]);
+    const start = performance.now();
+    const draws: number[] = [];
+    flames.renderFlames = () => draws.push(performance.now() - start);
+    setTimeout(() => {
+        RenderGate.backgroundIntervalMs = 1000;
+        RenderGate.setMode('background');
+    }, 35);
+    BotClient.prototype['startTitleFlames'](flames);
+    clock.advanceTimersByTime(2099);
+    flames.close();
+    expect(draws).toEqual([35, 1050, 2065]);
+});
+
 test('unparking after a hidden tick waits for the next rail tick', () => {
     const gate = new RenderGateController();
     gate.setMode('hidden');
