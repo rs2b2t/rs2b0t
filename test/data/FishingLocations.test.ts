@@ -8,8 +8,7 @@ import {
     resolveFishingLocation,
     resolveLocation
 } from '#/bot/data/fishingLocations.js';
-
-const bankTiles = new Set(BANK_LOCATIONS.map(b => `${b.tile.x},${b.tile.z},${b.tile.level}`));
+import { expectKnownBankStands } from './expectKnownBankStands.js';
 
 describe('Shilo Village camp', () => {
     test('resolves the river camp and existing quest-gated teller', () => {
@@ -108,10 +107,7 @@ describe('FISHING_LOCATIONS table', () => {
     });
 
     test('every bankStand is a known BANK_LOCATIONS tile', () => {
-        for (const loc of FISHING_LOCATIONS) {
-            const key = `${loc.bankStand.x},${loc.bankStand.z},${loc.bankStand.level}`;
-            expect(bankTiles.has(key), `${loc.name} bank ${key}`).toBe(true);
-        }
+        expectKnownBankStands(FISHING_LOCATIONS);
     });
 
     test('Catherby has a range stand for cook-after-fish', () => {
