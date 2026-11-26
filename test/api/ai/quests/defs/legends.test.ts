@@ -1,3 +1,4 @@
+import { itemCounts } from '../../../../lib/questSteps.js';
 import { describe, expect, test } from 'bun:test';
 
 import { LQ_ID, LQ_STAGE, LQ_TILE, inJungleBand, inOctagram, jungleSection, legendsArea } from '#/bot/api/ai/quests/defs/legends/areas.js';
@@ -30,14 +31,6 @@ function counts(names: string[]): Map<string, number> {
     return out;
 }
 
-function ids(list: number[]): Map<number, number> {
-    const out = new Map<number, number>();
-    for (const id of list) {
-        out.set(id, (out.get(id) ?? 0) + 1);
-    }
-    return out;
-}
-
 /** Karamja's open ground, where every bank and shop leg is allowed to start. */
 const KARAMJA = { x: 2850, z: 2960, level: 0 };
 
@@ -60,14 +53,14 @@ function snap(o: SnapOpts = {}): QuestSnapshot {
     return {
         journal: o.journal ?? 'inProgress',
         inv: counts(o.inv ?? []),
-        invIds: ids(o.invIds ?? []),
+        invIds: itemCounts(o.invIds ?? []),
         worn: new Set((o.worn ?? []).map(n => n.toLowerCase())),
         wornIds: new Set(o.wornIds ?? WORN_KIT),
         noProgress: 0,
         bankCoins: 0,
         stage: o.stage,
         bank: counts(o.bank ?? []),
-        bankIds: ids(o.bankIds ?? []),
+        bankIds: itemCounts(o.bankIds ?? []),
         bankKnown: o.bankKnown ?? true,
         tile: (o.tile ?? KARAMJA) as QuestSnapshot['tile'],
         freeSlots: 8
