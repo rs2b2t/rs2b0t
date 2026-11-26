@@ -35,7 +35,7 @@ function fixture(origins?: Record<string, Record<string, string>>) {
 
     let rendererStorage: Partial<Record<string, string>> = {};
 
-    async function launch(server: string, recover = false) {
+    async function launch(server: string, recover = false, ready = Promise.resolve()) {
         let runtime = '';
         let startupError: unknown;
         const opened = Promise.withResolvers<void>();
@@ -43,7 +43,7 @@ function fixture(origins?: Record<string, Record<string, string>>) {
             getPath: () => dir,
             setPath: (_name: string, path: string) => { runtime = path; },
             commandLine: { appendSwitch() {}, getSwitchValue: () => '' },
-            whenReady: () => Promise.resolve(),
+            whenReady: () => ready,
             quit: () => opened.reject(new Error('app.quit', { cause: startupError }))
         });
         const handlers = new Map<string, (request: { url: string }) => Response>();
@@ -127,6 +127,34 @@ test.each([custom, original])('an initialized empty store stays empty until reco
     expect([(await launch(server)).length, (await launch(server)).length]).toEqual([0, 0]);
     expect(await launch(server, true)).toEqual(profiles);
     expect(await launch(server)).toEqual(profiles);
+});
+
+test('overlapping first launches recover all profiles after the empty origin seeds first', async () => {
+    const { launch } = fixture({ [custom]: { [accounts]: JSON.stringify(profiles) } });
+    const ready = Promise.withResolvers<void>();
+    const pending = launch(custom, false, ready.promise);
+    expect(await launch(original)).toEqual([]);
+    ready.resolve();
+    const first = await pending;
+    const second = await launch(custom);
+    expect([first.length, second.length]).toEqual([30, 30]);
+    expect(first).toEqual(profiles);
+    expect(second).toEqual(profiles);
+});
+
+test.each(['setItem', 'compareAndSet', 'removeItem'])('profile %s after the empty seed takes precedence over a pending migration', async method => {
+    const { launch, store } = fixture({ [custom]: { [accounts]: JSON.stringify(profiles) } });
+    const ready = Promise.withResolvers<void>();
+    const pending = launch(custom, false, ready.promise);
+    await launch(original);
+    if (method === 'setItem') store.setItem(vault, '[]');
+    if (method === 'compareAndSet') expect(store.compareAndSet(accounts, null, '[]')).toBe(true);
+    if (method === 'removeItem') store.removeItem(accounts);
+    const saved = store.snapshot();
+    ready.resolve();
+    expect(await pending).toEqual([]);
+    expect(store.snapshot()).toEqual(saved);
+    expect(await launch(custom)).toEqual([]);
 });
 
 test('an old empty migration can recover profiles alongside newer shared settings', async () => {

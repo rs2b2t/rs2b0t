@@ -56,6 +56,12 @@ function migrateProfiles(data, sources, { firstMigration, recover }) {
     }
 }
 
+function writeItem(state, key, value) {
+    if (profileKeys.includes(key)) delete state.seededWithoutProfiles;
+    if (value === null) delete state.data[key];
+    else state.data[key] = value;
+}
+
 function sharedStorage(dir) {
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
     const file = join(dir, 'storage.json');
@@ -98,28 +104,25 @@ function sharedStorage(dir) {
         keys: () => Object.keys(read().data),
         setItem(key, value) {
             if (!valid(key) || typeof value !== 'string') throw new Error('Invalid saved setting');
-            update(state => {
-                state.data[key] = value;
-            });
+            update(state => writeItem(state, key, value));
         },
         compareAndSet(key, expected, value) {
             if (!valid(key) || typeof value !== 'string') throw new Error('Invalid saved setting');
             return update(state => {
                 if ((state.data[key] ?? null) !== expected) return false;
-                state.data[key] = value;
+                writeItem(state, key, value);
                 return true;
             });
         },
         removeItem(key) {
-            if (valid(key))
-                update(state => {
-                    delete state.data[key];
-                });
+            if (valid(key)) update(state => writeItem(state, key, null));
         },
         seed(values, { fallback = {}, recover = false } = {}) {
             return update(state => {
-                if (state.initialized && !recover) return false;
+                if (state.initialized && !recover && !state.seededWithoutProfiles) return false;
                 migrateProfiles(state.data, [values, fallback], { firstMigration: !state.initialized, recover });
+                if (profileKeys.some(key => key in state.data)) delete state.seededWithoutProfiles;
+                else if (!state.initialized) state.seededWithoutProfiles = true;
                 if (state.initialized) return false;
                 for (const source of [fallback, values]) {
                     for (const [key, value] of Object.entries(source)) {
