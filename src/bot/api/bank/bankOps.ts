@@ -19,3 +19,8 @@ export function withdrawOp(ops: readonly (string | null)[], amount: 'all' | '10'
             return named.find(o => /^withdraw/i.test(o)) ?? null;
     }
 }
+
+export function withdrawXOpIndex(ops: readonly (string | null)[]): number {
+    const label = withdrawOp(ops, 'x');
+    return label === null ? -1 : ops.indexOf(label) + 1;
+}
