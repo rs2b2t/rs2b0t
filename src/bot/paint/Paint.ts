@@ -237,25 +237,15 @@ export class PaintFrame {
             return 0;
         }
 
-        const maxOffset = Math.max(0, lines.length - rows);
         // A scrollbar steals the last character column, so clip narrower while one is drawn.
-        const room = this.cols() - (maxOffset > 0 ? 1 : 0);
+        const room = this.cols() - (lines.length > rows ? 1 : 0);
         for (const line of lines.slice(scroll.offset, scroll.offset + rows)) {
             const entry = entryOf(line);
             this.ctx.fillStyle = entry.color ?? o.color ?? FG;
             this.ctx.fillText(clipText(entry.text, room), this.panel.x + this.bodyX, this.cursorY + LINE / 2 + 1);
             this.cursorY += LINE;
         }
-        this.chrome(
-            top,
-            rows * LINE,
-            rows / lines.length,
-            scroll.offset / Math.max(1, maxOffset),
-            maxOffset > 0 ? scroll.offset + 1 : 0,
-            maxOffset > 0 ? Math.min(lines.length, scroll.offset + rows) : 0,
-            o.footer,
-            lines.length
-        );
+        this.drawScrollChrome(top, lines.length, rows, scroll.offset, lines.length, 1, o.footer);
         return scroll.offset;
     }
 
@@ -290,7 +280,6 @@ export class PaintFrame {
             return 0;
         }
 
-        const maxOffset = Math.max(0, total - rows);
         for (let r = scroll.offset; r < Math.min(total, scroll.offset + rows); r++) {
             const slice = lines.slice(r * cols, r * cols + cols);
             // Pad the last row out, so a half-full row keeps the same column widths.
@@ -302,16 +291,7 @@ export class PaintFrame {
                 return { text: entry.text, color: entry.color ?? opts.color };
             }));
         }
-        this.chrome(
-            top,
-            rows * LINE,
-            rows / total,
-            scroll.offset / Math.max(1, maxOffset),
-            maxOffset > 0 ? scroll.offset * cols + 1 : 0,
-            maxOffset > 0 ? Math.min(lines.length, (scroll.offset + rows) * cols) : 0,
-            opts.footer,
-            lines.length
-        );
+        this.drawScrollChrome(top, total, rows, scroll.offset, lines.length, cols, opts.footer);
         return scroll.offset;
     }
 
@@ -340,6 +320,28 @@ export class PaintFrame {
         paintState.set(`${key}:manual`, scroll.manual ? '1' : '0');
         paintState.set(`${key}:focus`, String(scroll.focus));
         return scroll;
+    }
+
+    private drawScrollChrome(
+        top: number,
+        totalRows: number,
+        visibleRows: number,
+        rowOffset: number,
+        entryCount: number,
+        entriesPerRow: number,
+        footer?: string
+    ): void {
+        const maxOffset = Math.max(0, totalRows - visibleRows);
+        this.chrome(
+            top,
+            visibleRows * LINE,
+            visibleRows / totalRows,
+            rowOffset / Math.max(1, maxOffset),
+            maxOffset > 0 ? rowOffset * entriesPerRow + 1 : 0,
+            maxOffset > 0 ? Math.min(entryCount, (rowOffset + visibleRows) * entriesPerRow) : 0,
+            footer,
+            entryCount
+        );
     }
 
     /** Scrollbar thumb and the counter row, which any footer shares rather than costing a row. */
