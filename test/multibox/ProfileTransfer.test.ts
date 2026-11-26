@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { Loadouts } from '#/bot/api/loadout/loadoutStore.js';
+import { readScriptSettings, replaceScriptSettings, storedScripts } from '#/bot/multibox/RosterStorage.js';
 import type { Profile } from '#/bot/multibox/ProfileVault.js';
 import { SettingsStore } from '#/bot/runtime/Settings.js';
 
@@ -23,6 +24,18 @@ const snap = {
         alice: { selectedScript: 'Miner', 'set:Miner:rock': 'iron', 'set:Global:runAuto': 'false' }
     }
 };
+
+const browser = Reflect.get(window, 'happyDOM') as { setURL(url: string): void };
+
+function inBox<T>(box: string, run: () => T): T {
+    const previous = location.href;
+    browser.setURL('http://localhost/bot.html?box=' + box);
+    try {
+        return run();
+    } finally {
+        browser.setURL(previous);
+    }
+}
 
 afterEach(() => {
     localStorage.clear();
@@ -120,7 +133,8 @@ describe('ProfileTransfer', () => {
         Loadouts.save([{ name: 'travel', worn: {}, carry: [] }]);
         SettingsStore.save('Global', 'runEnergyMin', '73');
         SettingsStore.save('set', 'custom', 'standalone');
-        localStorage.setItem('rs2b0t:set:set:Global:runEnergyMin', '42');
+        SettingsStore.save('set', 'travel:mode', 'walk');
+        inBox('set', () => SettingsStore.save('Global', 'runEnergyMin', '42'));
         sessionStorage.setItem('rs2b0t:set:selectedScript', 'Miner');
 
         expect(collectBoxStorage(['set'])).toEqual({
@@ -128,35 +142,60 @@ describe('ProfileTransfer', () => {
         });
     });
 
+    test('the roster and the running profile share settings independently of legacy standalone values', () => {
+        for (const store of [sessionStorage, localStorage]) {
+            store.setItem('rs2b0t:set:set:travel:mode', 'walk');
+        }
+        SettingsStore.save('set%3Atravel%3Amode', 'color', 'green');
+        inBox('set', () => SettingsStore.save('travel', 'mode', 'ride'));
+        expect(SettingsStore.saved('set', 'travel:mode')).toBe('walk');
+        expect(readScriptSettings('set', 'travel')).toEqual({ mode: 'ride' });
+        replaceScriptSettings('set', 'travel', { 'return:%3A': 'sail' });
+        expect(storedScripts(['set'])).toEqual(['travel']);
+        expect(inBox('set', () => SettingsStore.saved('travel', 'return:%3A'))).toBe('sail');
+        expect(SettingsStore.saved('set%3Atravel%3Amode', 'color')).toBe('green');
+        const backup = collectBoxStorage(['set']);
+        expect(backup).toEqual({ set: { 'set:travel:return:%3A': 'sail' } });
+        applyBoxStorage(backup, ['set']);
+        expect(readScriptSettings('set', 'travel')).toEqual({ 'return:%3A': 'sail' });
+        sessionStorage.clear();
+        expect(SettingsStore.saved('set', 'travel:mode')).toBe('walk');
+    });
+
     for (const incoming of ['set', 'fixture', 'legacy set']) {
         test(`restoring ${incoming} over set preserves standalone storage`, () => {
             const loadout = { name: 'travel', worn: {}, carry: [{ item: 'Lobster', qty: 2 }] };
             Loadouts.save([loadout]);
             SettingsStore.save('Global', 'runEnergyMin', '73');
+            SettingsStore.save('set', 'travel:mode', 'walk');
             const user = incoming === 'fixture' ? 'fixture' : 'set';
             const threshold = 'set:Global:runEnergyMin';
             for (const store of [localStorage, sessionStorage]) {
                 store.setItem('rs2b0t:set:selectedScript', 'Miner');
-                store.setItem(`rs2b0t:set:${threshold}`, '31');
             }
+            inBox('set', () => SettingsStore.save('Global', 'runEnergyMin', '31'));
             const entries: Record<string, string> = { [threshold]: '42' };
             if (incoming === 'legacy set') {
                 entries['Loadouts:sets'] = '[]';
                 entries['Global:runEnergyMin'] = '10';
+                entries['set:travel:mode'] = 'ride';
             }
 
             applyBoxStorage({ [user]: entries }, ['set', user]);
 
+            expect(inBox('set', () => SettingsStore.saved('Global', 'runEnergyMin'))).toBe(user === 'set' ? '42' : undefined);
             for (const store of [localStorage, sessionStorage]) {
+                expect(store.getItem('rs2b0t:set:set:travel:mode')).toBe('walk');
                 expect(store.getItem('rs2b0t:set:selectedScript')).toBeNull();
-                expect(store.getItem(`rs2b0t:set:${threshold}`)).toBe(user === 'set' ? '42' : null);
-                expect(store.getItem(`rs2b0t:${user}:${threshold}`)).toBe('42');
                 expect(store.getItem('rs2b0t:set:Global:runEnergyMin')).toBe('73');
                 expect(store.getItem('rs2b0t:set:Loadouts:sets')).toBe(JSON.stringify([loadout]));
             }
             sessionStorage.clear();
             expect(SettingsStore.saved('Global', 'runEnergyMin')).toBe('73');
             expect(Loadouts.all()).toEqual([loadout]);
+            expect(SettingsStore.saved('set', 'travel:mode')).toBe('walk');
+            expect(inBox(user, () => SettingsStore.saved('Global', 'runEnergyMin'))).toBe('42');
+            expect(inBox('set', () => SettingsStore.saved('Global', 'runEnergyMin'))).toBe(user === 'set' ? '42' : undefined);
         });
     }
 });

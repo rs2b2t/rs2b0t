@@ -10,9 +10,16 @@ export function boxId(): string {
     return new URLSearchParams(location.search).get('box') ?? '';
 }
 
-export function boxKey(suffix: string): string {
-    const id = boxId();
+export function boxKey(suffix: string, id = boxId()): string {
+    // Why: every standalone setting under rs2b0t:set: contains a literal colon in its suffix.
+    if (id === 'set') suffix = suffix.replaceAll('%', '%25').replaceAll(':', '%3A');
     return id ? `rs2b0t:${id}:${suffix}` : `rs2b0t:${suffix}`;
+}
+
+export function boxSuffix(key: string, prefix: string, id: string): string | null {
+    if (!key.startsWith(prefix) || (id === 'set' && key.includes(':', prefix.length))) return null;
+    const suffix = key.slice(prefix.length);
+    return id === 'set' ? suffix.replaceAll('%3A', ':').replaceAll('%25', '%') : suffix;
 }
 
 // Why: one build serves /rs2b0t/index.html and local dev's /bot.html, and a relative path resolves to a file beside either.
