@@ -8,7 +8,7 @@ import { Traversal } from '../../../../walking/Traversal.js';
 import { weaponOf } from '../../../../loadout/loadoutPlan.js';
 import { openDialogue } from '../../exec/primitives.js';
 import { driveUntil } from '../../exec/prompts.js';
-import { QuestFood } from '../../food.js';
+import { questFoodNames } from '../../food.js';
 import { QuestLoadout, questWornGear } from '../../gear.js';
 import {
     bankedName as banked,
@@ -26,9 +26,7 @@ export { banked, held, heldCount, heldId, worn };
 const COMBAT_FOODS = ['Lobster', 'Swordfish', 'Tuna', 'Salmon', 'Trout'] as const;
 
 export function foodNames(): string[] {
-    const configured = QuestFood.name?.trim();
-    const names = [configured, ...COMBAT_FOODS].filter((n): n is string => Boolean(n));
-    return [...new Map(names.map(n => [n.toLowerCase(), n])).values()];
+    return questFoodNames(COMBAT_FOODS);
 }
 
 function foodHeld(snap: QuestSnapshot): number {

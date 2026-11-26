@@ -10,8 +10,8 @@ type WorkerRequest = {
 
 type InitMessage = {
     type: 'init';
-    versions: number[][];
-    crcs: number[][];
+    versions: Uint16Array[];
+    crcs: Int32Array[];
     host: string;
     secured: boolean;
     ingame: boolean;
@@ -138,8 +138,8 @@ async function write(db: IDBDatabase, archive: number, file: number, src: Uint8A
 }
 
 class WorkerOnDemand {
-    versions: number[][];
-    crcs: number[][];
+    versions: Uint16Array[];
+    crcs: Int32Array[];
     priorities: number[][];
     topPriority: number = 0;
     running: boolean = true;
