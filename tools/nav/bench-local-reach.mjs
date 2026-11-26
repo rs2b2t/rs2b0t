@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
+import process from 'node:process';
 import { pathToFileURL } from 'node:url';
 import { CollisionFlag } from '../../src/client/dash3d/CollisionFlag.ts';
 import { localReachProbe } from '../../src/bot/event/webwalk/geometry/localReach.ts';
