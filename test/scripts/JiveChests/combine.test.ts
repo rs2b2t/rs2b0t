@@ -1,5 +1,5 @@
 import { afterEach, expect, mock, spyOn, test } from 'bun:test';
-import { reader, type InvItemSnapshot } from '#/bot/adapter/ClientAdapter.js';
+import type { InvItemSnapshot } from '#/bot/adapter/ClientAdapter.js';
 import { Bank } from '#/bot/api/bank/Bank.js';
 import { Banking } from '#/bot/api/bank/Banking.js';
 import { Execution } from '#/bot/api/execution/Execution.js';
@@ -12,6 +12,7 @@ import Tile from '#/bot/geometry/Tile.js';
 import { Input } from '#/bot/input/Input.js';
 import { SettingsBag } from '#/bot/runtime/Settings.js';
 import JiveChests from '#/bot/scripts/JiveChests/JiveChests.js';
+import { depositPack, installBankSpies } from '../../fixtures/bank.js';
 
 afterEach(() => mock.restore());
 
@@ -29,19 +30,8 @@ async function fixture(teeth = 30, loops = 30) {
     spyOn(Game, 'tile').mockReturnValue(new Tile(3185, 3440, 0));
     spyOn(Skills, 'xp').mockReturnValue(0);
     spyOn(Skills, 'level').mockReturnValue(99);
-    spyOn(reader, 'bankComId').mockImplementation(() => state.open ? 5382 : -1);
-    spyOn(reader, 'inventorySize').mockReturnValue(28);
-    spyOn(reader, 'inventory').mockImplementation(() => state.pack);
-    spyOn(reader, 'bankSideItems').mockImplementation(() => state.sideReady ? state.pack : []);
+    installBankSpies(state);
     spyOn(Banking, 'open').mockImplementation(async () => { state.open = true; return true; });
-    spyOn(Bank, 'waitReady').mockImplementation(async () => state.ready);
-    spyOn(Bank, 'backpackReady').mockImplementation(async () => state.sideReady);
-    spyOn(Bank, 'countById').mockImplementation(id => state.ready ? state.bank.get(id) ?? 0 : 0);
-    spyOn(Bank, 'depositInventory').mockImplementation(async () => {
-        for (const i of state.pack) state.bank.set(i.id, (state.bank.get(i.id) ?? 0) + i.count);
-        state.pack = [];
-    });
-    spyOn(Bank, 'setNoteMode').mockImplementation(async notes => { state.notes = notes; });
     spyOn(Bank, 'withdrawXById').mockImplementation(async (id, count) => {
         if (state.failWithdrawal === id) { state.failWithdrawal = 0; return false; }
         expect(state.open).toBe(true);
@@ -53,7 +43,6 @@ async function fixture(teeth = 30, loops = 30) {
         state.pack.push(...Array.from({ length: count }, (_, i) => item(id, start + i)));
         return true;
     });
-    spyOn(Bank, 'close').mockImplementation(async () => { state.open = false; return true; });
     spyOn(Execution, 'delayUntil').mockImplementation(async condition => condition());
     spyOn(Execution, 'delayUntilTicks').mockImplementation(async condition => condition());
     spyOn(Input, 'useItemOnItem').mockImplementation((id, slot, _com, targetId, targetSlot) => {
@@ -195,8 +184,7 @@ test('does not double-count withdrawn halves when a failed withdrawal leaves the
     expect(Inventory.countById(985)).toBe(14);
     spyOn(Bank, 'depositInventory').mockImplementation(async () => {
         stale = false;
-        for (const i of state.pack) state.bank.set(i.id, (state.bank.get(i.id) ?? 0) + i.count);
-        state.pack = [];
+        depositPack(state);
     });
     for (let i = 0; i < 20 && !state.stops.length; i++) await bot.loop();
     expect(state.bank.get(989)).toBe(14);

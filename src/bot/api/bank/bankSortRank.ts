@@ -1,5 +1,6 @@
 // Why: kept free of client imports so scripts and tests pull it in without loading the adapter graph.
 
+import { HERBS, POTION_HERBS } from '../../data/herbs.js';
 import type { BankCategory, SortableItem } from './bankSortRules.js';
 
 export const UNRANKED = 9999;
@@ -56,24 +57,18 @@ const RUNES = [
 
 const LOGS = ['logs', 'achey tree logs', 'oak logs', 'willow logs', 'maple logs', 'yew logs', 'magic logs'];
 
-const HERBS = [
-    'guam leaf', 'snake weed', 'ardrigal', 'sito foil', 'volencia moss', 'rogues purse',
-    'marrentill', 'tarromin', 'harralander', 'ranarr weed', 'toadflax', 'irit leaf',
-    'avantoe', 'kwuarm', 'snapdragon', 'cadantine', 'lantadyme', 'dwarf weed', 'torstol'
-];
+const HERBS_BY_LEVEL = [...HERBS].sort((a, b) => a.level - b.level);
+const POTION_HERB_IDS = new Set(POTION_HERBS.map(herb => herb.id));
 
 // Why: every unidentified herb is named "Herb", so only the id says which. Karamja's 5 have no noted form.
-const UNID_HERB_IDS: readonly (readonly [string, ...number[]])[] = [
-    ['guam leaf', 199, 200], ['snake weed', 1525], ['ardrigal', 1527], ['sito foil', 1529],
-    ['volencia moss', 1531], ['rogues purse', 1533], ['marrentill', 201, 202], ['tarromin', 203, 204],
-    ['harralander', 205, 206], ['ranarr weed', 207, 208], ['toadflax', 3049, 3050], ['irit leaf', 209, 210],
-    ['avantoe', 211, 212], ['kwuarm', 213, 214], ['snapdragon', 3051, 3052], ['cadantine', 215, 216],
-    ['lantadyme', 2485, 2486], ['dwarf weed', 217, 218], ['torstol', 219, 220]
-];
-
-const UNID_HERB_RANK = new Map<number, number>(
-    UNID_HERB_IDS.flatMap(([herb, ...ids]) => ids.map(id => [id, HERBS.length + HERBS.indexOf(herb)] as const))
-);
+const UNID_HERB_RANK = new Map<number, number>();
+for (const [index, herb] of HERBS_BY_LEVEL.entries()) {
+    const rank = HERBS_BY_LEVEL.length + index;
+    UNID_HERB_RANK.set(herb.unidId, rank);
+    if (POTION_HERB_IDS.has(herb.id)) {
+        UNID_HERB_RANK.set(herb.unidId + 1, rank);
+    }
+}
 
 // Why: green, blue, red and black hide armour all read back as one name, so the colour is only in the id.
 const DHIDE_IDS: readonly (readonly number[])[] = [
@@ -124,7 +119,7 @@ const NAME_ORDER: Partial<Record<BankCategory, readonly string[]>> = {
     rangedArmour: RANGED_ARMOUR,
     runes: RUNES,
     logs: LOGS,
-    herbs: HERBS
+    herbs: HERBS_BY_LEVEL.map(herb => herb.name.toLowerCase())
 };
 
 /** Exact name first, then a prefix that ends on a word boundary, so "Bronze arrowtips" never picks up the "bronze arrow" rank. */
