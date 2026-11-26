@@ -2,33 +2,19 @@ import { describe, expect, test } from 'bun:test';
 
 import { NS_ID, NS_STAGE } from '#/bot/api/ai/quests/defs/druidspirit/areas.js';
 import { amulet, sickleStep } from '#/bot/api/ai/quests/defs/druidspirit/supplies.js';
-import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
+
+import { natureSpiritSnapshot, type NatureSpiritSnapshotOptions } from './druidspirit-snapshot.fixture.js';
 
 const MAX_MINING = 99;
 const BRONZE_PICKAXE = 1265;
 
-function snap(options: {
-    invIds?: [number, number][];
-    bankIds?: [number, number][];
-    bankKnown?: boolean;
-    wornIds?: number[];
-} = {}): QuestSnapshot {
-    return {
+function snap(options: Pick<NatureSpiritSnapshotOptions, 'invIds' | 'bankIds' | 'wornIds' | 'bankKnown'> = {}) {
+    return natureSpiritSnapshot({
+        ...options,
         journal: 'inProgress',
-        inv: new Map(),
-        invIds: new Map(options.invIds ?? []),
-        worn: new Set(),
-        wornIds: new Set(options.wornIds ?? []),
-        noProgress: 0,
-        bankCoins: 2_000_000,
         stage: NS_STAGE.STARTED,
-        progress: { stage: NS_STAGE.STARTED, flags: new Set() },
-        bank: new Map(),
-        bankIds: new Map(options.bankIds ?? []),
-        bankKnown: options.bankKnown ?? true,
-        tile: { x: 3253, z: 3420, level: 0 },
-        freeSlots: 20
-    };
+        tile: { x: 3253, z: 3420, level: 0 }
+    });
 }
 
 describe('nature spirit amulet', () => {
