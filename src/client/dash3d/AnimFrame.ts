@@ -4,16 +4,16 @@ import Packet from '#/client/io/Packet.js';
 
 export default class AnimFrame {
     static list: AnimFrame[] = [];
+    static opaque: boolean[] = [];
 
     delay: number = -1;
     base: AnimBase | null = null;
-    size: number = 0;
-    ti: Int32Array | null = null;
-    tx: Int32Array | null = null;
-    ty: Int32Array | null = null;
-    tz: Int32Array | null = null;
 
-    static opaque: boolean[] = [];
+    constructor(readonly transforms = new Int16Array(0)) {}
+
+    get size(): number {
+        return this.transforms.length / 4;
+    }
 
     static init(total: number) {
         this.list = new Array(total + 1);
@@ -54,88 +54,50 @@ export default class AnimFrame {
         const base = new AnimBase(baseBuf);
 
         const total = head.g2();
-        const tempTi: Int32Array = new Int32Array(500);
-        const tempTx: Int32Array = new Int32Array(500);
-        const tempTy: Int32Array = new Int32Array(500);
-        const tempTz: Int32Array = new Int32Array(500);
+        const scratch = new Int16Array(255 * 4);
 
-        for (let i: number = 0; i < total; i++) {
-            const id: number = head.g2();
+        for (let i = 0; i < total; i++) {
+            const id = head.g2();
+            const groupCount = head.g1();
+            let lastGroup = -1;
+            let end = 0;
 
-            const frame: AnimFrame = (this.list[id] = new AnimFrame());
-            frame.delay = del.g1();
-            frame.base = base;
-
-            const groupCount: number = head.g1();
-            let lastGroup: number = -1;
-            let current: number = 0;
-
-            for (let j: number = 0; j < groupCount; j++) {
+            for (let j = 0; j < groupCount; j++) {
                 if (!base.type) {
                     throw new Error();
                 }
 
-                const flags: number = tran1.g1();
-                if (flags > 0) {
-                    if (base.type[j] !== 0) {
-                        for (let group: number = j - 1; group > lastGroup; group--) {
-                            if (base.type[group] === 0) {
-                                tempTi[current] = group;
-                                tempTx[current] = 0;
-                                tempTy[current] = 0;
-                                tempTz[current] = 0;
-                                current++;
-                                break;
-                            }
+                const flags = tran1.g1();
+                if (flags === 0) continue;
+
+                const type = base.type[j];
+                if (type !== AnimTransform.ORIGIN) {
+                    for (let group = j - 1; group > lastGroup; group--) {
+                        if (base.type[group] === AnimTransform.ORIGIN) {
+                            scratch[end++] = group;
+                            scratch[end++] = 0;
+                            scratch[end++] = 0;
+                            scratch[end++] = 0;
+                            break;
                         }
                     }
+                }
 
-                    tempTi[current] = j;
+                const defaultValue = type === AnimTransform.SCALE ? 128 : 0;
+                scratch[end++] = j;
+                scratch[end++] = flags & 1 ? tran2.gsmarts() : defaultValue;
+                scratch[end++] = flags & 2 ? tran2.gsmarts() : defaultValue;
+                scratch[end++] = flags & 4 ? tran2.gsmarts() : defaultValue;
+                lastGroup = j;
 
-                    let defaultValue: number = 0;
-                    if (base.type[tempTi[current]] === AnimTransform.SCALE) {
-                        defaultValue = 128;
-                    }
-
-                    if ((flags & 0x1) === 0) {
-                        tempTx[current] = defaultValue;
-                    } else {
-                        tempTx[current] = tran2.gsmarts();
-                    }
-
-                    if ((flags & 0x2) === 0) {
-                        tempTy[current] = defaultValue;
-                    } else {
-                        tempTy[current] = tran2.gsmarts();
-                    }
-
-                    if ((flags & 0x4) === 0) {
-                        tempTz[current] = defaultValue;
-                    } else {
-                        tempTz[current] = tran2.gsmarts();
-                    }
-
-                    lastGroup = j;
-                    current++;
-
-                    if (base.type[j] === AnimTransform.TRANSPARENCY) {
-                        this.opaque[id] = false;
-                    }
+                if (type === AnimTransform.TRANSPARENCY) {
+                    this.opaque[id] = false;
                 }
             }
 
-            frame.size = current;
-            frame.ti = new Int32Array(current);
-            frame.tx = new Int32Array(current);
-            frame.ty = new Int32Array(current);
-            frame.tz = new Int32Array(current);
-
-            for (let j: number = 0; j < current; j++) {
-                frame.ti[j] = tempTi[j];
-                frame.tx[j] = tempTx[j];
-                frame.ty[j] = tempTy[j];
-                frame.tz[j] = tempTz[j];
-            }
+            const frame = (this.list[id] = new AnimFrame(scratch.slice(0, end)));
+            frame.delay = del.g1();
+            frame.base = base;
         }
     }
 
