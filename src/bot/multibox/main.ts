@@ -20,7 +20,7 @@ import { RosterPanel } from './RosterPanel.js';
 import { TabBar } from './TabBar.js';
 import { BotTabMenu } from './BotTabMenu.js';
 import { VaultPrompt } from './VaultPrompt.js';
-import { applyBoxStorage, collectBoxStorage, type ProfileSnapshot } from './ProfileTransfer.js';
+import { collectBoxStorage, type ProfileSnapshot } from './ProfileTransfer.js';
 import type { Account } from './types.js';
 
 type DesktopWall = Window & { rs2b0tLoginCoordinator?: LoginCoordinationRegistry & { parallelism: number } };
@@ -427,10 +427,7 @@ function boot(): void {
             storage: collectBoxStorage(vault.list().map(p => p.username), suffix =>
                 window.confirm(`Older versions shared "${suffix}" between standalone settings and profile "set". Include it in this profile backup?`))
         }),
-        replaceAll: data => vault.replaceAll(data, {
-            usernames: Object.keys(data.storage),
-            apply: wipe => applyBoxStorage(data.storage, wipe)
-        }),
+        replaceAll: data => vault.replaceAll(data, data.storage),
         onImported: data => {
             applyImportedTabs(data);
             loadImportedProfiles();

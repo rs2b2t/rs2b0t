@@ -1,6 +1,8 @@
 import { botFrameUrl } from '../../client/config/worlds.js';
 import { desktopStorage, storeKeys } from './desktopStorage.js';
 
+export { boxSuffix } from '../../../desktop/box-storage.cjs';
+
 // docs/decisions/architecture.md#per-instance-storage
 // Why: same-origin multibox frames share sessionStorage, so `?box=<account>` namespaces each bot.
 // Standalone tabs use the empty box id and their own sessionStorage.
@@ -18,17 +20,11 @@ export function boxKey(suffix: string, id = boxId()): string {
     return id ? `rs2b0t:${id}:${suffix}` : `rs2b0t:${suffix}`;
 }
 
-export function boxSuffix(key: string, prefix: string, id: string): string | null {
-    if (!key.startsWith(prefix) || (id === 'set' && key.includes(':', prefix.length))) return null;
-    const suffix = key.slice(prefix.length);
-    return id === 'set' ? suffix.replaceAll('%3A', ':').replaceAll('%25', '%') : suffix;
-}
-
 export function isLegacySetProfileSetting(suffix: string): boolean {
     return /^set:[^:]+:/.test(suffix);
 }
 
-const setProfileMigrationKey = 'rs2b0t:set-profile-settings-v1';
+export const setProfileMigrationKey = 'rs2b0t:set-profile-settings-v1';
 
 export function disableLegacySetProfileSettings(store: Storage): void {
     store.setItem(setProfileMigrationKey, '1');

@@ -14,6 +14,11 @@ test('shared encrypted vault preserves simultaneous changes from two instances',
     expect(output).toContain('shared vault preserves concurrent account and world edits');
 });
 
+test("a rejected restore preserves the other process's durable settings", () => {
+    const result = Bun.spawnSync([process.execPath, join(import.meta.dir, '../fixtures/competing-desktop-restores.ts')]);
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+});
+
 test('desktop instances share saved values and preserve concurrent writes to different keys', () => {
     const root = mkdtempSync(join(tmpdir(), 'rs2b0t-shared-test-'));
     try {

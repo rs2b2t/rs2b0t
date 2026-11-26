@@ -1,9 +1,12 @@
+import type { BoxStorageUpdate } from '../../../desktop/box-storage.cjs';
+
 export interface DesktopStorage {
     getItem(key: string): string | null;
     setItem(key: string, value: string): void;
     removeItem(key: string): void;
     keys(): string[];
     compareAndSet(key: string, expected: string | null, value: string): boolean;
+    restoreProfiles?(expected: string, value: string, settings: BoxStorageUpdate, legacyKey?: string): boolean;
     subscribe(callback: (key: string, oldValue: string | null, newValue: string | null) => void): void;
 }
 

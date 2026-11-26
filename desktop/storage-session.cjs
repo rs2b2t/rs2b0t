@@ -97,7 +97,7 @@ function prepareStorage(app) {
                 }
                 return snapshot;
             }
-            const methods = new Set(['snapshot', 'getItem', 'keys', 'setItem', 'removeItem', 'compareAndSet']);
+            const methods = new Set(['snapshot', 'getItem', 'keys', 'setItem', 'removeItem', 'compareAndSet', 'restoreProfiles']);
             ipcMain.on('rs2b0t-storage', (event, method, ...args) => {
                 try {
                     if (!valid(event.senderFrame) || !methods.has(method)) throw new Error('Invalid storage request');

@@ -318,6 +318,29 @@ describe('ProfileVault tabs', () => {
         expect(await reopen()).toEqual(imported);
     });
 
+    test("a stale wall cannot discard a failed restore's pending settings cleanup", async () => {
+        const wall = new ProfileVault();
+        const stale = new ProfileVault();
+        await wall.setup('pw');
+        expect(await stale.unlock('pw')).toBe(true);
+        const empty = { profiles: [], tabs: [], activeTab: 'Main' };
+        const key = 'rs2b0t:set:set%3AGlobal%3ArunEnergyMin';
+        const settings = { set: { 'set:Global:runEnergyMin': '42' } };
+        const write = sessionStorage.setItem;
+        Object.defineProperty(sessionStorage, 'setItem', { configurable: true, value() { throw new Error('storage full'); } });
+        try {
+            await expect(wall.replaceAll(empty, settings)).rejects.toThrow('storage full');
+        } finally {
+            Object.defineProperty(sessionStorage, 'setItem', { configurable: true, value: write });
+        }
+        expect(localStorage.getItem(key)).toBe('42');
+        await expect(stale.upsert({ username: 'later', password: '' })).rejects.toThrow(/changed/);
+        const retry = new ProfileVault();
+        expect(await retry.unlock('pw')).toBe(true);
+        await retry.replaceAll(empty, {});
+        expect(localStorage.getItem(key)).toBeNull();
+    });
+
     test("a late cleanup preserves the winning wall's encrypted wipe list", async () => {
         const first = new ProfileVault();
         const second = new ProfileVault();
@@ -330,30 +353,35 @@ describe('ProfileVault tabs', () => {
         const encrypt = crypto.subtle.encrypt.bind(crypto.subtle);
         const spy = spyOn(crypto.subtle, 'encrypt');
         try {
-            const pending = first.replaceAll(roster('first'), { usernames: ['storage-only'], apply() {
-                spy.mockImplementationOnce(async (...args) => {
-                    cleaning.resolve();
-                    await resume.promise;
-                    return encrypt(...args);
-                });
-            } });
+            spy.mockImplementationOnce(encrypt).mockImplementationOnce(async (...args) => {
+                cleaning.resolve();
+                await resume.promise;
+                return encrypt(...args);
+            });
+            const pending = first.replaceAll(roster('first'), { 'storage-only': { selectedScript: 'Miner' } });
             await cleaning.promise;
+            const write = localStorage.setItem;
+            Object.defineProperty(localStorage, 'setItem', { configurable: true, value(key: string, value: string) {
+                if (key === 'rs2b0t:second:selectedScript') throw new Error('storage full');
+                write.call(localStorage, key, value);
+            } });
             try {
-                await expect(second.replaceAll(roster('second'), { usernames: [], apply() {
-                    throw new Error('storage full');
-                } })).rejects.toThrow('storage full');
+                await expect(second.replaceAll(roster('second'), { second: { selectedScript: 'Fisher' } })).rejects.toThrow('storage full');
             } finally {
+                Object.defineProperty(localStorage, 'setItem', { configurable: true, value: write });
                 resume.resolve();
                 await expect(pending).rejects.toThrow(/changed/);
             }
             const reopened = new ProfileVault();
             expect(await reopened.unlock('pw')).toBe(true);
             expect(reopened.list().map(p => p.username)).toEqual(['second']);
-            const wipes: string[][] = [];
-            const restore = { usernames: [], apply(wipe: string[]) { wipes.push(wipe.sort()); } };
-            await reopened.replaceAll(roster('retry'), restore);
-            await reopened.replaceAll(roster('next'), restore);
-            expect(wipes).toEqual([['first', 'original', 'retry', 'second', 'storage-only'], ['next', 'retry']]);
+            const oldKeys = ['first', 'original', 'second', 'storage-only'].map(name => `rs2b0t:${name}:selectedScript`);
+            for (const key of oldKeys) localStorage.setItem(key, 'Miner');
+            await reopened.replaceAll(roster('retry'), {});
+            for (const key of oldKeys) expect(localStorage.getItem(key)).toBeNull();
+            for (const key of oldKeys) localStorage.setItem(key, 'Fisher');
+            await reopened.replaceAll(roster('next'), {});
+            for (const key of oldKeys) expect(localStorage.getItem(key)).toBe('Fisher');
         } finally {
             spy.mockRestore();
         }
@@ -366,7 +394,9 @@ describe('ProfileVault tabs', () => {
         localStorage.setItem(key + 'other', '["unrelated"]');
         const v = new ProfileVault();
         expect(await v.unlock('pw')).toBe(true);
-        await v.replaceAll(v.snapshot(), { usernames: [], apply(wipe) { expect(wipe).toEqual(['previous']); } });
+        localStorage.setItem('rs2b0t:previous:selectedScript', 'Miner');
+        await v.replaceAll(v.snapshot(), {});
+        expect(localStorage.getItem('rs2b0t:previous:selectedScript')).toBeNull();
         expect(localStorage.getItem(key + 'fixture')).toBeNull();
         expect(localStorage.getItem(key + 'other')).toBe('["unrelated"]');
     });

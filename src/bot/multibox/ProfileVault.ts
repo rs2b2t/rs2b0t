@@ -1,4 +1,6 @@
-import { desktopStorage } from '../runtime/desktopStorage.js';
+import { replaceBoxItems } from '../../../desktop/box-storage.cjs';
+import { applyBoxStorage, boxStorageUpdate, type BoxStorageMap } from './ProfileTransfer.js';
+import { desktopStorage, storeKeys } from '../runtime/desktopStorage.js';
 import type { WorldNumber } from '../../client/config/worlds.js';
 
 // docs/reference/multibox.md#profiles-and-the-vault
@@ -45,11 +47,6 @@ interface VaultPayload {
 interface PendingWipe {
     names: string[];
     legacyId?: string;
-}
-
-interface RestoreStorage {
-    usernames: string[];
-    apply(wipe: string[]): void;
 }
 
 const legacyWipeKey = 'rs2b0t:pending-profile-wipe';
@@ -188,6 +185,8 @@ export class ProfileVault {
     private pendingWipe?: PendingWipe;
     private key: CryptoKey | null = null;
     private salt: Uint8Array<ArrayBuffer> | null = null;
+    // Why: queued saves share a version until a new unlock replaces their snapshot.
+    private storageVersion: { raw: string | null } = { raw: null };
     private persistTail = Promise.resolve();
     private persistGeneration = 0;
     private worldTail = Promise.resolve();
@@ -200,6 +199,11 @@ export class ProfileVault {
 
     private get shared(): boolean {
         return !!desktopStorage && this.storage === localStorage;
+    }
+
+    private async withBrowserLock<T>(change: () => Promise<T>): Promise<T> {
+        const locks = !this.shared && globalThis.navigator?.locks;
+        return locks ? locks.request(KEY, change) : change();
     }
 
     async refresh(): Promise<void> {
@@ -254,6 +258,7 @@ export class ProfileVault {
                         values.delete(key);
                     }
                 });
+                draft.storageVersion = { raw: expected };
                 draft.key = this.key;
                 draft.salt = this.salt;
                 draft.adopt(payload);
@@ -305,7 +310,8 @@ export class ProfileVault {
         this.customTabs = [];
         this.active = MAIN_TAB;
         try {
-            await this.persist(raw);
+            this.storageVersion = { raw };
+            await this.persist();
         } catch (error) {
             this.cache = null;
             this.key = null;
@@ -318,7 +324,8 @@ export class ProfileVault {
 
     async unlock(pass: string): Promise<boolean> {
         if (this.pendingImport) return this.afterImport(() => this.unlock(pass));
-        const blob = parseBlob(this.storage ? this.storage!.getItem(KEY) : null);
+        const raw = this.storage?.getItem(KEY) ?? null;
+        const blob = parseBlob(raw);
         if (!blob) {
             return false;
         }
@@ -332,6 +339,7 @@ export class ProfileVault {
         }
         const payload = parsePayload(new TextDecoder().decode(pt));
         this.adopt(payload);
+        this.storageVersion = { raw };
         this.key = key;
         this.salt = salt;
         this.adoptGroupState();
@@ -345,6 +353,7 @@ export class ProfileVault {
             this.storage!.removeItem(LEGACY_KEY);
         }
         this.cache = null;
+        this.storageVersion = { raw: null };
         this.customTabs = [];
         this.pendingWipe = undefined;
         this.active = MAIN_TAB;
@@ -381,7 +390,7 @@ export class ProfileVault {
         });
     }
 
-    async replaceAll(data: VaultPayload, restore?: RestoreStorage): Promise<void> {
+    async replaceAll(data: VaultPayload, restore?: BoxStorageMap): Promise<void> {
         if (this.shared && !restore) return this.sharedChange(draft => draft.replaceAll(data), false);
         if (this.pendingImport) return this.afterImport(() => this.replaceAll(data, restore));
         this.assertUnlocked();
@@ -396,8 +405,7 @@ export class ProfileVault {
             if (generation !== this.persistGeneration) return;
             if (restore) {
                 const replace = () => this.restoreStorage(payload, restore, generation);
-                const locks = !this.shared && globalThis.navigator?.locks;
-                return locks ? locks.request(KEY, replace) : replace();
+                return this.withBrowserLock(replace);
             }
             await this.persist(undefined, payload);
             if (generation === this.persistGeneration) this.adopt(payload);
@@ -412,7 +420,7 @@ export class ProfileVault {
         }
     }
 
-    private async restoreStorage(payload: VaultPayload, restore: RestoreStorage, generation: number): Promise<void> {
+    private async restoreStorage(payload: VaultPayload, restore: BoxStorageMap, generation: number): Promise<void> {
         const expected = this.storage?.getItem(KEY) ?? null;
         const blob = parseBlob(expected);
         if (!blob) throw new Error('Saved accounts changed; unlock the vault again.');
@@ -427,14 +435,24 @@ export class ProfileVault {
             ...(legacy === null ? [] : wipeNames(JSON.parse(legacy))),
             ...previous.profiles.map(p => p.username),
             ...payload.profiles.map(p => p.username),
-            ...restore.usernames
+            ...Object.keys(restore)
         ])];
         const replacement = { ...payload, pendingWipe: { names, legacyId } };
-        const written = await this.persist(expected, replacement);
+        const update = this.shared ? boxStorageUpdate(restore, names) : undefined;
+        const commit = update ? (encoded: string) => {
+            if (!desktopStorage!.restoreProfiles) throw new Error('Update and restart the desktop app to restore profiles.');
+            return desktopStorage!.restoreProfiles(expected!, encoded, update, legacy === null ? undefined : legacyKey);
+        } : undefined;
+        const written = await this.persist(expected, replacement, commit);
         if (generation !== this.persistGeneration || !written) return;
+        if (this.storage!.getItem(KEY) !== written) throw new Error('Saved accounts changed in another instance; try again.');
         this.adopt(replacement);
-        if (legacy !== null) this.storage!.removeItem(legacyKey);
-        restore.apply(names);
+        if (update) {
+            if (typeof sessionStorage !== 'undefined') replaceBoxItems(sessionStorage, storeKeys(sessionStorage), update);
+        } else {
+            if (legacy !== null) this.storage!.removeItem(legacyKey);
+            applyBoxStorage(restore, names);
+        }
         await this.persist(written, { ...payload, pendingWipe: undefined });
         if (generation === this.persistGeneration) this.pendingWipe = undefined;
     }
@@ -612,30 +630,35 @@ export class ProfileVault {
         return this.cache;
     }
 
-    private persist(expected?: string | null, replacement?: VaultPayload): Promise<string | undefined> {
+    private persist(expected?: string | null, replacement?: VaultPayload, commit?: (encoded: string) => boolean): Promise<string | undefined> {
         if (!this.storage || !this.key || !this.salt || !this.cache) {
             return Promise.resolve(undefined);
         }
         const key = this.key;
         const salt = this.salt;
         const payload = replacement ?? { profiles: this.cache, tabs: this.customTabs, activeTab: this.active, pendingWipe: this.pendingWipe };
+        const version = this.storageVersion;
         const plaintext = new TextEncoder().encode(JSON.stringify(payload));
         const generation = this.persistGeneration;
         const write = this.persistTail.then(async () => {
             const iv = crypto.getRandomValues(new Uint8Array(12));
             const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plaintext);
-            if (generation !== this.persistGeneration) {
-                return;
-            }
             const blob: StoredBlob = { v: 1, kdf: 'PBKDF2-SHA256', iter: ITER, salt: b64(salt), iv: b64(iv), ct: b64(new Uint8Array(ct)) };
             const encoded = JSON.stringify(blob);
-            if (this.shared) {
-                if (!desktopStorage!.compareAndSet(KEY, expected ?? null, encoded)) throw new Error('Saved accounts changed in another instance; unlock the vault again.');
-            } else {
-                if (expected !== undefined && this.storage!.getItem(KEY) !== expected) throw new Error('Saved accounts changed in another instance; try again.');
-                this.storage!.setItem(KEY, encoded);
-            }
-            return encoded;
+            const save = async () => {
+                if (generation !== this.persistGeneration) return;
+                const previous = expected === undefined ? version.raw : expected;
+                if (this.shared) {
+                    const saved = commit ? commit(encoded) : desktopStorage!.compareAndSet(KEY, previous, encoded);
+                    if (!saved) throw new Error('Saved accounts changed in another instance; unlock the vault again.');
+                } else {
+                    if (this.storage!.getItem(KEY) !== previous) throw new Error('Saved accounts changed in another instance; unlock the vault again.');
+                    this.storage!.setItem(KEY, encoded);
+                }
+                version.raw = encoded;
+                return encoded;
+            };
+            return expected === undefined ? this.withBrowserLock(save) : save();
         });
         this.persistTail = write.then(() => {}, () => {});
         return write;

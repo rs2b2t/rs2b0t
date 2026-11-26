@@ -48,7 +48,7 @@ async function fixture() {
     await module.exports.prepareStorage(app).start('http://localhost:8081');
     cleanups.push(() => app.emit('quit'));
     const request = (frame: Frame, method: string, ...args: unknown[]) => {
-        const event = { sender: contents, senderFrame: frame, returnValue: undefined as unknown as { error?: string; snapshot?: { version: number; data: Record<string, string> } } };
+        const event = { sender: contents, senderFrame: frame, returnValue: undefined as unknown as { value?: unknown; error?: string; snapshot?: { version: number; data: Record<string, string> } } };
         ipcMain.emit('rs2b0t-storage', event, method, ...args);
         return event.returnValue;
     };
@@ -66,6 +66,22 @@ test('storage changes reach registered bridges only, with the writer updated by 
     expect(f.main.received).toEqual([]);
     expect(f.plain.received).toEqual([]);
     expect(f.nested.received).toEqual([]);
+});
+
+test('a profile restore publishes the vault and its settings in one snapshot', async () => {
+    const f = await fixture();
+    const vault = 'rs2b0t:multibox:profiles';
+    const profile = 'rs2b0t:set:set%3AGlobal%3ArunEnergyMin';
+    f.store.setItem(vault, 'previous');
+    f.store.setItem(key, 'Trout');
+    f.request(f.child, 'snapshot');
+    const restore = (value: string) => f.request(f.main, 'restoreProfiles', 'previous', 'replacement', {
+        usernames: ['set'], values: { [profile]: value }
+    });
+    expect(restore('73').value).toBe(true);
+    expect(restore('42').value).toBe(false);
+    expect(f.child.received.map(snapshot => snapshot.data)).toEqual([{ [vault]: 'replacement', [key]: 'Trout', [profile]: '73' }]);
+    expect(f.store.getItem(profile)).toBe('73');
 });
 
 test('subframe navigation unregisters its subtree until the new document requests a snapshot', async () => {

@@ -94,13 +94,18 @@ try {
     assert.equal(first.list().find(p => p.username === 'first')?.tab, 'Main');
     assert.equal(first.list().find(p => p.username === 'second')?.tab, 'Logs');
     const replacement = { profiles: [], tabs: [], activeTab: 'Main' };
-    await assert.rejects(first.replaceAll(replacement, { usernames: ['storage-only'], apply() {
-        throw new Error('storage full');
-    } }), /storage full/);
+    const write = sessionStorage.setItem;
+    Object.defineProperty(sessionStorage, 'setItem', { configurable: true, value() { throw new Error('storage full'); } });
+    try {
+        await assert.rejects(first.replaceAll(replacement, { 'storage-only': { selectedScript: 'Fisher' } }), /storage full/);
+    } finally {
+        Object.defineProperty(sessionStorage, 'setItem', { configurable: true, value: write });
+    }
     await second.upsert({ username: 'later', password: '' });
-    await second.replaceAll(replacement, { usernames: [], apply(wipe) {
-        assert.deepEqual(wipe.sort(), ['first', 'later', 'second', 'storage-only']);
-    } });
+    const stale = ['first', 'later', 'second', 'storage-only'].map(name => `rs2b0t:${name}:selectedScript`);
+    for (const key of stale) store.setItem(key, 'Miner');
+    await second.replaceAll(replacement, {});
+    for (const key of stale) assert.equal(store.getItem(key), null);
     first.reset();
     await second.refresh();
     assert.equal(second.status(), 'empty');

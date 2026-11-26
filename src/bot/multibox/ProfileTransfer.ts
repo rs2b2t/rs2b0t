@@ -1,4 +1,5 @@
-import { boxKey, boxSuffix, disableLegacySetProfileSettings, isLegacySetProfileSetting, legacyBoxSuffix } from '../runtime/box.js';
+import { boxStoragePrefix, replaceBoxItems, type BoxStorageUpdate } from '../../../desktop/box-storage.cjs';
+import { boxKey, boxSuffix, setProfileMigrationKey, isLegacySetProfileSetting, legacyBoxSuffix } from '../runtime/box.js';
 import type { Profile } from './ProfileVault.js';
 import { desktopStorage, storeKeys } from '../runtime/desktopStorage.js';
 
@@ -66,9 +67,7 @@ export function parseProfileFile(text: string): ProfileSnapshot {
     };
 }
 
-export function boxStoragePrefix(username: string): string {
-    return `rs2b0t:${username}:`;
-}
+export { boxStoragePrefix };
 
 export function collectBoxStorage(usernames: string[], includeLegacy?: (suffix: string) => boolean): BoxStorageMap {
     const out: BoxStorageMap = {};
@@ -92,29 +91,20 @@ export function collectBoxStorage(usernames: string[], includeLegacy?: (suffix: 
     return out;
 }
 
+export function boxStorageUpdate(storage: BoxStorageMap, wipe: string[]): BoxStorageUpdate {
+    const usernames = [...new Set([...wipe, ...Object.keys(storage)])];
+    const values: Record<string, string> = {};
+    if (usernames.includes('set')) values[setProfileMigrationKey] = '1';
+    for (const [user, entries] of Object.entries(storage)) {
+        for (const [suffix, value] of Object.entries(entries)) values[boxKey(suffix, user)] = value;
+    }
+    return { usernames, values };
+}
+
 export function applyBoxStorage(storage: BoxStorageMap, wipe: string[]): void {
-    const boxes = [...new Set([...wipe, ...Object.keys(storage)])].map(user => ({ user, prefix: boxStoragePrefix(user) }));
-    const replacesSet = boxes.some(({ user }) => user === 'set');
-    const stores: Storage[] = [];
-    if (typeof localStorage !== 'undefined') {
-        stores.push(localStorage);
-    }
-    if (typeof sessionStorage !== 'undefined') {
-        stores.push(sessionStorage);
-    }
-    for (const store of stores) {
-        for (const key of storeKeys(store)) {
-            if (boxes.some(({ user, prefix }) => boxSuffix(key, prefix, user) !== null)) {
-                store.removeItem(key);
-            }
-        }
-        if (replacesSet) disableLegacySetProfileSettings(store);
-        for (const [user, entries] of Object.entries(storage)) {
-            for (const [suffix, value] of Object.entries(entries)) {
-                store.setItem(boxKey(suffix, user), value);
-            }
-        }
-    }
+    const update = boxStorageUpdate(storage, wipe);
+    if (typeof localStorage !== 'undefined') replaceBoxItems(localStorage, storeKeys(localStorage), update);
+    if (typeof sessionStorage !== 'undefined') replaceBoxItems(sessionStorage, storeKeys(sessionStorage), update);
 }
 
 function readStore(store: Storage, usernames: string[], out: BoxStorageMap, legacy: Map<string, Storage> | null, includeSelectedScript = true): void {

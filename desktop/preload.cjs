@@ -39,6 +39,7 @@ contextBridge.exposeInMainWorld('rs2b0tDesktopStorage', {
     removeItem: key => call('removeItem', key),
     keys: () => snapshot.version >= 0 ? Object.keys(snapshot.data) : call('keys'),
     compareAndSet: (key, expected, value) => call('compareAndSet', key, expected, value),
+    restoreProfiles: (...args) => call('restoreProfiles', ...args),
     subscribe: callback => { listeners.add(callback); }
 });
 
