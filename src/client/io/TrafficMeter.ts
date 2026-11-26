@@ -1,4 +1,4 @@
-import { openTrafficChannel, publisherTrafficChannel, type TrafficChannelOptions } from './TrafficChannel.js';
+import { openPublisherChannel, type TrafficChannelOptions } from './TrafficChannel.js';
 
 export interface TrafficTotals {
     receivedBytes: number;
@@ -12,6 +12,7 @@ export type TrafficMessage =
 type TimerHandle = ReturnType<typeof setTimeout>;
 
 export interface TrafficMeterOptions extends TrafficChannelOptions {
+    channel?: { postMessage(message: TrafficMessage): void; close(): void } | null;
     intervalMs?: number;
     setTimeout?: (callback: () => void, delayMs: number) => TimerHandle;
     clearTimeout?: (timer: TimerHandle) => void;
@@ -25,7 +26,7 @@ function validBytes(bytes: number): boolean {
 
 /** Publishes actual WebSocket payload deltas from one browser or worker realm. */
 export class TrafficMeter {
-    private readonly channel: BroadcastChannel | null;
+    private readonly channel: NonNullable<TrafficMeterOptions['channel']> | null;
     private readonly intervalMs: number;
     private readonly scheduleTimeout: (callback: () => void, delayMs: number) => TimerHandle;
     private readonly cancelTimeout: (timer: TimerHandle) => void;
@@ -43,7 +44,7 @@ export class TrafficMeter {
         this.scheduleTimeout = options.setTimeout ?? ((callback, delayMs) => globalThis.setTimeout(callback, delayMs));
         this.cancelTimeout = options.clearTimeout ?? (timer => globalThis.clearTimeout(timer));
 
-        this.channel = openTrafficChannel({ channelName: options.channelName ?? publisherTrafficChannel(), channelFactory: options.channelFactory });
+        this.channel = options.channel === undefined ? openPublisherChannel(options) : options.channel;
         this.scheduleHeartbeat();
     }
 
@@ -120,4 +121,4 @@ export class TrafficMeter {
     }
 }
 
-export const trafficMeter = new TrafficMeter();
+export const trafficMeter = new TrafficMeter(typeof window === 'undefined' ? { channel: null } : {});
