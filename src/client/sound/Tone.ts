@@ -5,29 +5,15 @@ import Filter from '#/client/sound/Filter.js';
 import { mulShift16 } from '#/client/util/JsUtil.js';
 
 export default class Tone {
-    static buf: Int32Array = new Int32Array(22050 * 10);
-    static noise: Int32Array = new Int32Array(32768);
-    static sine: Int32Array = new Int32Array(32768);
+    static buf?: Int32Array;
+    static noise?: Int32Array;
+    static sine?: Int32Array;
 
     static fPos: Int32Array = new Int32Array(5);
     static fDel: Int32Array = new Int32Array(5);
     static fAmp: Int32Array = new Int32Array(5);
     static fMulti: Int32Array = new Int32Array(5);
     static fOffset: Int32Array = new Int32Array(5);
-
-    static {
-        for (let i = 0; i < 32768; i++) {
-            if (Math.random() > 0.5) {
-                this.noise[i] = 1;
-            } else {
-                this.noise[i] = -1;
-            }
-        }
-
-        for (let i = 0; i < 32768; i++) {
-            this.sine[i] = (Math.sin(i / 5215.1903) * 16384.0) | 0;
-        }
-    }
 
     frequencyBase: Envelope = new Envelope();
     amplitudeBase: Envelope = new Envelope();
@@ -55,6 +41,7 @@ export default class Tone {
     filterRange: Envelope | null = null;
 
     generate(sampleCount: number, length: number): Int32Array {
+        Tone.buf ??= new Int32Array(22050 * 10);
         for (let sample = 0; sample < sampleCount; sample++) {
             Tone.buf[sample] = 0;
         }
@@ -268,10 +255,12 @@ export default class Tone {
         if (form === 1) {
             return (phase & 0x7fff) < 16384 ? amplitude : -amplitude;
         } else if (form === 2) {
+            Tone.sine ??= Int32Array.from({ length: 32768 }, (_, i) => (Math.sin(i / 5215.1903) * 16384.0) | 0);
             return (Tone.sine[phase & 0x7fff] * amplitude) >> 14;
         } else if (form === 3) {
             return (((phase & 0x7fff) * amplitude) >> 14) - amplitude;
         } else if (form === 4) {
+            Tone.noise ??= Int32Array.from({ length: 32768 }, () => Math.random() > 0.5 ? 1 : -1);
             return Tone.noise[((phase / 2607) | 0) & 0x7fff] * amplitude;
         } else {
             return 0;
