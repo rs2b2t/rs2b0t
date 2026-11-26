@@ -9,7 +9,7 @@ import { installWorkerClockHub } from '../runtime/WorkerClock.js';
 import { installDiagnostics } from './installDiagnostics.js';
 import { TrafficCollector } from '../adapter/TrafficAdapter.js';
 import { DomSlotOps, orderedSlotElements } from './DomSlotOps.js';
-import { MultiBoxController, normalizeUsername } from './MultiBoxController.js';
+import { indexByUsername, MultiBoxController, normalizeUsername } from './MultiBoxController.js';
 import { ProfileChooser } from './ProfileChooser.js';
 import { vault, type Profile } from './ProfileVault.js';
 import { renderRailTile, slotIsRunning } from './RailTile.js';
@@ -26,14 +26,8 @@ import type { Account } from './types.js';
 type DesktopWall = Window & { rs2b0tLoginCoordinator?: LoginCoordinationRegistry & { parallelism: number } };
 
 function resolveSavedUsernames(profiles: Profile[]): (username: string) => string {
-    const exact = new Set<string>();
-    const byIdentity = new Map<string, string>();
-    for (const { username } of profiles) {
-        exact.add(username);
-        const identity = normalizeUsername(username);
-        if (identity && !byIdentity.has(identity)) byIdentity.set(identity, username);
-    }
-    return username => exact.has(username) ? username : byIdentity.get(normalizeUsername(username)) ?? username;
+    const saved = indexByUsername(profiles.map(p => [p.username, p.username] as const));
+    return username => saved.get(username) ?? username;
 }
 
 if (typeof window !== 'undefined') {
@@ -432,10 +426,10 @@ function boot(): void {
     function syncSavedGroups(): void {
         const { tabs, assignments } = vault.adoptGroupState();
         mergeSavedTabs(tabs);
-        const groups = new Map([...assignments].map(([name, tab]) => [normalizeUsername(name), tab]));
+        const groups = indexByUsername(assignments);
         const liveTabs = new Set(tabs);
         for (const slot of controller.snapshot()) {
-            const tab = groups.get(normalizeUsername(slot.username));
+            const tab = groups.get(slot.username);
             if (tab) controller.setSlotTab(slot.id, tab);
             else if (slot.tab !== 'Main') liveTabs.add(slot.tab);
         }

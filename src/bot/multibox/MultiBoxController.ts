@@ -16,6 +16,20 @@ export function normalizeUsername(username: string): string {
     return hash === 0n ? '' : JString.toRawUsername(hash);
 }
 
+export function indexByUsername<T>(entries: Iterable<readonly [string, T]>) {
+    const exact = new Map<string, T>();
+    const firstByIdentity = new Map<string, T>();
+    for (const [username, value] of entries) {
+        if (!exact.has(username)) exact.set(username, value);
+        const identity = normalizeUsername(username);
+        if (identity && !firstByIdentity.has(identity)) firstByIdentity.set(identity, value);
+    }
+    return {
+        get: (username: string) => exact.get(username) ?? firstByIdentity.get(normalizeUsername(username)),
+        firstByIdentity
+    };
+}
+
 interface Slot {
     id: number;
     account: Account;
@@ -66,17 +80,12 @@ export class MultiBoxController {
     }
 
     restoreProfiles(profiles: Account[], tabs: string[], activeTab: string): void {
-        const remaining = new Map<string, Account>();
-        for (const profile of profiles) {
-            const name = normalizeUsername(profile.username);
-            if (!remaining.has(name)) remaining.set(name, profile);
-        }
+        const savedProfiles = indexByUsername(profiles.map(p => [p.username, p] as const));
         const knownTabs = new Set([MAIN_TAB, ...tabs]);
         const retained = new Set<string>();
         let modesChanged = this.active !== activeTab;
         for (const slot of this.slots) {
-            const name = normalizeUsername(slot.account.username);
-            const saved = remaining.get(name);
+            const saved = savedProfiles.get(slot.account.username);
             if (!saved) {
                 retained.add(slot.tab);
                 continue;
@@ -87,7 +96,7 @@ export class MultiBoxController {
                 slot.tab = next;
                 modesChanged = true;
             }
-            remaining.delete(name);
+            savedProfiles.firstByIdentity.delete(normalizeUsername(slot.account.username));
         }
         for (const tab of this.customTabs) {
             if (retained.has(tab)) knownTabs.add(tab);
@@ -95,7 +104,7 @@ export class MultiBoxController {
         }
         this.customTabs = [...knownTabs].slice(1);
         this.active = activeTab;
-        this.addGroup([...remaining.values()], modesChanged);
+        this.addGroup([...savedProfiles.firstByIdentity.values()], modesChanged);
     }
 
     addGroup(accounts: Account[], modesChanged = false): void {

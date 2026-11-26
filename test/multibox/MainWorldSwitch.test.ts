@@ -194,6 +194,42 @@ test.each([30, 61])('settings import moves %i loaded profiles to the saved tab',
     });
 });
 
+test.each([
+    ['Fixture', 'Fleet'],
+    ['fixture', 'Work']
+])('import and refresh keep the exact tab for loaded %s', async (username, tab) => {
+    await withWall('local', async wall => {
+        const panel = openSettings();
+        const tabs = ['Work', 'Fleet'];
+        const profiles = [
+            { username: 'fixture', password: 'fixture', tab: 'Work' },
+            { username: 'Fixture', password: 'fixture', tab: 'Fleet' }
+        ];
+        await panel.importText(serializeProfileFile({
+            profiles: [{ username, password: 'fixture', tab }], tabs, activeTab: tab, storage: {}
+        }));
+        const [original] = wall.slots();
+        await panel.importText(serializeProfileFile({ profiles, tabs, activeTab: 'Fleet', storage: {} }));
+        expect(wall.slots().map(s => [s.id, s.username, s.tab])).toEqual([[original.id, username, tab]]);
+
+        wall.controller.addTab('Stale');
+        window.dispatchEvent(new StorageEvent('storage', { key: 'rs2b0t:multibox:profiles' }));
+        await waitFor(() => !wall.controller.tabs().includes('Stale'));
+        expect(wall.slots().map(s => [s.id, s.username, s.tab])).toEqual([[original.id, username, tab]]);
+
+        const saves = spyOn(vault, 'saveTabState');
+        try {
+            expect(await wall.addTab('Local')).toBe(true);
+            await saves.mock.results[0].value;
+            const reopened = new ProfileVault();
+            expect(await reopened.unlock('test-passphrase')).toBe(true);
+            expect(reopened.snapshot()).toEqual({ profiles, tabs: [...tabs, 'Local'], activeTab: 'Fleet' });
+        } finally {
+            saves.mockRestore();
+        }
+    });
+});
+
 test('a mixed import keeps an omitted slot in Work and saves a reused slot moved there', async () => {
     await withWall('local', async wall => {
         const panel = openSettings();
