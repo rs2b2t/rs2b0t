@@ -7,30 +7,7 @@ import {
     tileInDangerZones
 } from '#/bot/event/webwalk/data/dangerZones.js';
 import { PathFinder } from '#/bot/event/webwalk/PathFinder.js';
-
-/** Minimal pack: mapsquare (0,0) fully walkable levels 0–1. */
-function fullyWalkablePack(): Uint8Array {
-    const perLevel = 4096 + 512;
-    const bytes = new Uint8Array(10 + 3 + 2 * perLevel);
-    bytes[0] = 0x4c;
-    bytes[1] = 0x43;
-    bytes[2] = 0x4e;
-    bytes[3] = 0x56;
-    bytes[4] = 1;
-    bytes[5] = 0;
-    bytes[8] = 1;
-    let pos = 10;
-    bytes[pos++] = 0;
-    bytes[pos++] = 0;
-    bytes[pos++] = 0b0011;
-    for (let level = 0; level < 2; level++) {
-        bytes.fill(0xff, pos, pos + 4096);
-        pos += 4096;
-        bytes.fill(0xff, pos, pos + 512);
-        pos += 512;
-    }
-    return bytes;
-}
+import { twoLevelCollisionPack } from '../../fixtures/two-level-collision-pack.js';
 
 describe('known danger zones catalog', () => {
     test('includes white-wolf-mountain with a usable rect', () => {
@@ -151,7 +128,7 @@ describe('white wolf sample tiles', () => {
 
 describe('PathFinder avoidZones', () => {
     test('routes around a band of forbidden tiles', () => {
-        const finder = new PathFinder(fullyWalkablePack());
+        const finder = new PathFinder(twoLevelCollisionPack([[0, 0]]));
         const from = { x: 5, z: 10, level: 0 };
         const to = { x: 25, z: 10, level: 0 };
         // Vertical strip at x=15, only z 5..15, room to detour north/south.
@@ -168,7 +145,7 @@ describe('PathFinder avoidZones', () => {
     });
 
     test('escapes a zone when the start is more than one tile inside', () => {
-        const finder = new PathFinder(fullyWalkablePack());
+        const finder = new PathFinder(twoLevelCollisionPack([[0, 0]]));
         const from = { x: 10, z: 10, level: 0 };
         const to = { x: 25, z: 10, level: 0 };
         const zone = [{ minX: 5, maxX: 15, minZ: 5, maxZ: 15, level: 0 }];
@@ -184,7 +161,7 @@ describe('PathFinder avoidZones', () => {
     });
 
     test('cannot enter a danger zone from outside', () => {
-        const finder = new PathFinder(fullyWalkablePack());
+        const finder = new PathFinder(twoLevelCollisionPack([[0, 0]]));
         const from = { x: 5, z: 10, level: 0 };
         const to = { x: 25, z: 10, level: 0 };
         const zone = [{ minX: 20, maxX: 30, minZ: 5, maxZ: 15, level: 0 }];
