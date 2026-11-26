@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { Loadouts } from '#/bot/api/loadout/loadoutStore.js';
-import { readScriptSettings, replaceScriptSettings, storedScripts } from '#/bot/multibox/RosterStorage.js';
+import { readProfileScript, readScriptSettings, replaceScriptSettings, storedScripts, writeProfileScript } from '#/bot/multibox/RosterStorage.js';
 import type { Profile } from '#/bot/multibox/ProfileVault.js';
 import { SettingsStore } from '#/bot/runtime/Settings.js';
 import { boxKey } from '#/bot/runtime/box.js';
@@ -327,6 +327,27 @@ describe('ProfileTransfer', () => {
         expect(names.map(name => inBox(name, () => SettingsStore.saved('Global', 'runEnergyMin')))).toEqual(['42', undefined, undefined]);
         expect(SettingsStore.saved('Global', 'runEnergyMin')).toBe('73');
         expect(Loadouts.all()).toEqual([loadout]);
+    });
+
+    test('restoring set:Travel preserves standalone Travel fields across a fresh session', () => {
+        const names = ['set', 'set:Travel'];
+        const standalone = { selectedScript: 'walk', rendererEnabled: '1', creds: 'fixture', 'set:Miner:rock': 'trail' };
+        for (const [key, value] of Object.entries(standalone)) SettingsStore.save('Travel', key, value);
+        expect(collectBoxStorage(names)).toEqual({});
+
+        writeProfileScript('set:Travel', 'Miner');
+        inBox('set:Travel', () => SettingsStore.save('Miner', 'rock', 'iron'));
+        expect(readScriptSettings('set:Travel', 'Miner')).toEqual({ rock: 'iron' });
+        expect(collectBoxStorage(names)).toEqual({ 'set:Travel': { selectedScript: 'Miner', 'set:Miner:rock': 'iron' } });
+        applyBoxStorage({}, names);
+        for (const [key, value] of Object.entries(standalone)) {
+            expect(sessionStorage.getItem(`rs2b0t:set:Travel:${key}`)).toBe(value);
+        }
+        sessionStorage.clear();
+
+        for (const [key, value] of Object.entries(standalone)) expect(SettingsStore.saved('Travel', key)).toBe(value);
+        expect(readProfileScript('set:Travel')).toBe('');
+        expect(readScriptSettings('set:Travel', 'Miner')).toEqual({});
     });
 
     test('restoring a v1 backup with misclassified entries under overlapping names keeps standalone values', () => {

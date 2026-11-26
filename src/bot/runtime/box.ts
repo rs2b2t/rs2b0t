@@ -22,6 +22,10 @@ function nestedProfilePrefix(id: string): string {
     return settingsStoragePrefix + 'owner/' + encodeSuffix(id).replaceAll('/', '%2F') + '/';
 }
 
+export function isSetProfile(id: string): boolean {
+    return id === 'set' || id.startsWith('set:');
+}
+
 export function isLegacyProfileSuffix(id: string, suffix: string): boolean {
     if (id === 'set') return !suffix.includes(':') || isLegacySetProfileSetting(suffix);
     if (!id.startsWith('set:')) return true;
@@ -30,7 +34,7 @@ export function isLegacyProfileSuffix(id: string, suffix: string): boolean {
 
 export function boxKey(suffix: string, id = boxId()): string {
     if (id === 'set' && suffix.includes(':')) return setProfilePrefix + encodeSuffix(suffix);
-    if (id.startsWith('set:') && !isLegacyProfileSuffix(id, suffix)) return nestedProfilePrefix(id) + encodeSuffix(suffix);
+    if (id.startsWith('set:')) return nestedProfilePrefix(id) + encodeSuffix(suffix);
     if (!id && suffix.startsWith('set:set:')) return settingsStoragePrefix + 'standalone/' + encodeSuffix(suffix);
     return id ? `rs2b0t:${id}:${suffix}` : `rs2b0t:${suffix}`;
 }
@@ -44,23 +48,28 @@ export function boxKeyTail(key: string, prefix: string): string | null {
 
 export function boxSuffix(key: string, prefix: string, id: string): string | null {
     if (id === 'set' && key.startsWith(setProfilePrefix)) return boxKeyTail(key, setProfilePrefix);
-    if (id.startsWith('set:') && isEncodedSettingKey(key)) return boxKeyTail(key, nestedProfilePrefix(id));
+    if (id.startsWith('set:')) return isEncodedSettingKey(key) ? boxKeyTail(key, nestedProfilePrefix(id)) : null;
     if (!key.startsWith(prefix) || (id === 'set' && key.includes(':', prefix.length))) return null;
-    const suffix = key.slice(prefix.length);
-    return isLegacyProfileSuffix(id, suffix) ? suffix : null;
+    return key.slice(prefix.length);
 }
 
 export function isLegacySetProfileSetting(suffix: string): boolean {
     return /^set:[^:]+:/.test(suffix);
 }
 
-export function disableLegacySetProfileSettings(store: Storage): void {
-    store.setItem(setProfileMigrationKey, '1');
+function migrationKey(id: string): string | null {
+    if (id === 'set') return setProfileMigrationKey;
+    return id.startsWith('set:') ? settingsStoragePrefix + 'migrated/' + encodeSuffix(id) : null;
+}
+
+export function disableLegacySetProfileSettings(store: Storage, id = 'set'): void {
+    const marker = migrationKey(id);
+    if (marker) store.setItem(marker, '1');
 }
 
 function legacyKey(suffix: string, id: string): string | null {
     if (!id && suffix.startsWith('set:set:')) return `rs2b0t:${suffix}`;
-    if (id === 'set' && isLegacySetProfileSetting(suffix)) return `rs2b0t:set:${suffix}`;
+    if (isSetProfile(id) && isLegacySetProfileSetting(suffix)) return `rs2b0t:${id}:${suffix}`;
     return null;
 }
 
@@ -70,10 +79,11 @@ function clearedKey(key: string): string {
 
 export function allowsLegacyBoxItem(store: Storage, key: string, id: string): boolean {
     const cleared = clearedKey(key);
-    if (id === 'set') {
-        if (store.getItem(setProfileMigrationKey) !== null) return false;
+    const marker = migrationKey(id);
+    if (marker) {
+        if (store.getItem(marker) !== null) return false;
         if (typeof localStorage !== 'undefined' && store !== localStorage) {
-            if (localStorage.getItem(setProfileMigrationKey) !== null) return false;
+            if (localStorage.getItem(marker) !== null) return false;
             if (desktopStorage && localStorage.getItem(cleared) !== null) return false;
         }
     }
@@ -100,9 +110,9 @@ export function readBoxItem(suffix: string, id: string): string | null {
 export function clearBoxItem(store: Storage, suffix: string, id: string): void {
     const key = boxKey(suffix, id);
     const legacy = legacyKey(suffix, id);
-    const savedOnDesktop = id === 'set' && desktopStorage && store === localStorage && store.getItem(key) !== null;
-    if (legacy && allowsLegacyBoxItem(store, key, id) && (savedOnDesktop || store.getItem(legacy) !== null)) {
-        store.setItem(clearedKey(key), '1');
+    if (legacy && allowsLegacyBoxItem(store, key, id)) {
+        const savedOnDesktop = desktopStorage && id !== '' && store === localStorage && store.getItem(key) !== null;
+        if (savedOnDesktop || store.getItem(legacy) !== null) store.setItem(clearedKey(key), '1');
     }
     store.removeItem(key);
 }
@@ -114,9 +124,8 @@ export function legacyBoxSuffix(store: Storage, key: string, id: string): string
     return legacyKey(suffix, id) === key && allowsLegacyBoxItem(store, boxKey(suffix, id), id) ? suffix : null;
 }
 
-export function profileStorageKeys(store: Storage, id?: string): string[] {
-    const keys = storeKeys(store);
-    if (id !== 'set' && id !== '') return keys;
+export function profileStorageKeys(store: Storage, id: string, keys = storeKeys(store)): string[] {
+    if (id !== '' && !isSetProfile(id)) return keys;
     return keys.map(key => {
         const suffix = legacyBoxSuffix(store, key, id);
         return suffix === null ? key : boxKey(suffix, id);

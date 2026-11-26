@@ -1,5 +1,6 @@
 import { isRosterScript } from './RosterTypes.js';
 import { boxKey, boxKeyTail, clearBoxItem, profileStorageKeys, readBoxItem } from '../runtime/box.js';
+import { storeKeys } from '../runtime/desktopStorage.js';
 
 function canonicalScript(script: string): string {
     return script === 'NatureCrafter' ? 'JiveRC' : script;
@@ -14,7 +15,7 @@ function stores(): Storage[] {
     return [localStorage, sessionStorage];
 }
 
-function keys(id?: string): string[] {
+function keys(id: string): string[] {
     const saved = stores().flatMap(store => profileStorageKeys(store, id));
     return [...new Set(saved)];
 }
@@ -60,18 +61,17 @@ export function replaceScriptSettings(username: string, script: string, values: 
 }
 
 export function storedScripts(usernames: string[]): string[] {
-    const scripts = new Set<string>();
-    const rawKeys = keys();
-    const setKeys = usernames.includes('set') ? keys('set') : [];
-    for (const username of usernames) {
-        const selected = readProfileScript(username);
-        if (selected) scripts.add(selected);
-        const prefix = boxKey('set:', username);
-        for (const key of username === 'set' ? setKeys : rawKeys) {
-            const suffix = boxKeyTail(key, prefix);
-            if (suffix === null) continue;
-            const end = suffix.indexOf(':');
-            if (end > 0) scripts.add(canonicalScript(suffix.slice(0, end)));
+    const scripts = new Set(usernames.map(readProfileScript));
+    for (const store of stores()) {
+        const saved = storeKeys(store);
+        for (const username of usernames) {
+            const prefix = boxKey('set:', username);
+            for (const key of profileStorageKeys(store, username, saved)) {
+                const suffix = boxKeyTail(key, prefix);
+                if (suffix === null) continue;
+                const end = suffix.indexOf(':');
+                if (end > 0) scripts.add(canonicalScript(suffix.slice(0, end)));
+            }
         }
     }
     return [...scripts].filter(isRosterScript).sort();

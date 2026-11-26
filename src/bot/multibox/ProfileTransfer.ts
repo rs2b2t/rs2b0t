@@ -1,4 +1,4 @@
-import { allowsLegacyBoxItem, boxKey, boxSuffix, disableLegacySetProfileSettings, isLegacyProfileSuffix, legacyBoxSuffix } from '../runtime/box.js';
+import { allowsLegacyBoxItem, boxKey, boxSuffix, disableLegacySetProfileSettings, isLegacyProfileSuffix, isSetProfile, legacyBoxSuffix } from '../runtime/box.js';
 import type { Profile } from './ProfileVault.js';
 import { desktopStorage, storeKeys } from '../runtime/desktopStorage.js';
 
@@ -27,7 +27,7 @@ export function serializeProfileFile(data: ProfileSnapshot): string {
     const usernames = [...data.profiles.map(p => p.username), ...Object.keys(data.storage)];
     const file: ProfileFile = {
         kind: PROFILE_FILE_KIND,
-        v: usernames.some(user => user === 'set' || user.startsWith('set:')) ? PROFILE_FILE_VERSION : 1,
+        v: usernames.some(isSetProfile) ? PROFILE_FILE_VERSION : 1,
         profiles: data.profiles,
         tabs: data.tabs,
         activeTab: data.activeTab,
@@ -95,7 +95,6 @@ export function collectBoxStorage(usernames: string[], includeLegacy?: (suffix: 
 
 export function applyBoxStorage(storage: BoxStorageMap, wipe: string[]): void {
     const boxes = [...new Set([...wipe, ...Object.keys(storage)])].map(user => ({ user, prefix: boxStoragePrefix(user) }));
-    const replacesSet = boxes.some(({ user }) => user === 'set');
     const stores: Storage[] = [];
     if (typeof localStorage !== 'undefined') {
         stores.push(localStorage);
@@ -109,7 +108,7 @@ export function applyBoxStorage(storage: BoxStorageMap, wipe: string[]): void {
                 store.removeItem(key);
             }
         }
-        if (replacesSet) disableLegacySetProfileSettings(store);
+        for (const { user } of boxes) disableLegacySetProfileSettings(store, user);
         for (const [user, entries] of Object.entries(storage)) {
             for (const [suffix, value] of Object.entries(entries)) {
                 store.setItem(boxKey(suffix, user), value);
