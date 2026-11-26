@@ -2,6 +2,7 @@ import { reader, actions, type WorldTile } from '../../adapter/ClientAdapter.js'
 import { LoopingBot } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { Game, waitForPlayerTile } from '../../api/game/Game.js';
+import { TANNED_LEATHER_IDS } from '../../data/tannedLeather.js';
 import Tile from '../../geometry/Tile.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { Bank } from '../../api/bank/Bank.js';
@@ -35,12 +36,12 @@ interface TanMode {
 
 // Dragonhides share a display name, so behavior keys on ids and logs use names.
 const TAN_MODES: Record<string, TanMode> = {
-    'Soft leather': { hideId: 1739, hideLabel: 'Cow hide', productId: 1741, productLabel: 'Leather', tanAllComId: 8686 },
-    'Hard leather': { hideId: 1739, hideLabel: 'Cow hide', productId: 1743, productLabel: 'Hard leather', tanAllComId: 8690 },
-    'Green dragonhide': { hideId: 1753, hideLabel: 'Green dragonhide', productId: 1745, productLabel: 'Green d-leather', tanAllComId: 8695 },
-    'Blue dragonhide': { hideId: 1751, hideLabel: 'Blue dragonhide', productId: 2505, productLabel: 'Blue d-leather', tanAllComId: 8700 },
-    'Red dragonhide': { hideId: 1749, hideLabel: 'Red dragonhide', productId: 2507, productLabel: 'Red d-leather', tanAllComId: 8705 },
-    'Black dragonhide': { hideId: 1747, hideLabel: 'Black dragonhide', productId: 2509, productLabel: 'Black d-leather', tanAllComId: 8710 }
+    'Soft leather': { hideId: 1739, hideLabel: 'Cow hide', productId: TANNED_LEATHER_IDS.soft, productLabel: 'Leather', tanAllComId: 8686 },
+    'Hard leather': { hideId: 1739, hideLabel: 'Cow hide', productId: TANNED_LEATHER_IDS.hard, productLabel: 'Hard leather', tanAllComId: 8690 },
+    'Green dragonhide': { hideId: 1753, hideLabel: 'Green dragonhide', productId: TANNED_LEATHER_IDS.green, productLabel: 'Green d-leather', tanAllComId: 8695 },
+    'Blue dragonhide': { hideId: 1751, hideLabel: 'Blue dragonhide', productId: TANNED_LEATHER_IDS.blue, productLabel: 'Blue d-leather', tanAllComId: 8700 },
+    'Red dragonhide': { hideId: 1749, hideLabel: 'Red dragonhide', productId: TANNED_LEATHER_IDS.red, productLabel: 'Red d-leather', tanAllComId: 8705 },
+    'Black dragonhide': { hideId: 1747, hideLabel: 'Black dragonhide', productId: TANNED_LEATHER_IDS.black, productLabel: 'Black d-leather', tanAllComId: 8710 }
 };
 
 export const TANNER_SETTINGS: SettingsSchema = {

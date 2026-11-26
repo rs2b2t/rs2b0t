@@ -221,6 +221,25 @@ describe('LeatherCrafter startup readiness', () => {
 });
 
 describe('LeatherCrafter bank withdrawals', () => {
+    test.each<[string, number]>([
+        ['Leather', LEATHER],
+        ['Hard leather', 1743],
+        ['Green dragon leather', 1745],
+        ['Blue dragon leather', 2505],
+        ['Red dragon leather', 2507],
+        ['Black dragon leather', 2509],
+        ['unknown', LEATHER]
+    ])('%s withdraws material %i', async (leatherType, leatherId) => {
+        Skills.level = () => 99;
+        inventoryCounts.set(NEEDLE, 1);
+        inventoryCounts.set(THREAD, 100);
+        bankContents = [snapshot(leatherId, 500, 0)];
+        const instance = bot(leatherType);
+        await instance.onStart();
+        await instance.loop();
+        expect(clickedIds).toEqual([leatherId]);
+    });
+
     test('recognises a successful thread stack top-up without a new inventory slot', async () => {
         inventoryCounts.set(NEEDLE, 1);
         inventoryCounts.set(THREAD, 4);
