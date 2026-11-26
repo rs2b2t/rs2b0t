@@ -65,12 +65,39 @@ export class MultiBoxController {
         return this.snap(slot);
     }
 
-    addGroup(accounts: Account[]): void {
+    restoreProfiles(profiles: Account[], tabs: string[], activeTab: string): void {
+        const remaining = new Map<string, Account>();
+        for (const profile of profiles) {
+            const name = normalizeUsername(profile.username);
+            if (!remaining.has(name)) remaining.set(name, profile);
+        }
+        const knownTabs = new Set([MAIN_TAB, ...tabs]);
+        let modesChanged = this.active !== activeTab;
+        for (const slot of this.slots) {
+            const name = normalizeUsername(slot.account.username);
+            const saved = remaining.get(name);
+            const tab = saved ? saved.tab ?? MAIN_TAB : slot.tab;
+            const next = knownTabs.has(tab) ? tab : MAIN_TAB;
+            if (slot.tab !== next) {
+                slot.tab = next;
+                modesChanged = true;
+            }
+            remaining.delete(name);
+        }
+        for (const tab of this.customTabs) {
+            if (!knownTabs.has(tab)) this.lastFocusByTab.delete(tab);
+        }
+        this.customTabs = [...tabs];
+        this.active = activeTab;
+        this.addGroup([...remaining.values()], modesChanged);
+    }
+
+    addGroup(accounts: Account[], modesChanged = false): void {
         const before = this.slots.length;
         try {
             for (const account of accounts) this.addSlot(account);
         } finally {
-            if (this.slots.length !== before) this.applyModes();
+            if (modesChanged || this.slots.length !== before) this.applyModes();
         }
     }
 

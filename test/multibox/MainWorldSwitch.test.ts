@@ -16,6 +16,7 @@ import '#/client/config/target.js';
 interface Wall {
     controller: MultiBoxController;
     add(account: Account): SlotSnapshot;
+    addTab(name: string): boolean;
     slots(): SlotSnapshot[];
     setWorld(id: number, world: WorldNumber): Promise<boolean>;
 }
@@ -140,6 +141,47 @@ test.each([0, 4])('settings import applies modes once with %i profiles already l
         } finally {
             open.mockRestore();
             spawning.mockRestore();
+        }
+    });
+});
+
+test.each([30, 61])('settings import moves %i loaded profiles to the saved tab', async count => {
+    await withWall('local', async wall => {
+        const profiles = Array.from({ length: count }, (_, i) => ({ username: `fixture${i}`, password: 'fixture' }));
+        const spare = { username: 'spare', password: 'fixture' };
+        const tabs = ['Empty', 'Fleet', 'Reserve'];
+        const imported = [...profiles.map(p => ({ ...p, tab: 'Fleet' })), { ...spare, tab: 'Main' }];
+        const assignments = imported.map(p => [p.username, p.tab]);
+        const open = spyOn(SettingsPanel.prototype, 'open');
+        const saves = spyOn(vault, 'saveTabState');
+        try {
+            document.getElementById('mbx-settings')!.click();
+            const panel = open.mock.contexts[0] as SettingsPanel;
+            await panel.importText(serializeProfileFile({
+                profiles: [...profiles, spare].map(p => ({ ...p, tab: 'Old' })),
+                tabs: ['Old', 'Reserve', 'Empty'], activeTab: 'Old', storage: {}
+            }));
+            await Promise.all(saves.mock.results.map(result => result.value));
+            const original = wall.slots();
+            expect(original.map(s => [s.username, s.tab])).toEqual(imported.map(p => [p.username, 'Old']));
+            const guest = wall.add({ username: 'guest', password: 'fixture', tab: 'Old' });
+
+            wall.addTab('Local1');
+            wall.addTab('Local2');
+            await panel.importText(serializeProfileFile({ profiles: imported, tabs, activeTab: 'Fleet', storage: {} }));
+            expect(panel.el.querySelector('#mbx-settings-error')!.textContent).toBe('');
+            await Promise.all(saves.mock.results.map(result => result.value));
+            const reopened = new ProfileVault();
+            expect(await reopened.unlock('test-passphrase')).toBe(true);
+            expect(reopened.list().map(p => [p.username, p.tab])).toEqual(assignments);
+            expect(reopened.tabState()).toEqual({ tabs, activeTab: 'Fleet' });
+            expect(wall.controller.tabs()).toEqual(['Main', ...tabs]);
+            expect(wall.controller.activeTab()).toBe('Fleet');
+            expect(wall.slots().map(s => s.id)).toEqual([...original.map(s => s.id), guest.id]);
+            expect(wall.slots().map(s => [s.username, s.tab])).toEqual([...assignments, ['guest', 'Main']]);
+        } finally {
+            saves.mockRestore();
+            open.mockRestore();
         }
     });
 });

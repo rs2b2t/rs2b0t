@@ -20,7 +20,7 @@ import { RosterPanel } from './RosterPanel.js';
 import { TabBar } from './TabBar.js';
 import { BotTabMenu } from './BotTabMenu.js';
 import { VaultPrompt } from './VaultPrompt.js';
-import { applyBoxStorage, collectBoxStorage, type ProfileSnapshot } from './ProfileTransfer.js';
+import { applyBoxStorage, collectBoxStorage } from './ProfileTransfer.js';
 import type { Account } from './types.js';
 
 type DesktopWall = Window & { rs2b0tLoginCoordinator?: LoginCoordinationRegistry & { parallelism: number } };
@@ -380,16 +380,6 @@ function boot(): void {
         }
     }
 
-    function applyImportedTabs(data: ProfileSnapshot): void {
-        const live = controller.snapshot();
-        if (live.length === 0) {
-            controller.setTabState(data.tabs, data.activeTab);
-            tabsHydrated = true;
-            return;
-        }
-        mergeSavedTabs(data.tabs);
-    }
-
     function mergeSavedTabs(tabs: string[]): void {
         let changed = false;
         for (const tab of tabs) {
@@ -413,13 +403,6 @@ function boot(): void {
         renderRail();
     }
 
-    function loadImportedProfiles(): void {
-        const live = new Set(controller.snapshot().map(slot => slot.username));
-        controller.addGroup(vault.list().filter(profile => !live.has(profile.username)));
-        persistTabState();
-        renderRail();
-    }
-
     const settings = new SettingsPanel({
         ensureUnlocked: () => ensureUnlocked(),
         snapshot: () => ({
@@ -427,13 +410,15 @@ function boot(): void {
             storage: collectBoxStorage(vault.list().map(p => p.username))
         }),
         replaceAll: async data => {
+            await orderWrite;
             const previous = vault.list().map(p => p.username);
             await vault.replaceAll(data);
             applyBoxStorage(data.storage, [...previous, ...data.profiles.map(p => p.username)]);
         },
         onImported: data => {
-            applyImportedTabs(data);
-            loadImportedProfiles();
+            vault.adoptGroupState();
+            controller.restoreProfiles(vault.list(), data.tabs, data.activeTab);
+            renderRail();
         }
     });
     document.body.appendChild(settings.el);
