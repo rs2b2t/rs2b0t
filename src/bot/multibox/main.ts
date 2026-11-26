@@ -340,6 +340,7 @@ function boot(): void {
             if (tab) controller.setActiveTab(tab);
             controller.addGroup(profiles);
             renderRail();
+            if (tab) afterTabRestore(() => persistTabState(tab));
         }
     });
     document.body.appendChild(chooser.el);

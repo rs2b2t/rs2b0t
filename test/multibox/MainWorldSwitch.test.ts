@@ -469,6 +469,33 @@ test('overlapping settings imports remove the superseded profile settings from b
     });
 });
 
+test('loading Work from the chooser keeps it active after adding a tab and reopening', async () => {
+    await withWall('local', async wall => {
+        await vault.replaceAll({
+            profiles: [{ username: 'worker', password: 'fixture', tab: 'Work' }],
+            tabs: ['Fleet', 'Work'], activeTab: 'Fleet'
+        });
+        document.getElementById('mbx-add')!.click();
+        await waitFor(() => !!document.querySelector('.mbx-load-group'));
+        expect(wall.controller.activeTab()).toBe('Fleet');
+        const group = document.querySelector<HTMLButtonElement>('.mbx-load-group')!;
+        expect(group.textContent).toBe('Load group: Work (1)');
+        const saves = spyOn(vault, 'saveTabState');
+        try {
+            group.click();
+            expect(wall.controller.activeTab()).toBe('Work');
+            expect(await wall.addTab('Local')).toBe(true);
+            await waitFor(() => vault.tabState().tabs.includes('Local'));
+            await Promise.all(saves.mock.results.map(result => result.value));
+            const reopened = new ProfileVault();
+            expect(await reopened.unlock('test-passphrase')).toBe(true);
+            expect(reopened.tabState()).toEqual({ tabs: ['Fleet', 'Work', 'Local'], activeTab: 'Work' });
+        } finally {
+            saves.mockRestore();
+        }
+    });
+});
+
 test('a shared import can load from the open chooser and reveal its tile', async () => {
     await withWall('proxy', async wall => {
         const openChooser = async () => {
