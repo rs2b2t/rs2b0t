@@ -12,6 +12,12 @@ export function boxId(): string {
 }
 
 const setProfilePrefix = settingsStoragePrefix + 'profile/';
+const standalonePrefix = settingsStoragePrefix + 'standalone/';
+const ordinaryProfileFields = new Set(['selectedScript', 'rendererEnabled', 'creds']);
+
+function needsStandaloneNamespace(suffix: string): boolean {
+    return suffix.startsWith('set:') && (suffix.includes(':set:') || ordinaryProfileFields.has(suffix.slice(suffix.lastIndexOf(':') + 1)));
+}
 
 // Why: every profile prefix contains another colon after rs2b0t:.
 function encodeSuffix(suffix: string): string {
@@ -29,15 +35,26 @@ export function isSetProfile(id: string): boolean {
 export function boxKey(suffix: string, id = boxId()): string {
     if (id === 'set' && suffix.includes(':')) return setProfilePrefix + encodeSuffix(suffix);
     if (id.startsWith('set:')) return nestedProfilePrefix(id) + encodeSuffix(suffix);
-    if (!id && suffix.startsWith('set:set:')) return settingsStoragePrefix + 'standalone/' + encodeSuffix(suffix);
+    if (!id && needsStandaloneNamespace(suffix)) return standalonePrefix + encodeSuffix(suffix);
     return id ? `rs2b0t:${id}:${suffix}` : `rs2b0t:${suffix}`;
 }
 
+function decodeSuffix(suffix: string): string {
+    return suffix.replaceAll('%3A', ':').replaceAll('%25', '%');
+}
+
+function decodeStandaloneKey(key: string): string {
+    if (!key.startsWith(standalonePrefix) || !isEncodedSettingKey(key)) return key;
+    return 'rs2b0t:' + decodeSuffix(key.slice(standalonePrefix.length));
+}
+
 export function boxKeyTail(key: string, prefix: string): string | null {
+    key = decodeStandaloneKey(key);
+    prefix = decodeStandaloneKey(prefix);
     if (!key.startsWith(prefix)) return null;
     const tail = key.slice(prefix.length);
     if (!isEncodedSettingKey(prefix)) return tail;
-    return isEncodedSettingKey(key) ? tail.replaceAll('%3A', ':').replaceAll('%25', '%') : null;
+    return isEncodedSettingKey(key) ? decodeSuffix(tail) : null;
 }
 
 export function boxSuffix(key: string, prefix: string, id: string): string | null {
@@ -62,7 +79,7 @@ export function disableLegacySetProfileSettings(store: Storage, id = 'set'): voi
 }
 
 function legacyKey(suffix: string, id: string): string | null {
-    if (!id && suffix.startsWith('set:set:')) return `rs2b0t:${suffix}`;
+    if (!id && needsStandaloneNamespace(suffix)) return `rs2b0t:${suffix}`;
     if (isSetProfile(id) && isLegacySetProfileSetting(suffix)) return `rs2b0t:${id}:${suffix}`;
     return null;
 }
@@ -115,7 +132,9 @@ export function legacyBoxSuffix(store: Storage, key: string, id: string): string
     const prefix = id ? `rs2b0t:${id}:` : 'rs2b0t:';
     if (!key.startsWith(prefix)) return null;
     const suffix = key.slice(prefix.length);
-    return legacyKey(suffix, id) === key && allowsLegacyBoxItem(store, boxKey(suffix, id), id) ? suffix : null;
+    const ordinaryField = id.startsWith('set:') && ordinaryProfileFields.has(suffix);
+    if (!ordinaryField && legacyKey(suffix, id) !== key) return null;
+    return allowsLegacyBoxItem(store, boxKey(suffix, id), id) ? suffix : null;
 }
 
 export function profileStorageKeys(store: Storage, id: string, keys = storeKeys(store)): string[] {

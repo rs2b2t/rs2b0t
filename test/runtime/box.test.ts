@@ -26,3 +26,13 @@ test('encoded profile and standalone settings use distinct top-level keys and de
     }
     expect(boxKey('set:set:route%3A:out', 'set')).not.toBe(boxKey('set:set:route%3A:out', ''));
 });
+
+test('standalone prefix scans span encoded and ordinary fields of the same script', () => {
+    const prefix = 'set:Travel:';
+    for (const field of ['selectedScript', 'selectedScriptExtra', 'set:Miner:route%3A:out']) {
+        const suffix = prefix + field;
+        for (let end = prefix.length; end <= suffix.length; end++) {
+            expect(boxKeyTail(boxKey(suffix, ''), boxKey(suffix.slice(0, end), ''))).toBe(suffix.slice(end));
+        }
+    }
+});

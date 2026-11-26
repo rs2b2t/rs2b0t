@@ -84,9 +84,11 @@ export function collectBoxStorage(usernames: string[], includeLegacy?: ConfirmLe
         readStore(sessionStorage, usernames, out, legacy, !!desktopStorage);
     }
     if (legacy && includeLegacy) {
-        const preferred = desktopStorage ? globalThis.localStorage : globalThis.sessionStorage;
         for (const [key, { user, suffix, store }] of legacy) {
-            if (out[user] && Object.hasOwn(out[user], suffix) && (store !== preferred || store.getItem(key) !== null)) continue;
+            if (out[user] && Object.hasOwn(out[user], suffix)) {
+                const preferred = desktopStorage && suffix !== 'creds' ? globalThis.localStorage : globalThis.sessionStorage;
+                if (store !== preferred || store.getItem(key) !== null) continue;
+            }
             const value = store.getItem(boxStoragePrefix(user) + suffix);
             if (value === null || !includeLegacy(suffix, user)) continue;
             out[user] ??= {};
@@ -167,9 +169,10 @@ function parseStorage(raw: unknown, version: number, includeLegacy?: ConfirmLega
             if (typeof value !== 'string') {
                 throw new Error(`profile file storage '${user}.${suffix}' must be a string`);
             }
-            if (version === 1) {
-                if (user === 'set' && suffix.includes(':') && !isLegacySetProfileSetting(suffix)) continue;
-                if (user.startsWith('set:') && !includeLegacy?.(suffix, user)) continue;
+            const ambiguous = user.startsWith('set:') || (user === 'set' && suffix.includes(':'));
+            if (version === 1 && ambiguous) {
+                if (user === 'set' && !isLegacySetProfileSetting(suffix)) continue;
+                if (!includeLegacy?.(suffix, user)) continue;
             }
             box[suffix] = value;
         }

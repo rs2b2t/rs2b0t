@@ -118,6 +118,15 @@ describe('ProfileTransfer', () => {
         });
     });
 
+    test('desktop export recovers legacy fields while keeping the current session login', () => {
+        const result = Bun.spawnSync(['bun', 'test/fixtures/roster-desktop-storage.ts', '--export-legacy-fields']);
+        expect(result.exitCode, result.stderr.toString()).toBe(0);
+        expect(JSON.parse(result.stdout.toString())).toEqual({
+            storage: { 'set:Travel': { selectedScript: 'Miner', rendererEnabled: '1', creds: 'edited' } },
+            offered: ['rendererEnabled', 'selectedScript']
+        });
+    });
+
     test('an installed desktop shell can save and restore settings for set', () => {
         const result = Bun.spawnSync(['bun', 'test/fixtures/roster-desktop-storage.ts', '--installed-shell']);
         expect(result.exitCode, result.stderr.toString()).toBe(0);
@@ -344,13 +353,60 @@ describe('ProfileTransfer', () => {
         expect(collectBoxStorage(names)).toEqual({ 'set:Travel': { selectedScript: 'Miner', 'set:Miner:rock': 'iron' } });
         applyBoxStorage({}, names);
         for (const [key, value] of Object.entries(standalone)) {
-            expect(sessionStorage.getItem(`rs2b0t:set:Travel:${key}`)).toBe(value);
+            expect(sessionStorage.getItem(boxKey(`set:Travel:${key}`, ''))).toBe(value);
         }
         sessionStorage.clear();
 
         for (const [key, value] of Object.entries(standalone)) expect(SettingsStore.saved('Travel', key)).toBe(value);
         expect(readProfileScript('set:Travel')).toBe('');
         expect(readScriptSettings('set:Travel', 'Miner')).toEqual({});
+    });
+
+    test('the first export offers ordinary legacy profile fields before restoring them', () => {
+        const user = 'set:Travel';
+        const fields = { selectedScript: 'Miner', rendererEnabled: '0', creds: 'fixture' };
+        for (const [field, value] of Object.entries(fields)) sessionStorage.setItem(`rs2b0t:${user}:${field}`, value);
+        expect(collectBoxStorage([user])).toEqual({});
+        const offered: string[][] = [];
+        const storage = collectBoxStorage([user], (field, owner) => {
+            offered.push([owner, field]);
+            return field !== 'creds';
+        });
+        expect(offered.sort()).toEqual(Object.keys(fields).sort().map(field => [user, field]));
+        applyBoxStorage(storage, [user]);
+        sessionStorage.clear();
+        expect(readProfileScript(user)).toBe('Miner');
+        expect(collectBoxStorage([user])).toEqual({ [user]: { selectedScript: 'Miner', rendererEnabled: '0' } });
+    });
+
+    test('an ambiguous v1 setting under exact set requires confirmation', () => {
+        const threshold = 'set:Global:runEnergyMin';
+        const storage = { set: { [threshold]: '73', selectedScript: 'Miner', 'Loadouts:sets': '[]' } };
+        const file = JSON.stringify({ ...snap, profiles: [{ username: 'set', password: '' }], storage, kind: PROFILE_FILE_KIND, v: 1 });
+        SettingsStore.save('set', 'Global:runEnergyMin', '61');
+        const offered: string[][] = [];
+        applyBoxStorage(parseProfileFile(file, (field, owner) => {
+            offered.push([owner, field]);
+            return false;
+        }).storage, ['set']);
+        sessionStorage.clear();
+        expect(inBox('set', () => SettingsStore.globalBag().num('runEnergyMin'))).toBe(20);
+        expect(readProfileScript('set')).toBe('Miner');
+        expect(SettingsStore.saved('set', 'Global:runEnergyMin')).toBe('61');
+        expect(offered).toEqual([['set', threshold]]);
+    });
+
+    test('new standalone fields stay out of profile reads and legacy export offers', () => {
+        const fields = { 'set:Miner:rock': 'trail', selectedScript: 'walk', rendererEnabled: '1', creds: 'fixture' };
+        for (const [field, value] of Object.entries(fields)) SettingsStore.save('Travel', field, value);
+        sessionStorage.clear();
+        expect(readScriptSettings('set:Travel', 'Miner')).toEqual({});
+        expect(storedScripts(['set:Travel'])).toEqual([]);
+        expect(readProfileScript('set:Travel')).toBe('');
+        const offered: string[] = [];
+        expect(collectBoxStorage(['set:Travel'], field => { offered.push(field); return true; })).toEqual({});
+        expect(offered).toEqual([]);
+        expect(readScriptSettings('', 'Travel')).toEqual(fields);
     });
 
     test('the first backup asks which account owns each legacy setting', () => {
@@ -436,7 +492,7 @@ describe('ProfileTransfer', () => {
             [neighbour]: { 'set:Global:runEnergyMin': '61' }
         };
         const file = JSON.stringify({ ...snap, profiles, storage, kind: PROFILE_FILE_KIND, v: 1 });
-        applyBoxStorage(parseProfileFile(file).storage, names);
+        applyBoxStorage(parseProfileFile(file, (field, owner) => owner === 'set' && field === 'set:Global:runEnergyMin').storage, names);
         sessionStorage.clear();
 
         expect(names.map(name => inBox(name, () => SettingsStore.globalBag().num('runEnergyMin')))).toEqual([42, 73, 61]);
@@ -536,7 +592,7 @@ describe('ProfileTransfer', () => {
             const file = incoming === 'legacy set'
                 ? JSON.stringify({ ...snapshot, kind: PROFILE_FILE_KIND, v: 1 })
                 : serializeProfileFile(snapshot);
-            const backup = parseProfileFile(file);
+            const backup = parseProfileFile(file, field => field === threshold || field === 'set:travel:mode');
             applyBoxStorage(backup.storage, [previous, ...backup.profiles.map(p => p.username)]);
 
             expect(inBox('set', () => SettingsStore.saved('Global', 'runEnergyMin'))).toBe(user === 'set' ? '42' : undefined);

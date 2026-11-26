@@ -78,6 +78,20 @@ if (process.argv.includes('--export-edited-login')) {
     console.log(serializeProfileFile({ profiles, tabs: [], activeTab: 'Main', storage: collectBoxStorage([user]) }));
     process.exit(0);
 }
+if (process.argv.includes('--export-legacy-fields')) {
+    const { collectBoxStorage } = await import('../../src/bot/multibox/ProfileTransfer.js');
+    const { boxKey } = await import('../../src/bot/runtime/box.js');
+    const user = 'set:Travel';
+    localStorage.setItem(`rs2b0t:${user}:selectedScript`, 'Miner');
+    sessionStorage.setItem(`rs2b0t:${user}:selectedScript`, 'Fisher');
+    sessionStorage.setItem(`rs2b0t:${user}:rendererEnabled`, '1');
+    localStorage.setItem(`rs2b0t:${user}:creds`, 'old');
+    sessionStorage.setItem(boxKey('creds', user), 'edited');
+    const offered: string[] = [];
+    const storage = collectBoxStorage([user], field => { offered.push(field); return true; });
+    console.log(JSON.stringify({ storage, offered: offered.sort() }));
+    process.exit(0);
+}
 if (process.argv.includes('--export-set')) {
     const user = process.argv[3];
     const { SettingsStore } = await import('../../src/bot/runtime/Settings.js');
