@@ -1,0 +1,23 @@
+export const BANK_STAND_COORDINATES = {
+    varrockEast: [3253, 3420, 0],
+    varrockWest: [3185, 3440, 0],
+    alKharid: [3269, 3167, 0],
+    draynor: [3093, 3243, 0],
+    faladorEast: [3013, 3355, 0],
+    faladorWest: [2946, 3369, 0],
+    edgeville: [3094, 3493, 0],
+    seers: [2725, 3491, 0],
+    catherby: [2809, 3441, 0],
+    yanille: [2612, 3092, 0],
+    ardougneWest: [2616, 3332, 0],
+    ardougneEast: [2655, 3283, 0],
+    canifis: [3512, 3480, 0],
+    shiloVillage: [2852, 2954, 0],
+    zanaris: [3153, 9576, 0],
+    fishingGuild: [2586, 3420, 0],
+    legendsGuild: [2732, 3378, 2],
+    shantayPass: [3308, 3120, 0],
+    mageArena: [2542, 4714, 0],
+    grandTree: [2449, 3482, 1],
+    duelArena: [3382, 3269, 0]
+} as const;
