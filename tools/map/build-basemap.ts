@@ -62,41 +62,45 @@ function parseArgs(): BakeArgs {
     return { engine, jag, outDir, revision, fetchUrl, ifNeeded };
 }
 
-function hasCurrentBake(outDir: string): boolean {
+function hasCurrentBake(outDir: string, localFingerprint: string | null): boolean {
     try {
         const manifest: BasemapManifest = JSON.parse(fs.readFileSync(path.join(outDir, BASEMAP_MANIFEST_NAME), 'utf8'));
+        const optionalAssets = [manifest.multiOverlayUrl, manifest.freeOverlayUrl, manifest.keyIndexUrl, manifest.playerMarkerUrl];
         return (
             manifest.schema === BASEMAP_SCHEMA &&
-            [manifest.basemapUrl, manifest.keyOverlayUrl, manifest.labelsOverlayUrl].every(
-                url => typeof url === 'string' && fs.statSync(path.join(outDir, url)).isFile()
-            )
+            (localFingerprint === null || manifest.fingerprint === localFingerprint) &&
+            [
+                manifest.basemapUrl,
+                manifest.keyOverlayUrl,
+                manifest.labelsOverlayUrl,
+                ...optionalAssets.filter(url => url !== undefined),
+                ...Object.values(manifest.keyTypeOverlayUrls ?? {})
+            ].every(url => typeof url === 'string' && fs.statSync(path.join(outDir, url)).isFile())
         );
     } catch {
         return false;
     }
 }
 
-async function resolveJag(opts: ReturnType<typeof parseArgs>): Promise<{ bytes: Uint8Array; source: string }> {
+function findLocalJag(opts: BakeArgs): string | null {
     if (opts.jag) {
-        if (!fs.existsSync(opts.jag)) {
-            throw new Error(`--jag not found: ${opts.jag}`);
-        }
-        return { bytes: new Uint8Array(fs.readFileSync(opts.jag)), source: opts.jag };
+        return fs.existsSync(opts.jag) ? opts.jag : null;
     }
     const engineJag = path.join(opts.engine, 'data/pack/mapview/worldmap.jag');
     if (fs.existsSync(engineJag)) {
-        return { bytes: new Uint8Array(fs.readFileSync(engineJag)), source: engineJag };
+        return engineJag;
     }
     const cacheJag = path.join(opts.outDir, 'worldmap.jag');
-    if (fs.existsSync(cacheJag)) {
-        return { bytes: new Uint8Array(fs.readFileSync(cacheJag)), source: cacheJag };
-    }
-    console.log(`worldmap.jag missing under engine; downloading ${opts.fetchUrl}…`);
-    const res = await fetch(opts.fetchUrl);
+    return fs.existsSync(cacheJag) ? cacheJag : null;
+}
+
+async function downloadJag(url: string): Promise<Uint8Array> {
+    console.log(`worldmap.jag missing under engine; downloading ${url}…`);
+    const res = await fetch(url);
     if (!res.ok) {
         throw new Error(`download failed HTTP ${res.status}`);
     }
-    return { bytes: new Uint8Array(await res.arrayBuffer()), source: opts.fetchUrl };
+    return new Uint8Array(await res.arrayBuffer());
 }
 
 function fingerprint(jag: Uint8Array): string {
@@ -343,11 +347,17 @@ async function bake(jagBytes: Uint8Array): Promise<BakeResult> {
 
 async function main(): Promise<void> {
     const opts = parseArgs();
-    if (opts.ifNeeded && hasCurrentBake(opts.outDir)) return;
     const started = performance.now();
 
-    const { bytes, source } = await resolveJag(opts);
-    const fp = fingerprint(bytes);
+    const localJag = findLocalJag(opts);
+    const localBytes = localJag === null ? null : fs.readFileSync(localJag);
+    const localFingerprint = localBytes === null ? null : fingerprint(localBytes);
+    if (opts.ifNeeded && hasCurrentBake(opts.outDir, localFingerprint)) return;
+    if (opts.jag && localJag === null) throw new Error(`--jag not found: ${opts.jag}`);
+
+    const source = localJag ?? opts.fetchUrl;
+    const bytes = localBytes ?? await downloadJag(opts.fetchUrl);
+    const fp = localFingerprint ?? fingerprint(bytes);
     console.log(`source: ${source}`);
     console.log(`fingerprint: ${fp}`);
     console.log(`revision: ${opts.revision}`);

@@ -109,6 +109,46 @@ for (const script of ['pack-rs2b0t.sh', 'deploy-local.sh']) {
     });
 }
 
+test('packager refreshes the bake and packaged JAG when the engine map changes', () => {
+    const root = mkdtempSync(join(tmpdir(), 'pack-changed-map-'));
+    try {
+        const pack = prepareDeployment(root, 'pack-rs2b0t.sh');
+        const engineJag = join(root, 'engine/data/pack/mapview/worldmap.jag');
+        const dest = join(root, 'engine/public/rs2b0t/bot');
+        const manifest = () => JSON.parse(readFileSync(join(dest, 'worldmap-basemap.manifest.json'), 'utf8'));
+        writeFileSync(engineJag, emptyMap);
+        pack();
+        const first = manifest();
+
+        writeFileSync(engineJag, townMap);
+        pack();
+        expect(manifest().fingerprint).not.toBe(first.fingerprint);
+        expect(readFileSync(join(dest, 'worldmap.jag'))).toEqual(townMap);
+    } finally {
+        rmSync(root, { recursive: true, force: true });
+    }
+});
+
+test('packager restores a missing free overlay referenced by the manifest', () => {
+    const root = mkdtempSync(join(tmpdir(), 'pack-missing-overlay-'));
+    try {
+        const pack = prepareDeployment(root, 'pack-rs2b0t.sh');
+        const dest = join(root, 'engine/public/rs2b0t/bot');
+        writeFileSync(join(root, 'out/worldmap.jag'), townMap);
+        pack();
+        const { freeOverlayUrl } = JSON.parse(readFileSync(join(dest, 'worldmap-basemap.manifest.json'), 'utf8'));
+        const staged = join(dest, freeOverlayUrl);
+        const expected = readFileSync(staged);
+        rmSync(join(root, 'out', freeOverlayUrl));
+        rmSync(staged);
+
+        pack();
+        expect(readFileSync(staged)).toEqual(expected);
+    } finally {
+        rmSync(root, { recursive: true, force: true });
+    }
+});
+
 test('a failed download bake can retry and cache the valid worldmap', () => {
     const root = mkdtempSync(join(tmpdir(), 'bake-worldmap-'));
     try {
