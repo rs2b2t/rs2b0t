@@ -1,9 +1,10 @@
 import { expect, test } from 'bun:test';
 import { createHash } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { promisify } from 'node:util';
 
 import { encodePngRgba, pix2dToRgba } from '../../tools/map/encodePng.js';
 
@@ -100,6 +101,7 @@ for (const script of ['pack-rs2b0t.sh', 'deploy-local.sh']) {
             expect(manifest.labelsOverlayUrl).not.toBe(oldLabels);
             expect(manifest.fingerprint).not.toBe(oldFingerprint);
             expect(manifest.revision).toBe('275');
+            expect(readFileSync(join(dest, 'worldmap.jag'))).toEqual(townMap);
             const labels = decodePng(readFileSync(join(dest, manifest.labelsOverlayUrl)));
             expect(readFileSync(join(dest, manifest.basemapUrl)).equals(terrain)).toBe(true);
             expect([labels.width, labels.height]).toEqual([1600, 1216]);
@@ -149,24 +151,30 @@ test('packager keeps an explicit JAG when the engine has a different map', () =>
     }
 });
 
-test('packager refreshes the bake and packaged JAG when the engine map changes', () => {
+test('a schema 2 engine bake follows engine changes after the packager upgrades it', () => {
     const root = mkdtempSync(join(tmpdir(), 'pack-changed-map-'));
     try {
         const pack = prepareDeployment(root, 'pack-rs2b0t.sh');
         const engineJag = join(root, 'engine/data/pack/mapview/worldmap.jag');
         const dest = join(root, 'engine/public/rs2b0t/bot');
         const manifest = () => JSON.parse(readFileSync(join(dest, 'worldmap-basemap.manifest.json'), 'utf8'));
-        writeFileSync(engineJag, emptyMap);
-        bakeIfNeeded(join(root, 'out'), '--engine', join(root, 'engine'), '--revision', '275');
+        const out = join(root, 'out');
+        const legacy = join(out, 'worldmap-basemap.manifest.json');
+        writeFileSync(engineJag, townMap);
+        bakeMap(out, '--engine', join(root, 'engine'), '--revision', '275');
+        const original = JSON.parse(readFileSync(legacy, 'utf8'));
+        delete original.explicitJag;
+        writeFileSync(legacy, JSON.stringify({ ...original, schema: 2, fingerprint: '5f1c291201a299b0' }));
         pack();
         const first = manifest();
         expect(first.revision).toBe('275');
+        expect(first.explicitJag).toBe(false);
 
-        writeFileSync(engineJag, townMap);
+        writeFileSync(engineJag, emptyMap);
         pack();
         expect(manifest().fingerprint).not.toBe(first.fingerprint);
         expect(manifest().revision).toBe('274');
-        expect(readFileSync(join(dest, 'worldmap.jag'))).toEqual(townMap);
+        expect(readFileSync(join(dest, 'worldmap.jag'))).toEqual(emptyMap);
     } finally {
         rmSync(root, { recursive: true, force: true });
     }
@@ -202,6 +210,55 @@ test('a cache hit repairs the staged JAG before packaging', () => {
         pack();
         expect(readFileSync(join(root, 'out/worldmap.jag')).equals(townMap)).toBe(true);
         expect(readFileSync(join(root, 'engine/public/rs2b0t/bot/worldmap.jag')).equals(townMap)).toBe(true);
+    } finally {
+        rmSync(root, { recursive: true, force: true });
+    }
+});
+
+test('a concurrent cache check preserves the JAG staged by an explicit bake', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'bake-concurrent-'));
+    try {
+        const engine = join(root, 'engine/data/pack/mapview');
+        mkdirSync(engine, { recursive: true });
+        writeFileSync(join(engine, 'worldmap.jag'), emptyMap);
+        writeFileSync(join(root, 'selected.jag'), townMap);
+        bakeIfNeeded(root);
+
+        const pause = join(root, 'pause.cjs');
+        writeFileSync(pause, `
+            const fs = require('node:fs');
+            const rename = fs.renameSync;
+            fs.renameSync = (from, to) => {
+                rename(from, to);
+                if (require('node:path').basename(to) === 'worldmap.jag') {
+                    fs.writeSync(1, 'JAG staged\\n');
+                    fs.readSync(0, Buffer.alloc(1), 0, 1, null);
+                }
+            };
+        `);
+        const args = [join(tools, 'map/build-basemap.ts'), '--engine', join(root, 'engine'), '--out', root, '--fetch-url', 'data:,'];
+        const options = { cwd: root, env: { HOME: root }, timeout: 10000 };
+        const run = promisify(execFile);
+        const explicit = run(process.execPath, ['--no-install', '--preload', pause, ...args, '--jag', 'selected.jag'], options);
+        const staged = new Promise<void>(resolve => {
+            explicit.child.stdout!.on('data', chunk => {
+                if (chunk.toString().includes('JAG staged')) resolve();
+            });
+        });
+        await Promise.race([staged, explicit.then(() => { throw new Error('Bake exited before staging the JAG'); })]);
+        const check = run(process.execPath, ['--no-install', ...args, '--if-needed', '--revision', '276'], options);
+        try {
+            await Promise.race([check, Bun.sleep(500)]);
+        } finally {
+            explicit.child.stdin!.end('1');
+            await Promise.all([explicit, check]);
+        }
+
+        expect(readFileSync(join(root, 'worldmap.jag'))).toEqual(townMap);
+        bakeIfNeeded(root);
+        const manifest = JSON.parse(readFileSync(join(root, 'worldmap-basemap.manifest.json'), 'utf8'));
+        expect(manifest.revision).toBe('276');
+        expect(manifest.explicitJag).toBe(true);
     } finally {
         rmSync(root, { recursive: true, force: true });
     }

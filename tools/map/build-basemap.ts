@@ -6,6 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import { Database } from 'bun:sqlite';
 
 import {
     BASEMAP_MANIFEST_NAME,
@@ -101,7 +102,8 @@ function findLocalJag(opts: BakeArgs, previous: BakeManifest | null) {
     if (previous && previous.explicitJag !== false && fs.existsSync(cacheJag)) {
         const bytes = fs.readFileSync(cacheJag);
         if (fingerprint(bytes, previous.schema) === previous.fingerprint) {
-            return { path: cacheJag, bytes, explicit: true };
+            const explicit = previous.explicitJag ?? (!fs.existsSync(engineJag) || !bytes.equals(fs.readFileSync(engineJag)));
+            return { path: cacheJag, bytes, explicit };
         }
     }
     const file = fs.existsSync(engineJag) ? engineJag : cacheJag;
@@ -383,6 +385,19 @@ async function bake(jagBytes: Uint8Array): Promise<BakeResult> {
 
 async function main(): Promise<void> {
     const opts = parseArgs();
+    fs.mkdirSync(opts.outDir, { recursive: true });
+    // Why: an exclusive SQLite transaction locks this output directory across processes, even while a baker is paused.
+    const lock = new Database(path.join(opts.outDir, '.basemap-lock.sqlite'));
+    try {
+        lock.run('PRAGMA busy_timeout = 60000');
+        lock.run('BEGIN EXCLUSIVE');
+        await buildBasemap(opts);
+    } finally {
+        lock.close();
+    }
+}
+
+async function buildBasemap(opts: BakeArgs): Promise<void> {
     const started = performance.now();
 
     const manPath = path.join(opts.outDir, BASEMAP_MANIFEST_NAME);
@@ -414,8 +429,6 @@ async function main(): Promise<void> {
     const result = await bake(bytes);
     const { width, height } = result;
     console.log(`raster: ${width}×${height} (${((performance.now() - started) / 1000).toFixed(1)}s so far)`);
-
-    fs.mkdirSync(opts.outDir, { recursive: true });
 
     const terrainName = `worldmap-basemap.${fp}.png`;
     const keyName = `worldmap-key.${fp}.png`;
