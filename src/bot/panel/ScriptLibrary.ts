@@ -11,7 +11,7 @@ export default class ScriptLibrary {
 
     private category = 'All';
     private query = '';
-    private selectionVersion = 0;
+    private pendingSelections: Promise<LoadResult>[] = [];
 
     constructor(private onSelect: (name: string) => void) {
         this.backdrop = el('div', 'rs2b0t-modal-backdrop');
@@ -116,21 +116,25 @@ export default class ScriptLibrary {
     }
 
     private async handleLoad(pending: Promise<LoadResult>): Promise<void> {
-        const selectionVersion = ++this.selectionVersion;
+        this.pendingSelections.push(pending);
         this.loadStatus.textContent = 'loading…';
         this.loadStatus.className = 'rs2b0t-load-status';
 
-        const result = await pending;
-        if (result.ok && result.name) {
-            this.loadStatus.textContent = `loaded '${result.name}'`;
-            this.loadStatus.className = 'rs2b0t-load-status rs2b0t-load-ok';
-            if (selectionVersion === this.selectionVersion) {
-                this.onSelect(result.name);
-                this.close();
+        try {
+            const result = await pending;
+            if (result.ok && result.name) {
+                this.loadStatus.textContent = `loaded '${result.name}'`;
+                this.loadStatus.className = 'rs2b0t-load-status rs2b0t-load-ok';
+                if (this.pendingSelections.at(-1) === pending) {
+                    this.onSelect(result.name);
+                    this.close();
+                }
+            } else {
+                this.loadStatus.textContent = `load failed: ${result.ok ? 'no bot exported' : result.error}`;
+                this.loadStatus.className = 'rs2b0t-load-status rs2b0t-load-error';
             }
-        } else {
-            this.loadStatus.textContent = `load failed: ${result.ok ? 'no bot exported' : result.error}`;
-            this.loadStatus.className = 'rs2b0t-load-status rs2b0t-load-error';
+        } finally {
+            this.pendingSelections = this.pendingSelections.filter(load => load !== pending);
         }
     }
 
@@ -146,7 +150,7 @@ export default class ScriptLibrary {
     }
 
     cancelPendingSelection(): void {
-        this.selectionVersion++;
+        this.pendingSelections = [];
     }
 
     close(): void {

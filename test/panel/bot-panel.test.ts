@@ -150,11 +150,11 @@ function openLibrary() {
     const loadFile = loader.loadFromFile;
     const fileLoad = spyOn(loader, 'loadFromFile');
 
-    function startImport(name: string) {
+    function startImport(name: string, manifestVersion = 1) {
         const ready = Promise.withResolvers<void>();
         fileLoad.mockImplementationOnce(file => ready.promise.then(() => loadFile(file)));
         const transfer = new DataTransfer();
-        const source = `export default { __rs2b0tManifest: 1, name: ${JSON.stringify(name)}, create() {} }`;
+        const source = `export default { __rs2b0tManifest: ${manifestVersion}, name: ${JSON.stringify(name)}, create() {} }`;
         transfer.items.add(new File([source], 'fixture.js', { type: 'text/javascript' }));
         picker.files = transfer.files;
         picker.dispatchEvent(new Event('change'));
@@ -178,7 +178,8 @@ test.each([
     ['select another card', 'Picked fixture'],
     ['assign from roster', 'Picked fixture'],
     ['dismiss', 'Previous fixture'],
-    ['wait', 'Imported fixture']
+    ['wait', 'Imported fixture'],
+    ['fail a newer import', 'Imported fixture']
 ])('file load after %s leaves %s selected', async (action, selected) => {
     const key = 'rs2b0t:selectedScript';
     for (const name of ['Previous fixture', 'Picked fixture']) {
@@ -199,16 +200,44 @@ test.each([
             browse.click();
         } else if (action === 'assign from roster') {
             await library.panel.configureScript('Picked fixture', null, false);
+        } else if (action === 'fail a newer import') {
+            const finishInvalid = library.startImport('Invalid fixture', 0);
+            await finishInvalid();
+            expect(backdrop.querySelector('.rs2b0t-load-error')).not.toBeNull();
         }
         await finish();
 
         library.expectSelected(selected);
-        expect(backdrop.style.display).toBe(action === 'wait' ? 'none' : 'flex');
+        expect(backdrop.style.display).toBe(selected === 'Imported fixture' ? 'none' : 'flex');
         expect(Array.from(backdrop.querySelectorAll('.rs2b0t-card-name'), el => el.textContent)).toContain('Imported fixture ⇪');
     } finally {
         backdrop.click();
         library.restore();
         for (const name of ['Imported fixture', 'Picked fixture', 'Previous fixture']) ScriptRegistry.unregister(name);
+    }
+});
+
+test('an earlier import leaves WalkTo selected after roster travel stops', async () => {
+    attach({ ingame: true });
+    const previous = ScriptRegistry.get('WalkTo');
+    class TravelFixture extends LoopingBot { override loop(): void {} }
+    ScriptRegistry.register({ name: 'WalkTo', description: '', create: () => new TravelFixture() });
+    const library = openLibrary();
+    try {
+        const finish = library.startImport('Imported fixture');
+        await library.panel.travelTo('Varrock');
+        library.panel.stopScript();
+        await finish();
+
+        library.expectSelected('WalkTo');
+        expect(library.backdrop.style.display).toBe('flex');
+        expect(library.backdrop.querySelector('.rs2b0t-library-list')?.textContent).toContain('Imported fixture ⇪');
+    } finally {
+        library.backdrop.click();
+        library.restore();
+        ScriptRegistry.unregister('Imported fixture');
+        ScriptRegistry.unregister('WalkTo');
+        if (previous) ScriptRegistry.register(previous);
     }
 });
 

@@ -333,7 +333,7 @@ export default class BotPanel {
             this.assertNoUrlOverrides('WalkTo', ['destination', 'customTile']);
             SettingsStore.save('WalkTo', 'destination', target.name);
             SettingsStore.save('WalkTo', 'customTile', '0,0,0');
-            this.applyScriptSelection('WalkTo');
+            this.assignScript('WalkTo');
             this.handleStart(true);
         });
     }
