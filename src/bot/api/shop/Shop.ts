@@ -8,6 +8,8 @@ const SHOP_ROOT = 3824;
 const SHOP_STOCK_COM = 3900;
 const SHOP_PLAYER_COM = 3823;
 
+type SellSlotPredicate = (item: Pick<InvItemSnapshot, 'id' | 'count' | 'slot'>) => boolean;
+
 export async function buyWithRestockWait(name: string, quantity: number, maxTicks: number): Promise<number> {
     if (quantity <= 0) return 0;
     const bought = await Shop.buy(name, quantity);
@@ -78,11 +80,10 @@ export const Shop = {
     },
 
     // pick chooses among same-name pack slots, e.g. the noted stack over unnoted singles
-    async sell(name: string, n: number, pick?: (i: { id: number; count: number; slot: number }) => boolean): Promise<number> {
+    async sell(name: string, n: number, pick?: SellSlotPredicate): Promise<number> {
         let sold = 0;
         while (sold < n && Shop.isOpen()) {
-            const matches = reader.shopInv(SHOP_PLAYER_COM).filter(s => s.name?.toLowerCase() === name.toLowerCase());
-            const it = pick ? matches.find(pick) : matches[0];
+            const it = findSellSlot(name, pick);
             if (!it) {
                 break;
             }
@@ -99,11 +100,10 @@ export const Shop = {
     },
 
     /** Sell every one of `name` the pack holds, ten to a click. Returns how many went. */
-    async sellAll(name: string, pick?: (i: { id: number; count: number; slot: number }) => boolean): Promise<number> {
+    async sellAll(name: string, pick?: SellSlotPredicate): Promise<number> {
         let sold = 0;
         for (let click = 0; click < SELL_STACK_CLICKS && Shop.isOpen(); click++) {
-            const matches = reader.shopInv(SHOP_PLAYER_COM).filter(s => s.name?.toLowerCase() === name.toLowerCase());
-            const it = pick ? matches.find(pick) : matches[0];
+            const it = findSellSlot(name, pick);
             if (!it) {
                 break;
             }
@@ -142,6 +142,11 @@ async function buyMatching(n: number, matches: (item: InvItemSnapshot) => boolea
         bought += got;
     }
     return bought;
+}
+
+function findSellSlot(name: string, pick?: SellSlotPredicate): InvItemSnapshot | undefined {
+    const matches = reader.shopInv(SHOP_PLAYER_COM).filter(item => item.name?.toLowerCase() === name.toLowerCase());
+    return pick ? matches.find(pick) : matches[0];
 }
 
 function countHeld(name: string): number {
