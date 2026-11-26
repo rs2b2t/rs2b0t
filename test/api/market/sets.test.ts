@@ -46,6 +46,13 @@ describe('set names', () => {
         expect(resolveQuote({ cat, book, query: 'Rune Set', side: 'selling', qtyImplied: true })).toEqual({ kind: 'set', set: rune });
     });
 
+    test('without stock counts, the cap can favor the skirt and a one-set request breaks the tie in favor of legs', () => {
+        const prices = { ...book, maxTradeValue: 1100, rows: [...book.rows, { ...book.rows[2], id: 1093, sell: 200 }] };
+        const input = { cat, book: prices, query: 'rune set', side: 'selling', qtyImplied: false } as const;
+        expect(resolveQuote(input)).toMatchObject({ kind: 'set', set: { itemIds: [1163, 1127, 1093] } });
+        expect(resolveQuote({ ...input, requested: 1 })).toEqual({ kind: 'set', set: rune });
+    });
+
     test.each(['missing', 'disabled', 'invalid'])('does not sell a set with a %s component price', mode => {
         const rows = mode === 'missing' ? book.rows.slice(1) : book.rows.map(row => row.id === 1163
             ? { ...row, selling: mode !== 'disabled', mid: mode === 'invalid' ? 0 : row.mid } : row);

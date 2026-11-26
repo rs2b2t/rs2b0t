@@ -10,10 +10,7 @@ import {
     unnotedId
 } from '#/bot/api/market/catalog.js';
 import type { ObjRecord } from '#/bot/adapter/ClientAdapter.js';
-
-function rec(id: number, name: string, over: Partial<ObjRecord> = {}): ObjRecord {
-    return { id, name, cost: 1, stackable: false, members: false, equippable: false, certlink: -1, certtemplate: -1, ...over };
-}
+import { rec } from '../../fixtures/obj-record.js';
 
 const RECORDS: ObjRecord[] = [
     rec(440, 'Iron ore', { cost: 17 }),
