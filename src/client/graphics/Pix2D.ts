@@ -59,6 +59,9 @@ export default class Pix2D extends Linkable2 {
     }
 
     static cls(): void {
+        if (this.pixels.length === 0) {
+            return;
+        }
         const len = Math.max(0, Math.ceil(this.width * this.height));
         this.pixels.fill(0, 0, len);
     }

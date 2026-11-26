@@ -51,4 +51,17 @@ for (const renderer of [before, after]) {
     for (const [width, height, cleared] of [[3, 2, 6], [0, 2, 0], [3, 0, 0], [3, 3, 8], [-1, 2, 0], [1.25, 2, 3]]) {
         checkBounds(renderer, width, height, cleared);
     }
+
+    const pixels = new Int32Array(4).fill(seed);
+    renderer.setPixels(pixels, 2, 2);
+    const transferred = pixels.buffer.transfer();
+    renderer.cls();
+    assert.deepEqual(new Int32Array(transferred), new Int32Array(4).fill(seed));
+
+    const buffer = new ArrayBuffer(16, { maxByteLength: 16 });
+    const fixed = new Int32Array(buffer, 0, 4).fill(seed);
+    renderer.setPixels(fixed, 2, 2);
+    buffer.resize(8);
+    renderer.cls();
+    assert.deepEqual(new Int32Array(buffer), new Int32Array(2).fill(seed));
 }
