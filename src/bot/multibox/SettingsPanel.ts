@@ -116,14 +116,15 @@ export class SettingsPanel {
         if (!(await this.hooks.ensureUnlocked())) {
             return;
         }
-        this.importTail = this.importTail.then(async () => {
+        const currentImport = this.importTail.then(async () => {
             const data = parseProfileFile(text);
             await this.hooks.replaceAll(data);
             this.hooks.onImported?.(data);
-            this.close();
+            if (this.importTail === currentImport) this.close();
         }).catch(e => {
             this.err.textContent = e instanceof Error ? e.message : String(e);
         });
-        return this.importTail;
+        this.importTail = currentImport;
+        return currentImport;
     }
 }

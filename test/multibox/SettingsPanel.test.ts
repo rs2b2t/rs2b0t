@@ -74,6 +74,29 @@ describe('SettingsPanel', () => {
         expect(document.getElementById('mbx-settings-error')?.textContent).toMatch(/not JSON/);
     });
 
+    test.each<[string, string, RegExp]>([
+        ['malformed file', '{', /not JSON/],
+        ['failed save', serializeProfileFile(empty), /storage full/]
+    ])('a queued %s leaves its error visible after a successful import', async (_, text, error) => {
+        let current = empty;
+        const panel = new SettingsPanel({
+            ensureUnlocked: async () => true,
+            snapshot: () => current,
+            replaceAll: async data => {
+                if (!data.profiles.length) throw new DOMException('storage full', 'QuotaExceededError');
+                current = data;
+            }
+        });
+        document.body.appendChild(panel.el);
+        panel.open();
+
+        await Promise.all([panel.importText(serializeProfileFile(snap)), panel.importText(text)]);
+
+        expect(current).toEqual(snap);
+        expect(document.getElementById('mbx-settings-error')?.textContent).toMatch(error);
+        expect(panel.el.hidden).toBe(false);
+    });
+
     test('cancelling unlock does not export or import', async () => {
         const downloads: string[] = [];
         let replaced = false;

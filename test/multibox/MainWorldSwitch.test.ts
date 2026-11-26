@@ -111,6 +111,7 @@ test('overlapping settings imports remove the superseded profile settings from b
                 panel.importText(profileFile('first', 'Miner')),
                 panel.importText(profileFile('second', 'Fisher'))
             ]);
+            expect(panel.el.hidden).toBe(true);
 
             const reopened = new ProfileVault();
             expect(await reopened.unlock('test-passphrase')).toBe(true);
