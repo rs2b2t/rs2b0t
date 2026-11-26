@@ -1,4 +1,4 @@
-import { SettingsStore, type RecordSettingWrite, type SettingsSchema } from '../runtime/Settings.js';
+import { SettingsStore, type SettingsSchema } from '../runtime/Settings.js';
 import { groupSchema, isVisible, renderControl, refreshDeps } from './paramControls.js';
 import { el } from './dom.js';
 import { Loadouts } from '../api/loadout/loadoutStore.js';
@@ -27,7 +27,7 @@ export default class ParamsModal {
     constructor(
         private isActive: () => boolean,
         private onChanged: (key: string) => void,
-        private recordWrite?: RecordSettingWrite
+        private draft?: { keys: ReadonlySet<string>; values: Map<string, string> }
     ) {
         this.backdrop = el('div', 'rs2b0t-modal-backdrop');
         this.backdrop.addEventListener('click', e => {
@@ -136,7 +136,7 @@ export default class ParamsModal {
         this.globalExtra = extra;
     }
 
-    private render(): void {
+    render(): void {
         this.stopRefreshing();
         this.titleEl.textContent = this.openTitle ?? `${this.scriptName} · parameters`;
         this.bodyEl.replaceChildren();
@@ -179,7 +179,9 @@ export default class ParamsModal {
             this.bodyEl.appendChild(note);
         }
         const deps = refreshDeps(this.schema);
-        const valueOf = (key: string): string => (this.schema[key] ? SettingsStore.displayString(this.scriptName, key, this.schema[key]) : '');
+        const valueOf = (key: string): string => this.schema[key]
+            ? SettingsStore.displayString(this.scriptName, key, this.schema[key], this.draft?.values)
+            : '';
         const collapsed = this.collapsed.get(this.scriptName) ?? new Set<string>();
         this.collapsed.set(this.scriptName, collapsed);
 
@@ -238,9 +240,10 @@ export default class ParamsModal {
             row.appendChild(help);
         }
 
-        const current = SettingsStore.displayString(this.scriptName, key, def);
+        const current = valueOf(key);
         const control = renderControl(def, current, raw => {
-            SettingsStore.save(this.scriptName, key, raw, this.recordWrite);
+            if (this.draft?.keys.has(key)) this.draft.values.set(key, raw);
+            else SettingsStore.save(this.scriptName, key, raw);
             this.onChanged(key);
             if (deps.has(key)) {
                 this.render();
@@ -257,7 +260,7 @@ export default class ParamsModal {
             edit.textContent = 'Edit…';
             edit.disabled = disabled;
             edit.addEventListener('click', () => {
-                this.onEditPriceBook?.(SettingsStore.displayString(this.scriptName, key, def));
+                this.onEditPriceBook?.(valueOf(key));
             });
             pair.appendChild(edit);
             row.appendChild(pair);

@@ -22,7 +22,7 @@ import {
     BASEMAP_REGEN_TITLE,
     regenerateBasemap,
     resolveBasemapBakePrefs,
-    MapPickerBakeDraft
+    MAP_PICKER_BAKE_KEYS
 } from './basemapRegen.js';
 import { showConfirmDialog } from './confirmDialog.js';
 import {
@@ -856,16 +856,8 @@ export class WorldMapPicker {
             };
 
             // In-picker Settings modal (not Global settings).
-            let draft: MapPickerBakeDraft | null = null;
-            let editsDuringRebuild: MapPickerBakeDraft | null = null;
-            const settingsModal = new ParamsModal(
-                () => false,
-                requestPaint,
-                (...write) => {
-                    draft?.record(...write);
-                    editsDuringRebuild?.record(...write);
-                }
-            );
+            const bakeEdits = new Map<string, string>();
+            const settingsModal = new ParamsModal(() => false, requestPaint, { keys: MAP_PICKER_BAKE_KEYS, values: bakeEdits });
 
             const unsubSettings = SettingsStore.onChange((name, key) => {
                 if (name === MAP_PICKER_SETTINGS_NS && isMapPickerThemeSettingKey(key)) {
@@ -942,16 +934,11 @@ export class WorldMapPicker {
             });
 
             settingsBtn.addEventListener('click', () => {
-                draft = new MapPickerBakeDraft();
                 // Above map picker overlay (1100). Default params backdrop is 1000.
                 settingsModal.open(MAP_PICKER_SETTINGS_NS, MAP_PICKER_SETTINGS, {
                     title: 'Map picker settings',
                     zIndex: 1200,
-                    onClose: () => {
-                        draft?.discard();
-                        draft = null;
-                        editsDuringRebuild = null;
-                    }
+                    onClose: () => bakeEdits.clear()
                 });
             });
 
@@ -989,17 +976,17 @@ export class WorldMapPicker {
                     status.textContent = 'rebuilding basemap (tab may freeze)…';
                     status.style.color = '#fa0';
                     try {
-                        const prefs = resolveBasemapBakePrefs();
-                        const rebuildingDraft = draft;
-                        editsDuringRebuild = rebuildingDraft ? new MapPickerBakeDraft() : null;
+                        const submitted = new Map(bakeEdits);
+                        const prefs = resolveBasemapBakePrefs(submitted);
                         const next = await regenerateBasemap(prefs);
                         if (closed) {
                             return;
                         }
-                        if (editsDuringRebuild && draft === rebuildingDraft) {
-                            draft = editsDuringRebuild;
+                        for (const [key, value] of submitted) {
+                            SettingsStore.save(MAP_PICKER_SETTINGS_NS, key, value);
+                            if (bakeEdits.get(key) === value) bakeEdits.delete(key);
                         }
-                        editsDuringRebuild = null;
+                        if (submitted.size && settingsModal.isOpen()) settingsModal.render();
                         const crcKey = await fetchClientCrcKey();
                         if (crcKey) {
                             try {
@@ -1016,7 +1003,6 @@ export class WorldMapPicker {
                         status.style.color = '#8ab4f8';
                         requestPaint();
                     } catch (err) {
-                        editsDuringRebuild = null;
                         if (closed) {
                             return;
                         }

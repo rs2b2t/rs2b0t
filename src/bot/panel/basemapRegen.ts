@@ -13,9 +13,7 @@ import {
     MAP_PICKER_SETTINGS,
     MAP_PICKER_SETTINGS_NS,
     SettingsBag,
-    SettingsStore,
-    type SettingEdits,
-    type RecordSettingWrite
+    SettingsStore
 } from '../runtime/Settings.js';
 
 export type BasemapBakePrefs = {
@@ -49,7 +47,7 @@ const DEFAULT_BASEMAP_BAKE_PREFS: BasemapBakePrefs = {
 };
 
 /** Schema keys that only take effect when the basemap is regenerated. */
-const MAP_PICKER_BAKE_KEYS = new Set([
+export const MAP_PICKER_BAKE_KEYS = new Set([
     'bakeLabels',
     'bakeBorders',
     'bakeNpcs',
@@ -59,8 +57,8 @@ const MAP_PICKER_BAKE_KEYS = new Set([
     'bakeFreemap'
 ]);
 
-export function resolveBasemapBakePrefs(): BasemapBakePrefs {
-    const g = new SettingsBag(SettingsStore.resolve(MAP_PICKER_SETTINGS_NS, MAP_PICKER_SETTINGS));
+export function resolveBasemapBakePrefs(draft?: ReadonlyMap<string, string>): BasemapBakePrefs {
+    const g = new SettingsBag(SettingsStore.resolve(MAP_PICKER_SETTINGS_NS, MAP_PICKER_SETTINGS, draft));
     return {
         labels: g.bool('bakeLabels', DEFAULT_BASEMAP_BAKE_PREFS.labels),
         borders: g.bool('bakeBorders', DEFAULT_BASEMAP_BAKE_PREFS.borders),
@@ -70,24 +68,6 @@ export function resolveBasemapBakePrefs(): BasemapBakePrefs {
         multimap: g.bool('bakeMultimap', DEFAULT_BASEMAP_BAKE_PREFS.multimap),
         freemap: g.bool('bakeFreemap', DEFAULT_BASEMAP_BAKE_PREFS.freemap)
     };
-}
-
-export class MapPickerBakeDraft {
-    private edits = new Map<string, SettingEdits>();
-
-    record: RecordSettingWrite = (key, layer, before, value) => {
-        if (!MAP_PICKER_BAKE_KEYS.has(key)) return;
-        const edits = this.edits.get(key) ?? {};
-        const prior = edits[layer];
-        edits[layer] = { before: prior?.last === before ? prior.before : before, last: value };
-        this.edits.set(key, edits);
-    };
-
-    discard(): void {
-        for (const [key, edits] of this.edits) {
-            SettingsStore.restoreStored(MAP_PICKER_SETTINGS_NS, key, edits, MAP_PICKER_SETTINGS[key]);
-        }
-    }
 }
 
 export function prefsFingerprint(prefs: BasemapBakePrefs): string {

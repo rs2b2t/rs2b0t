@@ -554,20 +554,6 @@ function storageKey(name: string, key: string): string {
 
 type SettingChangeListener = (name: string, key: string, value: string) => void;
 
-export type StoredSetting = { session: string | null; local: string | null };
-
-type LayerEdit = { before: string | null; last: string };
-export type SettingEdits = Partial<Record<keyof StoredSetting, LayerEdit>>;
-export type RecordSettingWrite = (key: string, layer: keyof StoredSetting, before: string | null, value: string) => void;
-
-function restoreItem(storage: Storage, key: string, edit?: LayerEdit): boolean {
-    if (!edit || edit.before === edit.last || storage.getItem(key) !== edit.last) return false;
-    const value = edit.before;
-    if (value === null) storage.removeItem(key);
-    else storage.setItem(key, value);
-    return true;
-}
-
 class SettingsStoreImpl {
     private urlParams: URLSearchParams | null = typeof location !== 'undefined' ? new URLSearchParams(location.search) : null;
     /** Same-tab subscribers (open modals). `storage` events only fire across tabs. */
@@ -584,23 +570,6 @@ class SettingsStoreImpl {
             }
         }
         return null;
-    }
-
-    snapshotStored(name: string, key: string): StoredSetting {
-        const id = storageKey(name, key);
-        return {
-            session: hasSession ? sessionStorage.getItem(id) : null,
-            local: hasLocal ? localStorage.getItem(id) : null
-        };
-    }
-
-    restoreStored(name: string, key: string, edits: SettingEdits, def: SettingDef): void {
-        const id = storageKey(name, key);
-        const sessionChanged = hasSession && restoreItem(sessionStorage, id, edits.session);
-        const localChanged = hasLocal && restoreItem(localStorage, id, edits.local);
-        if (sessionChanged || localChanged) {
-            this.notifyChange(name, key, this.displayString(name, key, def));
-        }
     }
 
     saved(name: string, key: string): string | undefined {
@@ -622,19 +591,10 @@ class SettingsStoreImpl {
         return name === 'JiveRC' ? this.saved('NatureCrafter', key) : undefined;
     }
 
-    save(name: string, key: string, rawString: string, record?: RecordSettingWrite): void {
+    save(name: string, key: string, rawString: string): void {
         const id = storageKey(name, key);
-        const write = (storage: Storage, layer: keyof StoredSetting): void => {
-            const before = record ? storage.getItem(id) : null;
-            storage.setItem(id, rawString);
-            record?.(key, layer, before, rawString);
-        };
-        if (hasSession) write(sessionStorage, 'session');
-        if (hasLocal) write(localStorage, 'local');
-        this.notifyChange(name, key, rawString);
-    }
-
-    private notifyChange(name: string, key: string, rawString: string): void {
+        if (hasSession) sessionStorage.setItem(id, rawString);
+        if (hasLocal) localStorage.setItem(id, rawString);
         for (const fn of this.changeListeners) {
             try {
                 fn(name, key, rawString);
@@ -669,12 +629,12 @@ class SettingsStoreImpl {
         }
     }
 
-    private winningRaw(name: string, key: string, def: SettingDef): { raw: string | null; def: SettingDef } {
+    private winningRaw(name: string, key: string, def: SettingDef, draft?: ReadonlyMap<string, string>): { raw: string | null; def: SettingDef } {
         const url = this.urlOverride(name, key);
         if (url !== null) {
             return { raw: url, def };
         }
-        const saved = this.saved(name, key);
+        const saved = draft?.get(key) ?? this.saved(name, key);
         if (saved !== undefined) {
             return { raw: saved, def };
         }
@@ -693,15 +653,15 @@ class SettingsStoreImpl {
         return { raw: null, def };
     }
 
-    displayString(name: string, key: string, def: SettingDef): string {
-        const w = this.winningRaw(name, key, def);
+    displayString(name: string, key: string, def: SettingDef, draft?: ReadonlyMap<string, string>): string {
+        const w = this.winningRaw(name, key, def, draft);
         return w.raw !== null ? w.raw : settingToString(w.def, w.def.default);
     }
 
-    resolve(name: string, schema: SettingsSchema): Record<string, unknown> {
+    resolve(name: string, schema: SettingsSchema, draft?: ReadonlyMap<string, string>): Record<string, unknown> {
         const out: Record<string, unknown> = {};
         for (const [key, def] of Object.entries(schema)) {
-            const w = this.winningRaw(name, key, def);
+            const w = this.winningRaw(name, key, def, draft);
             out[key] = w.raw !== null ? parseValue(w.def, w.raw) : w.def.default;
         }
         return out;

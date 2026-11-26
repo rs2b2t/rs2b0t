@@ -5,7 +5,6 @@ import { WorldMapPicker } from '#/bot/panel/WorldMapPicker.js';
 import {
     prefsFingerprint,
     resolveBasemapBakePrefs,
-    MapPickerBakeDraft,
     type BasemapBakePrefs
 } from '#/bot/panel/basemapRegen.js';
 import { MAP_PICKER_SETTINGS_NS, SettingsStore } from '#/bot/runtime/Settings.js';
@@ -73,7 +72,7 @@ describe('client CRC key format (unit of /crc)', () => {
     });
 });
 
-describe('bake settings snapshot/restore (settings modal discard)', () => {
+describe('map picker bake settings drafts', () => {
     beforeEach(() => {
         sessionStorage.clear();
         localStorage.clear();
@@ -83,8 +82,13 @@ describe('bake settings snapshot/restore (settings modal discard)', () => {
         localStorage.clear();
     });
 
-    function bakeCheckbox(label: string): HTMLInputElement {
-        const row = Array.from(document.querySelectorAll('.rs2b0t-param-row'))
+    function stored(key: string) {
+        const id = `rs2b0t:set:MapPicker:${key}`;
+        return { local: localStorage.getItem(id), session: sessionStorage.getItem(id) };
+    }
+
+    function bakeCheckbox(label: string, root: ParentNode = document): HTMLInputElement {
+        const row = Array.from(root.querySelectorAll('.rs2b0t-param-row'))
             .find(row => row.querySelector('.rs2b0t-param-label')?.textContent === label)!;
         return row.querySelector<HTMLInputElement>('input')!;
     }
@@ -124,6 +128,43 @@ describe('bake settings snapshot/restore (settings modal discard)', () => {
         }
     }
 
+    test('discarding overlapping drafts in two tabs preserves the saved labels preference', async () => {
+        localStorage.setItem('rs2b0t:set:MapPicker:bakeLabels', 'false');
+        await withPicker(async () => {
+            const second = WorldMapPicker.open();
+            const [tabA, tabB] = Array.from(document.querySelectorAll<HTMLButtonElement>('.rs2b0t-walkmap-settings'));
+            const [modalA, modalB] = Array.from(document.querySelectorAll<HTMLElement>('.rs2b0t-modal-backdrop')).slice(-2);
+            const original = Object.getOwnPropertyDescriptor(globalThis, 'sessionStorage')!;
+            const sessionA = sessionStorage;
+            const sessionB = new Storage();
+            const selectSession = (value: Storage) => Object.defineProperty(globalThis, 'sessionStorage', { configurable: true, value });
+            try {
+                tabA.click();
+                selectSession(sessionB);
+                tabB.click();
+                const labelsA = bakeCheckbox('Stamp labels into rebuild', modalA);
+                const labelsB = bakeCheckbox('Stamp labels into rebuild', modalB);
+                expect([labelsA.checked, labelsB.checked]).toEqual([false, false]);
+                selectSession(sessionA);
+                labelsA.click();
+                selectSession(sessionB);
+                labelsB.click();
+                labelsB.click();
+                selectSession(sessionA);
+                modalA.click();
+                selectSession(sessionB);
+                modalB.click();
+
+                selectSession(new Storage());
+                expect(resolveBasemapBakePrefs().labels).toBe(false);
+            } finally {
+                Object.defineProperty(globalThis, 'sessionStorage', original);
+                document.querySelectorAll<HTMLButtonElement>('.rs2b0t-walkmap-cancel')[1]!.click();
+                await second;
+            }
+        });
+    });
+
     test.each([false, true])("Escape preserves another tab's label save (edited borders: %p)", async editBorders => {
         const labels = 'rs2b0t:set:MapPicker:bakeLabels';
         const borders = 'rs2b0t:set:MapPicker:bakeBorders';
@@ -136,9 +177,9 @@ describe('bake settings snapshot/restore (settings modal discard)', () => {
                 localStorage.setItem(labels, 'true');
                 if (editBorders) {
                     bakeCheckbox('Map-square borders').click();
-                    expect(localStorage.getItem(borders)).toBe('true');
+                    expect(localStorage.getItem(borders)).toBeNull();
                 }
-                expect(countStorageWrites(escapeSettings)).toBe(editBorders ? 2 : 0);
+                expect(countStorageWrites(escapeSettings)).toBe(0);
                 expect(localStorage.getItem(borders)).toBeNull();
                 expect(sessionStorage.getItem(borders)).toBeNull();
                 sessionStorage.clear();
@@ -163,10 +204,10 @@ describe('bake settings snapshot/restore (settings modal discard)', () => {
             if (timing === 'before the first edit') localStorage.setItem(labels, 'true');
             checkbox.click();
             checkbox.click();
-            expect(SettingsStore.snapshotStored(MAP_PICKER_SETTINGS_NS, 'bakeLabels')).toEqual({ local: 'false', session: 'false' });
+            expect(stored('bakeLabels')).toEqual({ local: timing === 'before the first edit' ? 'true' : initial, session: null });
             if (timing === 'after the last edit') localStorage.setItem(labels, 'true');
             escapeSettings();
-            expect(SettingsStore.snapshotStored(MAP_PICKER_SETTINGS_NS, 'bakeLabels')).toEqual({ local: 'true', session: null });
+            expect(stored('bakeLabels')).toEqual({ local: 'true', session: null });
         });
     });
 
@@ -186,14 +227,14 @@ describe('bake settings snapshot/restore (settings modal discard)', () => {
                 expect(bake).toHaveBeenCalledWith(prefs({ labels: alreadyOpen }));
                 if (!alreadyOpen) openSettings();
                 bakeCheckbox('Map-square borders').click();
-                expect(SettingsStore.saved(MAP_PICKER_SETTINGS_NS, 'bakeBorders')).toBe('true');
+                expect(SettingsStore.saved(MAP_PICKER_SETTINGS_NS, 'bakeBorders')).toBe('false');
                 if (alreadyOpen) bakeCheckbox('Stamp labels into rebuild').click();
                 pending.resolve(rebuiltMap());
                 await new Promise<void>(resolve => setImmediate(resolve));
                 expect(document.querySelector('.rs2b0t-walkmap-status')?.textContent).toContain('basemap rebuilt');
                 bakeCheckbox('NPC dots').click();
                 escapeSettings();
-                expect(SettingsStore.snapshotStored(MAP_PICKER_SETTINGS_NS, 'bakeBorders')).toEqual({ local: 'false', session: 'false' });
+                expect(stored('bakeBorders')).toEqual({ local: 'false', session: 'false' });
                 expect(SettingsStore.saved(MAP_PICKER_SETTINGS_NS, 'bakeLabels')).toBe(alreadyOpen ? 'true' : undefined);
                 expect(SettingsStore.saved(MAP_PICKER_SETTINGS_NS, 'bakeNpcs')).toBeUndefined();
             });
@@ -219,34 +260,40 @@ describe('bake settings snapshot/restore (settings modal discard)', () => {
                 expect(document.querySelector('.rs2b0t-walkmap-status')?.textContent).toContain('basemap rebuilt');
 
                 bakeCheckbox('Stamp labels into rebuild').click();
-                expect(SettingsStore.saved(MAP_PICKER_SETTINGS_NS, 'bakeLabels')).toBe('false');
+                expect(SettingsStore.saved(MAP_PICKER_SETTINGS_NS, 'bakeLabels')).toBe('true');
                 escapeSettings();
-                expect(SettingsStore.snapshotStored(MAP_PICKER_SETTINGS_NS, 'bakeLabels')).toEqual({ local: 'true', session: null });
+                expect(stored('bakeLabels')).toEqual({ local: 'true', session: null });
             });
         } finally {
             bake.mockRestore();
         }
     });
 
-    test('Escape removes the session draft when the local save throws', async () => {
-        await withPicker(() => {
-            openSettings();
-            const setItem = localStorage.setItem;
-            const report = spyOn(console, 'error').mockImplementationOnce(() => {});
-            Object.defineProperty(localStorage, 'setItem', {
-                configurable: true,
-                value: () => { throw new DOMException('storage full', 'QuotaExceededError'); }
-            });
-            try {
-                bakeCheckbox('Map-square borders').click();
-                expect(SettingsStore.snapshotStored(MAP_PICKER_SETTINGS_NS, 'bakeBorders')).toEqual({ local: null, session: 'true' });
+    test('reopened Settings shows a completed rebuild alongside its own pending edits', async () => {
+        const pending = Promise.withResolvers<ReturnType<typeof rebuiltMap>>();
+        const bake = spyOn(basemapRegen, 'regenerateBasemap').mockReturnValue(pending.promise);
+        try {
+            await withPicker(async () => {
+                openSettings();
+                bakeCheckbox("Don't ask before rebuild").click();
+                bakeCheckbox('Stamp labels into rebuild').click();
+                document.querySelector<HTMLButtonElement>('.rs2b0t-walkmap-rebuild')!.click();
+                expect(bake).toHaveBeenCalledWith(prefs({ labels: true }));
                 escapeSettings();
-                expect(SettingsStore.snapshotStored(MAP_PICKER_SETTINGS_NS, 'bakeBorders')).toEqual({ local: null, session: null });
-            } finally {
-                Object.defineProperty(localStorage, 'setItem', { value: setItem });
-                report.mockRestore();
-            }
-        });
+                openSettings();
+                bakeCheckbox('NPC dots').click();
+                pending.resolve(rebuiltMap());
+                await new Promise<void>(resolve => setImmediate(resolve));
+
+                expect(bakeCheckbox('Stamp labels into rebuild').checked).toBe(true);
+                expect(bakeCheckbox('NPC dots').checked).toBe(true);
+                escapeSettings();
+                expect(stored('bakeLabels')).toEqual({ local: 'true', session: 'true' });
+                expect(stored('bakeNpcs')).toEqual({ local: null, session: null });
+            });
+        } finally {
+            bake.mockRestore();
+        }
     });
 
     test('untouched close leaves the saved preference and absent keys alone under a URL override', async () => {
@@ -273,27 +320,19 @@ describe('bake settings snapshot/restore (settings modal discard)', () => {
         }
     });
 
-    test('discard restores prior raw values and absence in both storage layers', () => {
-        const labels = 'rs2b0t:set:MapPicker:bakeLabels';
-        const borders = 'rs2b0t:set:MapPicker:bakeBorders';
-        localStorage.setItem(labels, '0');
-        sessionStorage.setItem(borders, 'yes');
-        const draft = new MapPickerBakeDraft();
-
-        SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'bakeLabels', 'true', draft.record);
-        SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'bakeBorders', 'false', draft.record);
-        const restored: Record<string, string> = {};
-        const unsubscribe = SettingsStore.onChange((_name, key, value) => { restored[key] = value; });
-        try {
-            draft.discard();
-        } finally {
-            unsubscribe();
-        }
-        expect(restored).toEqual({ bakeLabels: '0', bakeBorders: 'yes' });
-        expect(localStorage.getItem(labels)).toBe('0');
-        expect(sessionStorage.getItem(labels)).toBeNull();
-        expect(localStorage.getItem(borders)).toBeNull();
-        expect(sessionStorage.getItem(borders)).toBe('yes');
+    test('editing and discarding preserves raw values and absence in both storage layers', async () => {
+        localStorage.setItem('rs2b0t:set:MapPicker:bakeLabels', '0');
+        sessionStorage.setItem('rs2b0t:set:MapPicker:bakeBorders', 'yes');
+        await withPicker(() => {
+            openSettings();
+            expect(countStorageWrites(() => {
+                bakeCheckbox('Stamp labels into rebuild').click();
+                bakeCheckbox('Map-square borders').click();
+                escapeSettings();
+            })).toBe(0);
+            expect(stored('bakeLabels')).toEqual({ local: '0', session: null });
+            expect(stored('bakeBorders')).toEqual({ local: null, session: 'yes' });
+        });
     });
 
     test('a failed rebuild leaves the original draft baseline in place', async () => {
@@ -307,7 +346,7 @@ describe('bake settings snapshot/restore (settings modal discard)', () => {
                 await new Promise<void>(resolve => setImmediate(resolve));
                 expect(document.querySelector('.rs2b0t-walkmap-status')?.textContent).toContain('rebuild failed');
                 escapeSettings();
-                expect(SettingsStore.snapshotStored(MAP_PICKER_SETTINGS_NS, 'bakeBorders')).toEqual({ local: null, session: null });
+                expect(stored('bakeBorders')).toEqual({ local: null, session: null });
             });
         } finally {
             bake.mockRestore();
