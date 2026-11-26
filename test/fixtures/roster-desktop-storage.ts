@@ -12,7 +12,15 @@ Reflect.set(globalThis, 'rs2b0tDesktopStorage', {
     subscribe: () => {}
 });
 await import('../../src/bot/panel/desktopStorage.js');
-const { readProfileScript, readScriptSettings, replaceScriptSettings } = await import('../../src/bot/multibox/RosterStorage.js');
+const { readProfileScript, readScriptSettings, replaceScriptSettings, writeProfileScript } = await import('../../src/bot/multibox/RosterStorage.js');
+if (process.argv.includes('--export')) {
+    const { collectBoxStorage, serializeProfileFile } = await import('../../src/bot/multibox/ProfileTransfer.js');
+    writeProfileScript('source', 'Miner');
+    data.set('rs2b0t:source:selectedScript', 'Fisher');
+    const profiles = [{ username: 'source', password: '' }];
+    console.log(serializeProfileFile({ profiles, tabs: [], activeTab: 'Main', storage: collectBoxStorage(['source']) }));
+    process.exit(0);
+}
 localStorage.setItem('rs2b0t:legacy:selectedScript', 'NatureCrafter');
 localStorage.setItem('rs2b0t:legacy:set:NatureCrafter:rune', 'Cosmic runes');
 sessionStorage.setItem('rs2b0t:legacy:set:NatureCrafter:rune', 'Air runes');
