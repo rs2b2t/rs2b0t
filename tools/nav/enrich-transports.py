@@ -150,9 +150,9 @@ def option_values(config: LocConfig) -> list[str]:
 def candidates_near(
     spatial: dict[tuple[int, int, int], list[Placement]],
     point: dict[str, int],
+    levels: Iterable[int],
     radius: int = 4,
 ) -> Iterable[tuple[int, Placement]]:
-    levels = range(4)
     for level in levels:
         for dx in range(-radius, radius + 1):
             for dz in range(-radius, radius + 1):
@@ -164,7 +164,7 @@ def candidates_near(
 def resolve_source_loc(
     edge: dict,
     configs: dict[int, LocConfig],
-    spatial: dict[tuple[int, int, int], list[Placement]],
+    candidates: Iterable[tuple[int, Placement]],
     allowed_stair_debugs: set[str],
 ) -> tuple[LocConfig, Placement] | None:
     wanted_name = normalized(edge.get("locName"))
@@ -180,7 +180,7 @@ def resolve_source_loc(
     midpoint_x = (source["x"] + destination["x"]) / 2
     midpoint_z = (source["z"] + destination["z"]) / 2
 
-    for distance, placement in candidates_near(spatial, edge["from"]):
+    for distance, placement in candidates:
         placed_config = configs.get(placement.loc_id)
         if not placed_config:
             continue
@@ -370,7 +370,7 @@ def main() -> None:
             if raw.get("scriptedLocs"):
                 scripted_edges[key].append(edge)
 
-    def enrich(rows: Iterable[tuple[dict, tuple[LocConfig, Placement] | None]]) -> list[dict]:
+    def enrich(rows: Iterable[tuple[dict, tuple[LocConfig, Placement] | None]], *, source_floor_only: bool) -> list[dict]:
         enriched: list[dict] = []
         for raw, resolved in rows:
             edge = dict(raw)
@@ -386,7 +386,9 @@ def main() -> None:
                 enriched.append(edge)
                 continue
             if resolved is None and not scripted_locs:
-                resolved = resolve_source_loc(edge, configs, spatial, allowed_stair_debugs)
+                levels = (edge["from"]["level"],) if source_floor_only else range(4)
+                candidates = candidates_near(spatial, edge["from"], levels)
+                resolved = resolve_source_loc(edge, configs, candidates, allowed_stair_debugs)
             if resolved:
                 config, placement = resolved
                 if auto_reverse and not edge.get("disabledReason"):
@@ -413,8 +415,8 @@ def main() -> None:
             enriched.append(edge)
         return enriched
 
-    enriched_curated = enrich((edge, None) for edge in curated)
-    enriched_stairs = enrich(stair_rows)
+    enriched_curated = enrich(((edge, None) for edge in curated), source_floor_only=False)
+    enriched_stairs = enrich(stair_rows, source_floor_only=True)
 
     def write_json(path: Path, edges: list[dict]) -> None:
         text = "[\n" + ",\n".join("    " + json.dumps(edge, separators=(",", ":")) for edge in edges) + "\n]\n"

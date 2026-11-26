@@ -255,6 +255,32 @@ test('a shared stand tile keeps the scripted landing of each adjacent staircase'
     expect(enrich(edges)).toEqual(edges);
 });
 
+test('a generated descent uses the staircase on its source floor', () => {
+    placeStairs('1 7 9: 1 10\n2 5 9: 1 10\n', '1=stairs\n', '[stairs]\nname=Stairs\nop1=Climb-down\n');
+    const from = { x: 3205, z: 3209, level: 1 };
+    const landing = { ...from, x: 3208, level: 0 };
+    const stair = { locName: 'Stairs', action: 'Climb-down', kind: 'stair' };
+    const lower = { ...from, x: 3207, debugName: 'stairs', action: stair.action };
+    const upper = { ...lower, x: 3205, level: 2 };
+    const edges = enrich([
+        { ...stair, from, to: { ...from, level: 0 }, autoReverse: true },
+        { ...stair, from: { ...from, x: 3206 }, to: landing, scriptedLocs: [lower] },
+        { ...stair, from: { ...from, level: 2 }, to: { ...from, x: 3206 }, scriptedLocs: [upper] }
+    ]);
+    expect(edges).toContainEqual({
+        ...stair, from, to: landing, locX: 3207, locZ: 3209, locId: 1, debugName: 'stairs', options: ['Climb-down']
+    });
+    runEnricher(['--check']);
+});
+
+test('a generated descent stays unresolved when only another floor has stairs', () => {
+    placeStairs('2 5 9: 1 10\n', '1=stairs\n', '[stairs]\nname=Stairs\nop1=Climb-down\n');
+    const from = { x: 3205, z: 3209, level: 1 };
+    const edge = { from, to: { ...from, level: 0 }, locName: 'Stairs', action: 'Climb-down', kind: 'stair' };
+    expect(enrich([{ ...edge, autoReverse: true }])).toEqual([{ ...edge, options: ['Climb-down'] }]);
+    runEnricher(['--check']);
+});
+
 test('a snapped edge retains each distinct scripted placement with the same landing', () => {
     placeStairs('0 5 9: 1 10\n0 7 9: 1 10\n');
     const from = { x: 3206, z: 3209, level: 0 };
