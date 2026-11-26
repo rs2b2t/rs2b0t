@@ -95,8 +95,8 @@ export function setField(
     }));
 }
 
-export function toggleSide(book: PriceBook, id: number, side: 'buying' | 'selling'): PriceBook {
-    return withRows(book, book.rows.map(r => (r.id === id ? { ...r, [side]: !r[side] } : r)));
+export function setSide(book: PriceBook, id: number, side: 'buying' | 'selling', enabled: boolean): PriceBook {
+    return withRows(book, book.rows.map(r => (r.id === id ? { ...r, [side]: enabled } : r)));
 }
 
 export function setMargin(book: PriceBook, margin: number): PriceBook {
