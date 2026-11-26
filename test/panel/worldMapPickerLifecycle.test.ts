@@ -1,5 +1,5 @@
 import { expect, spyOn, test } from 'bun:test';
-import { EventTarget as DomEventTarget, PropertySymbol } from 'happy-dom';
+import { EventTarget as DomEventTarget, PropertySymbol, Window } from 'happy-dom';
 import { WorldMapPicker } from '#/bot/panel/WorldMapPicker.js';
 
 function resources() {
@@ -41,8 +41,11 @@ test.each(['Cancel', 'Escape', 'Confirm'])('%s releases picker settings after ea
             : new Response(null, { status: 404 })
     });
     const frame = spyOn(globalThis, 'requestAnimationFrame').mockReturnValue(1);
-    const before = resources();
+    const sharedDOM = { window, document };
+    const pickerWindow = new Window();
+    Object.assign(globalThis, { window: pickerWindow, document: pickerWindow.document });
     try {
+        const before = resources();
         for (let i = 0; i < 5; i++) {
             const result = WorldMapPicker.open(tile);
             await new Promise<void>(resolve => setImmediate(resolve));
@@ -63,8 +66,8 @@ test.each(['Cancel', 'Escape', 'Confirm'])('%s releases picker settings after ea
             } else {
                 picker.querySelector<HTMLButtonElement>('.rs2b0t-walkmap-cancel')!.click();
             }
-            expect(await result).toEqual(action === 'Confirm' ? tile : null);
             expect(resources()).toEqual(before);
+            expect(await result).toEqual(action === 'Confirm' ? tile : null);
         }
     } finally {
         document.querySelector<HTMLButtonElement>('.rs2b0t-walkmap-cancel')?.click();
@@ -72,5 +75,7 @@ test.each(['Cancel', 'Escape', 'Confirm'])('%s releases picker settings after ea
         Object.defineProperty(globalThis, 'fetch', originalFetch);
         sessionStorage.clear();
         localStorage.clear();
+        Object.assign(globalThis, sharedDOM);
+        await pickerWindow.happyDOM.close();
     }
 });
