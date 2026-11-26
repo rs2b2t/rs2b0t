@@ -1,3 +1,5 @@
+import { potionIngredientByName } from './potionIngredientByName.js';
+
 export interface HerbDef {
     key: string;
     /** Display name of the cleaned (identified) herb. */
@@ -47,14 +49,7 @@ export const HERB_OPTIONS = HERBS.map(h => h.name);
 
 /** Find a herb by clean name (exact, then substring, then key), case-insensitive. */
 export function potionHerbByName(name: string): PotionHerb | null {
-    const wanted = name.trim().toLowerCase();
-    if (!wanted) {
-        return null;
-    }
-    return (
-        POTION_HERBS.find(h => h.name.toLowerCase() === wanted) ??
-        POTION_HERBS.find(h => h.name.toLowerCase().includes(wanted)) ??
-        POTION_HERBS.find(h => h.key.toLowerCase() === wanted) ??
-        null
+    return potionIngredientByName(POTION_HERBS, name, wanted =>
+        POTION_HERBS.find(h => h.key.toLowerCase() === wanted)
     );
 }

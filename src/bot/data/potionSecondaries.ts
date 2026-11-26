@@ -1,3 +1,5 @@
+import { potionIngredientByName } from './potionIngredientByName.js';
+
 export interface PotionSecondary {
     key: string;
     /** In-game secondary name, unique and descriptive. */
@@ -20,13 +22,5 @@ export const POTION_SECONDARIES: readonly PotionSecondary[] = [
 
 /** Find a secondary by in-game name (exact, then substring), case-insensitive. */
 export function potionSecondaryByName(name: string): PotionSecondary | null {
-    const wanted = name.trim().toLowerCase();
-    if (!wanted) {
-        return null;
-    }
-    return (
-        POTION_SECONDARIES.find(s => s.name.toLowerCase() === wanted) ??
-        POTION_SECONDARIES.find(s => s.name.toLowerCase().includes(wanted)) ??
-        null
-    );
+    return potionIngredientByName(POTION_SECONDARIES, name);
 }
