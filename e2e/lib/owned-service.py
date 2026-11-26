@@ -16,10 +16,12 @@ with socket.socket(socket.AF_UNIX) as owner:
     (groups / str(group)).touch()
     watcher = os.fork()
     if watcher == 0:
-        # Why: staying in the session pins its ID while a stopped service group needs an external signal.
+        # Why: a separate group in the same session pins the ID and can kill a stopped group.
         os.setpgid(0, 0)
+        if os.fork():
+            os._exit(0)
         os.dup2(owner.fileno(), 0)
-        os.closerange(1, max(5, owner.fileno() + 1))
+        os.closerange(1, os.sysconf("SC_OPEN_MAX"))
         try:
             os.read(0, 1)
         finally:
@@ -29,10 +31,16 @@ with socket.socket(socket.AF_UNIX) as owner:
                 pass
             shutil.rmtree(groups, ignore_errors=True)
         os._exit(0)
-    os.setpgid(watcher, watcher)
+    # Why: the command must be able to wait for all its own children.
+    if os.waitpid(watcher, 0)[1] != 0:
+        sys.exit(1)
 
 for name in ("SIGPIPE", "SIGXFZ", "SIGXFSZ"):
     if hasattr(signal, name):
         signal.signal(getattr(signal, name), signal.SIG_DFL)
-executable = os.environ["E2E_SERVICE_EXECUTABLE"]
-os.execvp(executable, [executable, *sys.argv[1:]])
+executable = os.environ.pop("E2E_SERVICE_EXECUTABLE")
+try:
+    os.execvp(executable, [executable, *sys.argv[1:]])
+except OSError as error:
+    (groups / f"{group}.errno").write_text(str(error.errno))
+    sys.exit(127)

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -157,6 +157,32 @@ test('a completed command uses its exit code or the supplied output verdict', as
     expect(result.status).toBe('pass');
 });
 
+test.skipIf(process.platform === 'win32')('cleanup never signals a retired harness group', async () => {
+    const prefix = join(dir, 'retired');
+    const cmd = ['node', serviceFixture, 'parent', prefix, '6000', 'detached', 'unregistered', 'ordinary-child', 'exit'];
+    const harness = run('retired', cmd, join(dir, 'case.log'), 1500);
+    await waitFor(() => existsSync(prefix + '.exited') && exited(Number(readFileSync(prefix + '.exited', 'utf8'))));
+    const leader = Number(readFileSync(prefix + '.exited', 'utf8'));
+    const ordinary = Number(readFileSync(prefix + '.ordinary', 'utf8'));
+    const detached = Number(readFileSync(prefix + '.pid', 'utf8'));
+    const kill = process.kill.bind(process);
+    const signals = spyOn(process, 'kill').mockImplementation((pid, signal) => {
+        if (pid === -leader && signal === 'SIGKILL') throw Object.assign(new Error('retired group'), { code: 'ESRCH' });
+        return kill(pid, signal);
+    });
+    try {
+        kill(ordinary, 'SIGTERM');
+        await waitFor(() => exited(ordinary));
+        const result = await harness;
+        expect(result.status).toBe('timeout');
+        expect(result.ms).toBeLessThan(2500);
+        expect(signals).not.toHaveBeenCalledWith(-leader, 'SIGKILL');
+    } finally {
+        signals.mockRestore();
+        if (!exited(detached)) kill(detached, 'SIGKILL');
+    }
+});
+
 test.skipIf(process.platform === 'win32')('the harness retains the default broken-pipe signal', async () => {
     const result = await run('pipe', ['/bin/sh', '-c', 'kill -PIPE $$'], join(dir, 'log'), 1500);
     expect(result.status).toBe('fail');
@@ -229,4 +255,28 @@ test.skipIf(process.platform === 'win32').each(['SIGHUP', 'SIGKILL'] as const)('
         }
     }
     await waitFor(() => readdirSync(dir).every(file => !file.startsWith('e2e-groups-')));
+});
+
+test.skipIf(process.platform === 'win32')('SIGHUP stops the live runner gate and removes its ownership directory', async () => {
+    writeFileSync(join(dir, 'git'), '#!/bin/sh\necho fixture\n', { mode: 0o755 });
+    writeFileSync(join(dir, 'bun'), '#!/bin/sh\necho "$E2E_SERVICE_GROUPS" > groups\necho "$$" > pid\nexec /bin/sleep 6\n', { mode: 0o755 });
+    const pidFile = join(dir, 'pid');
+    const runner = Bun.spawn([process.execPath, '--no-env-file', join(import.meta.dirname, '../../e2e/runner.ts'), '--gates-only'], {
+        cwd: dir, env: { PATH: dir, TMPDIR: dir }, stdout: 'ignore', stderr: 'inherit'
+    });
+    try {
+        await waitFor(() => existsSync(pidFile) && Number(readFileSync(pidFile, 'utf8')) > 0);
+    } finally {
+        runner.kill('SIGHUP');
+        await runner.exited;
+    }
+    const pid = Number(readFileSync(pidFile, 'utf8'));
+    const groups = readFileSync(join(dir, 'groups'), 'utf8').trimEnd();
+    try {
+        expect(runner.exitCode).toBe(129);
+        await waitFor(() => exited(pid) && !existsSync(groups));
+    } finally {
+        if (!exited(pid)) process.kill(pid, 'SIGKILL');
+        rmSync(groups, { recursive: true, force: true });
+    }
 });

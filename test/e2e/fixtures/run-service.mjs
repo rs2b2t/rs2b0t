@@ -37,6 +37,11 @@ if (mode === 'service') {
     if (flags.includes('hold-pipe')) {
         spawn('node', ['-e', 'setTimeout(() => {}, 6000)'], { stdio: 'inherit' }).unref();
     }
+    if (flags.includes('ordinary-child')) {
+        const child = spawn('/bin/sleep', ['6'], { stdio: 'ignore' });
+        writeFileSync(prefix + '.ordinary', String(child.pid));
+        child.unref();
+    }
     process.on('exit', () => writeFileSync(prefix + '.exited', String(process.pid)));
     child.once('message', () => {
         child.disconnect();

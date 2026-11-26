@@ -139,6 +139,7 @@ if (has('list')) {
 
 mkdirSync(LOGS, { recursive: true });
 process.once('exit', stopRuns);
+if (process.platform !== 'win32') process.once('SIGHUP', () => process.exit(129));
 process.once('SIGINT', () => process.exit(130));
 process.once('SIGTERM', () => process.exit(143));
 const git = (await new Response(Bun.spawn(['git', 'rev-parse', '--short', 'HEAD'], { stdout: 'pipe' }).stdout).text()).trim();
