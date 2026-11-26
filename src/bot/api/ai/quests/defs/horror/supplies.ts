@@ -7,6 +7,7 @@ import { Inventory } from '../../../../inventory/Inventory.js';
 import { Skills } from '../../../../skills/Skills.js';
 import { Locs } from '../../../../locs/Locs.js';
 import { FOOD_FLOAT, QuestFood } from '../../food.js';
+import { steelBarsForNails } from '../../nails.js';
 import { QuestLoadout } from '../../gear.js';
 import { weaponOf } from '../../../../loadout/loadoutPlan.js';
 import { cachedBankId as bankedId, heldId } from '../../engine/snapshotItems.js';
@@ -157,7 +158,7 @@ export function nails(snap: QuestSnapshot): QuestStep {
         return fromNails;
     }
     // Why: `smithNails` only reads steel in the pack, so banked bars (2 nails each) get withdrawn to skip the ore chain.
-    const bars = Math.ceil(need / 2);
+    const bars = steelBarsForNails(need);
     if (heldId(snap, HD_ID.STEEL_BAR) < bars) {
         const fromSteel = fromBank(snap, HD_ID.STEEL_BAR, 'Steel bar', bars - heldId(snap, HD_ID.STEEL_BAR));
         if (fromSteel) {

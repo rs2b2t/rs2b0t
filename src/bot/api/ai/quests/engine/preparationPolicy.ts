@@ -1,6 +1,7 @@
 import { IKOV_BOWS, IKOV_OBJ } from '../defs/ikov/areas.js';
 import { IKOV_STAGE } from '../defs/ikov/journal.js';
 import { FOOD_FLOAT } from '../food.js';
+import { steelBarsForNails } from '../nails.js';
 import { ITEMS_BY_NAME } from '../../../../data/itemIndex.js';
 import { UNTRADEABLE_IDS } from '../../../../data/untradeable.js';
 import type { QuestPreparationRequest } from './preparationTypes.js';
@@ -122,7 +123,7 @@ export function questPreparationRequest(
             if (!has('Unfired bowl')) skill('crafting', 8);
             if (count('Nails') < 12) {
                 skill('smithing', 34);
-                const bars = Math.max(0, Math.ceil((12 - count('Nails')) / 2) - count('Steel bar'));
+                const bars = Math.max(0, steelBarsForNails(12 - count('Nails')) - count('Steel bar'));
                 if (count('Iron ore') < bars) skill('mining', 15);
                 if (count('Coal') < bars * 2) skill('mining', 30);
             }
