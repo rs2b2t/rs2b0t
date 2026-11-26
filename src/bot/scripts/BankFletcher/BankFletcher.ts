@@ -645,29 +645,30 @@ class BankTrip implements Task {
 
     private async withdrawStringing(plan: StringPlan): Promise<void> {
         const listState = () => bankListState(Bank.isOpen(), Bank.ready());
-        const stringSlots = (): number => Inventory.items().filter(i => i.id === plan.stringId).length;
-        const stacked = stringIsStacked(this.bot.packCountById(plan.stringId), stringSlots());
-        const load = stringWithdrawPlan(stringSlots(), stacked);
+        const stringSlots = Inventory.items().filter(i => i.id === plan.stringId).length;
+        const stacked = stringIsStacked(this.bot.packCountById(plan.stringId), stringSlots);
+        const load = stringWithdrawPlan(stringSlots, stacked);
         if (load.stringExact > 0) {
             const stringItem = Bank.items().find(i => i.id === plan.stringId)
                 ?? exactName(Bank.items(), BOW_STRING);
             const action = stockAction({
                 state: listState(),
-                hasItem: Boolean(stringItem)
+                hasItem: Boolean(stringItem) || stringSlots > 0
             });
             this.bot.noteEmpty(BOW_STRING, action);
-            if (action === 'ok' && stringItem) {
-                if (!(await withdrawExact(stringItem, load.stringExact, () => this.bot.packCountById(plan.stringId), m => this.bot.log(m)))) {
-                    return;
-                }
-            } else if (action.startsWith('retry')) {
+            if (action.startsWith('retry')) {
                 this.bot.log(`no '${BOW_STRING}' in the bank list yet (${action}) — will retry`);
                 return;
-            } else if (shouldStopEmpty(this.bot.emptyReadCount(BOW_STRING))) {
-                this.bot.requestFinish(`BankFletcher: bank is out of '${BOW_STRING}'`);
+            }
+            if (action === 'empty-confirmed') {
+                if (shouldStopEmpty(this.bot.emptyReadCount(BOW_STRING))) {
+                    this.bot.requestFinish(`BankFletcher: bank is out of '${BOW_STRING}'`);
+                } else {
+                    this.bot.log(`bank snapshot missed '${BOW_STRING}' (${this.bot.emptyReadCount(BOW_STRING)}/${EMPTY_READ_LIMIT}) — will retry`);
+                }
                 return;
-            } else {
-                this.bot.log(`bank snapshot missed '${BOW_STRING}' (${this.bot.emptyReadCount(BOW_STRING)}/${EMPTY_READ_LIMIT}) — will retry`);
+            }
+            if (stringItem && !(await withdrawExact(stringItem, load.stringExact, () => this.bot.packCountById(plan.stringId), m => this.bot.log(m)))) {
                 return;
             }
         }
@@ -701,7 +702,8 @@ class BankTrip implements Task {
             return;
         }
         if (shouldStopEmpty(this.bot.emptyReadCount(unstrungKey))) {
-            this.bot.requestFinish(`BankFletcher: bank is out of unstrung ${plan.displayName}`);
+            const suffix = this.bot.fletchMode() === 'cut+string' ? ' — cut+string complete' : '';
+            this.bot.requestFinish(`BankFletcher: bank is out of unstrung ${plan.displayName}${suffix}`);
         } else {
             this.bot.log(
                 `bank snapshot missed unstrung ${plan.displayName} `
@@ -770,69 +772,7 @@ class BankTrip implements Task {
             await Bank.depositAllMatching((name) => name.trim().toLowerCase() === knifeName.trim().toLowerCase(), m => this.bot.log(`  ${m}`));
         }
 
-        // String phase: withdraw bow string + unstrung (like withdrawStringing but without re-checking logs).
-        const stringSlots = (): number => Inventory.items().filter(i => i.id === plan.stringId).length;
-        const stacked = stringIsStacked(this.bot.packCountById(plan.stringId), stringSlots());
-        const load = stringWithdrawPlan(stringSlots(), stacked);
-        if (load.stringExact > 0) {
-            const stringItem = Bank.items().find(i => i.id === plan.stringId) ?? exactName(Bank.items(), BOW_STRING);
-            const action = stockAction({
-                state: listState(),
-                hasItem: Boolean(stringItem)
-            });
-            this.bot.noteEmpty(BOW_STRING, action);
-            if (action === 'ok' && stringItem) {
-                if (!(await withdrawExact(stringItem, load.stringExact, () => this.bot.packCountById(plan.stringId), m => this.bot.log(m)))) {
-                    return;
-                }
-            } else if (action.startsWith('retry')) {
-                this.bot.log(`no '${BOW_STRING}' in the bank list yet (${action}) — will retry`);
-                return;
-            } else if (shouldStopEmpty(this.bot.emptyReadCount(BOW_STRING))) {
-                this.bot.requestFinish(`BankFletcher: bank is out of '${BOW_STRING}'`);
-                return;
-            } else {
-                this.bot.log(`bank snapshot missed '${BOW_STRING}' (${this.bot.emptyReadCount(BOW_STRING)}/${EMPTY_READ_LIMIT}) — will retry`);
-                return;
-            }
-        }
-
-        const unstrung = Bank.items().find(i => i.id === plan.unstrungId);
-        const unstrungAction = stockAction({
-            state: listState(),
-            hasItem: Boolean(unstrung)
-        });
-        const unstrungKey = `unstrung:${plan.unstrungId}`;
-        this.bot.noteEmpty(unstrungKey, unstrungAction);
-        if (unstrungAction === 'ok' && unstrung) {
-            if (!load.unstrungAll || Inventory.isFull()) {
-                return;
-            }
-            const before = this.bot.packCountById(plan.unstrungId);
-            if (!(await withdrawStack(unstrung, m => this.bot.log(m)))) {
-                return;
-            }
-            await Execution.delayUntilTicks(
-                () =>
-                    this.bot.packCountById(plan.unstrungId) > before
-                    || Inventory.isFull()
-                    || !Bank.items().some(i => i.id === plan.unstrungId),
-                WITHDRAW_CONFIRM_TICKS
-            );
-            return;
-        }
-        if (unstrungAction.startsWith('retry')) {
-            this.bot.log(`no ${plan.displayName} (u id ${plan.unstrungId}) in the bank list yet (${unstrungAction}) — will retry`);
-            return;
-        }
-        if (shouldStopEmpty(this.bot.emptyReadCount(unstrungKey))) {
-            this.bot.requestFinish(`BankFletcher: bank is out of unstrung ${plan.displayName} — cut+string complete`);
-        } else {
-            this.bot.log(
-                `bank snapshot missed unstrung ${plan.displayName} `
-                + `(${this.bot.emptyReadCount(unstrungKey)}/${EMPTY_READ_LIMIT}) — will retry`
-            );
-        }
+        await this.withdrawStringing(plan);
     }
 }
 
