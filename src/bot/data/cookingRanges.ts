@@ -80,6 +80,19 @@ export const CATHERBY_RANGE: CookingSurface = {
     notes: 'Door/gate; good for both pier and bank cook modes'
 };
 
+function draynorFireplace(): CookingSurface {
+    // Fireplace is inside the house and useOn can't reach it from 3100,3255 (street side); enter via Door@3101,3258 (east wall) and stand north of it.
+    return {
+        approach: new Tile(3102, 3258, 0),
+        stand: new Tile(3100, 3257, 0),
+        loc: new Tile(3100, 3256, 0),
+        locName: 'Fireplace',
+        kind: 'fireplace',
+        label: 'Draynor house fireplace',
+        notes: 'approach Door@3101,3258 → stand north of fireplace (interior)'
+    };
+}
+
 /**
  * Curated cook surfaces for fishing camps.
  * Why: the Seers pier range stands outside the Sinclair Large door so pathing walks the gate complex; aiming at the interior range tile sticks on the wrong side of doors.
@@ -132,25 +145,8 @@ export const FISH_CAMP_COOK_PLANS: Readonly<Record<string, FishCampCookPlan>> = 
         }
     },
     'Draynor Village': {
-        // Fireplace is inside the house and useOn can't reach it from 3100,3255 (street side); enter via Door@3101,3258 (east wall) and stand north of it.
-        pier: {
-            approach: new Tile(3102, 3258, 0),
-            stand: new Tile(3100, 3257, 0),
-            loc: new Tile(3100, 3256, 0),
-            locName: 'Fireplace',
-            kind: 'fireplace',
-            label: 'Draynor house fireplace',
-            notes: 'approach Door@3101,3258 → stand north of fireplace (interior)'
-        },
-        bank: {
-            approach: new Tile(3102, 3258, 0),
-            stand: new Tile(3100, 3257, 0),
-            loc: new Tile(3100, 3256, 0),
-            locName: 'Fireplace',
-            kind: 'fireplace',
-            label: 'Draynor house fireplace',
-            notes: 'approach Door@3101,3258 → stand north of fireplace (interior)'
-        }
+        pier: draynorFireplace(),
+        bank: draynorFireplace()
     }
 };
 
