@@ -13,6 +13,8 @@ import WorldMapFont from '#/client/mapview/WorldMapFont.js';
 import { WORLDMAP_KEY_NAMES } from '#/client/mapview/worldmapKeyNames.js';
 
 export class MapView extends GameShell {
+    declare protected drawArea: PixMap;
+
     static shouldDrawBorders: boolean = false;
     static shouldDrawLabels: boolean = true;
     /** Key legend icons (mapfunction sprites). Classic worldmap always draws these. */
@@ -129,6 +131,11 @@ export class MapView extends GameShell {
         super();
 
         this.run();
+    }
+
+    protected override resize(width: number, height: number): void {
+        super.resize(width, height);
+        this.drawArea = new PixMap(width, height);
     }
 
     override async maininit(): Promise<void> {
