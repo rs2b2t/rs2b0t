@@ -24,7 +24,11 @@ export default class ParamsModal {
     /** Set once by BotPanel; opens the order book window over this modal. */
     onEditPriceBook: ((bookName: string) => void) | null = null;
 
-    constructor(private isActive: () => boolean, private onChanged: (key: string) => void) {
+    constructor(
+        private isActive: () => boolean,
+        private onChanged: (key: string) => void,
+        private onBeforeSave?: (key: string) => void
+    ) {
         this.backdrop = el('div', 'rs2b0t-modal-backdrop');
         this.backdrop.addEventListener('click', e => {
             if (e.target === this.backdrop) {
@@ -236,6 +240,7 @@ export default class ParamsModal {
 
         const current = SettingsStore.displayString(this.scriptName, key, def);
         const control = renderControl(def, current, raw => {
+            this.onBeforeSave?.(key);
             SettingsStore.save(this.scriptName, key, raw);
             this.onChanged(key);
             if (deps.has(key)) {

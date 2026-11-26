@@ -857,13 +857,12 @@ export class WorldMapPicker {
             };
 
             // In-picker Settings modal (not Global settings).
-            const editedSettings = new Set<string>();
+            const editedSettings = new Map<string, number>();
+            let editSequence = 0;
             const settingsModal = new ParamsModal(
                 () => false,
-                key => {
-                    editedSettings.add(key);
-                    requestPaint();
-                }
+                requestPaint,
+                key => editedSettings.set(key, ++editSequence)
             );
 
             const unsubSettings = SettingsStore.onChange((name, key) => {
@@ -953,7 +952,7 @@ export class WorldMapPicker {
                     zIndex: 1200,
                     onClose: () => {
                         if (bakeSettingsSnapshot) {
-                            restoreMapPickerBakeSettings(bakeSettingsSnapshot, editedSettings);
+                            restoreMapPickerBakeSettings(bakeSettingsSnapshot, new Set(editedSettings.keys()));
                         }
                         bakeSettingsSnapshot = null;
                     }
@@ -995,13 +994,16 @@ export class WorldMapPicker {
                     status.style.color = '#fa0';
                     try {
                         const prefs = resolveBasemapBakePrefs();
+                        const rebuiltSettings = snapshotMapPickerBakeSettings();
+                        const lastBakedEdit = editSequence;
                         const next = await regenerateBasemap(prefs);
                         if (closed) {
                             return;
                         }
-                        // The post-rebuild bake keys become the discard baseline, so later toggles without a rebuild still discard on close.
-                        bakeSettingsSnapshot = snapshotMapPickerBakeSettings();
-                        editedSettings.clear();
+                        bakeSettingsSnapshot = rebuiltSettings;
+                        for (const [key, sequence] of editedSettings) {
+                            if (sequence <= lastBakedEdit) editedSettings.delete(key);
+                        }
                         const crcKey = await fetchClientCrcKey();
                         if (crcKey) {
                             try {
