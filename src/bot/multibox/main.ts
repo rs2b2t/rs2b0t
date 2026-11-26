@@ -452,11 +452,14 @@ function boot(): void {
         replaceAll: data => updateSavedTabs(async () => {
             const previous = vault.list().map(p => p.username);
             await vault.replaceAll(data);
-            applyBoxStorage(data.storage, [...previous, ...data.profiles.map(p => p.username)]);
-            vault.adoptGroupState();
-            controller.restoreProfiles(vault.list(), data.tabs, data.activeTab);
-            wallOnlyTabs = new Set(controller.tabs().slice(1).filter(tab => !data.tabs.includes(tab)));
-            renderRail();
+            try {
+                applyBoxStorage(data.storage, [...previous, ...data.profiles.map(p => p.username)]);
+            } finally {
+                vault.adoptGroupState();
+                controller.restoreProfiles(vault.list(), data.tabs, data.activeTab);
+                wallOnlyTabs = new Set(controller.tabs().slice(1).filter(tab => !data.tabs.includes(tab)));
+                renderRail();
+            }
         })
     });
     document.body.appendChild(settings.el);

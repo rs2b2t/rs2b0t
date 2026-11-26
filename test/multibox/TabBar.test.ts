@@ -35,7 +35,7 @@ function press(el: Element, key: string): void {
     el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
 }
 
-function makeBar() {
+function makeBar(onAdd?: (name: string) => Promise<boolean>) {
     const calls: string[] = [];
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -45,7 +45,7 @@ function makeBar() {
         },
         onAdd: n => {
             calls.push(`add:${n}`);
-            return !n.startsWith('bad');
+            return onAdd ? onAdd(n) : !n.startsWith('bad');
         },
         onRename: (o, n) => {
             calls.push(`rename:${o}:${n}`);
@@ -131,6 +131,26 @@ describe('TabBar', () => {
         container.querySelector<HTMLElement>('.mbx-tabadd')!.click();
         bar.render(['Main', 'x'], 'Main');
         expect(container.querySelector('.mbx-tabinput')).not.toBeNull();
+    });
+
+    test('a queued duplicate name stays editable through the import repaint', async () => {
+        const pending = Promise.withResolvers<boolean>();
+        const { bar, container } = makeBar(() => pending.promise);
+        bar.render(['Main', 'Old'], 'Old');
+        container.querySelector<HTMLElement>('.mbx-tabadd')!.click();
+        const input = container.querySelector<HTMLInputElement>('.mbx-tabinput')!;
+        input.value = 'Main';
+        press(input, 'Enter');
+        bar.render(['Main', 'Fleet'], 'Fleet');
+        pending.resolve(false);
+        await pending.promise;
+
+        expect(container.contains(input)).toBe(true);
+        expect(input.value).toBe('Main');
+        expect(input.classList.contains('is-invalid')).toBe(true);
+        press(input, 'Escape');
+        expect(container.querySelector<HTMLElement>('.is-active')?.dataset.tab).toBe('Fleet');
+        expect(container.querySelector('[data-tab="Old"]')).toBeNull();
     });
 
     test('the gear opens a menu that renames and deletes without selecting', () => {

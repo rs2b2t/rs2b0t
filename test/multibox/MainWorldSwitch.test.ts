@@ -357,7 +357,7 @@ test('a roster move queued during replacement uses the imported username', async
     });
 });
 
-test('a tab added during replacement is saved against the imported memberships', async () => {
+test.each(['succeeds', 'exceeds quota'])('a queued tab edit preserves imported memberships when the settings write %s', async result => {
     await withWall('local', async wall => {
         const panel = openSettings();
         const profile = { username: 'fixture', password: 'fixture' };
@@ -365,6 +365,8 @@ test('a tab added during replacement is saved against the imported memberships',
             profiles: [{ ...profile, tab: 'Old' }, { username: 'guest', password: 'fixture', tab: 'Work' }],
             tabs: ['Old', 'Work'], activeTab: 'Old', storage: {}
         }));
+        const [reused, omitted] = wall.slots();
+        const profiles = [{ ...profile, tab: 'Fleet' }, { username: 'new', password: 'fixture', tab: 'Fleet' }];
         let added: ReturnType<Wall['addTab']> | undefined;
         const replaceAll = vault.replaceAll.bind(vault);
         const replace = spyOn(vault, 'replaceAll').mockImplementationOnce(data => {
@@ -373,22 +375,32 @@ test('a tab added during replacement is saved against the imported memberships',
             return replacing;
         });
         const saves = spyOn(vault, 'saveTabState');
+        const setItem = sessionStorage.setItem;
         try {
+            if (result === 'exceeds quota') {
+                Object.defineProperty(sessionStorage, 'setItem', {
+                    configurable: true,
+                    value() { throw new DOMException('settings storage full', 'QuotaExceededError'); }
+                });
+            }
             await panel.importText(serializeProfileFile({
-                profiles: [{ ...profile, tab: 'Fleet' }], tabs: ['Fleet'], activeTab: 'Fleet', storage: {}
+                profiles, tabs: ['Fleet'], activeTab: 'Fleet', storage: { fixture: { selectedScript: 'Miner' } }
             }));
             expect(await added).toBe(true);
-            expect(panel.el.querySelector('#mbx-settings-error')!.textContent).toBe('');
+            expect(panel.el.querySelector('#mbx-settings-error')!.textContent).toBe(result === 'exceeds quota' ? 'settings storage full' : '');
             await Promise.all(saves.mock.results.map(result => result.value));
             const reopened = new ProfileVault();
             expect(await reopened.unlock('test-passphrase')).toBe(true);
             expect(reopened.snapshot()).toEqual({
-                profiles: [{ ...profile, tab: 'Fleet' }], tabs: ['Fleet', 'Local'], activeTab: 'Fleet'
+                profiles, tabs: ['Fleet', 'Local'], activeTab: 'Fleet'
             });
             expect(wall.controller.tabs()).toEqual(['Main', 'Fleet', 'Work', 'Local']);
             expect(wall.controller.activeTab()).toBe('Fleet');
-            expect(wall.slots().map(s => s.tab)).toEqual(['Fleet', 'Work']);
+            expect(wall.slots().map(s => [s.username, s.tab])).toEqual([['fixture', 'Fleet'], ['guest', 'Work'], ['new', 'Fleet']]);
+            expect(wall.slots().slice(0, 2).map(s => s.id)).toEqual([reused.id, omitted.id]);
         } finally {
+            Object.defineProperty(sessionStorage, 'setItem', { configurable: true, value: setItem });
+            for (const store of [localStorage, sessionStorage]) store.removeItem('rs2b0t:fixture:selectedScript');
             replace.mockRestore();
             saves.mockRestore();
         }
