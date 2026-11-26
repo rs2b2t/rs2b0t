@@ -6,10 +6,9 @@ import { DEFAULT_MARGIN, DEFAULT_MAX_TRADE, removeBook, rowOf, uniqueBookName, u
 import { CATEGORIES, shelves, type Category } from '../api/market/categories.js';
 import { el } from './dom.js';
 import { itemIconDataUrl } from './itemIcon.js';
+import { ItemIconRetry } from './ItemIconRetry.js';
 import { addRow, addRows, displayRows, dropRow, formatPrice, nextSort, parseAmount, parsePrice, pickerRows, setField, setMargin, setMaxTradeValue, setSide, viewRows, type DisplayRow, type SortDir, type SortKey } from './priceBookPanelLogic.js';
 
-const ICON_FILL_MS = 500;
-const ICON_FILL_TRIES = 12;
 const PICKER_LIMIT = 60;
 
 /** What survives a re-render: where each list was scrolled to, and which box the operator was typing in. */
@@ -40,8 +39,7 @@ export class PriceBookPanel {
     private shelf: Category | 'All' = 'All';
     private sort: { key: SortKey; dir: SortDir } = { key: 'name', dir: 'asc' };
     private renaming = false;
-    private iconTries = 0;
-    private iconTimer: ReturnType<typeof setTimeout> | null = null;
+    private readonly iconRetry = new ItemIconRetry(() => this.fillIcons());
     private importRevision = 0;
     private stagedImport: { filename: string; books: TransferBook[]; conflicts: string[] } | null = null;
     private importError: string | null = null;
@@ -70,7 +68,7 @@ export class PriceBookPanel {
         this.renaming = false;
         this.query = '';
         this.filter = '';
-        this.iconTries = 0;
+        this.iconRetry.resetAttempts();
         this.stagedImport = null;
         this.importError = null;
         this.render();
@@ -80,7 +78,7 @@ export class PriceBookPanel {
         this.root.style.display = 'none';
         this.adding = false;
         this.browsing = false;
-        this.stopIconFill();
+        this.iconRetry.cancel();
     }
 
     isOpen(): boolean {
@@ -146,9 +144,7 @@ export class PriceBookPanel {
             }
         }
         this.release(held);
-        if (this.fillIcons() > 0) {
-            this.scheduleIconFill();
-        }
+        this.iconRetry.fill();
     }
 
     private hold(): Held {
@@ -856,30 +852,6 @@ export class PriceBookPanel {
             face.appendChild(img);
         }
         return face;
-    }
-
-    /**
-     * The client streams item models on demand, so a sprite is null until the one asked about arrives.
-     * Why: re-rendering would blow away the search box mid-type, so icons are patched in place a few times before giving up.
-     */
-    private scheduleIconFill(): void {
-        this.stopIconFill();
-        if (this.iconTries >= ICON_FILL_TRIES) {
-            return;
-        }
-        this.iconTimer = setTimeout(() => {
-            this.iconTries++;
-            if (this.fillIcons() > 0) {
-                this.scheduleIconFill();
-            }
-        }, ICON_FILL_MS);
-    }
-
-    private stopIconFill(): void {
-        if (this.iconTimer !== null) {
-            clearTimeout(this.iconTimer);
-            this.iconTimer = null;
-        }
     }
 
     /** Returns how many faces are still waiting on a sprite. */

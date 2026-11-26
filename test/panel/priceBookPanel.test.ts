@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, jest, spyOn, test } from 'bun:test';
 
 import { PriceBooks } from '#/bot/api/market/bookStore.js';
 import { resetLiveCatalog } from '#/bot/api/market/catalog.js';
@@ -73,6 +73,32 @@ afterEach(() => {
     ObjType.numDefinitions = realCount;
     resetObjCatalog();
     resetLiveCatalog();
+});
+
+test('close cancels icon retries and reopen allows twelve fresh retries', () => {
+    const clock = jest as typeof jest & { advanceTimersByTime(ms: number): void };
+    clock.useFakeTimers();
+    try {
+        const panel = openPanel();
+        const fill = spyOn(panel, 'fillIcons');
+        clock.advanceTimersByTime(500);
+        expect(fill).toHaveBeenCalledTimes(1);
+        panel.close();
+        clock.advanceTimersByTime(500);
+        expect(fill).toHaveBeenCalledTimes(1);
+
+        fill.mockClear();
+        panel.open();
+        expect(fill).toHaveBeenCalledTimes(1);
+        for (let retry = 1; retry <= 12; retry++) {
+            clock.advanceTimersByTime(500);
+            expect(fill).toHaveBeenCalledTimes(1 + retry);
+        }
+        clock.advanceTimersByTime(500);
+        expect(fill).toHaveBeenCalledTimes(13);
+    } finally {
+        clock.useRealTimers();
+    }
 });
 
 describe('filtering the book', () => {
