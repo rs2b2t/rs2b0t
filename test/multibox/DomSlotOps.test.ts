@@ -21,6 +21,80 @@ afterEach(() => {
 });
 
 describe('DomSlotOps', () => {
+    test.each([30, 61])('only the focused rail mirror ticks on a %i-slot wall', size => {
+        jest.useFakeTimers();
+        const clock = jest as typeof jest & {
+            advanceTimersByTime(ms: number): void;
+            advanceTimersToNextTimer(): void;
+            getTimerCount(): number;
+        };
+        const start = Date.now();
+        const rail = document.getElementById('rail')!;
+        rail.id = 'mbx-rail';
+        let width = 264;
+        Object.defineProperty(rail, 'offsetWidth', { get: () => width });
+        const ops = new DomSlotOps(rail, document.getElementById('add')!, false);
+        const calls: unknown[][] = [];
+        for (let i = 0; i < size; i++) {
+            handles.push(ops.spawn({ username: 'slot' + i, password: '' }));
+            const frame = rail.querySelector<HTMLIFrameElement>(`iframe[title="slot${i}"]`)!;
+            const doc = frame.contentDocument!;
+            doc.body.innerHTML = '<canvas id="canvas" width="765" height="503"></canvas><canvas id="overlay" width="765" height="503"></canvas>';
+            const mirror = frame.closest('.mbx-slot')!.querySelector('canvas')!;
+            Object.defineProperty(mirror, 'getContext', { value: () => ({
+                clearRect: (...args: number[]) => calls.push([Date.now() - start, i, 'clear', ...args]),
+                drawImage: (source: HTMLCanvasElement, ...args: number[]) => calls.push([Date.now() - start, i, source.id, ...args])
+            }) });
+            Object.assign(frame.contentWindow!, { rs2b0t: { renderGate: {}, setRenderMode() {} } });
+            frame.dispatchEvent(new Event('mbx-client-initialized'));
+            clock.advanceTimersByTime(7);
+        }
+        clock.advanceTimersByTime(50);
+        handles[0].setRenderMode('focused');
+        const focusedTimers = clock.getTimerCount();
+        let finished = false;
+        window.setTimeout(() => { finished = true; }, 60_000);
+        let ticks = 0;
+        while (!finished) {
+            clock.advanceTimersToNextTimer();
+            if (!finished) ticks++;
+        }
+        const expected: unknown[][] = [];
+        const paint = (ms: number, slot: number) => expected.push(
+            [ms, slot, 'clear', 0, 0, 236, 155],
+            [ms, slot, 'canvas', 0, 0, 765, 503, 0, 0, 236, 155],
+            [ms, slot, 'overlay', 0, 0, 765, 503, 0, 0, 236, 155]
+        );
+        for (let i = 1; i <= 60; i++) paint(i * 1000, 0);
+        expect(calls).toEqual(expected);
+
+        handles[0].setRenderMode('background');
+        handles[1].setRenderMode('focused');
+        clock.advanceTimersByTime(61_006 - (Date.now() - start));
+        handles[1].setRenderMode('focused');
+        clock.advanceTimersByTime(1);
+        paint(61_007, 1);
+        width = 0;
+        clock.advanceTimersByTime(1000);
+        width = 264;
+        clock.advanceTimersByTime(1000);
+        paint(63_007, 1);
+        handles[1].setRenderMode('hidden');
+        handles[2].setRenderMode('focused');
+        handles[2].destroy();
+        clock.advanceTimersByTime(1500);
+        const emptyTimers = clock.getTimerCount();
+        handles[0].setRenderMode('focused');
+        clock.advanceTimersByTime(493);
+        paint(65_000, 0);
+        handles[0].destroy();
+        clock.advanceTimersByTime(1000);
+        expect(calls).toEqual(expected);
+        expect({ ticks, focusedTimers, emptyTimers, remaining: clock.getTimerCount() }).toEqual({
+            ticks: 60, focusedTimers: 1, emptyTimers: 0, remaining: 0
+        });
+    });
+
     test.each(['missing', 'unreadable'])('a startup timeout (%s bridge) stops checks, admits the next frame and allows re-add', bridge => {
         jest.useFakeTimers();
         const clock = jest as typeof jest & { advanceTimersByTime(ms: number): void };
