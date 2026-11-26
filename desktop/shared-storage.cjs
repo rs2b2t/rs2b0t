@@ -3,8 +3,6 @@ const { join } = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { lockSync } = require('proper-lockfile');
 
-const legacyOrigin = 'http://localhost:8081';
-const migratedOrigins = state => state.migratedOrigins ?? (state.initialized ? [legacyOrigin] : []);
 const profileKeys = ['rs2b0t:multibox:profiles', 'rs2b0t:multibox:accounts'];
 
 function sharedStorage(dir) {
@@ -43,7 +41,7 @@ function sharedStorage(dir) {
         }
     }
     return {
-        initialized: (origin = legacyOrigin) => migratedOrigins(read()).includes(origin),
+        initialized: () => read().initialized,
         snapshot: () => read().data,
         getItem: key => (valid(key) ? (read().data[key] ?? null) : null),
         keys: () => Object.keys(read().data),
@@ -67,20 +65,20 @@ function sharedStorage(dir) {
                     delete state.data[key];
                 });
         },
-        seed(values, origin = legacyOrigin) {
+        seed(values, { fallback = {}, recover = false } = {}) {
             update(state => {
-                const origins = migratedOrigins(state);
-                if (origins.includes(origin)) return;
-                const hasProfiles = profileKeys.some(key => key in state.data);
-                for (const [key, value] of Object.entries(values)) {
-                    if (hasProfiles && profileKeys.includes(key)) continue;
-                    if (valid(key) && typeof value === 'string' && !(key in state.data)) state.data[key] = value;
+                if (state.initialized && !recover) return;
+                for (const source of [values, fallback]) {
+                    const hasProfiles = profileKeys.some(key => key in state.data);
+                    for (const [key, value] of Object.entries(source)) {
+                        if (hasProfiles && profileKeys.includes(key)) continue;
+                        if (valid(key) && typeof value === 'string' && !(key in state.data)) state.data[key] = value;
+                    }
                 }
-                state.migratedOrigins = [...origins, origin];
                 state.initialized = true;
             });
         }
     };
 }
 
-module.exports = { sharedStorage, legacyOrigin };
+module.exports = { sharedStorage };
