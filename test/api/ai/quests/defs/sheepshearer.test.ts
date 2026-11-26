@@ -1,14 +1,6 @@
 import { expect, test, describe } from 'bun:test';
 import { decide, gatherBalls, sheepshearer } from '#/bot/api/ai/quests/defs/sheepshearer.js';
-import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
-
-const snap = (journal: string, items: [string, number][] = []): QuestSnapshot => ({
-    journal: journal as QuestSnapshot['journal'],
-    inv: new Map(items),
-    worn: new Set(),
-    noProgress: 0,
-    bankCoins: 0
-});
+import { snap } from './inventory-snapshot.fixture.js';
 
 describe('sheepshearer gatherBalls', () => {
     test('no shears and short of wool -> grab the free shears spawn', () => {
