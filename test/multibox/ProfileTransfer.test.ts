@@ -126,6 +126,12 @@ describe('ProfileTransfer', () => {
         expect(JSON.parse(result.stdout.toString())).toEqual({ threshold: 20, syncReads: 0, keyReads: 1 });
     });
 
+    test('saving an unrelated script setting keeps desktop global settings cached for set', () => {
+        const result = Bun.spawnSync(['bun', 'test/fixtures/profile-transfer-desktop.ts', '--warm-cache']);
+        expect(result.exitCode, result.stderr.toString()).toBe(0);
+        expect(JSON.parse(result.stdout.toString())).toEqual({ syncReads: 0, keyReads: 0 });
+    });
+
     test('migrating native storage keeps the durable marker for cleared set settings', () => {
         const result = Bun.spawnSync(['bun', 'test/fixtures/profile-transfer-desktop.ts', '--settings', '--migrate']);
         expect(result.exitCode, result.stderr.toString()).toBe(0);
@@ -219,10 +225,10 @@ describe('ProfileTransfer', () => {
         const legacy = 'rs2b0t:set:set:Global:runEnergyMin';
         const current = boxKey('set:Global:runEnergyMin', 'set');
         localStorage.setItem(legacy, '42');
-        const getItem = localStorage.getItem.bind(localStorage);
+        const getItem = localStorage.getItem;
         let interleaved = false;
         Object.defineProperty(localStorage, 'getItem', { configurable: true, value(key: string) {
-            const value = getItem(key);
+            const value = getItem.call(localStorage, key);
             if (key === legacy && !interleaved) {
                 interleaved = true;
                 localStorage.setItem(current, '73');
@@ -232,8 +238,9 @@ describe('ProfileTransfer', () => {
         try {
             inBox('set', () => SettingsStore.saved('Global', 'runEnergyMin'));
         } finally {
-            Reflect.deleteProperty(localStorage, 'getItem');
+            Object.defineProperty(localStorage, 'getItem', { value: getItem });
         }
+        expect(localStorage.getItem).toBe(getItem);
         expect(interleaved).toBe(true);
         sessionStorage.clear();
         expect(inBox('set', () => SettingsStore.saved('Global', 'runEnergyMin'))).toBe('73');

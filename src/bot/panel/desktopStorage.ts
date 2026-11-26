@@ -54,7 +54,10 @@ if (desktopStorage) {
         })
     });
     shared.subscribe((key, oldValue, newValue) => {
-        if (needsCache(key)) settings = undefined;
+        if (settings && needsCache(key)) {
+            if (newValue === null) settings.delete(key);
+            else settings.set(key, undefined);
+        }
         if (isSetting(key)) {
             if (newValue === null) sessionStorage.removeItem(key);
             else sessionStorage.setItem(key, newValue);

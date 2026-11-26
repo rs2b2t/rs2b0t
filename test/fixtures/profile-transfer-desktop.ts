@@ -52,6 +52,23 @@ if (process.argv.includes('--migrate')) {
     localStorage.setItem('rs2b0t:set:set:Global:runEnergyMin', '42');
 }
 await import('../../src/bot/panel/desktopStorage.js');
+if (process.argv.includes('--warm-cache')) {
+    const { SettingsStore, GLOBAL_SETTINGS } = await import('../../src/bot/runtime/Settings.js');
+    const browser = Reflect.get(window, 'happyDOM') as { setURL(url: string): void };
+    browser.setURL('http://localhost/bot.html?box=set');
+    for (const [key, def] of Object.entries(GLOBAL_SETTINGS).slice(0, 16)) {
+        SettingsStore.save('Global', key, String(def.default));
+    }
+    SettingsStore.save('Global', 'runEnergyMin', '73');
+    await Promise.resolve();
+    assert.equal(SettingsStore.globalBag().num('runEnergyMin'), 73);
+    SettingsStore.save('Miner', 'rock', 'iron');
+    await Promise.resolve();
+    syncReads = keyReads = 0;
+    assert.equal(SettingsStore.globalBag().num('runEnergyMin'), 73);
+    console.log(JSON.stringify({ syncReads, keyReads }));
+    process.exit(0);
+}
 if (process.argv.includes('--settings')) {
     const { SettingsStore } = await import('../../src/bot/runtime/Settings.js');
     const browser = Reflect.get(window, 'happyDOM') as { setURL(url: string): void };
