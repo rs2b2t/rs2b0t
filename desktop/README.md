@@ -49,12 +49,15 @@ On first migration, the desktop looks for profiles on the configured origin, the
 `http://localhost:8081`. The panel still migrates script settings and selections
 from the configured origin when the shared store has no value for them.
 If the configured origin is unreadable and 8081 is readable, the chooser opens
-even if 8081 is empty. When no profiles were found, the next launch retries the
-configured origin. Saving or resetting profiles cancels that retry.
-If 8081 is unreadable, the desktop opens with the configured roster and defers
-script settings until it can check 8081. Edits made in the meantime take
-precedence. If an older desktop writes to the shared store while settings are
-deferred, the retry skips missing settings to preserve possible deletions.
+even if 8081 is empty. When no profiles were found, the next launch retries
+each unreadable configured origin, starting with the current one if it is
+pending. Saving or resetting profiles cancels pending profile retries.
+If 8081 is unreadable, the desktop can open with a populated configured roster
+and defer script settings until it can check 8081. With an empty configured
+roster, startup stops and the next launch tries migration again. Edits made
+while settings are deferred take precedence. If an older desktop writes to the
+shared store during that time, the retry skips missing settings to preserve
+possible deletions.
 
 If an older migration left the chooser empty, run
 `B0T_RECOVER_LEGACY_PROFILES=1 bun run start -- --server=http://localhost:8082`

@@ -239,6 +239,34 @@ test('a failed configured read after another launch seeded settings retries the 
     expect(await launch(custom)).toEqual(profiles);
 });
 
+test.each(['same launch', 'next launch'])('overlapping migrations recover 8082 when 8083 becomes readable on the %s', async when => {
+    const other = 'http://localhost:8083';
+    const ore = 'rs2b0t:set:Miner:ore';
+    const tree = 'rs2b0t:set:Woodcutter:tree';
+    const script = 'rs2b0t:fixture:selectedScript';
+    const unreadable = new Set([custom, other]);
+    const { launch, store } = fixture({
+        [custom]: { [accounts]: JSON.stringify(profiles), [ore]: 'Tin' },
+        [other]: { [script]: 'Fisher', [tree]: 'Oak' }
+    }, origin => {
+        if (unreadable.has(origin)) throw new Error('Unreadable fixture');
+    });
+    const ready = Promise.withResolvers<void>();
+    const pending = launch(other, false, ready.promise);
+    expect(await launch(custom)).toEqual([]);
+    store.removeItem(tree);
+    ready.resolve();
+    expect(await pending).toEqual([]);
+    store.removeItem(ore);
+    unreadable.delete(custom);
+    if (when === 'same launch') unreadable.delete(other);
+    expect(await launch(custom)).toEqual(profiles);
+    expect(store.getItem(script)).toEqual(when === 'same launch' ? 'Fisher' : null);
+    unreadable.delete(other);
+    expect(await launch(custom)).toEqual(profiles);
+    expect([script, tree, ore].map(key => store.getItem(key))).toEqual(['Fisher', null, null]);
+});
+
 test('a configured-origin retry recovers panel settings and preserves edits and deletions across the failed read', async () => {
     const script = 'rs2b0t:fixture-0:selectedScript';
     const ore = 'rs2b0t:fixture-0:set:Miner:ore';
@@ -491,6 +519,19 @@ test.each(['retry', 'save', 'reset'])('8081 settings open while the configured r
     expect(await launch(custom)).toEqual(expected);
 });
 
+test('a pending retry from an older desktop recovers its origin and preserves deleted settings', async () => {
+    const script = 'rs2b0t:fixture:selectedScript';
+    const ore = 'rs2b0t:set:Miner:ore';
+    const { launch, store, storeDir } = fixture({ [custom]: { [accounts]: JSON.stringify(profiles), [script]: 'Miner', [ore]: 'Tin' } });
+    const marker = { [vault]: null, [accounts]: null };
+    writeFileSync(join(storeDir, 'storage.json'), JSON.stringify({
+        initialized: true, data: marker, seededWithoutProfiles: marker, retryProfileOrigin: custom, deletedDuringProfileRetry: [ore]
+    }) + '\n');
+    expect(await launch(original)).toEqual(profiles);
+    expect(await launch(original)).toEqual(profiles);
+    expect([store.getItem(script), store.getItem(ore)]).toEqual(['Miner', null]);
+});
+
 test('an older pending retry without profile markers requires explicit recovery', async () => {
     const { launch, storeDir } = fixture({ [custom]: { [accounts]: JSON.stringify(profiles) } });
     writeFileSync(join(storeDir, 'storage.json'), JSON.stringify({
@@ -671,6 +712,18 @@ test('an empty readable fallback opens the chooser and retries the configured or
     expect(store.initialized()).toBe(true);
     unreadable = false;
     expect(await launch(original)).toEqual(profiles);
+    expect(await launch(custom)).toEqual(profiles);
+});
+
+test('an empty configured roster and unreadable 8081 leave first migration pending', async () => {
+    let unreadable = true;
+    const { launch, store } = fixture({ [custom]: { [accounts]: '[]' }, [original]: { [accounts]: JSON.stringify(profiles) } }, origin => {
+        if (origin === original && unreadable) throw new Error('Unreadable 8081 fixture');
+    });
+    await expect(launch(custom)).rejects.toMatchObject({ message: 'app.quit', cause: { message: 'Unreadable 8081 fixture' } });
+    expect(store.initialized()).toBe(false);
+    unreadable = false;
+    expect(await launch(custom)).toEqual(profiles);
     expect(await launch(custom)).toEqual(profiles);
 });
 

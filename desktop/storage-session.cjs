@@ -18,13 +18,13 @@ function prepareStorage(app, serverUrl) {
     const legacy = join(directory, 'Local Storage');
     const recover = process.env.B0T_RECOVER_LEGACY_PROFILES === '1';
     const hasLegacy = fs.existsSync(legacy);
-    const { initialized, retrySettings, retryProfileOrigin } = hasLegacy
+    const { initialized, retrySettings, retryProfileOrigins = [] } = hasLegacy
         ? store.migrationStatus(URL.canParse(serverUrl) && isCustomOrigin(new URL(serverUrl).origin))
         : {};
     const automaticRetry = initialized && !recover;
     const runtime = fs.mkdtempSync(join(cacheRoot, 'rs2b0t-session-'));
     let copied = false;
-    if (hasLegacy && (recover || !initialized || retrySettings || retryProfileOrigin)) {
+    if (hasLegacy && (recover || !initialized || retrySettings || retryProfileOrigins.length)) {
         const destination = join(runtime, 'Local Storage');
         const fingerprint = () => {
             const hash = createHash('sha256');
@@ -74,7 +74,7 @@ function prepareStorage(app, serverUrl) {
                     const entries = source === legacyOrigin
                         ? 'Object.entries(localStorage).filter(([key]) => key.startsWith("rs2b0t:"))'
                         : `${JSON.stringify(profileKeys)}.map(key => [key, localStorage[key]])`;
-                    const readPanelSettings = !initialized || (automaticRetry && source === retryProfileOrigin);
+                    const readPanelSettings = !initialized || automaticRetry;
                     if (readPanelSettings && source !== legacyOrigin) return await hidden.webContents.executeJavaScript(`(() => {
                         const values = Object.fromEntries(${entries});
                         for (const key of Object.keys(localStorage)) {
@@ -96,16 +96,23 @@ function prepareStorage(app, serverUrl) {
                     readError = error;
                     return null;
                 }
-                const profileOrigin = automaticRetry ? retryProfileOrigin : origin;
-                const readConfigured = isCustomOrigin(profileOrigin);
                 let fallback;
                 if (!initialized || retrySettings) fallback = await readLegacy(legacyOrigin).catch(failed);
-                const values = readConfigured ? await readLegacy(profileOrigin, fallback === null).catch(failed) : {};
+                const retries = [];
+                let values = {};
+                if (automaticRetry) {
+                    const origins = retryProfileOrigins.includes(origin) ? new Set([origin, ...retryProfileOrigins]) : retryProfileOrigins;
+                    for (const source of origins) {
+                        if (!isCustomOrigin(source)) continue;
+                        const entries = await readLegacy(source).catch(failed);
+                        if (entries) retries.push([source, entries]);
+                    }
+                } else if (isCustomOrigin(origin)) values = await readLegacy(origin, fallback === null).catch(failed);
                 if (recover && fallback === undefined && !savedProfileKey(values ?? {})) fallback = await readLegacy(legacyOrigin).catch(failed);
                 let firstMigration = false;
-                if (!automaticRetry || fallback || (retryProfileOrigin && values)) {
+                if (!automaticRetry || fallback || retries.length) {
                     try {
-                        firstMigration = store.seed(values, { fallback, recover, readError, profileOrigin });
+                        firstMigration = store.seed(values, { fallback, recover, readError, profileOrigin: automaticRetry ? undefined : origin, retries });
                     } catch (error) {
                         if (!automaticRetry) throw error;
                     }
