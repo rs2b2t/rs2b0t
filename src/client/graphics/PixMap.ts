@@ -5,10 +5,9 @@ export default class PixMap {
     readonly data: Int32Array;
     private readonly width: number;
     private readonly height: number;
-    private readonly img: ImageData;
-
     private readonly ctx: CanvasRenderingContext2D;
-    private readonly paint: Uint32Array;
+    private img?: ImageData;
+    private paint?: Uint32Array;
 
     constructor(width: number, height: number, ctx: CanvasRenderingContext2D = canvas2d) {
         this.width = width;
@@ -16,8 +15,6 @@ export default class PixMap {
         this.data = new Int32Array(width * height);
 
         this.ctx = ctx;
-        this.img = this.ctx.createImageData(width, height);
-        this.paint = new Uint32Array(this.img.data.buffer);
 
         this.setPixels();
     }
@@ -27,13 +24,14 @@ export default class PixMap {
     }
 
     draw(x: number, y: number): void {
-        this.prepareCanvas();
-        this.ctx.putImageData(this.img, x, y);
+        const img = (this.img ??= this.ctx.createImageData(this.width, this.height));
+        const paint = (this.paint ??= new Uint32Array(img.data.buffer));
+        this.prepareCanvas(paint);
+        this.ctx.putImageData(img, x, y);
     }
 
-    private prepareCanvas(): void {
+    private prepareCanvas(paint: Uint32Array): void {
         const data = this.data;
-        const paint = this.paint;
         const len = data.length;
 
         let i = 0;
