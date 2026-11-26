@@ -9,6 +9,7 @@ import { cachedBankId as bankedId, heldId } from '../../engine/snapshotItems.js'
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { findSceneTarget, settleScene, useOnLoc } from '../../exec/prompts.js';
 import { SM_ID, SM_LOC, SM_LOC_ID, SM_NAME, SM_STAGE, SM_TILE, VARROCK_GENERAL } from './areas.js';
+import { PYRE_OIL_VIALS } from './oil.js';
 
 export { bankedId, heldId };
 
@@ -86,9 +87,13 @@ export function recoverPyreSupplies(snap: QuestSnapshot, needLogs: boolean, need
     if (needLogs && bankedId(snap, SM_ID.PYRE_LOGS) > 0) {
         items.push({ name: SM_NAME.PYRE_LOGS, id: SM_ID.PYRE_LOGS, qty: 1 });
     } else if (needOil) {
-        const oil = [SM_ID.SACRED_OIL4, SM_ID.SACRED_OIL3, SM_ID.SACRED_OIL2, SM_ID.OLIVE_OIL4, SM_ID.OLIVE_OIL3, SM_ID.OLIVE_OIL2]
-            .find(id => bankedId(snap, id) > 0);
-        if (oil !== undefined) items.push({ name: oil <= SM_ID.OLIVE_OIL2 ? 'Olive oil' : 'Sacred oil', id: oil, qty: 1 });
+        for (const kind of ['sacred', 'olive'] as const) {
+            const vial = PYRE_OIL_VIALS.find(vial => bankedId(snap, vial[kind]) > 0);
+            if (vial) {
+                items.push({ name: kind === 'sacred' ? 'Sacred oil' : 'Olive oil', id: vial[kind], qty: 1 });
+                break;
+            }
+        }
     }
     if (needRemains && bankedId(snap, SM_ID.REMAINS) > 0) {
         items.push({ name: SM_NAME.REMAINS, id: SM_ID.REMAINS, qty: 1 });

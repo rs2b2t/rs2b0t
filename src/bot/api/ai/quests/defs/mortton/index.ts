@@ -6,7 +6,8 @@ import { KIT_KEEP, kitWanted } from '../fightarena/index.js';
 import { wearKit } from '../fightarena/legs.js';
 import { SM_ID, SM_NPC, SM_STAGE, SM_TILE } from './areas.js';
 import { readMorttonProgress, SM_FLAG } from './journal.js';
-import { bodiedPyre, cremateShade, DOSES_PER_PYRE_LOG, loadedPyre, makePyreLogs } from './pyre.js';
+import { countSacredDoses, DOSES_PER_PYRE_LOG, PYRE_OIL_VIALS } from './oil.js';
+import { bodiedPyre, cremateShade, loadedPyre, makePyreLogs } from './pyre.js';
 import { huntShade, REMAINS_WANTED } from './shades.js';
 import {
     ashesShort,
@@ -65,15 +66,14 @@ const ulsquire = (script: readonly string[]): QuestStep =>
 
 /** Doses of sacred oil in the pack; a pyre log wants two. */
 function sacredDoses(snap: QuestSnapshot): number {
-    return held(snap, SM_ID.SACRED_OIL4) * 4 + held(snap, SM_ID.SACRED_OIL3) * 3
-        + held(snap, SM_ID.SACRED_OIL2) * 2 + held(snap, SM_ID.SACRED_OIL1);
+    return countSacredDoses(id => held(snap, id));
 }
 
 /** Sacred oil, or the pyre logs it became, or the olive oil it comes from. */
 function haveOil(snap: QuestSnapshot, madeLogs = true): boolean {
     return (madeLogs && held(snap, SM_ID.PYRE_LOGS) > 0)
         || sacredDoses(snap) >= DOSES_PER_PYRE_LOG
-        || held(snap, SM_ID.OLIVE_OIL4) + held(snap, SM_ID.OLIVE_OIL3) + held(snap, SM_ID.OLIVE_OIL2) > 0;
+        || PYRE_OIL_VIALS.reduce((total, vial) => total + held(snap, vial.olive), 0) > 0;
 }
 
 // Why: sanctity is a player varp only this character's building earns, and the shell is world state the shades knock down, so a flame leg can owe material either way.

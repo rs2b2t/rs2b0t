@@ -11,7 +11,10 @@ import { Modals } from '../../../../ui/widgets/Modals.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import { settleScene, useOnLoc } from '../../exec/prompts.js';
 import { isTempleWall, SM_ID, SM_LOC, SM_LOC_ID, SM_TILE, SM_VARP } from './areas.js';
+import { PYRE_OIL_VIALS, sacredOilDoses } from './oil.js';
 import { permSerumVialId, serumVialId } from './supplies.js';
+
+export { sacredOilDoses };
 
 const REPAIR = 'Repair';
 const REINFORCE = 'Reinforce';
@@ -273,8 +276,7 @@ export async function lightAltar(log: (m: string) => void): Promise<boolean> {
 
 /** Put a vial of olive oil into the sacred flame. */
 export async function sanctifyOil(log: (m: string) => void): Promise<boolean> {
-    const oil = [SM_ID.OLIVE_OIL4, SM_ID.OLIVE_OIL3, SM_ID.OLIVE_OIL2]
-        .find(id => Inventory.countById(id) > 0);
+    const oil = PYRE_OIL_VIALS.find(vial => Inventory.countById(vial.olive) > 0)?.olive;
     if (oil === undefined) {
         log('no olive oil of two doses or more in the pack');
         return false;
@@ -287,13 +289,6 @@ export async function sanctifyOil(log: (m: string) => void): Promise<boolean> {
         () => sacredOilDoses() > before,
         log
     );
-}
-
-export function sacredOilDoses(): number {
-    return Inventory.countById(SM_ID.SACRED_OIL4) * 4
-        + Inventory.countById(SM_ID.SACRED_OIL3) * 3
-        + Inventory.countById(SM_ID.SACRED_OIL2) * 2
-        + Inventory.countById(SM_ID.SACRED_OIL1);
 }
 
 // Why: sanctifying converts every dose in the vial at no cost, and one dose of the result sets a villager's permanent bit, so the endgame conversation never needs another serum.
