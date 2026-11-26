@@ -1,6 +1,7 @@
 import Tile from '../../geometry/Tile.js';
 import { bestFromTiers, type ToolTier } from '../../api/acquisition/Tools.js';
 import { CANT_REACH } from '../../api/chatbox/gameMessages.js';
+import { BOW_TIERS } from '../../data/bows.js';
 
 export const RANGED_REQUIRED = 40;
 export const ENTRY_FEE = 200;
@@ -44,20 +45,7 @@ export const TARGETS: readonly Tile[] = [
     new Tile(2682, 3425, 0)
 ];
 
-export const BOWS: readonly ToolTier[] = [
-    { name: 'Magic shortbow', level: 50 },
-    { name: 'Magic longbow', level: 50 },
-    { name: 'Yew shortbow', level: 40 },
-    { name: 'Yew longbow', level: 40 },
-    { name: 'Maple shortbow', level: 30 },
-    { name: 'Maple longbow', level: 30 },
-    { name: 'Willow shortbow', level: 20 },
-    { name: 'Willow longbow', level: 20 },
-    { name: 'Oak shortbow', level: 5 },
-    { name: 'Oak longbow', level: 5 },
-    { name: 'Shortbow', level: 1 },
-    { name: 'Longbow', level: 1 }
-];
+export const BOWS: readonly ToolTier[] = BOW_TIERS.map(({ name, level }) => ({ name, level }));
 
 const BOW_NAMES = new Set(BOWS.map(b => b.name.toLowerCase()));
 

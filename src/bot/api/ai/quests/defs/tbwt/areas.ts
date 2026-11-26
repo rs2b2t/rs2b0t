@@ -1,3 +1,4 @@
+import { BOW_TIERS } from '../../../../../data/bows.js';
 import Tile from '../../../../../geometry/Tile.js';
 import type { NpcStop } from '../../exec/primitives.js';
 
@@ -166,20 +167,7 @@ export const TB_POTION_IDS: readonly number[] = TB_POTIONS.map(p => p.id);
 // Why: the bow isn't spent, so the best one the account can draw is the right one.
 
 /** Bows, best first, with the Ranged level each needs to be wielded. */
-export const TB_BOWS: readonly { name: string; ranged: number }[] = [
-    { name: 'Magic shortbow', ranged: 50 },
-    { name: 'Magic longbow', ranged: 50 },
-    { name: 'Yew shortbow', ranged: 40 },
-    { name: 'Yew longbow', ranged: 40 },
-    { name: 'Maple shortbow', ranged: 30 },
-    { name: 'Maple longbow', ranged: 30 },
-    { name: 'Willow shortbow', ranged: 20 },
-    { name: 'Willow longbow', ranged: 20 },
-    { name: 'Oak shortbow', ranged: 5 },
-    { name: 'Oak longbow', ranged: 5 },
-    { name: 'Shortbow', ranged: 1 },
-    { name: 'Longbow', ranged: 1 }
-];
+export const TB_BOWS: readonly { name: string; ranged: number }[] = BOW_TIERS.map(({ name, level }) => ({ name, ranged: level }));
 
 // Why: Any arrow works with any bow in this revision; prefer tested adamant arrows because 200 rune arrows exceed the reward value.
 
