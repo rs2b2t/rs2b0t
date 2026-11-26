@@ -268,6 +268,54 @@ test('a mixed import keeps an omitted slot in Work and saves a reused slot moved
     });
 });
 
+test('adding a tab while viewing an omitted slot keeps the saved active tab', async () => {
+    await withWall('local', async wall => {
+        const guest = { username: 'guest', password: 'fixture', tab: 'Work' };
+        await openSettings().importText(serializeProfileFile({
+            profiles: [guest], tabs: ['Work'], activeTab: 'Work', storage: {}
+        }));
+        const saved = { username: 'fixture', password: 'fixture', tab: 'Fleet' };
+        await vault.replaceAll({ profiles: [saved], tabs: ['Fleet'], activeTab: 'Fleet' });
+        window.dispatchEvent(new StorageEvent('storage', { key: 'rs2b0t:multibox:profiles' }));
+        await waitFor(() => wall.controller.tabs().includes('Fleet'));
+        expect(wall.controller.activeTab()).toBe('Work');
+
+        const saves = spyOn(vault, 'saveTabState');
+        try {
+            expect(await wall.addTab('Local')).toBe(true);
+            await saves.mock.results[0].value;
+            const reopened = new ProfileVault();
+            expect(await reopened.unlock('test-passphrase')).toBe(true);
+            expect(reopened.snapshot()).toEqual({ profiles: [saved], tabs: ['Fleet', 'Local'], activeTab: 'Fleet' });
+            expect(wall.controller.activeTab()).toBe('Work');
+            expect(wall.slots().map(slot => [slot.username, slot.tab])).toEqual([['guest', 'Work']]);
+        } finally {
+            saves.mockRestore();
+        }
+    });
+});
+
+test('a world-only refresh preserves the order of groups retained by running slots', async () => {
+    await withWall('local', async wall => {
+        const panel = openSettings();
+        const saved = { username: 'fixture', password: 'fixture', tab: 'Fleet' };
+        await panel.importText(serializeProfileFile({
+            profiles: [
+                { username: 'ops', password: 'fixture', tab: 'Ops' },
+                { username: 'worker', password: 'fixture', tab: 'Work' }
+            ], tabs: ['Work', 'Ops'], activeTab: 'Work', storage: {}
+        }));
+        await panel.importText(serializeProfileFile({ profiles: [saved], tabs: ['Fleet'], activeTab: 'Fleet', storage: {} }));
+        expect(wall.controller.tabs()).toEqual(['Main', 'Fleet', 'Work', 'Ops']);
+
+        await vault.setWorld(saved.username, 2);
+        wall.controller.addTab('Stale');
+        window.dispatchEvent(new StorageEvent('storage', { key: 'rs2b0t:multibox:profiles' }));
+        await waitFor(() => !wall.controller.tabs().includes('Stale'));
+        expect(wall.controller.tabs()).toEqual(['Main', 'Fleet', 'Work', 'Ops']);
+    });
+});
+
 test('a roster move queued during replacement uses the imported username', async () => {
     await withWall('local', async wall => {
         const panel = openSettings();

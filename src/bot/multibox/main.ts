@@ -134,16 +134,18 @@ function boot(): void {
                 wallOnlyTabs.delete(tab);
             }
         }
-        wallOnlyTabs.delete(activeTab);
         wallOnlyTabs = new Set(tabs.filter(tab => wallOnlyTabs.has(tab)));
         const customTabs = tabs.filter(tab => !wallOnlyTabs.has(tab));
-        orderWrite = orderWrite.then(() => vault.saveTabState(customTabs, tabByUser, activeTab)).catch(err => console.error('[rs2b0t] failed to save tab state', err));
+        const savedActiveTab = wallOnlyTabs.has(activeTab) ? undefined : activeTab;
+        orderWrite = orderWrite.then(() => vault.saveTabState(customTabs, tabByUser, savedActiveTab)).catch(err => console.error('[rs2b0t] failed to save tab state', err));
     }
 
     function mutateTabs(action: () => boolean, renamed?: { from: string; to: string }) {
         return afterTabRestore(() => {
+            const previousActive = controller.activeTab();
             const changed = action();
             if (changed) {
+                if (controller.activeTab() !== previousActive) wallOnlyTabs.delete(controller.activeTab());
                 renderRail();
                 persistTabState(renamed);
             }
@@ -436,8 +438,8 @@ function boot(): void {
         for (const tab of controller.tabs().slice(1)) {
             if (!liveTabs.has(tab)) controller.removeTab(tab);
         }
-        controller.setTabState([...liveTabs], controller.activeTab());
-        wallOnlyTabs = new Set([...liveTabs].filter(tab => !tabs.includes(tab)));
+        wallOnlyTabs = new Set(controller.tabs().slice(1).filter(tab => !tabs.includes(tab)));
+        controller.setTabState([...tabs, ...wallOnlyTabs], controller.activeTab());
         renderRail();
     }
 

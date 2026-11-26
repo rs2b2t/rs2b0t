@@ -499,11 +499,11 @@ export class ProfileVault {
         await this.persist();
     }
 
-    async saveTabState(tabs: string[], tabByUser: ReadonlyMap<string, string>, activeTab: string): Promise<void> {
+    async saveTabState(tabs: string[], tabByUser: ReadonlyMap<string, string>, activeTab?: string): Promise<void> {
         if (this.pendingReplacement) return this.afterReplacement(() => this.saveTabState(tabs, tabByUser, activeTab));
         if (this.shared) {
             const requested = tabs.map(tab => tab.trim());
-            assertTabStateValid(requested, activeTab, []);
+            assertTabStateValid(requested, activeTab ?? MAIN_TAB, []);
             return this.sharedChange(async draft => {
                 const previous = this.sharedTabs ?? { tabs: [], assignments: new Map<string, string>() };
                 const removed = new Set(previous.tabs.filter(tab => !requested.includes(tab)));
@@ -524,21 +524,23 @@ export class ProfileVault {
                     if (tab !== MAIN_TAB && !requested.includes(tab)) throw new Error(`tab '${tab}' is not in the tab list`);
                     if (previous.assignments.get(username) !== tab) assignments.set(username, tab);
                 }
-                await draft.saveTabState(merged, assignments, merged.includes(activeTab) ? activeTab : MAIN_TAB);
+                const active = activeTab ?? draft.active;
+                await draft.saveTabState(merged, assignments, merged.includes(active) ? active : MAIN_TAB);
             }).then(() => {
                 this.sharedTabs = { tabs: requested, assignments: new Map(tabByUser) };
             });
         }
         const all = this.assertUnlocked();
         const trimmed = tabs.map(t => t.trim());
-        assertTabStateValid(trimmed, activeTab, []);
+        const active = activeTab ?? (trimmed.includes(this.active) ? this.active : MAIN_TAB);
+        assertTabStateValid(trimmed, active, []);
         for (const [username, tab] of tabByUser) {
             if (tab !== MAIN_TAB && !trimmed.includes(tab)) {
                 throw new Error(`tab '${tab}' for '${username}' is not in the tab list`);
             }
         }
         this.customTabs = trimmed;
-        this.active = activeTab;
+        this.active = active;
         for (const p of all) {
             const next = tabByUser.get(p.username) ?? p.tab;
             // a profile not loaded in this wall keeps its stored tab, landing in Main when that tab has been deleted

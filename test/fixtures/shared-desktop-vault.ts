@@ -66,6 +66,10 @@ try {
     await second.saveTabState(['Fishing', 'Mining', 'Woodcutting'], new Map(), 'Woodcutting');
     await first.refresh();
     assert.deepEqual(first.tabState().tabs, ['Fishing', 'Woodcutting']);
+    await second.saveTabState(['Fishing', 'Woodcutting'], new Map(), 'Fishing');
+    await first.saveTabState(['Fishing', 'Woodcutting', 'Local'], new Map());
+    await second.refresh();
+    assert.deepEqual(second.tabState(), { tabs: ['Fishing', 'Woodcutting', 'Local'], activeTab: 'Fishing' });
     await Promise.all([first.upsert({ username: 'first', password: 'one', world: 1 }), second.upsert({ username: 'second', password: 'two', world: 2 })]);
     const reopened = new ProfileVault();
     assert.equal(await reopened.unlock('fixture-passphrase'), true);
