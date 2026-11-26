@@ -15,11 +15,12 @@ function prepareStorage(app, serverUrl) {
     const storeDir = join(directory, 'Shared Storage');
     const store = sharedStorage(storeDir);
     const legacy = join(directory, 'Local Storage');
-    const recover = process.env.B0T_RECOVER_LEGACY_PROFILES === '1';
+    const recoveryRequested = process.env.B0T_RECOVER_LEGACY_PROFILES === '1';
     const hasLegacy = fs.existsSync(legacy);
-    const { initialized, retrySettings, retryProfileOrigins = [], expectedProfiles } = hasLegacy || recover
-        ? store.migrationStatus(hasLegacy && URL.canParse(serverUrl) && isCustomOrigin(new URL(serverUrl).origin), recover)
+    const { initialized, retrySettings, retryProfileOrigins = [], expectedProfiles } = hasLegacy || recoveryRequested
+        ? store.migrationStatus(hasLegacy && URL.canParse(serverUrl) && isCustomOrigin(new URL(serverUrl).origin), recoveryRequested)
         : {};
+    const recover = !!expectedProfiles;
     const automaticRetry = initialized && !recover;
     const runtime = fs.mkdtempSync(join(cacheRoot, 'rs2b0t-session-'));
     let copied = false;

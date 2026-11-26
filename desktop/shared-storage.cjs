@@ -35,14 +35,22 @@ function savedProfileKey(source, keys = profileKeys) {
     return keys.find(key => hasSavedProfiles(key, source[key]));
 }
 
+function hasSharedRoster(data) {
+    return profileKeys.some(key => key in data && !isEmptyRoster(data[key]));
+}
+
+function promoteSharedAccounts(state) {
+    const { data } = state;
+    if (state.initialized && isEmptyRoster(data[vaultKey]) && hasSavedProfiles(accountsKey, data[accountsKey])) {
+        data[vaultKey] = data[accountsKey];
+        delete data[accountsKey];
+    }
+}
+
 function migrateProfiles(state, sources, recover) {
     const { data } = state;
     const firstMigration = !state.initialized;
-    if (recover && !firstMigration && isEmptyRoster(data[vaultKey]) && hasSavedProfiles(accountsKey, data[accountsKey])) {
-        data[vaultKey] = data[accountsKey];
-        delete data[accountsKey];
-        return;
-    }
+    if (recover) promoteSharedAccounts(state);
     if (profileKeys.some(key => key in data && (firstMigration || !isEmptyRoster(data[key])))) return;
     let selected = [];
     const invalid = new Map();
@@ -226,8 +234,9 @@ function sharedStorage(dir) {
             let state = read();
             if ((!state.initialized && trackPanel) || recover) {
                 state = update(current => {
-                    if (recover && profileKeys.every(key => !(key in current.data) || isEmptyRoster(current.data[key]))) {
-                        current.profileRecovery ??= migrationId;
+                    if (recover) {
+                        promoteSharedAccounts(current);
+                        if (!hasSharedRoster(current.data)) current.profileRecovery ??= migrationId;
                     }
                     if (!current.initialized && trackPanel) {
                         current.panelMigrations ??= {};
@@ -240,7 +249,7 @@ function sharedStorage(dir) {
                 initialized: state.initialized,
                 retrySettings: !!state.deletedDuringSettingsMigration,
                 retryProfileOrigins: Object.keys(state.profileRetries ?? {}),
-                expectedProfiles: recover ? profileState(state) : undefined
+                expectedProfiles: recover && (!state.initialized || !hasSharedRoster(state.data)) ? profileState(state) : undefined
             };
         },
         snapshot: () => read().data,
@@ -282,12 +291,19 @@ function sharedStorage(dir) {
                     if (finishProfileRetry(state, origin, source)) sources.push([origin, source]);
                 }
                 finishProfileRetry(state, legacyOrigin, fallback);
+                sources.push([legacyOrigin, fallback ?? {}]);
                 const profilesChanged = expectedProfiles && profileState(state).some((value, i) => value !== expectedProfiles[i]);
                 if (!profilesChanged && (!state.initialized || recover || state.seededWithoutProfiles)) {
                     if (!state.initialized && !profileKeys.some(key => key in state.data)) state.seededWithoutProfiles = true;
-                    migrateProfiles(state, [...sources, [legacyOrigin, fallback ?? {}]], recover);
+                    migrateProfiles(state, sources, recover);
+                } else if (!recover && migration && !migration.removed && !hasSharedRoster(state.data)) {
+                    const found = sources.find(([, source]) => savedProfileKey(source));
+                    if (found) {
+                        const origin = found[0].replaceAll("'", "'\\''");
+                        console.warn(`Legacy profiles found. To recover them, run this command from the desktop directory.\nB0T_RECOVER_LEGACY_PROFILES=1 bun run start -- --server='${origin}'`);
+                    }
                 }
-                if (profileKeys.some(key => key in state.data && !isEmptyRoster(state.data[key]))) {
+                if (hasSharedRoster(state.data)) {
                     delete state.seededWithoutProfiles;
                     delete state.profileRecovery;
                 }

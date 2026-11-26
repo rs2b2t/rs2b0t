@@ -173,6 +173,28 @@ test('a concurrent recovery from an empty origin leaves the populated origin eli
     expect(store.getItem('rs2b0t:setting')).toBe('changed');
 });
 
+test('an overlapping older empty seed reports how to recover the configured roster', async () => {
+    const { launch, storeDir } = fixture({ [custom]: { [accounts]: JSON.stringify(profiles) } });
+    const ready = Promise.withResolvers<void>();
+    const pending = launch(custom, false, ready.promise);
+    const file = join(storeDir, 'storage.json');
+    const olderState = JSON.parse(readFileSync(file, 'utf8'));
+    olderState.initialized = true;
+    writeFileSync(file, JSON.stringify(olderState));
+
+    const warning = spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+        ready.resolve();
+        expect(await pending).toEqual([]);
+        expect(warning).toHaveBeenCalledWith(expect.stringMatching(/B0T_RECOVER_LEGACY_PROFILES=1 bun run start -- --server=.*localhost:8082/));
+        expect(await launch(custom)).toEqual([]);
+        expect(await launch(custom, true)).toEqual(profiles);
+        expect(await launch(custom)).toEqual(profiles);
+    } finally {
+        warning.mockRestore();
+    }
+});
+
 const emptyRosters: Record<string, string>[] = [{}, { [accounts]: '[]' }, { [vault]: '[]' }];
 test.each(emptyRosters)('overlapping first launches recover all profiles when 8081 seeds %j first', async empty => {
     const { launch } = fixture({
@@ -408,6 +430,28 @@ test('explicit recovery leaves an existing vault intact', async () => {
     writeFileSync(join(storeDir, 'storage.json'), JSON.stringify({ initialized: true, data: { [vault]: current, [accounts]: '[]' } }));
     expect(await launch(custom, true)).toEqual([]);
     expect(store.snapshot()).toEqual({ [vault]: current, [accounts]: '[]' });
+});
+
+test.each(['shared accounts', 'encrypted vault'])('explicit recovery opens %s with an unreadable legacy directory', async source => {
+    let copies = 0;
+    const { launch, store } = fixture({ [custom]: {} }, undefined, () => {
+        copies++;
+        throw Object.assign(new Error('Unreadable fixture directory'), { code: 'EACCES' });
+    });
+    store.seed({ [accounts]: JSON.stringify(profiles) });
+    if (source === 'encrypted vault') await new ProfileVault(store).setup('fixture');
+    else store.setItem(vault, '[]');
+    const encrypted = source === 'encrypted vault' ? store.getItem(vault) : null;
+
+    await launch(custom, true);
+    expect(copies).toBe(0);
+    expect(store.getItem(vault)).toBe(encrypted ?? JSON.stringify(profiles));
+    expect(store.getItem(accounts)).toBeNull();
+    if (!encrypted) await new ProfileVault(store).setup('fixture');
+    await launch(custom);
+    const reopened = new ProfileVault(store);
+    expect(await reopened.unlock('fixture')).toBe(true);
+    expect(reopened.list()).toEqual(profiles.map(profile => ({ ...profile, tab: 'Main' })));
 });
 
 test.each([['populated', 'current'], ['empty', 'current'], ['populated', 'older'], ['empty', 'older']])(

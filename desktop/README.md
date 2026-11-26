@@ -66,7 +66,10 @@ once from `desktop/`, using the origin where you saved the profiles. On an
 initialized store, recovery imports only profiles unless a settings retry is
 already pending for that origin. It can replace an empty
 plaintext roster and preserves populated rosters and encrypted vaults.
-Ordinary launches preserve deletions.
+If shared storage already contains the accounts, recovery can use them even
+when Chromium storage is unreadable. Ordinary launches preserve deletions.
+If an older desktop initializes the store while the configured origin is being
+read, startup logs the recovery command when it finds legacy profiles.
 If neither origin has a usable roster and one contains malformed profile data,
 the chooser opens with the usable settings and startup logs the affected storage
 key. After you repair the roster, relaunch to retry the profile import. If you
