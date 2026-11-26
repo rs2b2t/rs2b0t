@@ -76,20 +76,39 @@ test('restoring Catherby writes all eight directed edges and passes --check', ()
     expect(derive('--check').exitCode).toBe(0);
 });
 
-function placeStairs(placements: string) {
+function placeStairs(placements: string, pack = '1=stairs\n', configs = '[stairs]\nname=Stairs\nop1=Climb-up\n') {
     mkdirSync(join(root, 'content/pack'));
     mkdirSync(join(root, 'content/maps'));
-    writeFileSync(join(root, 'content/pack/loc.pack'), '1=stairs\n');
-    writeFileSync(join(root, 'content/scripts/stairs.loc'), '[stairs]\nname=Stairs\nop1=Climb-up\n');
+    writeFileSync(join(root, 'content/pack/loc.pack'), pack);
+    writeFileSync(join(root, 'content/scripts/stairs.loc'), configs);
     writeFileSync(join(root, 'content/maps/m50_50.jm2'), '==== LOC ====\n' + placements);
+}
+
+function runEnricher(...args: string[]) {
+    const result = Bun.spawnSync(['python3', '-B', enricher, '--content', 'content', ...args], { cwd: root });
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
 }
 
 function enrich(rows: object[]) {
     writeFileSync(out, JSON.stringify(rows));
-    const result = Bun.spawnSync(['python3', '-B', enricher, '--content', 'content'], { cwd: root });
-    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    runEnricher();
     return JSON.parse(readFileSync(out, 'utf8'));
 }
+
+test('a scripted open trapdoor binds to its exact closed placement and passes --check', () => {
+    placeStairs('0 5 9: 1 10\n0 6 9: 2 10\n', '1=trapdoor\n2=trapdoor_open\n',
+        '[trapdoor]\nname=Trapdoor\nop1=Open\n[trapdoor_open]\nname=Trapdoor\nop1=Climb-down\n');
+    appendFileSync(stairs, '[oploc1,trapdoor_open]\n');
+    const loc = { x: 3205, z: 3209, level: 0 };
+    const edge = {
+        from: { ...loc, x: 3206 }, to: { ...loc, z: 9609 }, locName: 'Trapdoor', action: 'Climb-down', kind: 'stair'
+    };
+    const edges = enrich([{ ...edge, scriptedLocs: [{ ...loc, debugName: 'trapdoor_open', action: edge.action }] }]);
+    expect(edges).toEqual([{
+        ...edge, locX: 3205, locZ: 3209, locId: 1, openLocId: 2, debugName: 'trapdoor_open', options: ['Climb-down']
+    }]);
+    runEnricher('--check');
+});
 
 test('enrichment keeps each approach once at its scripted landing', () => {
     placeStairs('0 5 9: 1 10\n');

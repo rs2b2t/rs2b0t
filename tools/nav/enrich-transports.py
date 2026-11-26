@@ -255,10 +255,10 @@ def edge_key(edge: dict) -> tuple[int, int, int, int, int, int, str, str]:
 
 def stair_placements(
     edge: dict,
-    configs: dict[int, LocConfig],
+    configs_by_debug: dict[str, LocConfig],
     spatial: dict[tuple[int, int, int], list[Placement]],
     allowed_stair_debugs: set[str],
-) -> dict[tuple[int, int, int, str, str], Placement]:
+) -> dict[tuple[int, int, int, str, str], tuple[LocConfig, Placement]]:
     locs = edge.get("scriptedLocs", [])
     if not locs and all(field in edge for field in ("locX", "locZ", "debugName")):
         locs = [{
@@ -267,13 +267,17 @@ def stair_placements(
         }]
     matches = {}
     for loc in locs:
-        if edge.get("kind") == "stair" and loc["debugName"] not in allowed_stair_debugs:
+        debug = loc["debugName"]
+        if edge.get("kind") == "stair" and debug not in allowed_stair_debugs:
             continue
+        config = configs_by_debug.get(debug)
+        if not config or loc["action"] not in config.options:
+            continue
+        closed = configs_by_debug.get(debug.removesuffix("_open")) if debug.endswith("_open") else None
         tile = (loc["x"], loc["z"], loc["level"])
         for placement in spatial.get(tile, []):
-            config = configs.get(placement.loc_id)
-            if config and config.debug_name == loc["debugName"] and loc["action"] in config.options:
-                matches[(*tile, config.debug_name, loc["action"])] = placement
+            if placement.loc_id == config.loc_id or (closed and placement.loc_id == closed.loc_id):
+                matches[(*tile, debug, loc["action"])] = (config, placement)
                 break
     return matches
 
@@ -327,6 +331,7 @@ def main() -> None:
     args = parser.parse_args()
 
     configs = load_loc_configs(args.content)
+    configs_by_debug = {cfg.debug_name: cfg for cfg in configs.values()}
     _, spatial = load_placements(args.content)
     # Include quest ladders with oploc handlers, but exclude decorative ladders.
     allowed_stair_debugs: set[str] = set()
@@ -341,18 +346,18 @@ def main() -> None:
     scripted_edges = defaultdict(list)
     stair_rows = []
     for raw in stairs:
-        placements = stair_placements(raw, configs, spatial, allowed_stair_debugs)
+        placements = stair_placements(raw, configs_by_debug, spatial, allowed_stair_debugs)
         if not placements:
             stair_rows.append((raw, None))
-        for key, placement in placements.items():
+        for key, resolved in placements.items():
             edge = {**raw, "action": key[-1]}
-            stair_rows.append((edge, placement))
+            stair_rows.append((edge, resolved))
             if raw.get("scriptedLocs"):
                 scripted_edges[key].append(edge)
 
-    def enrich(rows: Iterable[tuple[dict, Placement | None]]) -> list[dict]:
+    def enrich(rows: Iterable[tuple[dict, tuple[LocConfig, Placement] | None]]) -> list[dict]:
         enriched: list[dict] = []
-        for raw, bound_placement in rows:
+        for raw, resolved in rows:
             edge = dict(raw)
             scripted_locs = edge.pop("scriptedLocs", [])
             auto_reverse = edge.pop("autoReverse", False)
@@ -365,11 +370,7 @@ def main() -> None:
             if source_backed_ladder and all(field in edge for field in ("locId", "locX", "locZ", "debugName", "options")):
                 enriched.append(edge)
                 continue
-            if bound_placement:
-                resolved = configs[bound_placement.loc_id], bound_placement
-            elif scripted_locs:
-                resolved = None
-            else:
+            if resolved is None and not scripted_locs:
                 resolved = resolve_source_loc(edge, configs, spatial, allowed_stair_debugs)
             if resolved:
                 config, placement = resolved
