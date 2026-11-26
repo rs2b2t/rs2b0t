@@ -10,6 +10,9 @@ import { Game } from '#/bot/api/game/Game.js';
 import { Sustain } from '#/bot/api/sustain/Sustain.js';
 import { Traversal } from '#/bot/api/walking/Traversal.js';
 import Tile from '#/bot/geometry/Tile.js';
+import { Input } from '#/bot/input/Input.js';
+import AutoFighter from '#/bot/scripts/AutoFighter/AutoFighter.js';
+import { SettingsBag } from '#/bot/runtime/Settings.js';
 
 const clue: InvItemSnapshot = { id: 3490, name: 'Clue scroll (easy)', count: 1, slot: 0, comId: 1, ops: ['Read'] };
 let pack: InvItemSnapshot[];
@@ -203,4 +206,130 @@ test('reset keeps an earned riddle key so the server does not refuse another dro
     await task.execute();
     expect(pack).toEqual([riddle, key]);
     expect(solves).toBe(2);
+});
+
+test('an opted-in trail retries its first abandonment and discards only after the second', async () => {
+    pack = [{ ...clue, ops: ['Read', 'Drop'] }];
+    spyOn(Bank, 'close').mockImplementation(async () => { open = false; return true; });
+    spyOn(Input, 'heldOp').mockImplementation(id => { pack = pack.filter(item => item.id !== id); return true; });
+    const solve = spyOn(ClueExecutor, 'solveHeldClue').mockResolvedValue('abandon');
+    const task = new SolveClue({ ...host, retryAbandoned: true, discardAbandoned: true });
+    await task.execute();
+    expect(pack.map(item => item.id)).toEqual([3490]);
+    expect(task.validate()).toBe(true);
+    await task.execute();
+    expect(solve).toHaveBeenCalledTimes(2);
+    expect(pack).toEqual([]);
+    expect(task.validate()).toBe(false);
+    expect(task.canLoot(3490, here)).toBe(false);
+    expect(task.canLoot(3490, here.translate(1, 0))).toBe(true);
+    expect(task.canLoot(536, here)).toBe(true);
+    spyOn(Date, 'now').mockReturnValue(Date.now() + 300001);
+    expect(task.canLoot(3490, here)).toBe(true);
+});
+
+test('random-event yields do not spend the second attempt', async () => {
+    const solve = spyOn(ClueExecutor, 'solveHeldClue').mockResolvedValueOnce('abandon').mockResolvedValueOnce('yield').mockImplementation(async () => {
+        pack = [];
+        return 'done';
+    });
+    const statuses: string[] = [];
+    const task = new SolveClue({ ...host, retryAbandoned: true, discardAbandoned: true, setStatus: status => statuses.push(status) });
+    await task.execute();
+    expect(task.validate()).toBe(true);
+    await task.execute();
+    expect(task.validate()).toBe(true);
+    await task.execute();
+    expect(solve).toHaveBeenCalledTimes(3);
+    expect(statuses).toContain('clue solved');
+});
+
+test('a failed discard retries dropping without starting a third solve', async () => {
+    pack = [{ ...clue, ops: ['Read', 'Drop'] }];
+    spyOn(Bank, 'close').mockImplementation(async () => { open = false; return true; });
+    const drop = spyOn(Input, 'heldOp').mockReturnValue(false);
+    const solve = spyOn(ClueExecutor, 'solveHeldClue').mockResolvedValue('abandon');
+    const task = new SolveClue({ ...host, retryAbandoned: true, discardAbandoned: true });
+    await task.execute();
+    await task.execute();
+    expect(task.validate()).toBe(true);
+    await task.execute();
+    expect(solve).toHaveBeenCalledTimes(2);
+    expect(pack.map(item => item.id)).toEqual([3490]);
+    drop.mockImplementation(id => { pack = pack.filter(item => item.id !== id); return true; });
+    await task.execute();
+    expect(pack).toEqual([]);
+    expect(task.validate()).toBe(false);
+    expect(solve).toHaveBeenCalledTimes(2);
+});
+
+test('the retry budget covers the whole trail and resets for the next clue', async () => {
+    pack = [{ ...clue, ops: ['Read', 'Drop'] }];
+    spyOn(Bank, 'close').mockImplementation(async () => { open = false; return true; });
+    spyOn(Input, 'heldOp').mockImplementation(id => { pack = pack.filter(item => item.id !== id); return true; });
+    const solve = spyOn(ClueExecutor, 'solveHeldClue').mockResolvedValueOnce('abandon').mockImplementationOnce(async () => {
+        pack = [{ ...clue, id: 2831, ops: ['Read', 'Drop'] }];
+        return 'abandon';
+    }).mockResolvedValue('abandon');
+    const task = new SolveClue({ ...host, retryAbandoned: true, discardAbandoned: true });
+    await task.execute();
+    await task.execute();
+    expect(pack).toEqual([]);
+    expect(task.validate()).toBe(false);
+    pack = [{ ...clue, ops: ['Read', 'Drop'] }];
+    expect(task.validate()).toBe(true);
+    await task.execute();
+    expect(pack.map(item => item.id)).toEqual([3490]);
+    expect(task.validate()).toBe(true);
+    await task.execute();
+    expect(pack).toEqual([]);
+    expect(solve).toHaveBeenCalledTimes(4);
+});
+
+test.each([false, true])('AutoFighter retries and discards clues only when delegated: %s', async delegated => {
+    pack = [{ ...clue, ops: ['Read', 'Drop'] }];
+    spyOn(Game, 'ingame').mockReturnValue(true);
+    spyOn(Bank, 'close').mockImplementation(async () => { open = false; return true; });
+    spyOn(Input, 'heldOp').mockImplementation(id => { pack = pack.filter(item => item.id !== id); return true; });
+    const solve = spyOn(ClueExecutor, 'solveHeldClue').mockResolvedValue('abandon');
+    const fighter = new AutoFighter();
+    fighter.bindLog(() => {});
+    if (delegated) fighter.bindFinish(() => {});
+    fighter.settings = new SettingsBag({ solveClues: true, foodWithdraw: 0 });
+    try {
+        await fighter.onStart();
+        const task = fighter['solveClue']!;
+        await task.execute();
+        expect(task.validate()).toBe(delegated);
+        expect(pack.map(item => item.id)).toEqual([3490]);
+        if (delegated) {
+            await task.execute();
+            expect(solve).toHaveBeenCalledTimes(2);
+            expect(pack).toEqual([]);
+            expect(fighter.bankAfterSolve).toBe(true);
+            expect(fighter.canLoot(3490, here)).toBe(false);
+        }
+    } finally {
+        fighter.disposeSubscriptions();
+    }
+});
+
+test('retains prerequisite-blocked clues through gear restoration without spending an abandonment attempt', async () => {
+    pack = [{ ...clue, ops: ['Read', 'Drop'] }];
+    const statuses: string[] = [];
+    const policy = () => 'prepare' as const;
+    const solve = spyOn(ClueExecutor, 'solveHeldClue').mockResolvedValue('requirements-needed');
+    const drop = spyOn(Input, 'heldOp').mockReturnValue(false);
+    const task = new SolveClue({ ...host, retryAbandoned: true, discardAbandoned: true, beforeStep: policy, setStatus: status => statuses.push(status) });
+    await task.execute();
+    expect(solve.mock.calls[0][3]).toBe(policy);
+    expect(task.validate()).toBe(true);
+    expect(statuses).not.toContain('clue requirements needed');
+    await task.execute();
+    expect(statuses).toContain('clue requirements needed');
+    expect(pack.map(item => item.id)).toEqual([3490]);
+    expect(drop).not.toHaveBeenCalled();
+    expect(task['retriedAbandonment']).toBe(false);
+    expect(task.validate()).toBe(false);
+    expect(Sustain.hook).toBe(upkeep);
 });

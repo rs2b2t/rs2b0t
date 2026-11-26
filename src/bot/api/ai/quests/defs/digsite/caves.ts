@@ -7,7 +7,7 @@ import { Inventory } from '../../../../inventory/Inventory.js';
 import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
 import { Modals } from '../../../../ui/widgets/Modals.js';
 import type { QuestStep } from '../../engine/types.js';
-import { driveChoice, settleScene } from '../../exec/prompts.js';
+import { findSceneTarget, driveChoice, settleScene } from '../../exec/prompts.js';
 import { DIG_ID, DIG_LOC, DIG_NPC, DIG_TILE, inAltarCave, inShaftEast, inShaftWest } from './areas.js';
 import {
     climbOutOfCave,
@@ -49,8 +49,7 @@ export async function descendWinch(
     }
     for (let attempt = 0; attempt < 3 && !arrived(); attempt++) {
         await Modals.closeIfOpen();
-        await settleScene();
-        const winch = locByIdAction([winchLocId], 'Operate', 8);
+        const winch = await findSceneTarget(() => locByIdAction([winchLocId], 'Operate', 8));
         if (!winch) {
             log(`no winch ${winchLocId} within eight tiles of (${stand.x},${stand.z})`);
             return false;
@@ -224,7 +223,7 @@ export function barrelLeg(): QuestStep {
                 return false;
             }
             if (await trowel.useOn(barrel)) {
-                await Execution.delayTicks(3);
+                await Execution.delayUntilTicks(() => ChatDialog.canContinue() || ChatDialog.isOpen() || Modals.isOpen(), 3);
                 await driveChoice([], log);
             }
             await Modals.closeIfOpen();
@@ -296,8 +295,7 @@ export function blastLeg(pour: boolean): QuestStep {
                 log(`the blast wants (${DIG_TILE.BRICK_STAND.x},${DIG_TILE.BRICK_STAND.z}) and we are at (${here?.x},${here?.z})`);
                 return false;
             }
-            await settleScene();
-            const brick = locByIds([DIG_LOC.BRICK], 4);
+            const brick = await findSceneTarget(() => locByIds([DIG_LOC.BRICK], 4));
             if (!brick) {
                 log('no blocked brick within four tiles of (3379,9826)');
                 return false;
@@ -358,8 +356,7 @@ export function tabletLeg(): QuestStep {
             if (!(await walkTo(DIG_TILE.TABLET, 1, log))) {
                 return false;
             }
-            await settleScene();
-            const tablet = GroundItems.query().where(g => g.id === DIG_ID.STONE_TABLET).within(8).nearest();
+            const tablet = await findSceneTarget(() => GroundItems.query().where(g => g.id === DIG_ID.STONE_TABLET).within(8).nearest());
             if (!tablet) {
                 log('no stone tablet within eight tiles of (3374,9747)');
                 return false;

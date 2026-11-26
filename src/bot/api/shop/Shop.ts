@@ -1,4 +1,4 @@
-import { actions, reader } from '../../adapter/ClientAdapter.js';
+import { actions, reader, type InvItemSnapshot } from '../../adapter/ClientAdapter.js';
 import { Input } from '../../input/Input.js';
 import { Execution } from '../execution/Execution.js';
 import { Npcs } from '../npcs/Npcs.js';
@@ -7,6 +7,20 @@ import { Inventory } from '../inventory/Inventory.js';
 const SHOP_ROOT = 3824;
 const SHOP_STOCK_COM = 3900;
 const SHOP_PLAYER_COM = 3823;
+
+export async function buyWithRestockWait(name: string, quantity: number, maxTicks: number): Promise<number> {
+    if (quantity <= 0) return 0;
+    const bought = await Shop.buy(name, quantity);
+    if (bought > 0 || !Shop.isOpen()) return bought;
+    const wanted = name.toLowerCase();
+    const inStock = () => Shop.stock().some(item => item.name.toLowerCase() === wanted && item.count > 0);
+    if (inStock()) {
+        await Execution.delayUntilTicks(() => !Shop.isOpen(), maxTicks);
+        return 0;
+    }
+    const changed = await Execution.delayUntilTicks(() => !Shop.isOpen() || inStock(), maxTicks);
+    return changed && Shop.isOpen() ? Shop.buy(name, quantity) : 0;
+}
 
 /**
  * A shop interface. Nothing here walks; be near the keeper first.
@@ -60,19 +74,7 @@ export const Shop = {
                 break;
             }
 
-            const batch = shopOpBatch(it.ops, 'buy', n - bought);
-            if (batch.length === 0) {
-                break;
-            }
-
-            const before = countHeld(name);
-            for (const opIndex of batch) {
-                await Input.invButton(it.id, it.slot, it.comId, opIndex + 1);
-            }
-            await Execution.delayUntil(() => countHeld(name) !== before, 3000);
-            // the batch lands in one server tick, settle so the recount sees all of it
-            await Execution.delayTicks(1);
-            const got = countHeld(name) - before;
+            const got = await tradeBatch(it, 'buy', n - bought, () => countHeld(name));
             if (got <= 0) {
                 break;
             }
@@ -94,18 +96,7 @@ export const Shop = {
                 break;
             }
 
-            const batch = shopOpBatch(it.ops, 'buy', n - bought);
-            if (batch.length === 0) {
-                break;
-            }
-
-            const before = heldById(id);
-            for (const opIndex of batch) {
-                await Input.invButton(it.id, it.slot, it.comId, opIndex + 1);
-            }
-            await Execution.delayUntil(() => heldById(id) !== before, 3000);
-            await Execution.delayTicks(1);
-            const got = heldById(id) - before;
+            const got = await tradeBatch(it, 'buy', n - bought, () => heldById(id));
             if (got <= 0) {
                 break;
             }
@@ -126,18 +117,7 @@ export const Shop = {
                 break;
             }
 
-            const batch = shopOpBatch(it.ops, 'sell', n - sold);
-            if (batch.length === 0) {
-                break;
-            }
-
-            const before = countHeld(name);
-            for (const opIndex of batch) {
-                await Input.invButton(it.id, it.slot, it.comId, opIndex + 1);
-            }
-            await Execution.delayUntil(() => countHeld(name) !== before, 3000);
-            await Execution.delayTicks(1);
-            const gone = before - countHeld(name);
+            const gone = await tradeBatch(it, 'sell', n - sold, () => countHeld(name));
             if (gone <= 0) {
                 break;
             }
@@ -157,17 +137,7 @@ export const Shop = {
             if (!it) {
                 break;
             }
-            const batch = shopOpBatch(it.ops, 'sell', SELL_STACK_STEP);
-            if (batch.length === 0) {
-                break;
-            }
-            const before = countHeld(name);
-            for (const opIndex of batch) {
-                await Input.invButton(it.id, it.slot, it.comId, opIndex + 1);
-            }
-            await Execution.delayUntil(() => countHeld(name) !== before, 3000);
-            await Execution.delayTicks(1);
-            const gone = before - countHeld(name);
+            const gone = await tradeBatch(it, 'sell', SELL_STACK_STEP, () => countHeld(name));
             if (gone <= 0) {
                 break;
             }
@@ -206,16 +176,35 @@ const SELL_STACK_CLICKS = 40;
 
 /** Why: the engine drops extra user-event packets, so 25 must sell as 10+10+5 in one tick. */
 export function shopOpBatch(ops: (string | null)[], verb: 'buy' | 'sell', remaining: number): number[] {
+    return planBatch(ops, verb, remaining).batch;
+}
+
+function planBatch(ops: (string | null)[], verb: 'buy' | 'sell', remaining: number) {
     const batch: number[] = [];
-    let left = remaining;
-    while (batch.length < USER_OPS_PER_TICK && left > 0) {
-        const step = SHOP_STEPS.find(size => size <= left
+    let quantity = 0;
+    while (batch.length < USER_OPS_PER_TICK && quantity < remaining) {
+        const step = SHOP_STEPS.find(size => size <= remaining - quantity
             && ops.some(o => o?.toLowerCase() === `${verb} ${size}`));
         if (step === undefined) {
             break;
         }
         batch.push(ops.findIndex(o => o?.toLowerCase() === `${verb} ${step}`));
-        left -= step;
+        quantity += step;
     }
-    return batch;
+    return { batch, quantity };
+}
+
+async function tradeBatch(item: InvItemSnapshot, verb: 'buy' | 'sell', remaining: number, held: () => number): Promise<number> {
+    const { batch, quantity } = planBatch(item.ops, verb, remaining);
+    if (!batch.length) return 0;
+    const before = held();
+    const changed = () => verb === 'buy' ? held() - before : before - held();
+    for (const op of batch) {
+        await Input.invButton(item.id, item.slot, item.comId, op + 1);
+    }
+    await Execution.delayUntil(() => changed() !== 0, 3000);
+    const delta = changed();
+    if (delta >= quantity) return delta;
+    await Execution.delayTicks(1);
+    return changed();
 }

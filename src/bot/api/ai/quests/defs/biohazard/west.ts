@@ -1,3 +1,4 @@
+import { afterDialogueAction } from '../../exec/primitives.js';
 import { EventSignal } from '../../../../execution/EventSignal.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Game } from '../../../../game/Game.js';
@@ -7,7 +8,7 @@ import { Npcs, type Npc } from '../../../../npcs/Npcs.js';
 import { Skills } from '../../../../skills/Skills.js';
 import { Sustain } from '../../../../sustain/Sustain.js';
 import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
-import { driveChoice, driveUntil, settleScene } from '../../exec/prompts.js';
+import { driveChoice, driveUntil, findSceneTarget } from '../../exec/prompts.js';
 import { BIO_ITEM, BIO_LOC, BIO_TILE, SICK_MOURNER_ID } from './areas.js';
 import { heldId, wear } from './gear.js';
 import { enterHq, locById, walkTo } from './travel.js';
@@ -27,11 +28,9 @@ export async function takeRottenApples(log: (m: string) => void): Promise<boolea
     if (!(await walkTo(BIO_TILE.ROTTEN_APPLES, 1, log))) {
         return false;
     }
-    await settleScene();
-    const apples = GroundItems.query().where(item => item.id === BIO_ITEM.ROTTEN_APPLES.id).within(8).nearest();
+    const apples = await findSceneTarget(() => GroundItems.query().where(item => item.id === BIO_ITEM.ROTTEN_APPLES.id).within(8).nearest(), 6);
     if (!apples) {
         log(`no Rotten apples at (${BIO_TILE.ROTTEN_APPLES.x},${BIO_TILE.ROTTEN_APPLES.z}) — waiting for the respawn`);
-        await Execution.delayTicks(4);
         return false;
     }
     if (!(await apples.interact('Take'))) {
@@ -45,8 +44,7 @@ export async function poisonTheStew(log: (m: string) => void): Promise<boolean> 
     if (!(await walkTo(BIO_TILE.CAULDRON, 1, log))) {
         return false;
     }
-    await settleScene();
-    const cauldron = locById(BIO_LOC.CAULDRON, null, 8);
+    const cauldron = await findSceneTarget(() => locById(BIO_LOC.CAULDRON, null, 8));
     const apples = Inventory.items().find(item => item.id === BIO_ITEM.ROTTEN_APPLES.id);
     if (!cauldron || !apples) {
         log(`no ${cauldron ? 'Rotten apples' : 'Cauldron'} for the stew`);
@@ -68,8 +66,7 @@ export async function takeDoctorGown(log: (m: string) => void): Promise<boolean>
     if (!(await walkTo(BIO_TILE.NURSE_CUPBOARD, 1, log))) {
         return false;
     }
-    await settleScene();
-    const open = locById(BIO_LOC.NURSE_CUPBOARD_OPEN, 'Search', 6);
+    const open = await findSceneTarget(() => locById(BIO_LOC.NURSE_CUPBOARD_OPEN, 'Search', 6));
     if (open) {
         if (!(await open.interact('Search'))) {
             return false;
@@ -115,8 +112,7 @@ async function fightForKey(log: (m: string) => void): Promise<boolean> {
             return true;
         }
         if (ChatDialog.canContinue()) {
-            await ChatDialog.continue();
-            await Execution.delayTicks(1);
+            await afterDialogueAction(await ChatDialog.continue(), 1);
             continue;
         }
         if (hungry()) {
@@ -165,8 +161,7 @@ export async function takeMournerKey(log: (m: string) => void): Promise<boolean>
     if (!(await walkTo(BIO_TILE.HQ_UPSTAIRS, 2, log))) {
         return false;
     }
-    await settleScene();
-    const npc = sickMourner();
+    const npc = await findSceneTarget(() => sickMourner());
     if (!npc) {
         log('no sick Mourner on the headquarters first floor');
         return false;
@@ -193,8 +188,7 @@ export async function searchTheCrate(log: (m: string) => void): Promise<boolean>
     if (!(await walkTo(BIO_TILE.HQ_CRATE, 1, log))) {
         return false;
     }
-    await settleScene();
-    const crate = locById(BIO_LOC.HQ_CRATE, 'Search', 6);
+    const crate = await findSceneTarget(() => locById(BIO_LOC.HQ_CRATE, 'Search', 6));
     if (!crate) {
         log(`no Crate offering Search at (${BIO_TILE.HQ_CRATE.x},${BIO_TILE.HQ_CRATE.z},1)`);
         return false;

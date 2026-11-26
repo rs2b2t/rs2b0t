@@ -91,6 +91,40 @@ async function withWall(mode: 'local' | 'proxy', check: (wall: Wall) => Promise<
     }
 }
 
+test('a shared import can load from the open chooser and reveal its tile', async () => {
+    await withWall('proxy', async wall => {
+        const openChooser = async () => {
+            document.getElementById('mbx-add')!.click();
+            await new Promise(resolve => setTimeout(resolve, 0));
+        };
+        await openChooser();
+        const alice = wall.add(vault.list()[0]);
+        const original = document.querySelector('iframe');
+        const tab = 'Fleet Levelers';
+        await vault.replaceAll({
+            tabs: [tab], activeTab: 'Main',
+            profiles: [...vault.list(), { username: 'fleet1', password: 'test', tab }]
+        });
+        window.dispatchEvent(new StorageEvent('storage', { key: 'rs2b0t:multibox:profiles' }));
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const pick = () => Array.from(document.querySelectorAll<HTMLElement>('.mbx-profile-name')).find(el => el.textContent === 'fleet1')!.click();
+        expect(wall.controller.tabs()).toContain(tab);
+        expect(wall.controller.activeTab()).toBe('Main');
+        pick();
+        expect(wall.controller.activeTab()).toBe(tab);
+        expect(wall.slots()).toHaveLength(2);
+        wall.controller.focus(alice.id);
+        await openChooser();
+        document.getElementById('mbx-load-all')!.click();
+        expect(wall.controller.activeTab()).toBe('Main');
+        await openChooser();
+        pick();
+        expect(wall.controller.activeTab()).toBe(tab);
+        expect(document.querySelectorAll('iframe')).toHaveLength(3);
+        expect(document.querySelector('iframe')).toBe(original);
+    });
+});
+
 test('roster closes when shared profiles are reset or relocked', async () => {
     await withWall('proxy', async () => {
         document.getElementById('mbx-manage')!.click();

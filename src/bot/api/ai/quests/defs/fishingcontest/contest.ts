@@ -7,7 +7,7 @@ import { Npcs } from '../../../../npcs/Npcs.js';
 import { Reach } from '../../../../walking/Reach.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import type { NpcStop } from '../../exec/primitives.js';
-import { driveChoice, driveUntil, heldId, settleScene } from '../../exec/prompts.js';
+import { findSceneTarget, driveChoice, driveUntil, heldId, settleScene } from '../../exec/prompts.js';
 import {
     BONZO_ENTER,
     BONZO_REPORT,
@@ -64,8 +64,7 @@ async function crossGate(stand: Tile, inside: boolean, log: (m: string) => void)
     if (!(await Traversal.walkResilient(stand, { radius: 1, attempts: 3, timeoutMs: WALK_MS, log }))) {
         return false;
     }
-    await settleScene();
-    const door = gateLoc();
+    const door = await findSceneTarget(() => gateLoc());
     if (!door) {
         log(`no Hemenster Gate at (${stand.x},${stand.z})`);
         return false;
@@ -140,8 +139,7 @@ export async function fishAtPipes(log: (m: string) => void): Promise<boolean> {
     if (!(await Traversal.walkResilient(FC_TILE.PIPES_SPOT, { radius: 2, attempts: 3, timeoutMs: 60_000, log }))) {
         return false;
     }
-    await settleScene();
-    const spot = Npcs.query().where(n => n.id === FC_NPC.PIPES_SPOT).action('Fish').within(8).nearest();
+    const spot = await findSceneTarget(() => Npcs.query().where(n => n.id === FC_NPC.PIPES_SPOT).action('Fish').within(8).nearest());
     if (!spot) {
         log(`no contest Fishing spot at (${FC_TILE.PIPES_SPOT.x},${FC_TILE.PIPES_SPOT.z})`);
         return false;

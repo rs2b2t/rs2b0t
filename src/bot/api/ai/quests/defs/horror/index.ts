@@ -36,7 +36,6 @@ async function fetchKey(log: (m: string) => void): Promise<boolean> {
         log('could not get through the outpost to Gunnjorn');
         return false;
     }
-    await Execution.delayTicks(2);
     if (!(await talkThrough(GUNNJORN.npc, GUNNJORN.prefer, log))) {
         return false;
     }

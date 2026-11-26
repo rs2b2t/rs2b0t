@@ -10,7 +10,7 @@ import { Shop } from '../../../../shop/Shop.js';
 import { Sustain } from '../../../../sustain/Sustain.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import Tile from '../../../../../geometry/Tile.js';
-import { settleScene, useOnLoc } from '../../exec/prompts.js';
+import { findSceneTarget, settleScene, useOnLoc } from '../../exec/prompts.js';
 import { TB_ID, TB_LOC, TB_NAME, TB_NPC, TB_TILE } from './areas.js';
 import { foodFormsForQuest } from './loadout.js';
 import { Skills } from '../../../../skills/Skills.js';
@@ -274,9 +274,8 @@ export function killFor(
             if (!(await walkTo(anchor, 5, log))) {
                 return false;
             }
-            await settleScene();
-            const victim = Npcs.query().name(npcName).action('Attack')
-                .where(n => !n.targetsAnotherPlayer()).within(12).nearest();
+            const victim = await findSceneTarget(() => Npcs.query().name(npcName).action('Attack')
+                .where(n => !n.targetsAnotherPlayer()).within(12).nearest());
             if (!victim) {
                 log(`no ${npcName} within 12 tiles of the stand`);
                 return false;

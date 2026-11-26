@@ -16,31 +16,40 @@ export function zanarisExitNeeds(s: LevelerSnapshot): Requirement[] | null {
     return null;
 }
 
-export function auditDragonWeapons(s: LevelerSnapshot): SupplyAudit {
+export function auditDragonWeapons(s: LevelerSnapshot): SupplyAudit & { diamondReserve?: number } {
     const gold = stockOf(s, 'Coins');
     const result: SupplyAudit = { needs: [], budget: 0, reserve: Math.min(gold, Math.max(SHOPPING_RESERVE, Math.floor(gold / 10))), skipped: [] };
     if (!s.bankReady || s.levels.attack < 60 || !s.quests['Lost City']) return result;
     const missing = DRAGON_WEAPONS.filter(item => stockOf(s, item) === 0);
     if (!missing.length) return result;
     if (!stockOf(s, 'Dramen staff')) return { ...result, skipped: ['Dragon weapons: need a Dramen staff for Zanaris'] };
-    const cut = !stockOf(s, 'Diamond') && s.levels.crafting >= 43 && stockOf(s, 'Uncut diamond') > 0;
-    if (!stockOf(s, 'Diamond') && !cut) return { ...result, skipped: ['Dragon weapons: need a Diamond, or Crafting 43 and an Uncut diamond, for the marketplace tax'] };
+    const chisel = stockOf(s, 'Chisel') || !s.unavailableItems?.includes('chisel');
+    const cut = !stockOf(s, 'Diamond') && s.levels.crafting >= 43 && stockOf(s, 'Uncut diamond') > 0 && chisel;
     for (const item of [...(cut && !stockOf(s, 'Chisel') ? ['Chisel'] : []), ...missing]) {
         if (s.unavailableItems?.some(unavailable => unavailable.toLowerCase() === item.toLowerCase())) {
             result.skipped.push(`Dragon weapons: ${item} supplier is cooling down`);
+            if (item === 'Dragon longsword') break;
             continue;
         }
         const budget = purchaseBudget(supplyOffer(item)!, 1);
-        if (result.budget + budget > gold - result.reserve) {
+        const reserve = item === 'Dragon longsword' ? SHOPPING_RESERVE : result.reserve;
+        if (result.budget + budget > gold - reserve) {
             result.skipped.push(`Dragon weapons: cannot budget ${item} (${budget} coins)`);
+            if (item === 'Dragon longsword') break;
             continue;
         }
         result.needs.push({ item, count: 1 });
         result.budget += budget;
+        result.reserve = Math.min(result.reserve, gold - result.budget);
     }
     if (!result.needs.some(need => DRAGON_WEAPONS.includes(need.item)) || cut && !stockOf(s, 'Chisel') && !result.needs.some(need => need.item === 'Chisel')) {
         result.needs = [];
         result.budget = 0;
+    }
+    if (result.needs.length && !stockOf(s, 'Diamond') && !cut) {
+        const sword = result.needs.some(need => need.item === 'Dragon longsword');
+        return { ...result, needs: [], budget: 0, skipped: ['Dragon weapons: need a Diamond for the marketplace tax'],
+            diamondReserve: sword ? SHOPPING_RESERVE + purchaseBudget(supplyOffer('Dragon longsword')!, 1) : undefined };
     }
     return result;
 }

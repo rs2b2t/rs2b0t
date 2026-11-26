@@ -106,3 +106,24 @@ test('owned usable helmets are equipped even without a shopping budget', () => {
     const kit = meleeEquipment(snapshot({ defence: 40 }, { coins: 200, 'iron scimitar': 1, 'iron chainbody': 1, 'iron platelegs': 1, 'rune full helm': 1 }));
     expect(kit).toContainEqual({ item: 'Rune full helm', count: 1, carry: 1, equip: true });
 });
+
+test('Dragon Slayer unlocks affordable rune upgrades from Oziach and Scavvo', () => {
+    const s = snapshot({ attack: 40, defence: 40 }, { coins: 190000 });
+    const names = () => meleeEquipment(s).map(need => need.item);
+    expect(names().filter(name => name.startsWith('Rune '))).toEqual([]);
+    s.quests['Dragon Slayer'] = true;
+    expect(names().slice(0, 3)).toEqual(['Rune longsword', 'Rune platebody', 'Rune platelegs']);
+    expect(supplyOffer('Rune platebody')?.keeper).toBe('Oziach');
+    expect(supplyOffer('Rune longsword')?.tile).toEqual({ x: 3191, z: 3352, level: 1 });
+    s.unavailableItems = ['Rune platebody', 'Rune platelegs', 'Rune longsword'];
+    expect(names().slice(0, 3)).toEqual(['Rune sword', 'Rune chainbody', 'Rune plateskirt']);
+    s.levels.attack = 39;
+    s.levels.defence = 39;
+    expect(names().filter(name => name.startsWith('Rune '))).toEqual([]);
+});
+
+test('keeps equivalent owned rune legs and an owned dragon weapon', () => {
+    const s = snapshot({ attack: 60, defence: 40 }, { coins: 250000, 'rune plateskirt': 1, 'dragon longsword': 1 });
+    s.quests = { 'Dragon Slayer': true, 'Lost City': true };
+    expect(meleeEquipment(s).slice(0, 3).map(need => need.item)).toEqual(['Dragon longsword', 'Rune platebody', 'Rune plateskirt']);
+});

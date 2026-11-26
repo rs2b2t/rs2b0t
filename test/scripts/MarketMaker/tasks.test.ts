@@ -51,6 +51,7 @@ async function fixture(settings: Record<string, unknown> = {}, stock: [number, n
     spyOn(reader, 'bankSideItems').mockImplementation(() => snapshots(state.pack));
     spyOn(reader, 'inventorySize').mockReturnValue(28);
     spyOn(reader, 'bankItems').mockImplementation(() => state.bankOpen ? snapshots(state.bank, true) : []);
+    spyOn(reader, 'bankSideSnapshotReady').mockImplementation(() => state.bankOpen);
     spyOn(reader, 'bankSnapshotReady').mockImplementation(() => state.bankOpen);
     spyOn(reader, 'bankComId').mockImplementation(() => state.bankOpen ? 5382 : -1);
     spyOn(reader, 'modals').mockImplementation(() => ({ main: state.bankOpen ? 5292 : -1, side: state.bankOpen ? 5063 : -1, chat: -1 }));
@@ -82,6 +83,13 @@ async function fixture(settings: Record<string, unknown> = {}, stock: [number, n
         state.pack.set(target, (state.pack.get(target) ?? 0) + take);
         state.bank.set(id, held - take);
         return take === qty;
+    });
+    spyOn(Bank, 'depositXById').mockImplementation(async (id, count) => {
+        const held = state.pack.get(id) ?? 0;
+        if (held < count) return false;
+        state.bank.set(id, (state.bank.get(id) ?? 0) + count);
+        state.pack.set(id, held - count);
+        return true;
     });
     spyOn(Bank, 'depositAllMatching').mockImplementation(async predicate => {
         for (const [id, count] of state.pack) {
@@ -369,4 +377,39 @@ test('a customer who leaves the confirmation screen open still times out', async
     expect(active).toBe(false);
     expect(bot.counter().current()).toBeNull();
     expect(bot.blocked('Alice')).toBe(true);
+});
+
+test.each([200000, 160000])('keeps the carried %s coins when depositing purchased goods', async purse => {
+    const { state, tick } = await fixture();
+    state.pack.set(995, purse);
+    state.pack.set(989, 24);
+    await tick();
+    expect(state.pack.get(995)).toBe(200000);
+    expect(state.pack.has(989)).toBe(false);
+    if (purse === 200000) expect(Bank.withdrawXById).not.toHaveBeenCalled();
+    else expect(Bank.withdrawXById).toHaveBeenCalledWith(995, 40000);
+});
+
+test.each([200000, 0])('deposits only the sale surplus for a float of %s', async coinFloat => {
+    const { state, tick, bot } = await fixture({ coinFloat });
+    state.pack.set(995, 350000);
+    await tick();
+    expect(Bank.depositXById).toHaveBeenCalledWith(995, 350000 - coinFloat);
+    expect(Bank.withdrawXById).not.toHaveBeenCalled();
+    expect(state.pack.get(995)).toBe(coinFloat);
+    expect(bot.stocked(995)).toBe(550000);
+});
+
+test('a partially deposited purchase stays owed when the pack has room again', async () => {
+    const { state, tick, bot } = await fixture();
+    state.pack.set(989, 24);
+    spyOn(Bank, 'depositAllMatching').mockImplementation(async () => {
+        state.pack.set(989, 1);
+        state.bank.set(989, 47);
+    });
+    await tick();
+    expect(bot.stocked(989)).toBe(48);
+    expect(bot.settleForced()).toBe(true);
+    expect(bot.bankReady(Date.now())).toBe(false);
+    expect(state.bankOpen).toBe(false);
 });

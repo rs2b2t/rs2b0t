@@ -1,6 +1,5 @@
+import { Modals } from '../../../../ui/widgets/Modals.js';
 import { normalizeJournal as normalize } from '../../journalText.js';
-import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
-import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 import { FT_NAME } from './areas.js';
@@ -90,10 +89,7 @@ export async function readFremennikProgress(): Promise<QuestProgress | undefined
     if (status !== 'inProgress') return undefined;
 
     const progress = parseFremennikJournal(await Quests.journal(FT_NAME));
-    if (reader.modals().main !== -1) {
-        actions.closeModal();
-        await Execution.delayTicks(1);
-    }
+    await Modals.closeIfOpen();
     if (progress) {
         lastGood = progress;
     }

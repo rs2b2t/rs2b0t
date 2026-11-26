@@ -1,6 +1,5 @@
+import { Modals } from '../../../../ui/widgets/Modals.js';
 import { normalizeJournal as normalize } from '../../journalText.js';
-import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
-import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
 import { hasFlag, type QuestProgress } from '../../engine/types.js';
 import { TROLL_FLAG, TROLL_QUEST, parseTrollStrongholdJournal } from '../trollstronghold/journal.js';
@@ -141,10 +140,7 @@ export function parseEadgarJournal(lines: readonly string[] | string): QuestProg
 }
 
 async function closeJournal(): Promise<void> {
-    if (reader.modals().main !== -1) {
-        actions.closeModal();
-        await Execution.delayTicks(1);
-    }
+    await Modals.closeIfOpen();
 }
 
 // Why: Troll Stronghold can be finished without opening Mad Eadgar's cell, and an unfreed Eadgar leaves the Cave Entrance dropping you into an empty room.

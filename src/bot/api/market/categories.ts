@@ -133,7 +133,7 @@ const POPULAR_SHELVES: readonly Category[] = ['Runes', 'Ores', 'Bars', 'Herbs', 
 // Why: potions are the 3-dose, which is what gets traded; the other doses are still addable one at a time.
 const POPULAR_NAMES: readonly string[] = [
     'Bronze arrow', 'Iron arrow', 'Steel arrow', 'Mithril arrow', 'Adamant arrow', 'Rune arrow',
-    'Rune full helm', 'Rune platebody', 'Rune chainbody', 'Rune platelegs', 'Rune kiteshield',
+    'Rune full helm', 'Rune platebody', 'Rune chainbody', 'Rune platelegs', 'Rune plateskirt', 'Rune kiteshield',
     'Rune scimitar', 'Rune longsword',
     'Super attack(3)', 'Super strength(3)', 'Super defence(3)', 'Superantipoison(3)', 'Prayer potion(3)',
     'Amulet of glory(4)',

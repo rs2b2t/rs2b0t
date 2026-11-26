@@ -20,7 +20,7 @@ import {
     type BurnDir,
     type FirePlot
 } from '../../api/firemaking/Firemaking.js';
-import { lightFire } from '../../api/firemaking/LightFire.js';
+import { lightFire, waitForFireSpace } from '../../api/firemaking/LightFire.js';
 
 /** Same face-target filter as GatheringBot.FleeCombat, sticky combatCycle is ignored. */
 function hostileFaceTarget(): boolean {
@@ -145,7 +145,7 @@ class ChopBurnLoad implements Task {
                     laneFails++;
                     this.bot.setStatus('burn: waiting for clear tiles');
                     this.bot.log(`burn: no clear lane — repath wait (${laneFails}/4)`);
-                    await Execution.delayTicks(20);
+                    await waitForFireSpace(plot, 20);
                     continue;
                 }
                 // Named bank strips (or exhausted local): stop burning this load; bank leftover logs.
@@ -197,7 +197,7 @@ class ChopBurnLoad implements Task {
             );
             if (!found) {
                 this.bot.setStatus('burn: waiting for clear lane');
-                await Execution.delayTicks(15);
+                await waitForFireSpace(live, 15);
                 continue;
             }
             this.laneDir = found.dir;

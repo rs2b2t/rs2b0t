@@ -1,3 +1,4 @@
+import { afterDialogueAction } from '../../exec/primitives.js';
 import { DirectNavigator } from '../../../../../event/webwalk/DirectNavigator.js';
 import Tile from '../../../../../geometry/Tile.js';
 import { Execution } from '../../../../execution/Execution.js';
@@ -5,7 +6,7 @@ import { Game } from '../../../../game/Game.js';
 import { Locs, type Loc } from '../../../../locs/Locs.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
-import { driveUntil, heldId, settleScene } from '../../exec/prompts.js';
+import { findSceneTarget, driveUntil, heldId, settleScene } from '../../exec/prompts.js';
 import { TG_ITEM, TG_LOC, TG_TILE, inChestFloor, inKhazardHall, inLadderRoom, inStronghold } from './areas.js';
 import { clearCommander } from './combat.js';
 
@@ -48,16 +49,14 @@ async function answerCoordinates(log: (m: string) => void): Promise<boolean> {
                 log(`ballista: no coordinate header above [${options.join(' | ')}]`);
                 return false;
             }
-            await ChatDialog.chooseOption(pick);
+            await afterDialogueAction(await ChatDialog.chooseOption(pick), 2);
             answered++;
             quiet = 0;
-            await Execution.delayTicks(2);
             continue;
         }
         if (ChatDialog.canContinue()) {
             quiet = 0;
-            await ChatDialog.continue();
-            await Execution.delayTicks(1);
+            await afterDialogueAction(await ChatDialog.continue(), 1);
             continue;
         }
         quiet++;
@@ -73,8 +72,7 @@ export async function fireBallista(log: (m: string) => void): Promise<boolean> {
     if (!(await Traversal.walkResilient(TG_TILE.BALLISTA_STAND, { ...WALK, radius: 2, log }))) {
         return false;
     }
-    await settleScene();
-    const ballista = locById(TG_LOC.BALLISTA, 8);
+    const ballista = await findSceneTarget(() => locById(TG_LOC.BALLISTA, 8));
     if (!ballista) {
         log(`no Ballista at (${TG_TILE.BALLISTA_STAND.x},${TG_TILE.BALLISTA_STAND.z})`);
         return false;
@@ -90,8 +88,7 @@ async function climbCrumbledWall(log: (m: string) => void): Promise<boolean> {
     if (!(await Traversal.walkResilient(TG_TILE.WALL_STAND, { ...WALK, radius: 1, log }))) {
         return false;
     }
-    await settleScene();
-    const wall = locById(TG_LOC.CRUMBLED_WALL, 4);
+    const wall = await findSceneTarget(() => locById(TG_LOC.CRUMBLED_WALL, 4));
     if (!wall) {
         log(`no Crumbled wall at (${TG_TILE.WALL_STAND.x},${TG_TILE.WALL_STAND.z + 1})`);
         return false;
@@ -172,8 +169,7 @@ export async function takeTheOrb(log: (m: string) => void): Promise<boolean> {
     if (!(await Traversal.walkResilient(TG_TILE.CHEST_STAND, { ...WALK, log }))) {
         return false;
     }
-    await settleScene();
-    let chest = locById(TG_LOC.CHEST_OPEN, 4);
+    let chest = await findSceneTarget(() => locById(TG_LOC.CHEST_OPEN, 4));
     if (!chest) {
         const shut = locById(TG_LOC.CHEST_SHUT, 4);
         if (!shut) {

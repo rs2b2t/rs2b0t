@@ -276,7 +276,6 @@ export default class FlaxPicker extends TaskBot {
             return false;
         }
         await Bank.depositInventory();
-        await Execution.delayTicks(1);
         this.countTrip();
         this.log(`banked ${had} ${this.flaxName} (+ any junk)`);
         this.setStatus('returning to the field');

@@ -8,7 +8,7 @@ import Tile from '../../../../../geometry/Tile.js';
 import { HEROES, LQ_ID, LQ_LOC, LQ_LOC_ID, LQ_NPC, LQ_TILE, legendsArea } from './areas.js';
 import { fight } from './fight.js';
 import { legendsPocket, type LegendsPocket } from './pockets.js';
-import { clearBoxes, driveBoxes, driveUntil, heldId, locNear, modalText, offerTo, promptLoc, settleScene, useOnLoc } from './scene.js';
+import { findSceneTarget, clearBoxes, driveBoxes, driveUntil, heldId, locNear, modalText, offerTo, promptLoc, settleScene, useOnLoc } from './scene.js';
 import { climbOutOfTrials, leaveOctagram, leaveShamanCave, pocket } from './trials.js';
 
 interface Ledge {
@@ -355,8 +355,7 @@ async function pushSourceBoulder(log: (m: string) => void): Promise<boolean> {
     if (!(await Traversal.walkResilient(LQ_TILE.SOURCE_STAND, { radius: 0, attempts: 4, timeoutMs: 120_000, log }))) {
         return false;
     }
-    await settleScene();
-    const boulder = Npcs.query().name(LQ_NPC.BOULDER).within(8).nearest();
+    const boulder = await findSceneTarget(() => Npcs.query().name(LQ_NPC.BOULDER).within(8).nearest());
     if (!boulder) {
         log('no boulder within reach of the source stand');
         return false;
@@ -390,8 +389,7 @@ export async function tradeDaggerForSpell(log: (m: string) => void): Promise<boo
         && !(await Traversal.walkResilient(LQ_TILE.FIRE_WALL_WEST, { radius: 1, attempts: 3, timeoutMs: 120_000, log }))) {
         return false;
     }
-    await settleScene();
-    const shaman = Npcs.query().name(LQ_NPC.UNGADULU).within(12).nearest();
+    const shaman = await findSceneTarget(() => Npcs.query().name(LQ_NPC.UNGADULU).within(12).nearest());
     if (!shaman) {
         log('no Ungadulu in range for the black dagger');
         return false;

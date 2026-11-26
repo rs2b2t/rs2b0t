@@ -20,7 +20,6 @@ export async function bankRun(bot: FlaxAIO): Promise<boolean> {
         return false;
     }
     await Bank.depositInventory();
-    await Execution.delayTicks(1);
 
     // Why: in spin-only mode the bank is the flax source, so refill after depositing product.
     if (bot.spinning && !bot.picking && bot.fibreCount() === 0) {

@@ -281,7 +281,7 @@ export class ProfileVault {
             throw error;
         }
         this.storage?.removeItem(LEGACY_KEY);
-        this.sharedTabs = { tabs: [], assignments: new Map(legacy.map(profile => [profile.username, profile.tab ?? MAIN_TAB])) };
+        this.adoptGroupState();
     }
 
     async unlock(pass: string): Promise<boolean> {
@@ -303,7 +303,7 @@ export class ProfileVault {
         this.active = payload.activeTab;
         this.key = key;
         this.salt = salt;
-        this.sharedTabs = { tabs: [...payload.tabs], assignments: new Map(payload.profiles.map(profile => [profile.username, profile.tab ?? MAIN_TAB])) };
+        this.adoptGroupState();
         return true;
     }
 
@@ -329,6 +329,12 @@ export class ProfileVault {
     tabState(): TabState {
         this.assertUnlocked();
         return { tabs: [...this.customTabs], activeTab: this.active };
+    }
+
+    adoptGroupState(): { tabs: string[]; assignments: Map<string, string> } {
+        const assignments = new Map(this.assertUnlocked().map(p => [p.username, p.tab ?? MAIN_TAB]));
+        this.sharedTabs = { tabs: [...this.customTabs], assignments };
+        return this.sharedTabs;
     }
 
     snapshot(): { profiles: Profile[]; tabs: string[]; activeTab: string } {
@@ -410,6 +416,17 @@ export class ProfileVault {
         });
         this.worldTail = change.catch(() => {});
         return change;
+    }
+
+    async assignGroup(usernames: string[], name: string): Promise<void> {
+        const tab = name.trim();
+        if (!tab || !usernames.length) throw new Error('Choose profiles and enter a group name.');
+        if (this.shared) return this.sharedChange(draft => draft.assignGroup(usernames, tab));
+        const saved = new Set(this.assertUnlocked().map(p => p.username));
+        if (usernames.some(username => !saved.has(username))) throw new Error('Only saved profiles can be grouped.');
+        const tabs = [...this.customTabs];
+        if (tab !== MAIN_TAB && !tabs.includes(tab)) tabs.push(tab);
+        await this.saveTabState(tabs, new Map(usernames.map(username => [username, tab])), this.active);
     }
 
     async remove(username: string): Promise<void> {

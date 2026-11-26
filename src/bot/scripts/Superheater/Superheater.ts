@@ -25,6 +25,7 @@ import {
     NATURES_DEFAULT,
     NATURES_MIN,
     NATURE_RUNE,
+    SUPERHEAT_FIRES,
     barsPerTrip,
     barsSmeltable,
     opIndex,
@@ -46,6 +47,7 @@ function mustYield(): boolean {
 }
 
 export const SUPERHEATER_SETTINGS: SettingsSchema = {
+    useFireRunes: { type: 'boolean', default: false, label: 'Use fire runes instead of a staff' },
     bar: {
         type: 'string',
         default: 'Bronze',
@@ -82,6 +84,7 @@ export default class Superheater extends TaskBot {
 
     private bar: Recipe = recipeForBar('Bronze')!;
     private natures = NATURES_DEFAULT;
+    useFireRunes = false;
     private goldsmith = true;
     private fastBank = true;
 
@@ -101,18 +104,19 @@ export default class Superheater extends TaskBot {
 
         const barName = this.settings.str('bar', 'Bronze');
         this.bar = recipeForBar(barName) ?? recipeForBar('Bronze')!;
+        this.useFireRunes = this.settings.bool('useFireRunes', false);
         this.natures = this.settings.num('natures', NATURES_DEFAULT);
         this.goldsmith = this.settings.bool('goldsmithGauntlets', true);
         this.fastBank = this.settings.bool('fastBank', true);
 
         if (Skills.level('magic') < MAGIC_REQUIRED) {
             this.log(`Superheat Item needs ${MAGIC_REQUIRED} Magic (have ${Skills.level('magic')}) — stopping`);
-            ScriptRunner.stop(`Superheat Item needs ${MAGIC_REQUIRED} Magic`);
+            this.requestFinish(`Superheat Item needs ${MAGIC_REQUIRED} Magic`);
             return;
         }
         if (Skills.level('smithing') < this.bar.level) {
             this.log(`${this.bar.bar} bars need ${this.bar.level} Smithing (have ${Skills.level('smithing')}) — stopping`);
-            ScriptRunner.stop(`${this.bar.bar} bars need ${this.bar.level} Smithing`);
+            this.requestFinish(`${this.bar.bar} bars need ${this.bar.level} Smithing`);
             return;
         }
 
@@ -120,7 +124,7 @@ export default class Superheater extends TaskBot {
         this.xpAtStart = Skills.xp('smithing');
         this.magicXpAtStart = Skills.xp('magic');
 
-        const plan = Object.entries(withdrawSet(this.bar)).map(([ore, n]) => `${n} ${ore}`).join(' + ');
+        const plan = Object.entries(withdrawSet(this.bar, this.useFireRunes)).map(([ore, n]) => `${n} ${ore}`).join(' + ');
         this.log(`Superheater — ${this.bar.bar} via ${SUPERHEAT_ITEM} (${plan}), keeping ${this.natures} ${NATURE_RUNE}s`);
         if (!(await this.resolveBank())) {
             return;
@@ -143,7 +147,7 @@ export default class Superheater extends TaskBot {
         const bank = await nearestBankReachable(here, Navigator);
         if (!bank) {
             this.log('no reachable bank — stopping');
-            ScriptRunner.stop('no reachable bank');
+            this.requestFinish('no reachable bank');
             return false;
         }
         this.bank = bank;
@@ -157,7 +161,7 @@ export default class Superheater extends TaskBot {
         this.setStatus(`walking to ${bank.name}`);
         if (!(await Traversal.walkResilient(bank.tile, { radius: 3, attempts: 4, timeoutMs: 180_000, log: m => this.log(`  ${m}`) }))) {
             this.log('walk to the bank failed — stopping');
-            ScriptRunner.stop('walk to the bank failed');
+            this.requestFinish('walk to the bank failed');
             return false;
         }
         return true;
@@ -190,7 +194,11 @@ export default class Superheater extends TaskBot {
     }
     // Why: a nature rune funds each cast, so a smelt needs the full ingredient set AND one nature rune.
     canSmeltOne(): boolean {
-        return this.bar.ingredients.every(i => Inventory.count(i.ore) >= i.perBar) && Inventory.count(NATURE_RUNE) > 0;
+        return this.bar.ingredients.every(i => Inventory.count(i.ore) >= i.perBar) && this.fundedCasts() > 0;
+    }
+    fundedCasts(): number {
+        const natures = Inventory.count(NATURE_RUNE);
+        return this.useFireRunes ? Math.min(natures, Math.floor(Inventory.count('Fire rune') / SUPERHEAT_FIRES)) : natures;
     }
     natureTarget(): number {
         return this.natures;
@@ -204,7 +212,7 @@ export default class Superheater extends TaskBot {
 
     /** Why: bank requests are handled in send order, so deposit, Withdraw-All, close and the ore landing can all go without a wait. */
     async fastRestock(): Promise<boolean> {
-        if (!this.fastBank || this.bar.ingredients.length !== 1) {
+        if (!this.fastBank || this.useFireRunes || this.bar.ingredients.length !== 1) {
             return false;
         }
         const side = reader.bankSideItems();
@@ -255,7 +263,7 @@ export default class Superheater extends TaskBot {
 
     // Why: Bank.isOpen() only proves the component exists. The item list fills a beat after opening and again after every deposit, so a count of zero can be a list that has not loaded rather than an empty bank. Before halting on "out of X", confirm the bank is ready and every named item reads zero; otherwise retry.
     async bankTrulyOutOf(...names: string[]): Promise<boolean> {
-        const settled = await Execution.delayUntil(() => Bank.ready(), 3500);
+        const settled = await Bank.waitReady(3500);
         if (!settled) {
             return false;
         }
@@ -290,7 +298,7 @@ class EnsureGear implements Task {
     constructor(private bot: Superheater) {}
 
     validate(): boolean {
-        return !mustYield() && pickFireStaff(name => Equipment.contains(name)) === undefined;
+        return !mustYield() && !this.bot.useFireRunes && pickFireStaff(name => Equipment.contains(name)) === undefined;
     }
 
     async execute(): Promise<void> {
@@ -302,7 +310,6 @@ class EnsureGear implements Task {
         }
         if (Inventory.used() > 0) {
             await Bank.depositAllMatching(() => true);
-            await Execution.delayTicks(1);
         }
         let staff = pickFireStaff(name => Inventory.count(name) > 0);
         if (!staff) {
@@ -314,7 +321,7 @@ class EnsureGear implements Task {
                     return;
                 }
                 this.bot.log('no fire staff in the bank — stopping');
-                ScriptRunner.stop('no fire staff in the bank');
+                this.bot.requestFinish('no fire staff in the bank');
                 return;
             }
             this.bot.log(`withdrawing ${staff}`);
@@ -324,7 +331,7 @@ class EnsureGear implements Task {
                     return;
                 }
                 this.bot.log('no fire staff in the bank — stopping');
-                ScriptRunner.stop('no fire staff in the bank');
+                this.bot.requestFinish('no fire staff in the bank');
                 return;
             }
         }
@@ -343,7 +350,7 @@ class EnsureGear implements Task {
         this.bot.setStatus(`wielding ${staff}`);
         if (!(await Equipment.equip(staff))) {
             this.bot.log(`could not wield ${staff} — stopping`);
-            ScriptRunner.stop(`could not wield ${staff}`);
+            this.bot.requestFinish(`could not wield ${staff}`);
             return;
         }
         this.bot.log(`wore ${staff} — casts need only ${NATURE_RUNE}s now`);
@@ -372,7 +379,7 @@ class EnsureGauntlets implements Task {
                     return;
                 }
                 this.bot.log('no Goldsmith gauntlet in the bank — stopping');
-                ScriptRunner.stop('no Goldsmith gauntlet in the bank');
+                this.bot.requestFinish('no Goldsmith gauntlet in the bank');
                 return;
             }
             this.bot.log('withdrawing Goldsmith gauntlet');
@@ -381,7 +388,7 @@ class EnsureGauntlets implements Task {
                     return;
                 }
                 this.bot.log('no Goldsmith gauntlet in the bank — stopping');
-                ScriptRunner.stop('no Goldsmith gauntlet in the bank');
+                this.bot.requestFinish('no Goldsmith gauntlet in the bank');
                 return;
             }
         }
@@ -399,7 +406,7 @@ class EnsureGauntlets implements Task {
         this.bot.setStatus('wearing Goldsmith gauntlet');
         if (!(await Equipment.equip('Goldsmith gauntlet'))) {
             this.bot.log('could not equip the Goldsmith gauntlet — stopping');
-            ScriptRunner.stop('could not equip the Goldsmith gauntlet');
+            this.bot.requestFinish('could not equip the Goldsmith gauntlet');
             return;
         }
         this.bot.log('wore the Goldsmith gauntlet — gold bars give 2.5x Smithing XP');
@@ -412,7 +419,7 @@ class Restock implements Task {
     constructor(private bot: Superheater) {}
 
     validate(): boolean {
-        return !mustYield() && !this.bot.canSmeltOne();
+        return !mustYield() && (Bank.isOpen() || !this.bot.canSmeltOne());
     }
 
     async execute(): Promise<void> {
@@ -424,7 +431,11 @@ class Restock implements Task {
             return;
         }
 
-        // Why: clear whatever is left, bars, partial ores and junk, keeping only nature runes, so every restock starts from a known-empty pack.
+        if (this.bot.canSmeltOne()) {
+            await Bank.close();
+            return;
+        }
+
         this.bot.setStatus('restocking');
         // Why: runes stack, so the exact top-up can run before the fused pass and still only fires when the pack cannot cover the next trip.
         if (!(await this.topUpNatures())) {
@@ -444,7 +455,7 @@ class Restock implements Task {
         }
         if (Inventory.used() > 0) {
             const before = Inventory.used();
-            await Bank.depositAllMatching(name => name.toLowerCase() !== NATURE_RUNE.toLowerCase());
+            await Bank.depositAllMatching(name => name.toLowerCase() !== NATURE_RUNE.toLowerCase() && !(this.bot.useFireRunes && name.toLowerCase() === 'fire rune'));
             // Why: depositAllMatching waits for each row to leave the side pack, and the ore withdrawal that follows confirms the bank update; the old extra tick bought nothing.
             const cleared = before - Inventory.used();
             if (cleared > 0) {
@@ -454,6 +465,15 @@ class Restock implements Task {
         if (mustYield()) {
             this.bot.log('pausing for a random event');
             return;
+        }
+        if (this.bot.useFireRunes) {
+            const casts = Math.min(Inventory.count(NATURE_RUNE), barsPerTrip(this.bot.recipe(), true));
+            const need = casts * SUPERHEAT_FIRES - Inventory.count('Fire rune');
+            if (need > 0) await Bank.withdrawX('Fire rune', need);
+            if (Inventory.count('Fire rune') < SUPERHEAT_FIRES) {
+                if (await this.bot.bankTrulyOutOf('Fire rune')) this.bot.requestFinish('not enough Fire runes for one cast');
+                return;
+            }
         }
         if (!(await this.withdrawOres())) {
             return;
@@ -466,7 +486,7 @@ class Restock implements Task {
 
         this.bot.countTrip();
         this.bot.log(
-            `restocked: ${Object.entries(withdrawSet(this.bot.recipe())).map(([ore, n]) => `${n} ${ore}`).join(' + ')} + ${Inventory.count(NATURE_RUNE)} ${NATURE_RUNE}s`
+            `restocked for ${barsSmeltable(this.bot.recipe(), ore => Inventory.count(ore))} ${this.bot.recipe().bar} bars`
         );
     }
 
@@ -484,6 +504,12 @@ class Restock implements Task {
         const want = this.bot.natureTarget() - have;
         if (coversTrip || want <= 0) {
             return true;
+        }
+        if (!(await Bank.waitReady(3500))) return false;
+        if (Bank.count(NATURE_RUNE) === 0) {
+            if (have > 0) return true;
+            this.bot.requestFinish(`no ${NATURE_RUNE}s in the bank`);
+            return false;
         }
         const before = have;
 
@@ -511,6 +537,7 @@ class Restock implements Task {
             }
         }
 
+        if (Inventory.count(NATURE_RUNE) > 0 && Bank.count(NATURE_RUNE) === 0) return true;
         const remaining = this.bot.natureTarget() - Inventory.count(NATURE_RUNE);
         if (remaining > 0 && (await Bank.withdrawX(NATURE_RUNE, remaining))) {
             this.bot.log(`topped up ${NATURE_RUNE}s to ${Inventory.count(NATURE_RUNE)}`);
@@ -523,7 +550,7 @@ class Restock implements Task {
                 return false;
             }
             this.bot.log(`no ${NATURE_RUNE}s in the bank — stopping`);
-            ScriptRunner.stop(`no ${NATURE_RUNE}s in the bank`);
+            this.bot.requestFinish(`no ${NATURE_RUNE}s in the bank`);
         }
         return false;
     }
@@ -536,39 +563,16 @@ class Restock implements Task {
         // Why: a one-ore recipe fills the 27 free slots with a single Withdraw-All click, skipping the count dialog and its two server waits.
         if (recipe.ingredients.length === 1) {
             const ore = recipe.ingredients[0].ore;
-            return this.withdrawAllOf(ore, withdrawSet(recipe)[ore]);
+            return this.withdrawAllOf(ore, withdrawSet(recipe, this.bot.useFireRunes)[ore]);
         }
-        const set = withdrawSet(recipe);
-        for (const [ore, count] of Object.entries(set)) {
-            this.bot.log(`withdrawing ${count} ${ore}`);
-            const before = Inventory.count(ore);
-            const ok = await Bank.withdrawX(ore, count);
-            const got = Inventory.count(ore) - before;
-            this.bot.log(`got ${got} ${ore}`);
-            if (!ok || got === 0) {
-                // The bank list can read zero while it is still loading after open or deposit, so verify it is settled before declaring the ore gone.
-                if (!(await this.bot.bankTrulyOutOf(ore))) {
-                    this.bot.log(`withdraw of ${ore} stalled but the bank list is still settling — retrying`);
-                    return false;
-                }
-                if (Bank.count(ore) > 0) {
-                    this.bot.log(`bank still has ${ore} but the withdraw stalled — retrying`);
-                    return false;
-                }
-                this.bot.log(`no ${ore} in the bank (wanted ${count}) — stopping`);
-                ScriptRunner.stop(`no ${ore} in the bank`);
-                return false;
-            }
-            if (got < count) {
-                // Same settling guard before concluding the bank is short on this ore.
-                if (!(await this.bot.bankTrulyOutOf(ore))) {
-                    this.bot.log(`partial withdraw of ${ore} but the bank list is still settling — retrying`);
-                    return false;
-                }
-                this.bot.log(`WARNING: only ${got}/${count} ${ore} withdrawn — a partial recipe smelts the wrong bar`);
-                ScriptRunner.stop(`only ${got} ${ore} in the bank`);
-                return false;
-            }
+        if (!(await Bank.waitReady(3500))) return false;
+        const bars = Math.min(barsPerTrip(recipe, this.bot.useFireRunes), this.bot.fundedCasts(), barsSmeltable(recipe, ore => Bank.count(ore)));
+        if (!bars) {
+            this.bot.requestFinish(`the bank cannot supply one ${recipe.bar} bar`);
+            return false;
+        }
+        for (const { ore, perBar } of recipe.ingredients) {
+            if (mustYield() || !(await Bank.withdrawX(ore, bars * perBar))) return false;
         }
         return true;
     }
@@ -587,7 +591,7 @@ class Restock implements Task {
                 return false;
             }
             this.bot.log(`no ${ore} in the bank — stopping`);
-            ScriptRunner.stop(`no ${ore} in the bank`);
+            this.bot.requestFinish(`no ${ore} in the bank`);
             return false;
         }
         const got = Inventory.count(ore) - before;
@@ -598,7 +602,7 @@ class Restock implements Task {
                 return false;
             }
             this.bot.log(`no ${ore} in the bank — stopping`);
-            ScriptRunner.stop(`no ${ore} in the bank`);
+            this.bot.requestFinish(`no ${ore} in the bank`);
             return false;
         }
         if (got < count) {
@@ -633,38 +637,16 @@ class Smelt implements Task {
 
         const recipe = this.bot.recipe();
 
-        // Why: casting on a partial recipe smelts the wrong bar, iron without coal makes an iron bar, so every cast needs the full set plus a nature rune, which is what canSmeltOne() checks. Pace each cast on the bar forming: the ore count drops a tick or two after the cast lands, so wait before clicking again.
-        const start = barsSmeltable(recipe, ore => Inventory.count(ore));
-
-        while (this.bot.canSmeltOne()) {
-            // Why: the guardian needs the interaction, so stop casting the moment an event or dialog is up.
-            if (mustYield()) {
-                this.bot.log('pausing for a random event');
-                return;
-            }
-            const left = barsSmeltable(recipe, ore => Inventory.count(ore));
-            this.bot.log(`casting on ${primaryOre(recipe)} (${left} more bars' worth of ore left, ${Inventory.count(NATURE_RUNE)} ${NATURE_RUNE}s)`);
-            const ore = Inventory.first(primaryOre(recipe));
-            if (!ore) {
-                break;
-            }
-            if (!(await Game.castOnItem(SUPERHEAT_ITEM, ore))) {
-                this.bot.log(`cast-on-item was rejected for ${ore.name} — retrying`);
-                await Execution.delayTicks(1);
-                continue;
-            }
-            await Execution.delayTicks(3);
+        const name = primaryOre(recipe);
+        const ore = Inventory.first(name);
+        if (!ore) return;
+        const before = Inventory.count(name);
+        if (!(await Game.castOnItem(SUPERHEAT_ITEM, ore))) {
+            this.bot.log(`cast-on-item was rejected for ${ore.name}`);
+            await Execution.delayTicks(1);
+            return;
         }
-
-        this.bot.recordSmelt(start - barsSmeltable(recipe, ore => Inventory.count(ore)));
-
-        if (Inventory.count(primaryOre(recipe)) > 0) {
-            const left = barsSmeltable(recipe, ore => Inventory.count(ore));
-            if (Inventory.count(NATURE_RUNE) === 0) {
-                this.bot.log(`out of ${NATURE_RUNE}s with ${left} bars' worth of ore left — banking to restock`);
-            } else {
-                this.bot.log(`WARNING: stopped early — ${left} more bars' worth of ore left, but the loop bailed. No partial-recipe casts were sent.`);
-            }
-        }
+        await Execution.delayTicks(3);
+        if (Inventory.count(name) < before) this.bot.recordSmelt(1);
     }
 }

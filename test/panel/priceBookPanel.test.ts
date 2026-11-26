@@ -186,6 +186,32 @@ describe('editing a row', () => {
     });
 });
 
+test('sets stock caps across the selected book, including filtered items', () => {
+    const panel = openPanel();
+    const book = PriceBooks.byName('seers')!;
+    const other = { ...book, name: 'varrock' };
+    PriceBooks.save([book, other]);
+    type(filterBox(panel), 'coal');
+    const input = panel.root.querySelector<HTMLInputElement>('[data-role=stock-cap]')!;
+    const apply = panel.root.querySelector<HTMLButtonElement>('[data-action=set-all-caps]')!;
+    expect(input).not.toBeNull();
+    for (const invalid of ['', '-1', '1.5', 'bad', '2147483648']) {
+        type(input, invalid);
+        expect(apply.disabled).toBe(true);
+    }
+    type(input, '10k');
+    expect(PriceBooks.byName('seers')).toEqual(book);
+    apply.click();
+    expect(PriceBooks.all()).toEqual([{ ...book, rows: book.rows.map(row => ({ ...row, cap: 10_000 })) }, other]);
+    expect(names(panel)).toEqual(['Coal']);
+    panel.open('seers');
+    const reopened = panel.root.querySelector<HTMLInputElement>('[data-role=stock-cap]')!;
+    expect(reopened.value).toBe('10000');
+    type(reopened, '0');
+    panel.root.querySelector<HTMLButtonElement>('[data-action=set-all-caps]')!.click();
+    expect(PriceBooks.all()).toEqual([book, other]);
+});
+
 describe('transferring books', () => {
     test('exports either the selected book or every book', async () => {
         const panel = openPanel();

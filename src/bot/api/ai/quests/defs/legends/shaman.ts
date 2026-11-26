@@ -12,7 +12,7 @@ import { LQ_ID, LQ_LOC, LQ_LOC_ID, LQ_NPC, LQ_TILE, inOctagram } from './areas.j
 import { drinkPrayer } from './fight.js';
 import { enterJungle, leaveJungle, summonGujuo, talkGujuoStatus, type GujuoTalk } from './jungle.js';
 import { climbOutOfTrials, leaveOctagram } from './trials.js';
-import { driveBoxes, driveToEnd, driveUntil, heldId, here, locNear, modalText, offerTo, promptLoc, settleScene, useOnLoc } from './scene.js';
+import { findSceneTarget, driveBoxes, driveToEnd, driveUntil, heldId, here, locNear, modalText, offerTo, promptLoc, settleScene, useOnLoc } from './scene.js';
 
 const CRAWL_ATTEMPTS = 6;
 
@@ -69,8 +69,7 @@ export async function speakToUngadulu(log: (m: string) => void): Promise<boolean
     if (!(await Traversal.walkResilient(LQ_TILE.FIRE_WALL_WEST, { radius: 1, attempts: 3, timeoutMs: 120_000, log }))) {
         return false;
     }
-    await settleScene();
-    const wall = locNear(LQ_LOC.FIRE_WALL, 'Investigate', 6);
+    const wall = await findSceneTarget(() => locNear(LQ_LOC.FIRE_WALL, 'Investigate', 6));
     if (!wall) {
         log('no fire wall offering Investigate beside the octagram');
         return false;
@@ -409,8 +408,7 @@ export async function summonDemon(log: (m: string) => void): Promise<boolean> {
     if (!(await Traversal.walkResilient(LQ_TILE.OCTAGRAM_INSIDE, { radius: 2, attempts: 3, timeoutMs: 60_000, log }))) {
         return false;
     }
-    await settleScene();
-    const shaman = Npcs.query().name(LQ_NPC.UNGADULU).within(10).nearest();
+    const shaman = await findSceneTarget(() => Npcs.query().name(LQ_NPC.UNGADULU).within(10).nearest());
     if (!shaman) {
         log('no Ungadulu inside the octagram');
         return false;

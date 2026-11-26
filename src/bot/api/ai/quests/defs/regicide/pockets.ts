@@ -5,7 +5,7 @@ import type { Loc } from '../../../../model/Loc.js';
 import { Sustain } from '../../../../sustain/Sustain.js';
 import { Traversal, type WalkResilientOptions } from '../../../../walking/Traversal.js';
 import Tile from '../../../../../geometry/Tile.js';
-import { settleScene } from '../../exec/prompts.js';
+import { findSceneTarget } from '../../exec/prompts.js';
 import { REGICIDE_POCKETS, REGICIDE_SEAMS } from './seams.js';
 
 export type TirannwnTravelOptions = Pick<WalkResilientOptions, 'useTeleportCatalog' | 'policy'>;
@@ -184,8 +184,7 @@ async function crossSeam(leg: SeamLeg, log: (m: string) => void, options: Tirann
             log(`could not stand at (${stand.x},${stand.z}) — retrying from (${Game.tile()?.x},${Game.tile()?.z})`);
             continue;
         }
-        await settleScene();
-        const loc = seamLoc(leg.seam);
+        const loc = await findSceneTarget(() => seamLoc(leg.seam));
         if (!loc) {
             log(`no ${leg.seam.loc} at (${leg.seam.x},${leg.seam.z}) — retrying`);
             continue;

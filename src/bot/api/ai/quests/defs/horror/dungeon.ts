@@ -5,7 +5,7 @@ import { Traversal } from '../../../../walking/Traversal.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
 import { Locs } from '../../../../locs/Locs.js';
 import { GameMessages } from '../../../../chatbox/gameMessages.js';
-import { driveUntil, settleScene } from '../../exec/prompts.js';
+import { findSceneTarget, driveUntil, settleScene } from '../../exec/prompts.js';
 import { HD_ID, HD_ITEM, HD_LOC, HD_TILE } from './areas.js';
 import { inBasement } from './lighthouse.js';
 
@@ -54,8 +54,7 @@ async function leaveLighthouse(log: (m: string) => void): Promise<boolean> {
     }
     const doorway = HD_TILE.REAL_LIGHTHOUSE_L0.translate(0, -1);
     if (!(await Traversal.walkResilient(doorway, { radius: 0, attempts: 3, timeoutMs: 30_000, log }))) return false;
-    await settleScene();
-    const door = Locs.query().name(HD_LOC.DOORWAY).action('Walk-through').where(loc => loc.tile().equals(doorway)).nearest();
+    const door = await findSceneTarget(() => Locs.query().name(HD_LOC.DOORWAY).action('Walk-through').where(loc => loc.tile().equals(doorway)).nearest());
     if (!door || !(await door.interact('Walk-through'))) return false;
     if (!(await Execution.delayUntil(() => {
         const tile = Game.tile();
@@ -163,8 +162,7 @@ export async function openWallAndDescend(log: (m: string) => void): Promise<bool
     if (!(await Traversal.walkResilient(HD_TILE.BASEMENT_DOWN, { radius: 2, attempts: 4, timeoutMs: 120_000, log }))) {
         return false;
     }
-    await settleScene();
-    const ladder = ladderAt(HD_TILE.BASEMENT_DOWN);
+    const ladder = await findSceneTarget(() => ladderAt(HD_TILE.BASEMENT_DOWN));
     if (!ladder) {
         log('no iron ladder down to the cavern');
         return false;
@@ -198,8 +196,7 @@ export async function exitAfterQuest(log: (m: string) => void): Promise<boolean>
             log('could not reach the ladder out of the post-quest cavern');
             return false;
         }
-        await settleScene();
-        const ladder = ladderAt(HD_TILE.POSTQUEST_LADDER);
+        const ladder = await findSceneTarget(() => ladderAt(HD_TILE.POSTQUEST_LADDER));
         if (!ladder || !(await ladder.interact('Climb'))) {
             log('no iron ladder out of the post-quest cavern');
             return false;

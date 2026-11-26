@@ -173,3 +173,14 @@ test('collects raw scales from the dungeon floor and counts the pickup', async (
     expect(bot['gathered']).toBe(1);
     expect(Inventory.count('Dragon scale dust')).toBe(0);
 });
+
+test('a missing key finishes the delegated scale trip and leaves the supplier running', async () => {
+    const { bot, bank, pack, stock, state } = await setup();
+    const finished: string[] = [];
+    bot.bindFinish(reason => finished.push(reason));
+    pack.delete('Dusty key');
+    stock.delete('Dusty key');
+    await bank.execute();
+    expect(finished).toEqual(['no Dusty key banked for Blue dragon scale']);
+    expect(state.stops).toEqual([]);
+});

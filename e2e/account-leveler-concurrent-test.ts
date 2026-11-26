@@ -248,7 +248,6 @@ async function main(): Promise<void> {
                 regions.set(s.user, seen);
             }
             if (['running', 'final'].includes(kind) && (!s.ingame || s.state !== 'running')) problems.add(`${s.user}: ${s.ingame ? s.state : 'disconnected'} during ${kind} observation`);
-            if (s.plan && ['Fisher', 'CookBot'].includes(s.plan.script) && ['attack', 'strength', 'defence'].some(name => (s.skills[name]?.level ?? 0) < 20)) problems.add(`${s.user}: ${s.plan.script} selected before melee level 20`);
             const recovery = recoveries.get(s.user) ?? [];
             for (let death = (previous?.deaths ?? 0) + 1; death <= s.deaths; death++) recovery.push({ death, observedAt: s.at, combatXp: combatXp(s) });
             for (const event of recovery) {
@@ -341,7 +340,7 @@ async function main(): Promise<void> {
                     });
                     await seedItemsToBank(page, seededBank, { x: 3093, z: 3244, level: 0 });
                     await stopScript(page);
-                    await setSettings(page, 'AccountLeveler', { targetLevel: 40, marketAxes: false, wilderness: true });
+                    await setSettings(page, 'AccountLeveler', { targetLevel: 40, wilderness: true });
                     const state = await sample(client);
                     writeFileSync(join(output, `${user}-baseline.json`), JSON.stringify({ fixture, seededBank, ...state }, null, 2));
                     if (Object.entries(state.skills).some(([name, s]) => s.level !== (name === 'hitpoints' ? 10 : 1))) throw new Error(`${user}: unexpected starting levels`);
@@ -368,8 +367,8 @@ async function main(): Promise<void> {
         const deadline = startedAt + minutes * 60000;
         while (!interrupted && Date.now() < deadline) {
             const rows = await record('running');
-            const gaining = rows.filter(s => combatXp(s) > combatXp(baseline.get(s.user)!)).length;
-            console.log(`${Math.round((Date.now() - startedAt) / 1000)}s: ${rows.filter(s => s.ingame).length}/${count} in game, ${rows.filter(s => s.state === 'running').length} running, ${gaining} gaining combat XP`);
+            const gaining = rows.filter(s => s.totalXp > baseline.get(s.user)!.totalXp).length;
+            console.log(`${Math.round((Date.now() - startedAt) / 1000)}s: ${rows.filter(s => s.ingame).length}/${count} in game, ${rows.filter(s => s.state === 'running').length} running, ${gaining} gaining XP`);
             await new Promise(resolve => setTimeout(resolve, Math.min(interval * 1000, Math.max(0, deadline - Date.now()))));
         }
         completedAt = Date.now();
@@ -410,22 +409,21 @@ async function main(): Promise<void> {
             };
         });
         for (const a of accounts) {
-            if ((a.combatXpGain ?? 0) <= 0 && !pilot) problems.add(`${a.user}: no combat XP gained`);
-            if (!a.trainingCamps.length && !pilot) problems.add(`${a.user}: no combat XP observed at a training camp`);
+            if ((a.xpGain ?? 0) <= 0 && !pilot) problems.add(`${a.user}: no XP gained`);
             if (!a.loggedOut) problems.add(`${a.user}: clean logout unverified`);
         }
         if (simultaneousRunning !== count) problems.add(`Only ${simultaneousRunning}/${count} clients observed simultaneously in game and running`);
         const result = failure || problems.size ? 'FAIL' : pilot ? 'INCOMPLETE' : 'PASS';
         const trainingCamps = [...new Set(accounts.flatMap(a => a.trainingCamps))];
-        const summary = { result, pilot, failure, fixture, seededBank, base: base.origin, count, minutes, gold, settings: { marketAxes: false, wilderness: true }, startedAt, completedAt, simultaneous, simultaneousRunning, camps: [...camps], trainingCamps, samples, problems: [...problems], accounts };
+        const summary = { result, pilot, failure, fixture, seededBank, base: base.origin, count, minutes, gold, settings: { wilderness: true }, startedAt, completedAt, simultaneous, simultaneousRunning, camps: [...camps], trainingCamps, samples, problems: [...problems], accounts };
         writeFileSync(join(output, 'summary.json'), JSON.stringify(summary, null, 2));
         writeFileSync(join(output, 'summary.md'), [
             `# AccountLeveler concurrent test: ${result}`, '',
             `${simultaneous}/${count} clients observed simultaneously in game; ${simultaneousRunning}/${count} also running. Requested duration ${minutes} minutes; observed ${(Math.max(0, completedAt - startedAt) / 60000).toFixed(2)} minutes.`, '',
             ...(pilot ? ['Short pilot only; XP progress acceptance requires a full observation run.', ''] : []),
-            `Fixture: ${fixture}. Fresh accounts: level 1, HP 10, empty inventory and equipment, no food. Market trades disabled; Wilderness enabled.`, '',
+            `Fixture: ${fixture}. Fresh accounts: level 1, HP 10, empty inventory and equipment, no food. Wilderness enabled.`, '',
             `Seeded bank: ${seededBank.map(item => `${item.displayName} [${item.id}] x${item.qty}`).join(', ')}.`, '',
-            'Full acceptance requires combat XP between two consecutive observations at the same training camp for every account. Combat XP gained only during shopping or travel does not satisfy this check.', '',
+            'Full acceptance requires XP gain on every account. Combat camp observations are recorded for accounts that draw combat tasks.', '',
             'Cleanup disables auto-login, stops scripts, and retries the game logout button for up to 120 seconds while allowing combat to end. Closing a browser context after timeout does not count as verified logout.', '',
             `Selected camps: ${[...camps].join(', ') || 'none'}. Camps with observed combat XP: ${trainingCamps.join(', ') || 'none'}.`, '',
             '| Account | Combat XP gained | Total XP gained | Levels gained | Deaths | Last state | Last plan | Logged out |',

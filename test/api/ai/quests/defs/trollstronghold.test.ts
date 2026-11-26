@@ -302,6 +302,15 @@ describe('Troll Stronghold loadout', () => {
         expect(name).toContain('Rune platelegs');
     });
 
+    test('a saved platelegs loadout wears the rune skirt already in the pack', () => {
+        QuestLoadout.current = { name: 'quest', worn: { legs: 'Rune platelegs' }, carry: [] };
+        const step = decide(snap({
+            stage: TROLL_STAGE.STARTED, inv: [...COINS, ...FOOD, 'Rune plateskirt'],
+            worn: [ITEM.CLIMBING_BOOTS], bank: ['Rune platelegs']
+        }));
+        expect(customName(step)).toContain('Rune plateskirt');
+    });
+
     test('boot money rides the same bank visit as the gear', () => {
         QuestLoadout.current = { name: 'quest', worn: { righthand: WEAPON }, carry: [] };
         const step = decide(snap({

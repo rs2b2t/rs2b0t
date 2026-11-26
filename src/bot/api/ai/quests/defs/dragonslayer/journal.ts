@@ -1,6 +1,5 @@
+import { Modals } from '../../../../ui/widgets/Modals.js';
 import { normalizeJournal as normalize } from '../../journalText.js';
-import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
-import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 
@@ -95,10 +94,7 @@ export async function readDragonProgress(): Promise<QuestProgress | undefined> {
 
     const lines = await Quests.journal(DRAGON_QUEST);
     const progress = parseDragonJournal(lines);
-    if (reader.modals().main !== -1) {
-        actions.closeModal();
-        await Execution.delayTicks(1);
-    }
+    await Modals.closeIfOpen();
     journalRead.reads++;
     journalRead.chars = normalize(lines).length;
     journalRead.cached = progress === undefined;

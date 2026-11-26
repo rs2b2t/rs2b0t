@@ -1,3 +1,4 @@
+import { afterDialogueAction } from '../../exec/primitives.js';
 import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
 import { EventSignal } from '../../../../execution/EventSignal.js';
 import { Execution } from '../../../../execution/Execution.js';
@@ -9,7 +10,7 @@ import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
 import { Modals } from '../../../../ui/widgets/Modals.js';
 import { Reach } from '../../../../walking/Reach.js';
 import { Traversal } from '../../../../walking/Traversal.js';
-import { promptLoc, settleScene } from '../../exec/prompts.js';
+import { findSceneTarget, promptLoc, settleScene } from '../../exec/prompts.js';
 import { SM_ID, SM_LOC, SM_LOC_ID, SM_NAME, SM_NPC, SM_TILE } from './areas.js';
 import { permSerumVialId, serumVialId } from './supplies.js';
 
@@ -36,8 +37,7 @@ export async function driveOnce(script: readonly string[], log: (m: string) => v
             return false;
         }
         if (ChatDialog.canContinue()) {
-            await ChatDialog.continue();
-            await Execution.delayTicks(1);
+            await afterDialogueAction(await ChatDialog.continue(), 1);
             continue;
         }
         const opts = ChatDialog.options();
@@ -45,8 +45,7 @@ export async function driveOnce(script: readonly string[], log: (m: string) => v
             const wantIndex = pending.findIndex(want => opts.some(o => o.toLowerCase().includes(want.toLowerCase())));
             if (wantIndex >= 0) {
                 const want = pending.splice(wantIndex, 1)[0]!;
-                await ChatDialog.chooseOption(opts.find(o => o.toLowerCase().includes(want.toLowerCase()))!);
-                await Execution.delayTicks(2);
+                await afterDialogueAction(await ChatDialog.chooseOption(opts.find(o => o.toLowerCase().includes(want.toLowerCase()))!), 2);
                 continue;
             }
             const exit = opts.find(o => OK_OPTION.test(o.trim()));
@@ -54,8 +53,7 @@ export async function driveOnce(script: readonly string[], log: (m: string) => v
                 log(`no scripted or exit option in [${opts.join(' | ')}]`);
                 return false;
             }
-            await ChatDialog.chooseOption(exit);
-            await Execution.delayTicks(2);
+            await afterDialogueAction(await ChatDialog.chooseOption(exit), 2);
             continue;
         }
         if (!ChatDialog.isOpen()) {
@@ -226,10 +224,9 @@ export async function takeVial(log: (m: string) => void): Promise<boolean> {
         }
         await settleScene();
     }
-    const vial = vialSpawn();
+    const vial = await findSceneTarget(vialSpawn, 4);
     if (!vial) {
         log('no empty vial on the experiment-house floor yet — waiting for the spawn');
-        await Execution.delayTicks(4);
         return false;
     }
     if (!(await vial.interact('Take'))) {
@@ -320,8 +317,7 @@ export function shopAtRazmire(order: ShopOrder): (log: (m: string) => void) => P
         if (!(await Traversal.walkResilient(SM_TILE.RAZMIRE, { radius: 2, attempts: 3, timeoutMs: 180_000, log }))) {
             return false;
         }
-        await settleScene();
-        const counter = Npcs.query().name(SM_NPC.RAZMIRE).action(order.op).within(12).nearest();
+        const counter = await findSceneTarget(() => Npcs.query().name(SM_NPC.RAZMIRE).action(order.op).within(12).nearest());
         if (counter && (await counter.interact(order.op))) {
             return fillOrder(order, log);
         }

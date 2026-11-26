@@ -32,7 +32,7 @@ async function openBank(bot: MuleCrafterContext): Promise<boolean> {
     if (!opened) {
         bot.log('could not open the bank — retrying');
     }
-    return opened;
+    return opened && await Bank.waitReady(3000);
 }
 
 async function walkToBank(bot: MuleCrafterContext): Promise<void> {
@@ -81,16 +81,15 @@ export function createCrafterPrepareTask(bot: MuleCrafterContext): Task {
                 await Bank.close();
                 return;
             }
-            await Execution.delayUntil(() => Bank.loaded(), 3000);
+            if (!(await Bank.waitReady(3000))) return;
             const banked = Bank.count(ESSENCE);
             if (banked === 0) {
                 await Bank.close();
-                ScriptRunner.stop('MuleCrafter: no essence left in the bank (three reads)');
+                ScriptRunner.stop('MuleCrafter: no essence left in the bank');
                 return;
             }
             const amount = Math.min(Inventory.free(), essencePerTrade(28, true), banked);
-            await Bank.withdrawX(ESSENCE, amount);
-            await Execution.delayUntil(() => bot.essenceCount() > 0, 4000);
+            if (amount <= 0 || !(await Bank.withdrawX(ESSENCE, amount))) return;
             bot.log(`withdrew ${bot.essenceCount()} essence from the bank`);
             await Bank.close();
         }
@@ -105,7 +104,6 @@ export function createCrafterBankTask(bot: MuleCrafterContext): Task {
             if (!await openBank(bot)) return;
             const runesHeld = bot.runeCount();
             await Bank.depositAllMatching(name => name.toLowerCase() === bot.cfg().rune.toLowerCase(), message => bot.log(`  ${message}`));
-            await Execution.delayTicks(1);
             if (runesHeld > 0) bot.log(`deposited ${runesHeld} ${bot.cfg().rune}s`);
 
             const talismanId = Bank.items().find(item => item.name?.toLowerCase() === bot.cfg().talisman.toLowerCase())?.id
@@ -120,16 +118,15 @@ export function createCrafterBankTask(bot: MuleCrafterContext): Task {
                 throw new Error(`MuleCrafter: ${bot.cfg().talisman} not found`);
             }
             if (bot.bankVisitsEnabled() && bot.essenceCount() === 0) {
-                await Execution.delayUntil(() => Bank.loaded(), 3000);
+                if (!(await Bank.waitReady(3000))) return;
                 const banked = Bank.count(ESSENCE);
                 if (banked === 0) {
                     await Bank.close();
-                    ScriptRunner.stop('MuleCrafter: no essence left in the bank (three reads)');
+                    ScriptRunner.stop('MuleCrafter: no essence left in the bank');
                     return;
                 }
                 const amount = Math.min(Inventory.free(), essencePerTrade(28, true), banked);
-                await Bank.withdrawX(ESSENCE, amount);
-                await Execution.delayUntil(() => bot.essenceCount() > 0, 4000);
+                if (amount <= 0 || !(await Bank.withdrawX(ESSENCE, amount))) return;
                 bot.log(`withdrew ${bot.essenceCount()} essence from the bank`);
             }
             await Bank.close();
@@ -153,8 +150,8 @@ export function createMuleBankTask(bot: MuleCrafterContext): Task {
             if (!await openBank(bot)) return;
             const runesHeld = bot.runeCount();
             if (runesHeld > 0) {
-                await Bank.deposit(bot.cfg().rune, 'Deposit-All');
-                await Execution.delayTicks(1);
+                if (!(await Bank.deposit(bot.cfg().rune, 'Deposit-All'))
+                    || !(await Execution.delayUntil(() => bot.runeCount() === 0, 3000))) return;
                 bot.log(`deposited ${runesHeld} ${bot.cfg().rune}s`);
                 bot.recordMuleDelivery(0);
             }
@@ -173,11 +170,11 @@ export function createMuleBankTask(bot: MuleCrafterContext): Task {
             if (bot.meetingPoint() === 'Altar (inside)' && !await ensureTalisman(bot)) {
                 throw new Error(`MuleCrafter: ${bot.cfg().talisman} not found`);
             }
-            await Execution.delayUntil(() => Bank.loaded(), 3000);
+            if (!(await Bank.waitReady(3000))) return;
             const banked = Bank.count(ESSENCE);
             if (banked === 0 && bot.essenceCount() === 0) {
                 await Bank.close();
-                ScriptRunner.stop('MuleCrafter: out of essence in the bank (three reads)');
+                ScriptRunner.stop('MuleCrafter: out of essence in the bank');
                 return;
             }
             if (bot.essenceCount() > 0) {
@@ -185,8 +182,7 @@ export function createMuleBankTask(bot: MuleCrafterContext): Task {
                 return;
             }
             const amount = Math.min(Inventory.free(), essencePerTrade(28, false), banked);
-            await Bank.withdrawX(ESSENCE, amount);
-            await Execution.delayUntil(() => bot.essenceCount() > 0, 4000);
+            if (amount <= 0 || !(await Bank.withdrawX(ESSENCE, amount))) return;
             bot.log(`withdrew ${bot.essenceCount()} essence from the bank`);
             await Bank.close();
         }

@@ -14,6 +14,7 @@ import { Locs } from '../../api/locs/Locs.js';
 import { Npcs, type Npc } from '../../api/npcs/Npcs.js';
 import { ContinueDialog } from '../../api/tasks/ContinueDialog.js';
 import Tile from '../../geometry/Tile.js';
+import { findSceneTarget } from '../../api/walking/Reach.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
@@ -409,7 +410,7 @@ export default class ChaosDruidKiller extends TaskBot {
         const open = gate.actions().find(action => /^open$/i.test(action))!;
         this.log(`opening ${gate.name} at ${gate.tile()}`);
         await gate.interact(open);
-        await Execution.delayTicks(4);
+        await Execution.delayUntilTicks(() => !Locs.query().where(loc => loc.id === gate.id && loc.tile().equals(gate.tile())).action(open).nearest(), 4);
     }
 
     private async crossDungeonGates(towardField: boolean): Promise<void> {
@@ -442,11 +443,8 @@ export default class ChaosDruidKiller extends TaskBot {
             return false;
         }
         for (let attempt = 0; attempt < 5; attempt++) {
-            const ladder = Locs.query().name(LADDER.name).within(8).action(LADDER.op).nearest();
-            if (!ladder) {
-                await Execution.delayTicks(2);
-                continue;
-            }
+            const ladder = await findSceneTarget(() => Locs.query().name(LADDER.name).within(8).action(LADDER.op).nearest());
+            if (!ladder) continue;
             this.log(`climbing out via ${ladder.name} at ${ladder.tile()}`);
             await ladder.interact(LADDER.op);
             if (await Execution.delayUntil(() => !inEdgevilleDungeon(Game.tile()), 8000)) {
@@ -472,11 +470,8 @@ export default class ChaosDruidKiller extends TaskBot {
             return false;
         }
         for (let attempt = 0; attempt < 7; attempt++) {
-            const trapdoor = Locs.query().name(TRAPDOOR.name).within(6).nearest();
-            if (!trapdoor) {
-                await Execution.delayTicks(2);
-                continue;
-            }
+            const trapdoor = await findSceneTarget(() => Locs.query().name(TRAPDOOR.name).within(6).nearest());
+            if (!trapdoor) continue;
             const action = trapdoor.actions().find(op => /climb-down/i.test(op))
                 ?? trapdoor.actions().find(op => /^open$/i.test(op));
             if (!action) {
@@ -511,11 +506,8 @@ export default class ChaosDruidKiller extends TaskBot {
                 return true;
             }
             await this.eatIfLow();
-            const door = Locs.query().name(TOWER_DOOR.name).action(TOWER_DOOR.op).within(5).nearest();
-            if (!door) {
-                await Execution.delayTicks(2);
-                continue;
-            }
+            const door = await findSceneTarget(() => Locs.query().name(TOWER_DOOR.name).action(TOWER_DOOR.op).within(5).nearest());
+            if (!door) continue;
             const mark = GameMessages.mark();
             if (!(await door.interact(TOWER_DOOR.op))) {
                 await Execution.delayTicks(2);
@@ -583,8 +575,9 @@ export default class ChaosDruidKiller extends TaskBot {
             await Execution.delayTicks(2);
             return false;
         }
-        const ledge = Locs.query().name(LEDGE.name).action(LEDGE.op).within(4).nearest();
-        if (!ledge || !(await ledge.interact(LEDGE.op))) {
+        const ledge = await findSceneTarget(() => Locs.query().name(LEDGE.name).action(LEDGE.op).within(4).nearest());
+        if (!ledge) return false;
+        if (!(await ledge.interact(LEDGE.op))) {
             await Execution.delayTicks(2);
             return false;
         }
@@ -701,12 +694,17 @@ export default class ChaosDruidKiller extends TaskBot {
         this.setStatus('banking loot');
         // Why: equipment is not in the backpack, so depositing the pack banks the haul and gives the withdrawal a clean slate.
         // Why: every trip is normalised rather than carrying leftovers above the configured amount.
-        await Bank.depositInventory();
-        await Execution.delayTicks(1);
-
         const shortfall = chaosDruidFoodShortfall(this.foodWithdraw, 0);
+        if (shortfall > 0 && (!(await Bank.waitReady()) || !(await Bank.backpackReady()))) return false;
+        const expected = Math.min(shortfall, Bank.count(this.foodName) + Inventory.count(this.foodName));
+        await Bank.depositInventory();
+
         if (shortfall > 0) {
-            await Execution.delayUntil(() => Bank.loaded(), 4000);
+            if (Bank.count(this.foodName) < expected) {
+                await Execution.delayUntil(() => Bank.count(this.foodName) >= expected || !Bank.isOpen(), 4000);
+                if (Bank.count(this.foodName) < expected) return false;
+            }
+            if (!Bank.ready()) return false;
             const available = Bank.count(this.foodName);
             if (available < shortfall) {
                 await Bank.close();
@@ -1030,7 +1028,7 @@ class Fight implements Task {
                 await target.interact('Attack');
                 await Execution.delayUntil(() => Game.inCombat() || ChatDialog.canContinue(), 5000);
             }
-            await Execution.delayTicks(2);
+            await Execution.delayTicks(1);
         }
     }
 
@@ -1055,6 +1053,5 @@ class Wait implements Task {
     }
     async execute(): Promise<void> {
         this.bot.setStatus(Game.inCombat() ? 'fighting' : 'waiting for a druid or drop');
-        await Execution.delayTicks(2);
     }
 }

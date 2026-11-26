@@ -1,6 +1,7 @@
 import { Execution } from '../../../execution/Execution.js';
 import { Reachability } from '../../../../event/webwalk/geometry/Reachability.js';
 import type Tile from '../../../../geometry/Tile.js';
+import { findSceneTarget } from '../../../walking/Reach.js';
 import { Traversal } from '../../../walking/Traversal.js';
 import { ChatDialog } from '../../../ui/dialogue/ChatDialog.js';
 import { Inventory } from '../../../inventory/Inventory.js';
@@ -40,11 +41,12 @@ async function shearOne(pen: Tile, log: (m: string) => void): Promise<boolean> {
 async function spinAllWool(wheelStand: Tile, log: (m: string) => void): Promise<boolean> {
     const ballsBefore = Inventory.count('Ball of wool');
     if (!ChatDialog.isMakeMenu()) {
-        const wheel = Locs.query().name('Spinning wheel').action('Spin').within(8).nearest();
+        const findWheel = () => Locs.query().name('Spinning wheel').action('Spin').within(8).nearest();
+        let wheel = findWheel();
         if (!wheel) {
-            await Traversal.walkResilient(wheelStand, { radius: 2, attempts: 3, timeoutMs: 300_000, log });
-            await Execution.delayTicks(2);
-            return false;
+            if (!(await Traversal.walkResilient(wheelStand, { radius: 2, attempts: 3, timeoutMs: 300_000, log }))) return false;
+            wheel = await findSceneTarget(findWheel);
+            if (!wheel) return false;
         }
         log('spinning wool into a ball at the spinning wheel');
         if (!(await wheel.interact('Spin'))) {

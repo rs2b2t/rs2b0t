@@ -1,5 +1,5 @@
+import { Modals } from '../../../ui/widgets/Modals.js';
 import { Execution } from '../../../execution/Execution.js';
-import { actions, reader } from '../../../../adapter/ClientAdapter.js';
 import { Game } from '../../../game/Game.js';
 import { ChatDialog } from '../../../ui/dialogue/ChatDialog.js';
 import { Inventory } from '../../../inventory/Inventory.js';
@@ -40,10 +40,7 @@ async function readStage(): Promise<number | undefined> {
     if (status === 'notStarted') return 0;
     if (status !== 'inProgress') return undefined;
     const text = (await Quests.journal("Black Knight's Fortress")).join(' ').replace(/@[a-z0-9]{3}@/gi, ' ').replace(/[|\s]+/g, ' ').toLowerCase();
-    if (reader.modals().main !== -1) {
-        actions.closeModal();
-        await Execution.delayTicks(1);
-    }
+    await Modals.closeIfOpen();
     if (text.includes('quest complete!')) return 4;
     if (text.includes("now that i have sabotaged the witch's potion")) return 3;
     if (text.includes('i eavesdropped on a witch')) return 2;

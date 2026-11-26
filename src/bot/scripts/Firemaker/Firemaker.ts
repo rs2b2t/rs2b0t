@@ -27,7 +27,7 @@ import {
     tileKey,
     type FirePlot
 } from '../../api/firemaking/Firemaking.js';
-import { lightFire } from '../../api/firemaking/LightFire.js';
+import { lightFire, waitForFireSpace } from '../../api/firemaking/LightFire.js';
 import { exactTool, hasAllTools, toolKeepNames, toolRestockPlan, type ToolReq } from '../../api/acquisition/Tools.js';
 
 export { FIRE_SPOTS, LOG_LEVELS } from '../../api/firemaking/Firemaking.js';
@@ -198,7 +198,7 @@ export default class Firemaker extends LoopingBot {
                 const refused = this.noLight.size > 0 ? ` (${this.noLight.size} tiles refused a light)` : '';
                 this.log(`no clear ground left in the ${this.spotName} plot${refused} — waiting for fires to burn out`);
                 this.setStatus('waiting for a clear lane');
-                await Execution.delayTicks(25);
+                await waitForFireSpace(this.plot, 25);
                 continue;
             }
             const full = found.run >= want && isBurnWest(found.dir);

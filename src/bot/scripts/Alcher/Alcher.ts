@@ -23,6 +23,8 @@ import {
     customAlchItem,
     fmtGp,
     FIRE_STAVES,
+    HIGH_ALCH_FIRES,
+    LOW_ALCH_FIRES,
     nextAlchTarget,
     resolveAlchSpell,
     pickFireStaff,
@@ -53,6 +55,7 @@ const BAD = '#ff6b6b';
 const DIM = '#8a919a';
 
 export const ALCHER_SETTINGS: SettingsSchema = {
+    useFireRunes: { type: 'boolean', default: false, label: 'Use fire runes instead of a staff' },
     spell: {
         type: 'string',
         default: SPELL_HIGH,
@@ -101,6 +104,7 @@ export default class Alcher extends TaskBot {
     /** Keys a loaded bank has confirmed it holds none of. */
     private empty = new Set<string>();
     private alchs = 27;
+    firesPerCast = 0;
 
     // Why: the bank access is resolved once; every trip only opens the booth.
     private bank: BankLocation | null = null;
@@ -134,17 +138,18 @@ export default class Alcher extends TaskBot {
             const custom = customAlchItem(customText, this.spell.rate);
             if (!custom) {
                 this.log(`custom item "${customText}" is not in the item database — stopping`);
-                ScriptRunner.stop(`custom item "${customText}" is not in the item database`);
+                this.requestFinish(`custom item "${customText}" is not in the item database`);
                 return;
             }
             this.log(`custom item: ${custom.label} (${custom.key}, ${custom.alchValue}gp each)`);
         }
         this.selected = selectedAlchItems(keys, customText, this.spell.rate);
+        this.firesPerCast = this.settings.bool('useFireRunes', false) ? (this.spell.key === SPELL_HIGH ? HIGH_ALCH_FIRES : LOW_ALCH_FIRES) : 0;
         this.alchs = this.settings.num('alchs', 27);
 
         if (Skills.level('magic') < this.spell.level) {
             this.log(`${this.spell.name} needs ${this.spell.level} Magic (have ${Skills.level('magic')}) — stopping`);
-            ScriptRunner.stop(`${this.spell.name} needs ${this.spell.level} Magic`);
+            this.requestFinish(`${this.spell.name} needs ${this.spell.level} Magic`);
             return;
         }
 
@@ -162,7 +167,7 @@ export default class Alcher extends TaskBot {
         this.sampleEvent();
         if (this.targets().length === 0 && !this.packAlchable()) {
             this.log('the bank is out of every selected item — stopping');
-            ScriptRunner.stop('the bank is out of every selected item');
+            this.requestFinish('the bank is out of every selected item');
             return;
         }
         return super.loop();
@@ -178,7 +183,7 @@ export default class Alcher extends TaskBot {
         const bank = await nearestBankReachable(here, Navigator);
         if (!bank) {
             this.log('no reachable bank — stopping');
-            ScriptRunner.stop('no reachable bank');
+            this.requestFinish('no reachable bank');
             return false;
         }
         this.bank = bank;
@@ -194,7 +199,7 @@ export default class Alcher extends TaskBot {
         this.setStatus(`walking to ${bank.name}`, WARN);
         if (!(await Traversal.walkResilient(bank.tile, { radius: 3, attempts: 4, timeoutMs: 180_000, log: m => this.log(`  ${m}`) }))) {
             this.log('walk to the bank failed — stopping');
-            ScriptRunner.stop('walk to the bank failed');
+            this.requestFinish('walk to the bank failed');
             return false;
         }
         return true;
@@ -247,7 +252,7 @@ export default class Alcher extends TaskBot {
 
     // Why: a count of zero can be a list that has not loaded rather than an empty bank. Before halting on "out of X", confirm the list is ready and every named item reads zero.
     async bankTrulyOutOf(...names: string[]): Promise<boolean> {
-        const settled = await Execution.delayUntil(() => Bank.ready(), 3500);
+        const settled = await Bank.waitReady(3500);
         if (!settled) {
             return false;
         }
@@ -310,7 +315,7 @@ export default class Alcher extends TaskBot {
     }
     /** Whether the pack can fund one cast: a note to alch and a nature rune. */
     canAlchOne(): boolean {
-        return this.packAlchable() !== null && Inventory.count(NATURE_RUNE) > 0;
+        return this.packAlchable() !== null && Inventory.count(NATURE_RUNE) > 0 && (!this.firesPerCast || Inventory.count('Fire rune') >= this.firesPerCast);
     }
 
     bankStock(item: AlchItem): number {
@@ -425,7 +430,7 @@ class EnsureGear implements Task {
     constructor(private bot: Alcher) {}
 
     validate(): boolean {
-        return pickFireStaff(name => Equipment.contains(name)) === undefined;
+        return !this.bot.firesPerCast && pickFireStaff(name => Equipment.contains(name)) === undefined;
     }
 
     async execute(): Promise<void> {
@@ -434,7 +439,6 @@ class EnsureGear implements Task {
         }
         if (Inventory.used() > 0) {
             await Bank.depositAllMatching(() => true);
-            await Execution.delayTicks(1);
         }
         let staff = pickFireStaff(name => Inventory.count(name) > 0);
         if (!staff) {
@@ -445,7 +449,7 @@ class EnsureGear implements Task {
                     return;
                 }
                 this.bot.log('no fire staff in the bank — stopping');
-                ScriptRunner.stop('no fire staff in the bank');
+                this.bot.requestFinish('no fire staff in the bank');
                 return;
             }
             this.bot.log(`withdrawing ${staff}`);
@@ -455,7 +459,7 @@ class EnsureGear implements Task {
                     return;
                 }
                 this.bot.log('no fire staff in the bank — stopping');
-                ScriptRunner.stop('no fire staff in the bank');
+                this.bot.requestFinish('no fire staff in the bank');
                 return;
             }
         }
@@ -471,7 +475,7 @@ class EnsureGear implements Task {
         this.bot.setStatus(`wielding ${staff}`, WARN);
         if (!(await Equipment.equip(staff))) {
             this.bot.log(`could not wield ${staff} — stopping`);
-            ScriptRunner.stop(`could not wield ${staff}`);
+            this.bot.requestFinish(`could not wield ${staff}`);
             return;
         }
         this.bot.log(`wore ${staff} — casts need only ${NATURE_RUNE}s now`);
@@ -487,11 +491,16 @@ class Restock implements Task {
 
     validate(): boolean {
         // Why: fire whenever the pack cannot cover one cast. A bank short of the trip amount still yields a partial load that gets alched, so a shortfall never turns into a loop.
-        return !this.bot.canAlchOne();
+        return Bank.isOpen() || !this.bot.canAlchOne();
     }
 
     async execute(): Promise<void> {
         if (!(await this.bot.openBank())) {
+            return;
+        }
+
+        if (this.bot.canAlchOne()) {
+            await Bank.close();
             return;
         }
 
@@ -502,8 +511,7 @@ class Restock implements Task {
         if (Inventory.used() > 0) {
             const before = Inventory.used();
             const runes = NATURE_RUNE.toLowerCase();
-            await Bank.depositAllMatching((name, id) => name.toLowerCase() !== runes && !keep.has(id));
-            await Execution.delayTicks(1);
+            await Bank.depositAllMatching((name, id) => name.toLowerCase() !== runes && !(this.bot.firesPerCast && name.toLowerCase() === 'fire rune') && !keep.has(id));
             const cleared = before - Inventory.used();
             if (cleared > 0) {
                 this.bot.log(`cleared ${cleared} items from the pack`);
@@ -513,10 +521,9 @@ class Restock implements Task {
         // Why: note mode makes the withdraw return the item as notes, which a single cast alchs in full. The bank resets to item mode on open, so set it after opening.
         await Bank.setNoteMode(true);
 
-        if (!Bank.ready()) {
+        if (!(await Bank.waitReady(5000))) {
             // Why: a zero count only proves the bank is out once the bank has said what it holds; before that it is a list still in flight.
             this.bot.log('bank item list not loaded yet — retrying restock');
-            await Execution.delayUntil(() => Bank.ready(), 5000);
             return;
         }
 
@@ -531,17 +538,18 @@ class Restock implements Task {
             }
         }
 
-        const target = this.bot.target();
+        const target = this.bot.target() ?? this.bot.packAlchable();
         if (!target) {
             this.bot.log('the bank is out of every selected item — stopping');
-            ScriptRunner.stop('the bank is out of every selected item');
+            this.bot.requestFinish('the bank is out of every selected item');
             return;
         }
 
         const want = this.bot.alchTarget();
         const held = this.bot.notesHeld(target);
-        if (held < want) {
-            await Bank.withdrawXById(target.id, want - held, this.bot.notedId(target));
+        const take = Math.min(this.bot.bankStock(target), want - held);
+        if (take > 0) {
+            await Bank.withdrawXById(target.id, take, this.bot.notedId(target));
             const got = this.bot.notesHeld(target) - held;
             if (got === 0) {
                 this.bot.log(`withdraw of ${target.label} landed nothing against ${this.bot.bankStock(target)} banked — retrying`);
@@ -550,17 +558,12 @@ class Restock implements Task {
             this.bot.log(`withdrew ${got} ${target.label} (noted, ${target.alchValue}gp each)`);
         }
 
-        const needRunes = this.bot.notesInPack() - Inventory.count(NATURE_RUNE);
-        if (needRunes > 0) {
-            const before = Inventory.count(NATURE_RUNE);
-            const ok = await Bank.withdrawX(NATURE_RUNE, needRunes);
-            const got = Inventory.count(NATURE_RUNE) - before;
-            if (got > 0) {
-                this.bot.log(`withdrew ${got} ${NATURE_RUNE}s`);
-            }
-            if (!ok || got === 0) {
-                this.bot.log(`no ${NATURE_RUNE}s in the bank — stopping`);
-                ScriptRunner.stop(`no ${NATURE_RUNE}s in the bank`);
+        for (const [rune, perCast] of [[NATURE_RUNE, 1], ['Fire rune', this.bot.firesPerCast]] as const) {
+            const needed = this.bot.notesInPack() * perCast - Inventory.count(rune);
+            if (needed <= 0) continue;
+            await Bank.withdrawX(rune, needed);
+            if (Inventory.count(rune) < perCast) {
+                if (await this.bot.bankTrulyOutOf(rune)) this.bot.requestFinish(`not enough ${rune}s for one cast`);
                 return;
             }
         }

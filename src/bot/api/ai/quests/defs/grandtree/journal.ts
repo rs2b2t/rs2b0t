@@ -1,7 +1,6 @@
+import { Modals } from '../../../../ui/widgets/Modals.js';
 import { normalizeJournal as normalize } from '../../journalText.js';
 // docs/reference/quest-engine.md#how-modules-should-read-progress
-import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
-import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
 import { GT_STAGE } from './areas.js';
 
@@ -63,10 +62,7 @@ export async function readGrandTreeStage(): Promise<number | undefined> {
         return undefined;
     }
     const parsed = parseGrandTreeJournal(await Quests.journal(QUEST));
-    if (reader.modals().main !== -1) {
-        actions.closeModal();
-        await Execution.delayTicks(1);
-    }
+    await Modals.closeIfOpen();
     if (parsed !== undefined && (lastStage === undefined || parsed > lastStage)) {
         lastStage = parsed;
     }

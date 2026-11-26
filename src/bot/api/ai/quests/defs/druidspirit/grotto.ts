@@ -8,7 +8,7 @@ import { Npcs } from '../../../../npcs/Npcs.js';
 import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import { driveDialog, talkThrough } from '../../exec/primitives.js';
-import { driveUntil, heldId, settleScene } from '../../exec/prompts.js';
+import { findSceneTarget, driveUntil, heldId, settleScene } from '../../exec/prompts.js';
 import { FILLIMAN, inGrotto, NATURE_SPIRIT, NS_ID, NS_LOC, NS_TILE } from './areas.js';
 
 const inside = (): boolean => inGrotto(Game.tile());
@@ -33,8 +33,7 @@ export async function enterGrotto(log: (m: string) => void): Promise<boolean> {
     if (!(await Traversal.walkResilient(NS_TILE.GROTTO_DOOR, { radius: 2, attempts: 4, timeoutMs: 300_000, log }))) {
         return false;
     }
-    await settleScene();
-    const door = Locs.query().name(NS_LOC.GROTTO_DOOR).action('Enter').within(8).nearest();
+    const door = await findSceneTarget(() => Locs.query().name(NS_LOC.GROTTO_DOOR).action('Enter').within(8).nearest());
     if (!door) {
         log('no grotto door in the scene');
         return false;
@@ -65,8 +64,7 @@ export async function leaveGrotto(log: (m: string) => void): Promise<boolean> {
     if (!inside()) {
         return true;
     }
-    await settleScene();
-    const door = Locs.query().name(NS_LOC.GROTTO_DOOR).action('Exit').within(16).nearest();
+    const door = await findSceneTarget(() => Locs.query().name(NS_LOC.GROTTO_DOOR).action('Exit').within(16).nearest());
     if (!door) {
         log('no grotto exit in the scene');
         return false;
@@ -84,8 +82,7 @@ export async function talkInGrotto(prefer: string[], log: (m: string) => void): 
     if (!(await enterGrotto(log))) {
         return false;
     }
-    await settleScene();
-    const present = grottoSpirit();
+    const present = await findSceneTarget(() => grottoSpirit());
     if (present) {
         return talkThrough(present.name, prefer, log);
     }
@@ -111,9 +108,8 @@ export async function blessSickle(log: (m: string) => void): Promise<boolean> {
     if (!(await enterGrotto(log))) {
         return false;
     }
-    await settleScene();
-    const pool = Locs.query().name(NS_LOC.ALTAR).within(16).nearest()
-        ?? Locs.query().name(NS_LOC.GROTTO_POOL).action('Search').within(16).nearest();
+    const pool = await findSceneTarget(() => Locs.query().name(NS_LOC.ALTAR).within(16).nearest()
+        ?? Locs.query().name(NS_LOC.GROTTO_POOL).action('Search').within(16).nearest());
     const sickle = Inventory.items().find(i => i.id === NS_ID.SICKLE);
     if (!pool || !sickle) {
         log('no grotto pool in reach, or no plain sickle to dip');
@@ -140,8 +136,7 @@ export async function rechargePrayer(log: (m: string) => void): Promise<boolean>
     if (!(await Traversal.walkResilient(NS_TILE.TEMPLE_ALTAR, { radius: 2, attempts: 4, timeoutMs: 300_000, log }))) {
         return false;
     }
-    await settleScene();
-    const altar = Locs.query().name(NS_LOC.TEMPLE_ALTAR).action('Pray-at').within(8).nearest();
+    const altar = await findSceneTarget(() => Locs.query().name(NS_LOC.TEMPLE_ALTAR).action('Pray-at').within(8).nearest());
     if (!altar) {
         log(`no altar within 8 tiles of (${NS_TILE.TEMPLE_ALTAR.x},${NS_TILE.TEMPLE_ALTAR.z}) to pray at`);
         return false;

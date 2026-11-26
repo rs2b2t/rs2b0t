@@ -215,8 +215,8 @@ export class QuestEngine implements Task {
 
         // Bank-aware steps leave the bank open so this task can snapshot it before the interface closes.
         if (!skipEarly && Bank.isOpen()) {
-            await Execution.delayUntil(() => Bank.loaded(), 3000);
-            this.refreshBankCounts(true);
+            await Bank.waitReady(3000);
+            this.refreshBankCounts();
             await Modals.close();
             return;
         }
@@ -334,7 +334,7 @@ export class QuestEngine implements Task {
                 await this.runPreparation();
                 return;
             }
-            this.prepared.add(id);
+            if (id !== 'ikov' || (snap.bankKnown && stage !== undefined)) this.prepared.add(id);
         }
         const inQuestArea = snap.tile !== null && snap.tile !== undefined && module.resumeAt?.(snap.tile) === true;
         const combatActive = this.combatAdvancing(snap);
@@ -421,8 +421,8 @@ export class QuestEngine implements Task {
                         this.runningId = null;
                     }
                 }
-                await Execution.delayUntil(() => Bank.loaded(), 3000);
-                this.refreshBankCounts(true);
+                await Bank.waitReady(3000);
+                this.refreshBankCounts();
                 await Modals.closeIfOpen();
                 return;
             }
@@ -629,8 +629,8 @@ export class QuestEngine implements Task {
         }
 
         if (Bank.isOpen()) {
-            await Execution.delayUntil(() => Bank.loaded(), 3000);
-            this.refreshBankCounts(true);
+            await Bank.waitReady(3000);
+            this.refreshBankCounts();
             await Modals.close();
         }
 
@@ -661,7 +661,6 @@ export class QuestEngine implements Task {
         }
 
         this.refreshBankCounts();
-        await Execution.delayTicks(1);
     }
 
     private needsPreparation(request: QuestPreparationRequest, stock: ReadonlyMap<string, number>): boolean {
@@ -907,8 +906,8 @@ export class QuestEngine implements Task {
             this.block(id, ['could not prepare inventory: bank unreachable or deposit refused']);
             this.runningId = null;
         }
-        await Execution.delayUntil(() => Bank.loaded(), 3000);
-        this.refreshBankCounts(true);
+        await Bank.waitReady(3000);
+        this.refreshBankCounts();
         await Modals.closeIfOpen();
         return true;
     }

@@ -3,7 +3,7 @@ import { Execution } from '../../api/execution/Execution.js';
 import { Game } from '../../api/game/Game.js';
 import Tile from '../../geometry/Tile.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
-import { Bank } from '../../api/bank/Bank.js';
+import { Bank, withdrawOp } from '../../api/bank/Bank.js';
 import { Equipment } from '../../api/equipment/Equipment.js';
 import { Skills } from '../../api/skills/Skills.js';
 import { Traversal } from '../../api/walking/Traversal.js';
@@ -472,19 +472,7 @@ export default class AIOTeleport extends LoopingBot {
                 return;
             }
             
-            if (Bank.isOpen()) {
-                const canvas = ((globalThis as { document?: Document }).document?.getElementById('canvas') ?? null) as HTMLCanvasElement;
-                if (canvas) {
-                    const rect = canvas.getBoundingClientRect();
-                    const clickX = rect.left + rect.width / 2;
-                    const clickY = rect.top + rect.height / 2;
-                    canvas.dispatchEvent(new MouseEvent('mousedown', { clientX: clickX, clientY: clickY }));
-                    await Execution.delayTicks(1);
-                    canvas.dispatchEvent(new MouseEvent('mouseup', { clientX: clickX, clientY: clickY }));
-                    await Execution.delayTicks(1);
-                }
-            }
-            
+            if (Bank.isOpen() && !(await Bank.close())) return;
             await this.performTeleport();
             
         } catch (e) {
@@ -493,108 +481,19 @@ export default class AIOTeleport extends LoopingBot {
         }
     }
 
-    private async sendKeyboardInput(text: string): Promise<void> {
-        const canvas = ((globalThis as { document?: Document }).document?.getElementById('canvas') ?? null) as HTMLCanvasElement;
-        if (!canvas) {
-            this.log('❌ Canvas not found!');
-            return;
-        }
-        
-        for (const char of text) {
-            const keydownEvent = new KeyboardEvent('keydown', { key: char, code: char });
-            const keyupEvent = new KeyboardEvent('keyup', { key: char, code: char });
-            canvas.dispatchEvent(keydownEvent);
-            canvas.dispatchEvent(keyupEvent);
-            await Execution.delayTicks(0.5);
-        }
-    }
-
-    private async sendEnterKey(): Promise<void> {
-        const canvas = ((globalThis as { document?: Document }).document?.getElementById('canvas') ?? null) as HTMLCanvasElement;
-        if (!canvas) {
-            this.log('❌ Canvas not found!');
-            return;
-        }
-        
-        const enterDown = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter' });
-        const enterUp = new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter' });
-        canvas.dispatchEvent(enterDown);
-        canvas.dispatchEvent(enterUp);
-    }
-
     private async withdrawFromBankWithX(itemName: string, amount: number): Promise<boolean> {
-        this.log(`Withdrawing ${amount} ${itemName} using Withdraw X...`);
-        
-        const bankItems = Bank.items();
-        const item = bankItems.find(i => i.name === itemName);
-        if (!item) {
-            this.log(`❌ No ${itemName} found in bank!`);
-            return false;
-        }
-        
-        const bankCount = Bank.count(itemName);
-        if (bankCount < amount) {
-            this.log(`⚠️ Only ${bankCount} ${itemName} in bank, need ${amount}`);
-            return false;
-        }
-        
-        const ops = item.ops || [];
-        
-        const exactOp = `Withdraw ${amount}`;
-        if (ops.includes(exactOp)) {
-            this.log(`Using ${exactOp}...`);
-            const before = Inventory.count(itemName);
-            const result = await Bank.withdraw(itemName, exactOp);
-            if (result) {
-                await Execution.delayTicks(2);
-                const after = Inventory.count(itemName);
-                this.log(`✓ Withdrew ${after - before} ${itemName}`);
-                return (after - before) > 0;
-            }
-            return false;
-        }
-        
-        if (ops.includes('Withdraw X')) {
-            this.log('Using Withdraw X...');
-            const before = Inventory.count(itemName);
-            
-            const result = await Bank.withdraw(itemName, 'Withdraw X');
-            if (!result) {
-                this.log('❌ Failed to click Withdraw X');
-                return false;
-            }
-            
-            await Execution.delayTicks(3);
-            
-            this.log(`Typing ${amount}...`);
-            await this.sendKeyboardInput(amount.toString());
-            await Execution.delayTicks(1);
-            
-            this.log('Pressing Enter...');
-            await this.sendEnterKey();
-            await Execution.delayTicks(2);
-            
-            const after = Inventory.count(itemName);
-            const withdrawn = after - before;
-            this.log(`✓ Withdrew ${withdrawn} ${itemName}`);
-            return withdrawn > 0;
-        }
-        
-        if (ops.includes('Withdraw All')) {
-            this.log('Using Withdraw All...');
-            const before = Inventory.count(itemName);
-            const result = await Bank.withdraw(itemName, 'Withdraw All');
-            if (result) {
-                await Execution.delayTicks(2);
-                const after = Inventory.count(itemName);
-                this.log(`✓ Withdrew ${after - before} ${itemName}`);
-                return (after - before) > 0;
-            }
-            return false;
-        }
-        
-        this.log(`❌ Could not withdraw ${amount} ${itemName}`);
-        return false;
+        const item = Bank.items().find(stack => stack.name === itemName);
+        if (!item || item.count < amount) return false;
+        this.log(`Withdrawing ${amount} ${itemName}`);
+        const fixed = amount === 1 || amount === 5 || amount === 10
+            ? withdrawOp(item.ops, `${amount}`)
+            : null;
+        if (fixed || withdrawOp(item.ops, 'x')) return Bank.withdrawX(itemName, amount);
+
+        const all = withdrawOp(item.ops, 'all');
+        const before = Inventory.count(itemName);
+        if (!all || !(await Bank.withdraw(itemName, all))) return false;
+        return Execution.delayUntil(() => Inventory.count(itemName) > before, 4000);
     }
 
     private async performBanking(): Promise<void> {
@@ -630,8 +529,9 @@ export default class AIOTeleport extends LoopingBot {
             this.log('✓ Bank opened successfully');
             
             this.log('Depositing all inventory...');
+            const generation = Inventory.used() > 0 ? Bank.snapshotGeneration() : null;
             await Bank.depositInventory();
-            await Execution.delayTicks(2);
+            if (generation !== null && !(await Bank.waitSnapshotAfter(generation))) return;
             
             // Banking may unlock the next progressive teleport.
             if (this.isProgressiveMode) {
@@ -664,27 +564,16 @@ export default class AIOTeleport extends LoopingBot {
             
             const toWithdraw = Math.min(this.lawBatchSize, lawRunesInBank);
             
-            const lawWithdrawn = await this.withdrawFromBankWithX('Law rune', toWithdraw);
-            if (lawWithdrawn) {
-                this.lawRunesRemainingInBatch = Inventory.count('Law rune');
-                this.log(`✓ Batch set to ${this.lawRunesRemainingInBatch} law runes`);
-            } else {
-                this.log('Withdraw X failed, using Withdraw All...');
-                await Bank.withdraw('Law rune', 'Withdraw All');
-                await Execution.delayTicks(2);
-                this.lawRunesRemainingInBatch = Inventory.count('Law rune');
-                this.log(`✓ Withdrew ${this.lawRunesRemainingInBatch} law runes`);
+            if (!(await this.withdrawFromBankWithX('Law rune', toWithdraw))) {
+                this.log('Law rune withdrawal did not land, retrying banking');
+                return;
             }
-            
+            this.lawRunesRemainingInBatch = Inventory.count('Law rune');
+            this.log(`✓ Batch set to ${this.lawRunesRemainingInBatch} law runes`);
+
             await this.withdrawElementalRunes();
-            await Execution.delayTicks(2);
-            
-            // Walking to the bank tile closes the interface.
-            this.log('Walking to bank tile to close interface...');
-            const bankTile = new Tile(this.currentBankPos.x, this.currentBankPos.z, 0);
-            await Traversal.walkTo(bankTile, { radius: 0, timeoutMs: 15_000 });
-            
             this.needBanking = false;
+            if (!(await Bank.close())) return;
             
             this.log('✓ Banking complete!');
             this.log('Current law runes: ' + Inventory.count('Law rune'));

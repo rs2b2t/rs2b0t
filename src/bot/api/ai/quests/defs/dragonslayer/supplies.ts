@@ -1,3 +1,4 @@
+import { findSceneTarget } from '../../exec/prompts.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Game } from '../../../../game/Game.js';
 import { Bank } from '../../../../bank/Bank.js';
@@ -141,11 +142,10 @@ async function mineFor(rockIds: readonly number[], item: string, want: number, a
             return false;
         }
     }
-    const target = rock();
+    const target = await findSceneTarget(rock, 5);
     if (!target) {
         log(`no ${item} rocks in reach — waiting on a respawn (mining ${Skills.level('mining')}, `
             + `${Inventory.count(item)}/${want} ${item} held)`);
-        await Execution.delayTicks(5);
         return false;
     }
     const before = Inventory.count(item);
@@ -414,7 +414,8 @@ async function grabPlanks(need: number, log: (m: string) => void): Promise<boole
         plankTried.clear();
         return true;
     }
-    const loose = GroundItems.query().name('Plank').within(14).nearest();
+    const findPlank = () => GroundItems.query().name('Plank').within(14).nearest();
+    const loose = findPlank();
     if (loose) {
         const before = Inventory.count('Plank');
         log('taking a plank');
@@ -438,7 +439,7 @@ async function grabPlanks(need: number, log: (m: string) => void): Promise<boole
     if (!next) {
         log('every plank spawn was empty — they respawn, so waiting');
         plankTried.clear();
-        await Execution.delayTicks(10);
+        await findSceneTarget(findPlank, 10);
         return false;
     }
     log(`walking to the plank spawn at (${next.x},${next.z})`);

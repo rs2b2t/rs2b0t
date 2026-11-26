@@ -1,4 +1,4 @@
-import { actions, reader } from '../../../../adapter/ClientAdapter.js';
+import { Modals } from '../../../ui/widgets/Modals.js';
 import { Quests } from '../../../ui/questlog/Quests.js';
 import { EventSignal } from '../../../execution/EventSignal.js';
 import { Execution } from '../../../execution/Execution.js';
@@ -12,7 +12,7 @@ import { Npcs } from '../../../npcs/Npcs.js';
 import { Sustain } from '../../../sustain/Sustain.js';
 import { Traversal } from '../../../walking/Traversal.js';
 import Tile from '../../../../geometry/Tile.js';
-import { gotoNpc, openDialogue, pickPreferred, talkThrough, type NpcStop } from '../exec/primitives.js';
+import { afterDialogueAction, gotoNpc, openDialogue, pickPreferred, talkThrough, type NpcStop } from '../exec/primitives.js';
 import { gpShort } from '../engine/provisioning.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { QUESTS } from '../data/quests.js';
@@ -113,8 +113,7 @@ async function driveDialogue(prefer: string[], log: (m: string) => void, maxPage
         if (!ChatDialog.isOpen() && !ChatDialog.canContinue()
             && !(await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), 1500))) return matched;
         if (ChatDialog.canContinue()) {
-            await ChatDialog.continue();
-            await Execution.delayTicks(1);
+            await afterDialogueAction(await ChatDialog.continue(), 1);
             continue;
         }
         const opts = ChatDialog.options();
@@ -124,8 +123,7 @@ async function driveDialogue(prefer: string[], log: (m: string) => void, maxPage
             if (!pick) {
                 log(`  driveDialogue: no preferred option in [${opts.join(' | ')}] — taking the last`);
             }
-            await ChatDialog.chooseOption(pick ?? opts[opts.length - 1]);
-            await Execution.delayTicks(1);
+            await afterDialogueAction(await ChatDialog.chooseOption(pick ?? opts[opts.length - 1]), 1);
             continue;
         }
         await Execution.delayTicks(1);
@@ -668,10 +666,7 @@ async function readMerlinStage(): Promise<number | undefined> {
     if (status !== 'inProgress') return undefined;
     const text = (await Quests.journal("Merlin's Crystal")).join(' ')
         .replace(/@[a-z0-9]{3}@/gi, ' ').replace(/[|\s]+/g, ' ').toLowerCase();
-    if (reader.modals().main !== -1) {
-        actions.closeModal();
-        await Execution.delayTicks(1);
-    }
+    await Modals.closeIfOpen();
     if (text.includes('quest complete!')) return 7;
     if (text.includes('i freed merlin by shattering')) return 6;
     if (text.includes('i summoned the spirit thrantax')) return 5;

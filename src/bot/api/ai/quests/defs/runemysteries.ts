@@ -1,5 +1,4 @@
-import { actions, reader } from '../../../../adapter/ClientAdapter.js';
-import { Execution } from '../../../execution/Execution.js';
+import { Modals } from '../../../ui/widgets/Modals.js';
 import { Quests } from '../../../ui/questlog/Quests.js';
 import { normalizeJournal } from '../journalText.js';
 import Tile from '../../../../geometry/Tile.js';
@@ -78,9 +77,6 @@ async function readStage(): Promise<number | undefined> {
     if (status === 'notStarted') return 0;
     if (status !== 'inProgress') return undefined;
     const stage = parseRuneMysteriesJournal(await Quests.journal(quest));
-    if (reader.modals().main !== -1) {
-        actions.closeModal();
-        await Execution.delayTicks(1);
-    }
+    await Modals.closeIfOpen();
     return stage;
 }

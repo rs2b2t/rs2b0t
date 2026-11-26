@@ -37,9 +37,7 @@ import { ENT_LIFE_TICKS, ENT_NPC_IDS } from '../../data/woodcuttingLocations.js'
 import { bestPickaxe } from '../../api/acquisition/Tools.js';
 import { WHIRLPOOL_IDS, fishingRestockPlan } from '../../data/fishingMethods.js';
 import {
-    bankPaceTicks,
     cookFilterLabel,
-    cookPaceTicks,
     isBurntFishName,
     isCookedFishName,
     shouldCookThenBank
@@ -704,7 +702,7 @@ export class SupplierWithdrawRaw implements Task {
             this.bot.log('mule: supplier bank open failed — retry');
             return;
         }
-        await Execution.delayTicks(1);
+        if (!(await this.bot.waitBankReady(log))) return;
         // Count raw stacks in open bank (same filter as cook).
         const bankRaw = Bank.items()
             .filter(i => this.bot.isCookableRaw(i.name))
@@ -761,7 +759,6 @@ export class MuleBankHaul implements Task {
             this.bot.log('mule: bank open failed — will retry');
             return;
         }
-        await Execution.delayTicks(1);
         await Bank.depositAllMatching(name => this.bot.shouldDeposit(name));
         await Execution.delayUntilTicks(() => !this.bot.hasDepositable() || !Bank.isOpen(), 9);
         if (Bank.isOpen()) {
@@ -813,7 +810,6 @@ export class ClearPackJunk implements Task {
             const log = (m: string) => this.bot.log(`  ${m}`);
             if (await this.bot.openScriptBank(log)) {
                 await Bank.depositAllMatching((name, id) => this.bot.isPackJunk(name, id));
-                await Execution.delayTicks(1);
                 if (Bank.isOpen()) {
                     await this.bot.closeScriptBank(log);
                 }
@@ -993,7 +989,7 @@ export class BankCatch implements Task {
                 return;
             }
 
-            await Execution.delayUntilTicks(() => Bank.loaded(), 5);
+            if (!(await Bank.waitReady(3000, log))) return;
             await Execution.delayTicks(1);
             const total = this.bot.refreshBankRawTotal();
             this.bot.log(`bank: raw ${cookFilterLabel(this.bot.getCookFishFilter())} ${total}/${this.bot.getBankRawTarget()}`);
@@ -1030,7 +1026,6 @@ export class BankCatch implements Task {
                     return;
                 }
             }
-            await Execution.delayTicks(bankPaceTicks());
             const bankGenerationBeforeDeposit = strict ? Bank.snapshotGeneration() : -1;
             try {
                 await Bank.depositAllMatching(deposit, log);
@@ -1051,7 +1046,6 @@ export class BankCatch implements Task {
                     return;
                 }
             }
-            await Execution.delayTicks(1);
             await refreshRaw();
         }
         if (strict) {
@@ -1415,11 +1409,8 @@ export class FishCookLoad implements Task {
             }
         }
 
-        if (this.bot.cookableRawCount() === 0) {
-            if (this.bot.getBurntPolicy() === 'drop' && this.bot.burntFishCount() > 0) {
-                await dropBurnt(this.bot);
-            }
-            await Execution.delayTicks(1);
+        if (this.bot.cookableRawCount() === 0 && this.bot.getBurntPolicy() === 'drop' && this.bot.burntFishCount() > 0) {
+            await dropBurnt(this.bot);
         }
     }
 }
@@ -1454,11 +1445,8 @@ export class FishBankCooked implements Task {
             this.bot.setStatus('bank: cooked fish');
             let deposited = false;
             if (await this.bot.openScriptBank(log)) {
-                await Execution.delayTicks(bankPaceTicks());
                 await Bank.depositAllMatching(deposit);
-                await Execution.delayUntilTicks(() => Bank.loaded(), 5);
-                await Execution.delayTicks(1);
-                if (this.bot.getCookMode() === 'bank-raw-then-cook') {
+                if (this.bot.getCookMode() === 'bank-raw-then-cook' && await this.bot.waitBankReady(log)) {
                     this.bot.refreshBankRawTotal();
                 }
                 deposited = true;
@@ -1539,9 +1527,7 @@ export class FishWithdrawCookBatch implements Task {
             this.bot.log('cook: could not open bank for withdraw — will retry');
             return;
         }
-        await Execution.delayUntilTicks(() => Bank.loaded(), 5);
-        await Execution.delayTicks(1);
-
+        if (!(await this.bot.waitBankReady(log))) return;
         this.bot.refreshBankRawTotal();
 
 
@@ -1563,7 +1549,7 @@ export class FishWithdrawCookBatch implements Task {
         if (allOp) {
             this.bot.log(`cook: withdraw all ${bankName} (bank had ${this.bot.getBankRawInBank()})`);
             await Bank.withdraw(bankName, allOp);
-            await Execution.delayUntilTicks(() => this.bot.cookableRawCount() > 0 || Bank.count(bankName) === 0, 7);
+            await Execution.delayUntilTicks(() => this.bot.cookableRawCount() > 0, 7);
         } else {
             const tenOp = withdrawOp(rawItem.ops, '10') ?? withdrawOp(rawItem.ops, 'any') ?? 'Withdraw-10';
             for (let n = 0; n < 4 && !Inventory.isFull() && Bank.count(bankName) > 0; n++) {
@@ -1572,12 +1558,11 @@ export class FishWithdrawCookBatch implements Task {
                 if (!(await Execution.delayUntilTicks(() => this.bot.cookableRawCount() > before || Inventory.isFull(), 5))) {
                     break;
                 }
-                await Execution.delayTicks(cookPaceTicks());
             }
         }
 
 
-        await Execution.delayUntilTicks(() => Bank.loaded(), 4);
+        if (!(await Bank.waitReady(2400, log))) return;
         this.bot.refreshBankRawTotal();
 
         if (this.bot.cookableRawCount() === 0) {
@@ -1615,7 +1600,6 @@ async function dropBurnt(bot: GatheringBot): Promise<void> {
         if (await Execution.delayUntilTicks(() => Inventory.used() < before, 5)) {
             dropped += before - Inventory.used();
         }
-        await Execution.delayTicks(1);
     }
     if (dropped > 0) {
         bot.log(`cook: dropped ${dropped} burnt (session ${bot.burntTotal()})`);
@@ -1706,7 +1690,7 @@ export class RepairBrokenGatherTool implements Task {
                     return;
                 }
             }
-            await Execution.delayUntilTicks(() => Bank.loaded(), 5);
+            if (!(await Bank.waitReady(3000, log))) return;
             const pick = bestPickaxe(Skills.level('mining'), name => Bank.count(name) > 0);
             if (!pick) {
                 if (this.bot.toolAcquireEnabled() && this.bot.acquireReady()) {
@@ -1758,7 +1742,6 @@ export class RepairBrokenGatherTool implements Task {
             }
             if (await this.bot.openScriptBank(log)) {
                 await Bank.depositAllMatching(n => n.toLowerCase() === BROKEN_AXE.toLowerCase());
-                await Execution.delayUntilTicks(() => Bank.loaded(), 4);
                 if (Bank.isOpen()) {
                     await this.bot.closeScriptBank(log);
                 }
@@ -1827,7 +1810,7 @@ export class BuyGuildFeathers implements Task {
                 bot.log('feathers: could not open the bank for coins, will try again next round');
                 return;
             }
-            await Execution.delayUntilTicks(() => Bank.loaded() || !Bank.isOpen(), 5);
+            if (!(await Bank.waitReady(3000, log))) return;
             await Bank.depositAllMatching(bot.restockDepositMatcher());
             const draw = featherCoinsToDraw(Inventory.count(COINS), Bank.count(COINS), price);
             if (draw > 0) {
@@ -1979,16 +1962,14 @@ export class RestockFishingGear implements Task {
             await Execution.delayTicks(3);
             return;
         }
-        await Execution.delayTicks(bankPaceTicks());
-        await Execution.delayUntilTicks(() => Bank.loaded() || !Bank.isOpen(), 5);
+        if (!(await Bank.waitReady(3000, log))) return;
 
         // Deposit everything that is not required gear (clears haul / junk before tool withdraw).
         if (power || this.bot.awayFromGatherSpot()) {
             this.bot.log('restock: depositing non-gear first');
         }
         await Bank.depositAllMatching(this.bot.restockDepositMatcher());
-        await Execution.delayUntilTicks(() => Bank.loaded(), 5);
-        await Execution.delayTicks(1);
+        if (!(await Bank.waitReady(3000, log))) return;
 
         const plan = fishingRestockPlan(
             gear,
@@ -2069,8 +2050,7 @@ export class RestockFishingGear implements Task {
                 this.bot.log(`restock: withdraw ${step.qty}× ${step.name}`);
                 await Bank.withdrawX(step.name, step.qty);
             }
-            await Execution.delayUntilTicks(() => Inventory.count(step.name) > before || Bank.count(step.name) === 0, 7);
-            await Execution.delayTicks(bankPaceTicks());
+            await Execution.delayUntilTicks(() => Inventory.count(step.name) > before, 7);
         }
 
         if (!this.bot.hasGear()) {
@@ -2194,8 +2174,7 @@ export class RestockGatherTool implements Task {
             this.bot.stopMissingGear('Shantay bank did not become transaction-ready', missing);
             return;
         }
-        await Execution.delayTicks(bankPaceTicks());
-        await Execution.delayUntilTicks(() => Bank.loaded() || !Bank.isOpen(), 5);
+        if (!(await Bank.waitReady(3000, log))) return;
 
         if (power || this.bot.awayFromGatherSpot()) {
             this.bot.log('restock: depositing non-gear first');
@@ -2214,8 +2193,7 @@ export class RestockGatherTool implements Task {
                 return;
             }
         }
-        await Execution.delayUntilTicks(() => Bank.loaded(), 5);
-        await Execution.delayTicks(1);
+        if (!(await Bank.waitReady(3000, log))) return;
 
         const plan = this.bot.gatherToolRestockPlan();
         if (plan.length === 0) {
@@ -2281,8 +2259,7 @@ export class RestockGatherTool implements Task {
                 this.bot.log(`restock: withdraw ${step.qty}× ${step.name}`);
                 await Bank.withdrawX(step.name, step.qty);
             }
-            await Execution.delayUntilTicks(() => Inventory.count(step.name) > before || Bank.count(step.name) === 0, 7);
-            await Execution.delayTicks(bankPaceTicks());
+            await Execution.delayUntilTicks(() => Inventory.count(step.name) > before, 7);
         }
 
         // Same open: unequip/deposit surplus, close once, then Wield offline.

@@ -1,6 +1,6 @@
 import type { ActivityPlan, SessionMemory } from './types.js';
 
-export function usesActivityCooldown(plan: ActivityPlan): boolean { return plan.combat === true || !!plan.quest || plan.script === 'RangingGuild'; }
+export function usesActivityCooldown(plan: ActivityPlan): boolean { return plan.objective === 'economy' || plan.combat === true || !!plan.quest || plan.script === 'ReclaimLawTalisman' || plan.script === 'RangingGuild' || plan.id.startsWith('stock-super-'); }
 
 export class LevelerSession {
     plan: ActivityPlan | null = null;

@@ -61,6 +61,12 @@ const GAS_CHEST_LOC_ID = 2141;
 const WHIRLPOOL_NPC_IDS = [403, 404, 405, 406];
 const SMOKING_ROCK_ID_MIN = 2119;
 const SMOKING_ROCK_ID_MAX = 2138;
+function locHazard(id: number): string | null {
+    if (id === GAS_CHEST_LOC_ID) return 'poisonous gas';
+    if (id >= SMOKING_ROCK_ID_MIN && id <= SMOKING_ROCK_ID_MAX) return 'smoking rock';
+    return null;
+}
+
 /** How far to step off a hazard: gas damages the tile beside it and a whirlpool only takes gear from a re-click. */
 export const HAZARD_STEP = 4;
 const FISHING_GEAR = [
@@ -361,11 +367,9 @@ class RandomEventsImpl {
         }
 
         for (const loc of reader.locs()) {
-            if (loc.id === GAS_CHEST_LOC_ID && loc.distance <= 1) {
-                return { kind: 'hazard', name: 'poisonous gas', tile: loc.tile };
-            }
-            if (loc.id >= SMOKING_ROCK_ID_MIN && loc.id <= SMOKING_ROCK_ID_MAX && loc.distance <= 2) {
-                return { kind: 'hazard', name: 'smoking rock', tile: loc.tile };
+            const name = locHazard(loc.id);
+            if (name && loc.distance <= (name === 'smoking rock' ? 2 : 1)) {
+                return { kind: 'hazard', name, tile: loc.tile };
             }
         }
         for (const npc of npcs) {
@@ -616,7 +620,13 @@ class RandomEventsImpl {
         if (flee) {
             await Traversal.walkTo(flee, { radius: 1, timeoutMs: 15_000, log });
         }
-        await Execution.delayTicks(60);
+        await Execution.delayUntilTicks(() => {
+            if (!Game.sceneReady() || !at) return false;
+            const onTile = (tile: WorldTile) => tile.x === at.x && tile.z === at.z && tile.level === at.level;
+            return name === 'whirlpool'
+                ? !reader.npcs().some(npc => WHIRLPOOL_NPC_IDS.includes(npc.id) && onTile(npc.tile))
+                : !reader.locs().some(loc => onTile(loc.tile) && locHazard(loc.id) === name);
+        }, 60);
         return true;
     }
 

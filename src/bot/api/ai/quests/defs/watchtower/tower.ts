@@ -1,4 +1,5 @@
-import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
+import { Modals } from '../../../../ui/widgets/Modals.js';
+import { reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Game } from '../../../../game/Game.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
@@ -212,10 +213,8 @@ export async function readSpellScroll(log: (m: string) => void): Promise<boolean
     if (!(await scroll.interact('Read'))) {
         return false;
     }
-    await Execution.delayTicks(2);
-    if (reader.modals().main !== -1) {
-        actions.closeModal();
-        await Execution.delayTicks(1);
+    if (await Execution.delayUntilTicks(() => reader.modals().main !== -1, 2)) {
+        await Modals.closeIfOpen();
     }
     log('memorised the Watchtower Teleport scroll');
     return true;

@@ -1,3 +1,4 @@
+import { afterDialogueAction } from '../../exec/primitives.js';
 import { EventSignal } from '../../../../execution/EventSignal.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Game } from '../../../../game/Game.js';
@@ -57,8 +58,7 @@ function target(npcId: number): Npc | null {
 async function drainWinDialogue(): Promise<void> {
     for (let i = 0; i < 30; i++) {
         if (ChatDialog.canContinue()) {
-            await ChatDialog.continue();
-            await Execution.delayTicks(1);
+            await afterDialogueAction(await ChatDialog.continue(), 1);
             continue;
         }
         if (!ChatDialog.isOpen()) {

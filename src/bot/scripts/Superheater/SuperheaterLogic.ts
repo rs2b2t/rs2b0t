@@ -26,6 +26,7 @@ export const RECIPES: readonly Recipe[] = [
 
 /** Nature rune, one per cast, kept in the pack across the deposit-all-except. */
 export const NATURE_RUNE = 'Nature rune';
+export const SUPERHEAT_FIRES = 4;
 
 /** Preferred fire-rune staff when several are in the bank. */
 export const FIRE_STAFF = 'Staff of fire';
@@ -95,13 +96,13 @@ export function oresPerBar(recipe: Recipe): number {
 }
 
 /** Full bars a 27-slot trip makes (bronze 13, steel 9, mithril 5, rune 3…). */
-export function barsPerTrip(recipe: Recipe): number {
-    return Math.floor(SUPERHEAT_SLOTS / oresPerBar(recipe));
+export function barsPerTrip(recipe: Recipe, useFireRunes = false): number {
+    return Math.floor((SUPERHEAT_SLOTS - Number(useFireRunes)) / oresPerBar(recipe));
 }
 
 /** The exact per-item count to withdraw for one trip (27 ores or fewer). */
-export function withdrawSet(recipe: Recipe): Record<string, number> {
-    const trips = barsPerTrip(recipe);
+export function withdrawSet(recipe: Recipe, useFireRunes = false): Record<string, number> {
+    const trips = barsPerTrip(recipe, useFireRunes);
     const set: Record<string, number> = {};
     for (const i of recipe.ingredients) {
         set[i.ore] = trips * i.perBar;

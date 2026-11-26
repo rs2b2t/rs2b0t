@@ -1,6 +1,5 @@
+import { Modals } from '../../../../ui/widgets/Modals.js';
 import { normalizeJournal } from '../../journalText.js';
-import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
-import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 import { WITCHS_HOUSE_QUEST } from './areas.js';
@@ -56,9 +55,6 @@ export async function readWitchsHouseProgress(): Promise<QuestProgress | undefin
     }
 
     const progress = parseWitchsHouseJournal(await Quests.journal(WITCHS_HOUSE_QUEST));
-    if (reader.modals().main !== -1) {
-        actions.closeModal();
-        await Execution.delayTicks(1);
-    }
+    await Modals.closeIfOpen();
     return progress;
 }

@@ -7,7 +7,7 @@ import { Game } from '../../../../game/Game.js';
 import { GroundItems } from '../../../../grounditems/GroundItems.js';
 import { Locs } from '../../../../locs/Locs.js';
 import { Traversal } from '../../../../walking/Traversal.js';
-import { heldId, settleScene } from '../../exec/prompts.js';
+import { findSceneTarget, heldId, settleScene } from '../../exec/prompts.js';
 import { isUnderground, talkStrict } from '../../exec/primitives.js';
 import {
     GUARDIAN_STOP,
@@ -95,11 +95,10 @@ async function pushSecretWall(intoTemple: boolean, log: (m: string) => void): Pr
     if (!(await templeWalk(stand, 0, log))) {
         return false;
     }
-    await settleScene();
-    const wall = Locs.query()
+    const wall = await findSceneTarget(() => Locs.query()
         .where(l => l.id === IKOV_LOC.SECRET_WALL || l.id === IKOV_LOC.SECRET_WALL_OPEN)
         .within(4)
-        .nearest();
+        .nearest());
     if (wall && wall.id === IKOV_LOC.SECRET_WALL) {
         log(`ikov: pushing the secret wall ${intoTemple ? 'into' : 'out of'} the guardians' temple`);
         if (!(await wall.interact('Push'))) {
@@ -160,7 +159,6 @@ export async function joinTheGuardians(log: (m: string) => void): Promise<boolea
     if (!(await templeWalk(IKOV_TILE.GUARDIANS, 2, log))) {
         return false;
     }
-    await settleScene();
     if (!(await talkStrict(GUARDIAN_STOP.npc, GUARDIAN_STOP.prefer, log))) {
         return false;
     }

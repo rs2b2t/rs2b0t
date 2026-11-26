@@ -21,6 +21,25 @@ test('quest food overrides reach the module and the sustain policy together', ()
     }
 });
 
+test('Death Plateau reserves ten of the configured delivery food for Tenzing', () => {
+    const originalFood = QuestFood.name;
+    const countById = Inventory.countById;
+    try {
+        const bot = new AIOQuester();
+        bot.noteState([], 'death', 'collecting supplies', 0, 0);
+        for (const [name, id] of [['Trout', 333], ['Bread', 2309]] as const) {
+            bot.foodItem = () => name;
+            Inventory.countById = item => item === id ? 10 : 0;
+            expect(bot.sustainPolicy().foods).not.toContain(name.toLowerCase());
+            Inventory.countById = item => item === id ? 11 : 0;
+            expect(bot.sustainPolicy().foods).toContain(name.toLowerCase());
+        }
+    } finally {
+        Inventory.countById = countById;
+        QuestFood.name = originalFood;
+    }
+});
+
 function food(
     name: string,
     onInteract: (action: string) => void

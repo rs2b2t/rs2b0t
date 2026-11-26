@@ -167,7 +167,7 @@ let recovery: { clueId: number; used: boolean } | null = null;
 let postKillClue: number | null = null;
 let guardianHalt: 'dead' | 'guardian-lost' | null = null;
 let guardianEncounter: { readonly clueId: number; readonly encounter: GuardianEncounter } | null = null;
-export type ClueOutcome = 'done' | 'abandon' | 'yield' | 'reset-needed' | GuardianStop;
+export type ClueOutcome = 'done' | 'abandon' | 'requirements-needed' | 'yield' | 'reset-needed' | GuardianStop;
 
 function heldIds(): number[] {
     return Inventory.items().map(i => i.id);
@@ -652,7 +652,7 @@ export const ClueExecutor = {
         postKillClue = null;
     },
 
-    async solveHeldClue(log: (m: string) => void, needsBank?: () => boolean, ranged?: GuardianRangedLoadout): Promise<ClueOutcome> {
+    async solveHeldClue(log: (m: string) => void, needsBank?: () => boolean, ranged?: GuardianRangedLoadout, beforeStep?: (id: number) => 'prepare' | 'abandon' | undefined): Promise<ClueOutcome> {
         if (guardianHalt !== null) return guardianHalt;
         const tlog = (m: string): void => {
             trace.note(m);
@@ -691,6 +691,11 @@ export const ClueExecutor = {
                 return end('done');
             }
 
+            if (step.type !== 'open-casket') {
+                const action = beforeStep?.(step.id);
+                if (action === 'prepare') return 'requirements-needed';
+                if (action === 'abandon') return end('abandon', 'clue requirements cannot be completed under the current settings');
+            }
             if (needsBank?.()) return 'supplies-needed';
 
             const clueId = trackedId(step);

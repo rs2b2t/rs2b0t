@@ -60,7 +60,7 @@ describe('MazeRun recovery', () => {
             }),
             stubProps(Input, { interactNpc: index => { attacks.push(index); return true; } }),
             stubProps(Execution, {
-                delayTicks: async ticks => { waits.push(ticks); },
+                delayUntilTicks: async (check, ticks) => { waits.push(ticks); return check(); },
                 delayUntil: async (check, timeout) => {
                     if (timeout === 60_000 && attacks.length > 0) keys.add(DS_ID.RED_KEY);
                     return check();

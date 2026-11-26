@@ -1,4 +1,5 @@
 import loadTinyMidiPCM from '#/client/3rdparty/tinymidipcm/tinymidipcm.mjs';
+import { audioEnabled } from '#/client/config/audio.js';
 
 class TinyMidiPCM {
     constructor(options = {}) {
@@ -132,6 +133,7 @@ class TinyMidiPCM {
 
 // controlling tinymidipcm:
 (async () => {
+    if (!audioEnabled) return;
     const channels = 2;
     const sampleRate = 22050;
     const flushTime = 250;

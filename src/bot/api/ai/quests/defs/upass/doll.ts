@@ -8,7 +8,7 @@ import { Npcs } from '../../../../npcs/Npcs.js';
 import { Reachability } from '../../../../../event/webwalk/geometry/Reachability.js';
 import type { Npc } from '../../../../model/Npc.js';
 import Tile from '../../../../../geometry/Tile.js';
-import { driveUntil, heldId, settleScene } from '../../exec/prompts.js';
+import { findSceneTarget, driveUntil, heldId, settleScene } from '../../exec/prompts.js';
 import type { QuestSnapshot } from '../../engine/types.js';
 import { UP_AMULETS, UP_ITEM, UP_LOC, UP_NPC, UP_TILE, countHeld, insideIbanTemple, type UpassItem } from './areas.js';
 import { locById, walkTo } from './bridge.js';
@@ -40,8 +40,7 @@ export async function fillBrew(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(UP_TILE.BREW_BARREL, 3, log))) {
         return false;
     }
-    await settleScene();
-    const barrel = locById(UP_LOC.BREW_BARREL, null, 8);
+    const barrel = await findSceneTarget(() => locById(UP_LOC.BREW_BARREL, null, 8));
     const bucket = Inventory.items().find(item => item.id === UP_ITEM.BUCKET.id);
     if (!barrel || !bucket) {
         log(`missing ${barrel ? 'an empty bucket' : 'the brew barrel'}`);
@@ -111,8 +110,7 @@ async function killNpc(npcId: number, near: Tile, name: string, log: (m: string)
         return false;
     }
     // Why: these all wander, so one absent poll can be "walked out of the query", and a false kill sends the leg looking for a drop that was never made. It has to still be gone a moment later.
-    await Execution.delayTicks(3);
-    if (find() !== null) {
+    if (await Execution.delayUntilTicks(() => find() !== null, 3)) {
         log(`${name} only wandered out of range`);
         return false;
     }
@@ -166,8 +164,7 @@ export async function openSealedChest(log: (m: string) => void): Promise<boolean
     if (!(await walkTo(UP_TILE.SEALED_CHEST, 3, log))) {
         return false;
     }
-    await settleScene();
-    const chest = locById(UP_LOC.SEALED_CHEST, null, 8);
+    const chest = await findSceneTarget(() => locById(UP_LOC.SEALED_CHEST, null, 8));
     const op = chest?.actions()[0];
     if (!chest || !op || !(await chest.interact(op))) {
         log('no sealed chest on the demons platform');
@@ -186,8 +183,7 @@ export async function searchCages(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(UP_TILE.CAGE_DOVE, 1, log))) {
         return false;
     }
-    await settleScene();
-    const cage = locById(UP_LOC.CAGE_DOVE, null, 8);
+    const cage = await findSceneTarget(() => locById(UP_LOC.CAGE_DOVE, null, 8));
     const op = cage?.actions()[0];
     if (!cage || !op) {
         const at = Game.tile();
@@ -326,8 +322,7 @@ export async function openIbanDoor(log: (m: string) => void): Promise<boolean> {
         if (!(await walkTo(UP_TILE.IBAN_DOOR, 3, log))) {
             return false;
         }
-        await settleScene();
-        const shut = locById(UP_LOC.IBAN_DOOR_L, null, 8) ?? locById(UP_LOC.IBAN_DOOR_R, null, 8);
+        const shut = await findSceneTarget(() => locById(UP_LOC.IBAN_DOOR_L, null, 8) ?? locById(UP_LOC.IBAN_DOOR_R, null, 8));
         const op = shut?.actions()[0];
         if (shut && op) {
             if (!(await shut.interact(op))) {
@@ -353,9 +348,8 @@ export async function throwDoll(log: (m: string) => void): Promise<boolean> {
         log(`not in the temple to throw the doll — standing at (${at?.x},${at?.z})`);
         return false;
     }
-    await settleScene();
     // Why: no walk first. The temple floor isn't in the collision pack, so any radius approach reports unreachable from where you stand; a use-on-loc leaves the pathing to the server, which can see the floor.
-    const altar = locById(UP_LOC.IBAN_ALTAR, null, 16);
+    const altar = await findSceneTarget(() => locById(UP_LOC.IBAN_ALTAR, null, 16));
     const doll = Inventory.items().find(item => item.id === UP_ITEM.DOLL.id);
     if (!altar || !doll) {
         log(`missing ${altar ? 'the doll of Iban' : 'the well of the damned'}`);

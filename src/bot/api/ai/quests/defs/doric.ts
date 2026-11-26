@@ -1,5 +1,6 @@
+import { Modals } from '../../../ui/widgets/Modals.js';
 import { normalizeJournal as journalText } from '../journalText.js';
-import { actions, reader } from '../../../../adapter/ClientAdapter.js';
+import { reader } from '../../../../adapter/ClientAdapter.js';
 import { EventSignal } from '../../../execution/EventSignal.js';
 import { Execution } from '../../../execution/Execution.js';
 import { Game } from '../../../game/Game.js';
@@ -100,10 +101,7 @@ async function readDoricStage(): Promise<number | undefined> {
 
     const lines = await Quests.journal("Doric's Quest");
     const stage = parseDoricJournal(lines);
-    if (reader.modals().main !== -1) {
-        actions.closeModal();
-        await Execution.delayTicks(1);
-    }
+    await Modals.closeIfOpen();
     return stage;
 }
 
@@ -189,11 +187,10 @@ async function handInMaterials(log: (message: string) => void): Promise<boolean>
                 log('stage 10: closing the quest-complete scroll and continuing the server reward queue');
                 closedRewardScroll = true;
             }
-            if (!actions.closeModal()) {
+            if (!(await Modals.close())) {
                 log('stage 10: could not close the quest-complete/reward modal');
                 return false;
             }
-            await Execution.delayTicks(1);
             continue;
         }
 

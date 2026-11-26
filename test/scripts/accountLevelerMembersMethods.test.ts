@@ -123,7 +123,7 @@ test('every selected members plan uses installed script settings and preserves r
     }
     const logs = producer(s, 'firemaking', { item: 'Logs', count: 28 }, emptyMemory(), () => 0)!;
     expect(logs.settings).toMatchObject({ treeName: 'Tree', location: 'Seers (trees)' });
-    expect(logs.output).toEqual({ item: 'Logs', count: 28 });
+    expect(logs.output).toEqual({ item: 'Logs', count: 1000 });
 });
 
 test('existing members-only agility and flax plans prepare food and boat fares before explicit travel', () => {

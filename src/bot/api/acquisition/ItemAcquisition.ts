@@ -1,9 +1,10 @@
 import type { WorldTile } from '../../adapter/ClientAdapter.js';
 import type { AbstractBot, Task } from '../bot/Bot.js';
 import { Execution } from '../execution/Execution.js';
+import { findSceneTarget } from '../walking/Reach.js';
 import { Traversal } from '../walking/Traversal.js';
 import { Inventory } from '../inventory/Inventory.js';
-import { Shop } from '../shop/Shop.js';
+import { buyWithRestockWait, Shop } from '../shop/Shop.js';
 import { GroundItems } from '../grounditems/GroundItems.js';
 
 type ItemSource = { kind: 'shop'; npc: string; near: WorldTile } | { kind: 'ground'; at: WorldTile } | { kind: 'gather' } | { kind: 'make' };
@@ -51,10 +52,9 @@ export class AcquireTask implements Task {
                 return;
             }
             if (await Shop.open(src.npc)) {
-                const bought = await Shop.buy(need.name, need.count - held(need.name));
+                const bought = await buyWithRestockWait(need.name, need.count - held(need.name), 5);
                 if (bought === 0) {
                     this.bot.log(`warning: bought 0 of ${need.name} — out of stock or coins`);
-                    await Execution.delayTicks(5);
                 }
                 await Shop.close();
             }
@@ -68,9 +68,8 @@ export class AcquireTask implements Task {
                 this.bot.log(`warning: could not reach the ground spawn for ${need.name} at (${src.at.x},${src.at.z},${src.at.level}) — will retry`);
                 return;
             }
-            const item = GroundItems.query().name(need.name).within(6).nearest();
+            const item = await findSceneTarget(() => GroundItems.query().name(need.name).within(6).nearest(), 5);
             if (!item) {
-                await Execution.delayTicks(5);
                 return;
             }
 

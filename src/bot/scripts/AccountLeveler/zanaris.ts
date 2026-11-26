@@ -98,13 +98,17 @@ async function enterMarket(port: ZanarisPort): Promise<boolean> {
     return port.wait(() => inDragonMarket(port.tile()));
 }
 
-export async function enterDragonShop(port: ZanarisPort): Promise<boolean> {
+export async function enterZanaris(port: ZanarisPort): Promise<boolean> {
     if (!port.complete()) return false;
     if (!inZanaris(port.tile())) {
         if (!port.wearingStaff() && (port.held('Dramen staff') < 1 || !(await port.equipStaff()))) return false;
         if (!(await port.walk(SHED)) || !(await port.interact(2406, 'Open')) || !(await port.wait(() => inZanaris(port.tile())))) return false;
     }
-    return await enterMarket(port) && await port.walk(SHOP);
+    return true;
+}
+
+export async function enterDragonShop(port: ZanarisPort): Promise<boolean> {
+    return await enterZanaris(port) && await enterMarket(port) && await port.walk(SHOP);
 }
 
 export async function leaveZanaris(port: ZanarisPort): Promise<boolean> {

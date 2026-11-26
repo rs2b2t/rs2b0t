@@ -357,7 +357,7 @@ class BankTrip implements Task {
             bot.log('[chests] the haul is still in the pack, retrying');
             return;
         }
-        if (!(await Execution.delayUntil(() => Bank.isOpen() && Bank.loaded(), 5000))) {
+        if (!(await Bank.waitReady(5000))) {
             bot.log(Bank.isOpen() ? '[chests] the bank list has not filled in, retrying' : '[chests] the bank window closed, retrying');
             return;
         }

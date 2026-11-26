@@ -126,7 +126,7 @@ function parentHub(): WorkerClockHub | null {
 const localClock = new TimerWorkerClock(globalThis as unknown as ClockGlobal, LOCAL_WORKER_SRC);
 
 export const WorkerClock = {
-    sleep(ms: number, useParentClock: boolean = false): Promise<void> {
-        return (useParentClock ? parentHub() : null)?.sleep(ms) ?? localClock.sleep(ms);
+    sleep(ms: number): Promise<void> {
+        return parentHub()?.sleep(ms) ?? localClock.sleep(ms);
     }
 };

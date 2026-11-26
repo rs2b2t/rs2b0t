@@ -1,6 +1,5 @@
+import { Modals } from '../../../../ui/widgets/Modals.js';
 import { normalizeJournal as normalize } from '../../journalText.js';
-import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
-import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 import { KS_QUEST, KS_STAGE } from './areas.js';
@@ -39,10 +38,7 @@ export async function readKnightsSwordProgress(): Promise<QuestProgress | undefi
 
     const lines = await Quests.journal(KS_QUEST);
     const progress = parseKnightsSwordJournal(lines);
-    if (reader.modals().main !== -1) {
-        actions.closeModal();
-        await Execution.delayTicks(1);
-    }
+    await Modals.closeIfOpen();
     if (progress) {
         lastGood = progress;
     }

@@ -8,7 +8,7 @@ import { Modals } from '../../../../ui/widgets/Modals.js';
 import { Reach } from '../../../../walking/Reach.js';
 import Tile from '../../../../../geometry/Tile.js';
 import { talkStrict } from '../../exec/primitives.js';
-import { driveUntil, heldId, settleScene } from '../../exec/prompts.js';
+import { driveUntil, heldId, findSceneTarget } from '../../exec/prompts.js';
 import { DirectNavigator } from '../../../../../event/webwalk/DirectNavigator.js';
 import { UP_ITEM, UP_LOC, UP_NPC, UP_TILE, insideWitchHouse } from './areas.js';
 import { driveThroughBoxes, locById, walkTo } from './bridge.js';
@@ -18,8 +18,7 @@ async function talkTo(npcId: number, name: string, near: Tile, prefer: string[],
     if (!(await walkTo(near, 2, log))) {
         return false;
     }
-    await settleScene();
-    const npc = Npcs.query().where(n => n.id === npcId).within(12).nearest();
+    const npc = await findSceneTarget(() => Npcs.query().where(n => n.id === npcId).within(12).nearest());
     if (!npc) {
         log(`no ${name} near (${near.x},${near.z})`);
         return false;
@@ -36,8 +35,7 @@ export async function descendToDwarves(log: (m: string) => void): Promise<boolea
     if (!(await walkTo(UP_TILE.TUNNEL_TO_DWARVES, 3, log))) {
         return false;
     }
-    await settleScene();
-    const tunnel = locById(UP_LOC.TUNNEL_DOWN, null, 8);
+    const tunnel = await findSceneTarget(() => locById(UP_LOC.TUNNEL_DOWN, null, 8));
     const op = tunnel?.actions()[0];
     if (!tunnel || !op || !(await tunnel.interact(op))) {
         log('no wall tunnel down to the dwarves');
@@ -52,8 +50,7 @@ export async function ascendFromDwarves(log: (m: string) => void): Promise<boole
     if (!(await walkTo(UP_TILE.TUNNEL_FROM_DWARVES, 3, log))) {
         return false;
     }
-    await settleScene();
-    const tunnel = locById(UP_LOC.TUNNEL_UP, null, 8);
+    const tunnel = await findSceneTarget(() => locById(UP_LOC.TUNNEL_UP, null, 8));
     const op = tunnel?.actions()[0];
     if (!tunnel || !op || !(await tunnel.interact(op))) {
         log('no wall tunnel up out of the dwarves cave');
@@ -90,9 +87,8 @@ export async function catchCat(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(UP_TILE.WITCH_CAT, 2, log))) {
         return false;
     }
-    await settleScene();
     // Why: the cat wanders its platform, so the query reaches further than the walk radius, and it says what it found because a silent false alternates the step between fetching a cat and knocking with nothing.
-    const cat = Npcs.query().where(n => n.id === UP_NPC.WITCH_CAT).within(20).nearest();
+    const cat = await findSceneTarget(() => Npcs.query().where(n => n.id === UP_NPC.WITCH_CAT).within(20).nearest());
     const op = cat?.actions()[0];
     if (!cat || !op) {
         const at = Game.tile();
@@ -169,8 +165,7 @@ export async function distractWitch(log: (m: string) => void): Promise<boolean> 
             tried.push(`(${stand.x},${stand.z}) unreachable`);
             continue;
         }
-        await settleScene();
-        const loc = locById(UP_LOC.WITCH_DOOR, null, 16);
+        const loc = await findSceneTarget(() => locById(UP_LOC.WITCH_DOOR, null, 16));
         if (!loc) {
             tried.push(`(${stand.x},${stand.z}) no door`);
             continue;

@@ -145,7 +145,7 @@ async function withdrawXById(id: number, count: number): Promise<WithdrawResult>
     if (count <= 0) {
         return 'withdrawn';
     }
-    if (!Bank.loaded()) {
+    if (!Bank.ready()) {
         return 'retry';
     }
     const item = Bank.items().find(i => i.id === id);
@@ -173,15 +173,8 @@ async function withdrawXById(id: number, count: number): Promise<WithdrawResult>
 // places, so a name-keyed deposit would bank the wrong thing
 async function depositAllExceptIds(keep: Set<number>): Promise<boolean> {
     for (let guard = 0; guard < 32; guard++) {
-        let items = reader.bankSideItems();
-        if (items.length === 0 && Inventory.used() > 0 && Bank.isOpen()) {
-            await Execution.delayUntil(() => reader.bankSideItems().length > 0 || !Bank.isOpen(), 1200);
-            items = reader.bankSideItems();
-        }
-        if (items.length === 0) {
-            return Inventory.used() === 0;
-        }
-        const item = items.find(i => !keep.has(i.id));
+        if (!(await Bank.backpackReady())) return false;
+        const item = reader.bankSideItems().find(i => !keep.has(i.id));
         if (!item) {
             return true;
         }
@@ -298,7 +291,7 @@ export default class LeatherCrafter extends LoopingBot {
             return;
         }
         this.log('bank leg: bank opened');
-        if (!(await Execution.delayUntil(() => Bank.loaded(), 3000))) {
+        if (!(await Bank.waitReady(3000))) {
             this.log('bank leg: bank contents not ready — retrying');
             return;
         }

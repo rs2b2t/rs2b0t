@@ -4,11 +4,11 @@ import { paintState, wrapText } from '../../paint/paintLogic.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import { describeActivity, type ActionQueue } from './actions.js';
 import { requirementKey, type ActivityPlan } from './types.js';
-import { trainingPriority } from './priority.js';
 import { combatLevel } from './combatProgression.js';
 
 export interface LevelerPaintView {
     target: number;
+    supplierOnly?: boolean;
     levels: Record<string, number>;
     completed: number;
     total: number;
@@ -46,7 +46,7 @@ export function levelerLines(v: LevelerPaintView, page: string, cols: number): {
             add(`   ${action.detail}`, COLORS[state]);
             if (action.destination) add(`   Destination: ${tileText(action.destination)}`, COLORS[state]);
         }
-        if (!lines.length) add('Read the bank, audit supplies, then choose an unfinished skill.');
+        if (!lines.length) add(v.supplierOnly ? 'Check the bank for a lot of 1,000 to sell.' : 'Read the bank, audit supplies, then choose an unfinished skill.');
     } else if (page === 'Supplies') {
         add(`Coins carried: ${v.heldCoins.toLocaleString()}gp`);
         add(`Available bank + carried: ${(v.stock.coins ?? 0).toLocaleString()}gp${v.bankReady ? '' : ' (bank refresh pending)'}`);
@@ -63,11 +63,12 @@ export function levelerLines(v: LevelerPaintView, page: string, cols: number): {
         if (!lines.length) add('No actions recorded yet.');
     } else {
         add(`Now: ${v.status}`, COLORS.running);
-        add(`Phase: ${trainingPriority(v.levels, v.target).label}`);
-        const combat = combatLevel(v.levels);
-        add(`Combat ${combat}: ${combat < 15 ? 'melee death walking until 15' : 'prepare food for stronger targets'}`);
+        if (!v.supplierOnly) {
+            const combat = combatLevel(v.levels);
+            add(`Combat ${combat}: ${combat < 15 ? 'melee death walking until 15' : 'prepare food for stronger targets'}`);
+        }
         if (v.queue.current && v.queue.current !== v.status) add(`Action: ${v.queue.current}`, COLORS.running);
-        add(`Goal: ${v.objective ?? 'audit supplies'}${v.objective && v.levels[v.objective] ? ` ${v.levels[v.objective]} -> ${v.target}` : ''}`);
+        add(v.supplierOnly ? 'Goal: supply Seers Market' : `Goal: ${v.objective ?? 'audit supplies'}${v.objective && v.levels[v.objective] ? ` ${v.levels[v.objective]} -> ${v.target}` : ''}`);
         if (v.plan) add(`Plan: ${describeActivity(v.plan)}`);
         add(`Position: ${tileText(v.tile)}`);
         if (v.queue.destination) add(`Destination: ${tileText(v.queue.destination)}`);
@@ -75,7 +76,7 @@ export function levelerLines(v: LevelerPaintView, page: string, cols: number): {
         const next = v.queue.items.find(item => item.state === 'pending');
         if (next) add(`Next: ${next.label} - ${next.detail}`);
         if (v.waitingUntil > v.now) add(`Retry in ${duration(v.waitingUntil - v.now)}`, '#ffd17a');
-        add(`Action elapsed: ${duration(v.now - (v.queue.changedAt || v.startedAt))}; training left: ${duration(v.remainingMs)}`);
+        add(`Action elapsed: ${duration(v.now - (v.queue.changedAt || v.startedAt))}` + (v.supplierOnly ? '' : `; training left: ${duration(v.remainingMs)}`));
         add(`Runtime: ${duration(v.now - v.startedAt)}; deaths: ${v.deaths}; Wilderness: ${v.wilderness ? 'on' : 'off'}`);
     }
     return { lines, focus };
@@ -84,8 +85,9 @@ export function levelerLines(v: LevelerPaintView, page: string, cols: number): {
 export function paintLeveler(ctx: CanvasRenderingContext2D, v: LevelerPaintView): void {
     const expanded = paintState.get('leveler:expanded', '1') === '1';
     const p = Paint.begin(ctx, { dock: expanded ? { x: 8, y: 249, w: 506, h: 246 } : 'chatbox', accent: COLORS.running });
-    const page = p.strip('account-leveler', ['Now', 'Queue', 'Supplies', 'Skills', 'History'], `${v.completed}/${v.total}`, 'Leveler');
-    p.row(`${v.objective ?? 'Supplies'} -> ${v.target}`, `${v.completed}/${v.total} skills done`);
+    const page = p.strip('account-leveler', ['Now', 'Queue', 'Supplies', 'Skills', 'History'], v.supplierOnly ? 'Seers' : `${v.completed}/${v.total}`, 'Leveler');
+    if (v.supplierOnly) p.row('Supply Seers Market', 'Multiples of 1,000');
+    else p.row(`${v.objective ?? 'Supplies'} -> ${v.target}`, `${v.completed}/${v.total} skills done`);
     const content = levelerLines(v, page, p.cols() - 1);
     p.fill(`leveler:${page}`, content.lines, { reserve: 24, focus: content.focus });
     const click = p.buttons([

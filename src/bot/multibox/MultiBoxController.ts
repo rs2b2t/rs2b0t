@@ -19,6 +19,7 @@ export function normalizeUsername(username: string): string {
 interface Slot {
     id: number;
     account: Account;
+    claimedProfile?: string;
     handle: SlotHandle;
     loginCoordination: LoginCoordination;
     mode: RenderMode;
@@ -58,6 +59,22 @@ export class MultiBoxController {
     // New bots start empty; `account` is only for automation and vault restores.
     // Why: title-screen auto-login stays off unless the bot's Global checkbox (or ?autologin=1) arms it, though a running script still reconnects on its own (#215).
     add(account?: Account): SlotSnapshot | null {
+        const slot = this.addSlot(account);
+        if (!slot) return null;
+        this.applyModes();
+        return this.snap(slot);
+    }
+
+    addGroup(accounts: Account[]): void {
+        const before = this.slots.length;
+        try {
+            for (const account of accounts) this.addSlot(account);
+        } finally {
+            if (this.slots.length !== before) this.applyModes();
+        }
+    }
+
+    private addSlot(account?: Account): Slot | null {
         if (this.switchingWorld) return null;
         const acct: Account = { ...(account ?? { username: `bot${this.nextId}`, password: '' }), world: account?.world ?? this.defaultWorld };
         const username = normalizeUsername(acct.username);
@@ -71,29 +88,29 @@ export class MultiBoxController {
         if (!this.tabs().includes(tab)) {
             throw new Error(`unknown tab '${tab}' for bot '${acct.username}'`);
         }
-        const handle = this.ops.spawn(acct);
-        const loginCoordination = this.loginCoordinator.register();
-        handle.setLoginCoordination(loginCoordination);
-        const slot: Slot = {
-            id: this.nextId++,
-            account: acct,
-            handle,
-            loginCoordination,
-            mode: 'background',
-            tab,
-            switchingWorld: null
-        };
-        this.slots.push(slot);
-        if (account) {
-            handle.setCredentials(acct.username, acct.password);
+        const claimedProfile = account ? username : undefined;
+        if (claimedProfile && this.loginCoordinator.claimProfile?.(claimedProfile) === false) return null;
+        let handle: SlotHandle | undefined;
+        let slot: Slot;
+        try {
+            handle = this.ops.spawn(acct);
+            const loginCoordination = this.loginCoordinator.register();
+            handle.setLoginCoordination(loginCoordination);
+            if (account) handle.setCredentials(acct.username, acct.password);
+            slot = { id: this.nextId++, account: acct, claimedProfile, handle, loginCoordination,
+                mode: 'background', tab, switchingWorld: null };
+        } catch (error) {
+            if (claimedProfile) this.loginCoordinator.releaseProfile?.(claimedProfile);
+            handle?.destroy();
+            throw error;
         }
+        this.slots.push(slot);
         // a new bot is what you want to look at, but only when it lands in the
         // visible tab; a restored bot spawns into its saved (possibly hidden) tab
         if (tab === this.active) {
             this.focusedId = slot.id;
         }
-        this.applyModes();
-        return this.snap(slot);
+        return slot;
     }
 
     remove(id: number): void {
@@ -106,6 +123,7 @@ export class MultiBoxController {
         slot.loginCoordination.leaveQueue();
         slot.handle.setLoginCoordination(null);
         slot.handle.destroy();
+        if (slot.claimedProfile) this.loginCoordinator.releaseProfile?.(slot.claimedProfile);
         this.slots = this.slots.filter(s => s.id !== id);
         if (this.focusedId === id) {
             this.focusedId = null;

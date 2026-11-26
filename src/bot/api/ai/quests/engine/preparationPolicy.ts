@@ -1,3 +1,5 @@
+import { IKOV_BOWS, IKOV_OBJ } from '../defs/ikov/areas.js';
+import { IKOV_STAGE } from '../defs/ikov/journal.js';
 import { FOOD_FLOAT } from '../food.js';
 import { ITEM_DB } from '../../../../data/itemdb.js';
 import { UNTRADEABLE_IDS } from '../../../../data/untradeable.js';
@@ -5,6 +7,7 @@ import type { QuestPreparationRequest } from './preparationTypes.js';
 import type { QuestModule, QuestProgress, QuestSnapshot } from './types.js';
 import { FOOD_TARGET as TB_FOOD_TARGET, TB_MAIN } from '../defs/tbwt/areas.js';
 import { TOURIST_TRAP_FOOD_TARGET } from '../defs/touristtrapSupplies.js';
+import { DP_FLAG } from '../defs/deathplateau/journal.js';
 
 type Supply = { item: string; count: number };
 const supplies = (...items: (string | [string, number])[]): Supply[] => items.map(item =>
@@ -131,13 +134,6 @@ export function questPreparationRequest(
                 if (!has(`Raw ${fish}`)) skill('fishing', fishing);
             }
         }
-        const bowReady = stockIds ? (stockIds.get(857) ?? 0) > 0 : has('Yew shortbow');
-        if (id === 'ikov' && !bowReady) {
-            skill('fletching', 65);
-            const stave = stockIds ? (stockIds.get(68) ?? 0) > 0 : has('Yew shortbow (u)');
-            if (!stave && !has('Yew logs')) skill('woodcutting', 60);
-            if (!has('Bow string')) skill('crafting', 10);
-        }
         if (id === 'hero') {
             if (!has('Ice gloves', 'Fire feather')) skill('mining', 50);
             if (!has('Lava eel')) skill('cooking', 53);
@@ -146,6 +142,21 @@ export function questPreparationRequest(
                 if (!has('Oily fishing rod', 'Blamish oil')) skill('herblore', 25);
             }
         }
+    }
+    if (id === 'ikov' && (status === 'notStarted' || (progress && progress.stage < IKOV_STAGE.KILLED_WARRIOR))) {
+        const bow = IKOV_BOWS.find(({ id, name }) => stockIds ? (stockIds.get(id) ?? 0) > 0 : has(name));
+        if (bow) {
+            skill('ranged', bow.ranged);
+        } else {
+            skill('fletching', 65);
+            const stave = stockIds ? (stockIds.get(IKOV_OBJ.UNSTRUNG_YEW_SHORTBOW) ?? 0) > 0 : has('Yew shortbow (u)');
+            if (!stave && !has('Yew logs')) skill('woodcutting', 60);
+            if (!has('Bow string')) skill('crafting', 10);
+        }
+    }
+    if (id === 'death' && status === 'inProgress' && progress && !has('Secret way map')
+        && ![DP_FLAG.SUPPLIES, DP_FLAG.GOT_MAP, DP_FLAG.SCOUTED].some(flag => progress.flags.has(flag))) {
+        items.push(...SUPPLIES.death.filter(item => item.item !== 'Iron bar' || !has('Spiked boots')));
     }
     if (id === 'tbwt' && !progress?.flags.has('agility') && (progress?.stage ?? 0) < TB_MAIN.ALL_BROTHERS) {
         const doses = [1, 2, 3, 4].reduce((total, dose) => total + count(`Agility potion(${dose})`) * dose, 0);

@@ -26,7 +26,7 @@ const RESTOCK_DEATH = 'After death only';
 
 export const EDGEVILLE_MONKEYBARS_SETTINGS: SettingsSchema = {
     loadout: LOADOUT_SETTING,
-    food: { type: 'string', default: FALLBACK_FOOD, label: 'Food', help: 'Food to eat and restock when the loadout does not specify food.' },
+    food: { type: 'string', default: '', label: 'Food', help: 'Food to eat and restock. Leave blank to use the loadout food, or Lobster if the loadout has none.' },
     foodAmount: { type: 'number', default: 20, min: 5, max: 28, label: 'Food to withdraw' },
     minFood: {
         type: 'number',
@@ -82,7 +82,7 @@ function needsFoodRestock(bot: EdgevilleMonkeyBars): boolean {
     if (min <= 0) {
         return false;
     }
-    return foodCount(scriptFood(bot.settings, bot.settings.str('food', FALLBACK_FOOD))) < min;
+    return foodCount(bot.foodName) < min;
 }
 
 function swingOp(actions: string[], preferred?: string): string | undefined {
@@ -165,9 +165,11 @@ async function openNearestGate(log: (m: string) => void): Promise<void> {
         return;
     }
     log(`Opening gate: ${op} @ ${gate.tile().x},${gate.tile().z}`);
-    await gate.interact(op);
-    // Wait for gate animation to finish before pathing through.
-    await Execution.delayTicks(4);
+    const tile = gate.tile();
+    if (await gate.interact(op)) {
+        await Execution.delayUntilTicks(() => !Locs.query().name('Gate').action(op)
+            .where(loc => loc.tile().equals(tile)).nearest(), 4);
+    }
 }
 
 /** Climb the Edgeville dungeon ladder back to the surface. */
@@ -225,9 +227,11 @@ async function exitDungeonToSurface(log: (m: string) => void): Promise<boolean> 
             const op = swingOp(bars.actions()) ?? bars.actions()[0];
             if (op) {
                 log(`Swinging back: ${op} on '${bars.name}' @ ${bars.tile().x},${bars.tile().z}`);
-                await bars.interact(op);
-                // wait for swing animation to settle
-                await Execution.delayUntil(() => false, 12_000);
+                if (!(await bars.interact(op))) return false;
+                if (!(await Execution.delayUntil(() => {
+                    const tile = Game.tile();
+                    return !!tile && MONKEYBARS_APPROACH.distanceTo(tile) <= 1 && !Game.animating();
+                }, 12_000))) return false;
             }
         }
     }
@@ -247,6 +251,7 @@ async function exitDungeonToSurface(log: (m: string) => void): Promise<boolean> 
 }
 
 class EdgevilleMonkeyBars extends TaskBot {
+    foodName = FALLBACK_FOOD;
     private status = 'starting';
     private startedAt = Date.now();
     private xpAtStart = 0;
@@ -265,6 +270,7 @@ class EdgevilleMonkeyBars extends TaskBot {
             throw new Error(`EdgevilleMonkeyBars: Agility ${MIN_AGILITY} required`);
         }
 
+        this.foodName = this.settings.str('food', '').trim() || scriptFood(this.settings, FALLBACK_FOOD);
         this.startedAt = Date.now();
         this.xpAtStart = Skills.xp('agility');
 
@@ -276,12 +282,9 @@ class EdgevilleMonkeyBars extends TaskBot {
             }
         });
 
-        // Check inventory on startup, if no food is present, BankAndRestock will run first
-        // (validate returns true when no food on surface for any restock mode).
-        const foodName = scriptFood(this.settings, this.settings.str('food', FALLBACK_FOOD)).toLowerCase();
-        const hasFood = Inventory.items().some(i => i.name?.toLowerCase().includes(foodName));
+        const hasFood = foodCount(this.foodName) > 0;
         if (!hasFood) {
-            this.log(`No ${scriptFood(this.settings, this.settings.str('food', FALLBACK_FOOD))} in inventory — banking first`);
+            this.log(`No ${this.foodName} in inventory — banking first`);
         }
 
         // Ensure Auto Retaliate is off so we don't fight back while doing agility.
@@ -309,11 +312,10 @@ class EdgevilleMonkeyBars extends TaskBot {
         const xph = mins > 0.5
             ? `${(((Skills.xp('agility') - this.xpAtStart) / mins) * 60 / 1000).toFixed(1)}k`
             : '—';
-        const food = scriptFood(this.settings, this.settings.str('food', FALLBACK_FOOD));
         const mode = restockMode(this) === RESTOCK_DEATH ? 'death' : 'dungeon';
 
         p.row(`Runtime: ${fmtDuration(mins)}`, `Swings: ${this.completions}`, `XP/hr: ${xph}`);
-        p.row(`Food: ${foodCount(food)}`, `Ate: ${this.eats}`, `Deaths: ${this.deaths}`);
+        p.row(`Food: ${foodCount(this.foodName)}`, `Ate: ${this.eats}`, `Deaths: ${this.deaths}`);
         p.row(`Misses: ${this.failedSwings}`, `Restock: ${mode}`);
         p.bar('HP', Skills.hpFraction());
 
@@ -326,21 +328,12 @@ class EdgevilleMonkeyBars extends TaskBot {
 class EatFood implements Task {
     constructor(private bot: EdgevilleMonkeyBars) {}
 
-    private foodName(): string {
-        return scriptFood(this.bot.settings, this.bot.settings.str('food', FALLBACK_FOOD));
-    }
-
-    private heldFood(): number {
-        const key = this.foodName().toLowerCase();
-        return Inventory.items().filter(i => i.name?.toLowerCase().includes(key)).length;
-    }
-
     private needEat(): boolean {
         return shouldEatToUseFood({
             hp: Skills.effective('hitpoints'),
             maxHp: Skills.level('hitpoints'),
-            heal: foodHealAmount(this.foodName()),
-            foodCount: this.heldFood()
+            heal: foodHealAmount(this.bot.foodName),
+            foodCount: foodCount(this.bot.foodName)
         });
     }
 
@@ -353,7 +346,7 @@ class EatFood implements Task {
 
     async execute() {
         this.bot.setStatus('eating');
-        const key = this.foodName().toLowerCase();
+        const key = this.bot.foodName.toLowerCase();
         while (this.needEat()) {
             const food = Inventory.items().find(i => i.name?.toLowerCase().includes(key));
             if (!food) {
@@ -363,11 +356,9 @@ class EatFood implements Task {
             await food.interact('Eat');
             if (await Execution.delayUntil(() => Skills.effective('hitpoints') > before, 3000)) {
                 this.bot.countEat();
+                if (this.needEat()) await Execution.delayTicks(3);
             }
         }
-        // OSRS enforces a 3-tick penalty between eating; wait so the next agility
-        // action doesn't fire while the client is still processing the eat animation.
-        await Execution.delayTicks(3);
     }
 }
 
@@ -378,7 +369,7 @@ class BankAndRestock implements Task {
         if (this.bot.died) {
             return true;
         }
-        const fc = foodCount(scriptFood(this.bot.settings, this.bot.settings.str('food', FALLBACK_FOOD)));
+        const fc = foodCount(this.bot.foodName);
         const min = this.bot.settings.num('minFood', 1);
         if (fc < min && (Game.tile()?.z ?? 0) < UNDERGROUND_Z) {
             // Below minimum food on the surface, bank before heading into the dungeon (works for both restock modes).
@@ -388,8 +379,7 @@ class BankAndRestock implements Task {
     }
     async execute() {
         const log = (m: string) => this.bot.log(m);
-        const foodName = scriptFood(this.bot.settings, this.bot.settings.str('food', FALLBACK_FOOD)).toLowerCase();
-        const hasAnyFood = Inventory.items().some(i => i.name?.toLowerCase().includes(foodName));
+        const hasAnyFood = foodCount(this.bot.foodName) > 0;
 
         // Out of food underground → reverse dungeon path + ladder climb (only in dungeon mode)
         if (!this.bot.died && !hasAnyFood && restockMode(this.bot) !== RESTOCK_DEATH && (Game.tile()?.z ?? 0) >= UNDERGROUND_Z) {
@@ -412,7 +402,7 @@ class BankAndRestock implements Task {
         const opened = (await bankApi.openBooth(EDGEVILLE_BANK, 'Bank booth', 'Use-quickly', m => this.bot.log(`  ${m}`)))
             || (await bankApi.openNearest('Bank booth', 'Use-quickly', m => this.bot.log(`  ${m}`)));
         if (opened) {
-            const foodName = scriptFood(this.bot.settings, this.bot.settings.str('food', FALLBACK_FOOD));
+            const foodName = this.bot.foodName;
             if (this.bot.settings.bool('bankJunk', true)) {
                 await Bank.depositAllMatching(depositAllExcept([foodName]));
             } else {

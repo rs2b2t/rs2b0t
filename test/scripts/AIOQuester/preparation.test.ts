@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import { emptyMemory, enabledSkills } from '#/bot/scripts/AccountLeveler/planner.js';
 import type { LevelerSnapshot } from '#/bot/scripts/AccountLeveler/types.js';
+import { supplyOffer } from '#/bot/scripts/AccountLeveler/offers.js';
 import { planPreparation } from '#/bot/scripts/AIOQuester/preparation.js';
 
 const snapshot = (): LevelerSnapshot => ({ levels: Object.fromEntries(enabledSkills.map(skill => [skill, 40])), stock: { coins: 100000, lobster: 100 }, bankReady: true, quests: {}, target: 60, wilderness: false, now: 1000 });
@@ -13,6 +14,26 @@ test('unread bank is refreshed before deciding whether food must be gathered', (
 test('banked food satisfies exact quantities without training fishing', () => {
     const s = snapshot(); s.stock.shark = 20;
     expect(plan(s, { food: { item: 'Shark', count: 20 } }).kind).toBe('complete');
+});
+
+test('Death Plateau can source missing bread from the Ardougne baker', () => {
+    const s = snapshot();
+    s.stock.trout = 10;
+    s.stock['iron bar'] = 1;
+    const request = { items: [{ item: 'Bread', count: 10 }, { item: 'Trout', count: 10 }, { item: 'Iron bar', count: 1 }] };
+    expect(plan(s, request)).toMatchObject({ kind: 'activity', plan: { id: 'quest-supplies' } });
+    expect(supplyOffer('Bread')).toMatchObject({ keeper: 'Baker', item: { name: 'Bread', baseline: 10 } });
+    s.stock.bread = 10;
+    expect(plan(s, request).kind).toBe('complete');
+});
+
+test('Death Plateau sources cooked trout when the account has none', () => {
+    const s = snapshot();
+    Object.assign(s.stock, { bread: 10, 'iron bar': 1, 'fly fishing rod': 1, feather: 100, logs: 10 });
+    const request = { items: [{ item: 'Bread', count: 10 }, { item: 'Trout', count: 10 }, { item: 'Iron bar', count: 1 }] };
+    expect(plan(s, request)).toMatchObject({ kind: 'activity', plan: { script: 'Fisher' } });
+    s.stock['raw trout'] = 15;
+    expect(plan(s, request)).toMatchObject({ kind: 'activity', plan: { script: 'CookBot', output: { item: 'Trout', count: 10 } } });
 });
 
 test('prayer 43 trains prayer without starting another quest', () => {
@@ -30,12 +51,20 @@ test('missing sharks train gathering and cooking prerequisites above level 60', 
     expect(fishing.kind).toBe('activity');
     if (fishing.kind !== 'activity') return;
     expect(fishing.plan.script).toBe('Fisher');
-    expect(fishing.plan.prerequisiteLevels).toEqual({ fishing: 76 });
+    expect(fishing.plan.prerequisiteLevels).toEqual({ fishing: 60 });
+    s.levels.fishing = 60;
+    s.stock.logs = 1;
+    const advancedFishing = plan(s, { food: { item: 'Shark', count: 20 } });
+    expect(advancedFishing.kind === 'activity' && advancedFishing.plan.prerequisiteLevels).toEqual({ fishing: 76 });
     s.levels.fishing = 76;
     s.stock['raw lobster'] = 100;
     const cooking = plan(s, { food: { item: 'Shark', count: 20 } });
     expect(cooking.kind === 'activity' && cooking.plan.script).toBe('CookBot');
-    expect(cooking.kind === 'activity' && cooking.plan.prerequisiteLevels).toEqual({ cooking: 80 });
+    expect(cooking.kind === 'activity' && cooking.plan.prerequisiteLevels).toEqual({ cooking: 60 });
+    s.levels.cooking = 60;
+    s.stock['raw swordfish'] = 100;
+    const advancedCooking = plan(s, { food: { item: 'Shark', count: 20 } });
+    expect(advancedCooking.kind === 'activity' && advancedCooking.plan.prerequisiteLevels).toEqual({ cooking: 80 });
 });
 
 test('ready shark skills produce raw sharks then cook exact requested food', () => {

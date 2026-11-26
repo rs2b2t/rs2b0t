@@ -92,6 +92,7 @@ test('does not select another player\'s fight during combat', async () => {
 
 
 test('leaves an uninterrupted fight alone', async () => {
+    bot.resumeAttack = false;
     npcs = [guard(2, 32769, true)];
     expect(await fight.validate()).toBe(false);
 });

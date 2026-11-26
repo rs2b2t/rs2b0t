@@ -9,6 +9,7 @@ export const BANKING_OPTIONS = ['Auto', 'None'];
 export const BANK_LOCATION_OPTIONS = ['Nearest', ...BANK_LOCATIONS.map(b => b.name)];
 export const DEFAULT_CUSTOM_SPOT = new Tile(3273, 3427, 0);
 export const BURIAL_BONE_NAME = 'Bones';
+export const LEVELER_REGULAR_BONE_LIMIT = 50;
 
 interface BoneBurialState {
     enabled: boolean;

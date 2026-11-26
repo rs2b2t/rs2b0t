@@ -1,3 +1,4 @@
+import { findSceneTarget } from '../../exec/prompts.js';
 import { Execution } from '../../../../execution/Execution.js';
 import type Tile from '../../../../../geometry/Tile.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
@@ -24,16 +25,14 @@ export async function mineGem(log: (m: string) => void): Promise<boolean> {
     if (!(await Traversal.walkResilient(LQ_TILE.GEM_ROCKS, { radius: 3, attempts: 3, timeoutMs: 240_000, log }))) {
         return false;
     }
-    await settleScene();
     const deadline = performance.now() + MINE_MS;
     while (performance.now() < deadline) {
         if (uncutHeld() > before) {
             return true;
         }
-        const rock = Locs.query().where(l => l.id === GEM_ROCK_ID).action('Mine').within(10).nearest();
+        const rock = await findSceneTarget(() => Locs.query().where(l => l.id === GEM_ROCK_ID).action('Mine').within(10).nearest(), 12);
         if (!rock) {
             // Every rock is depleted; they come back on a 200-tick respawn.
-            await Execution.delayTicks(10);
             continue;
         }
         if (await rock.interact('Mine')) {

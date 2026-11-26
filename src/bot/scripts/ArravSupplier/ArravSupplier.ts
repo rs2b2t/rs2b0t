@@ -224,10 +224,7 @@ export default class ArravSupplier extends LoopingBot {
         if (!Bank.isOpen()) {
             return;
         }
-        if (force) {
-            await Execution.delayUntil(() => Bank.loaded(), 3000);
-        }
-        if (Bank.loaded()) {
+        if (force ? await Bank.waitReady(3000) : Bank.ready()) {
             this.banked = Bank.countById(SOA_ID.CERTIFICATE);
         }
     }

@@ -4,7 +4,7 @@ import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import { hasFlag } from '../../engine/types.js';
 import { gotoNpc, talkThrough, type NpcStop } from '../../exec/primitives.js';
-import { driveChoice, settleScene } from '../../exec/prompts.js';
+import { driveChoice, findSceneTarget } from '../../exec/prompts.js';
 import { SALESMAN, type LocStop, type Suspect } from './areas.js';
 import { POISON_PROVED, readMurderProgress } from './journal.js';
 
@@ -21,8 +21,7 @@ async function investigate(loc: LocStop, log: (m: string) => void): Promise<bool
     if (!(await Traversal.walkResilient(loc.near, { radius: 1, attempts: 3, timeoutMs: 90_000, log }))) {
         return false;
     }
-    await settleScene();
-    const target = Locs.query().where(l => l.id === loc.id).action('Investigate').within(6).nearest();
+    const target = await findSceneTarget(() => Locs.query().where(l => l.id === loc.id).action('Investigate').within(6).nearest());
     if (!target) {
         log(`murder: no ${loc.name} at (${loc.near.x},${loc.near.z})`);
         return false;

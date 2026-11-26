@@ -143,6 +143,10 @@ export function specialRequiresAt(x: number, z: number, level: number): Transpor
         if (sc.questWaivesItems) {
             requires.questWaivesItems = sc.questWaivesItems;
         }
+        if (sc.level === level && sc.minQuestPoints !== undefined) {
+            requires.minQuestPoints = sc.minQuestPoints;
+            gated = true;
+        }
         if (sc.requiresSkill) {
             requires.skills = [{ name: sc.requiresSkill.name, level: sc.requiresSkill.level }];
             gated = true;

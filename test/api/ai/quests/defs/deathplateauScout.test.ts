@@ -61,16 +61,16 @@ test('scouting enters the trigger zone instead of stopping south of it', async (
 
 const pack = 'out/collision.lcnav.gz';
 
-test.skipIf(!existsSync(pack))('scout anchor is reachable inside the trigger through the stile', () => {
+test.skipIf(!existsSync(pack))('scout anchor is reachable from inside the hut through the back door and stile', () => {
     const finder = new PathFinder(gunzipSync(readFileSync(pack)));
     loadDefaultNavEdges(finder);
     expect(finder.walkable(TILE.SCOUT.x, TILE.SCOUT.z, TILE.SCOUT.level)).toBe(true);
-    const route = finder.findPath(TILE.TENZING_BACK, TILE.SCOUT, { avoidZones: THROWER_APPROACH, maxExpansions: 100_000 });
+    const route = finder.findPath(TILE.TENZING, TILE.SCOUT, { avoidZones: THROWER_APPROACH, maxExpansions: 100_000 });
     expect(route.ok).toBe(true);
     if (!route.ok) throw new Error('scout route unavailable');
     expect(route.waypoints.at(-1)).toEqual({ x: TILE.SCOUT.x, z: TILE.SCOUT.z, level: TILE.SCOUT.level });
     expect(route.waypoints.every(tile => !tileInDangerZones(tile.x, tile.z, tile.level, THROWER_APPROACH))).toBe(true);
-    expect(route.hops.some(hop => hop.kind === 'shortcut' && hop.locId === 3730)).toBe(true);
+    expect(route.hops.map(hop => hop.locId)).toEqual([3746, 3730]);
 });
 
 test('a blocked secret path stops without falling back to unconstrained walking', async () => {

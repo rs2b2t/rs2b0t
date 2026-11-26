@@ -110,3 +110,16 @@ test('rejected input returns without looping or inventing progress', async () =>
     expect(state.bursts).toEqual([]);
     expect(bot['gathered']).toBe(0);
 });
+
+test('banks chocolate dust when only the reserved grinding slot is free', async () => {
+    const { bot, grind } = await setup('Chocolate dust', 25);
+    spyOn(Inventory, 'free').mockReturnValue(1);
+    spyOn(Inventory, 'isFull').mockReturnValue(false);
+    spyOn(bot, 'coinCount').mockReturnValue(1000);
+    const bank = bot['tasks'].find(task => task.constructor.name === 'BankTrip')!;
+    const shop = bot['tasks'].find(task => task.constructor.name === 'BuyGoods')!;
+    expect(bank.validate()).toBe(false);
+    await grind.execute();
+    expect(shop.validate()).toBe(false);
+    expect(bank.validate()).toBe(true);
+});

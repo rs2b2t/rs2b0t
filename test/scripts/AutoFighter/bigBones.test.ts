@@ -29,8 +29,9 @@ const bone = (id: number, name: string, slot: number, noted = false, ops = ['Bur
     id, name, slot, count: noted ? 10 : 1, noted, ops, comId: 1
 });
 const task = () => bot.registered.find(t => t.constructor.name === 'BuryBones')!;
-async function start(settings: Record<string, boolean> = {}) {
+async function start(settings: Record<string, boolean> = {}, delegated = false) {
     bot = new Fighter();
+    if (delegated) bot.bindFinish(() => {});
     bot.bindLog(message => logs.push(message));
     bot.settings = new SettingsBag({ foodWithdraw: 0, panicHp: 0, solveClues: false, ...settings });
     await bot.onStart();
@@ -158,4 +159,16 @@ test('baby dragon burial enables live drop selection', async () => {
     restores.push(stubProps(reader, { groundItems: () => [{ id: 534, name: 'Babydragon bones', count: 1, ops: ['Take'], tile: new Tile(3201, 3200), distance: 1 }] }));
     await start({ buryBabyDragonBones: true });
     expect(bot.registered.find(t => t.constructor.name === 'LootDrops')!.validate()).toBe(true);
+});
+
+test('reaching the burial limit during a fight skips ordinary bones already held', async () => {
+    let prayer = 49;
+    restores.push(stubProps(Skills, { level: skill => skill === 'prayer' ? prayer : 40 }));
+    inventory = [bone(526, 'Bones', 0), bone(532, 'Big bones', 1)];
+    await start({ buryBones: true, buryBigBones: true }, true);
+    expect(task().validate()).toBe(true);
+    prayer++;
+    await task().execute();
+    expect(inventory.map(item => item.name)).toEqual(['Bones']);
+    expect(task().validate()).toBe(false);
 });

@@ -1,3 +1,4 @@
+import { findSceneTarget } from '../../exec/prompts.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Game } from '../../../../game/Game.js';
 import Tile from '../../../../../geometry/Tile.js';
@@ -276,9 +277,8 @@ async function chopLogs(qty: number, log: (m: string) => void): Promise<boolean>
                 return false;
             }
         }
-        const tree = Locs.query().name('Tree').action('Chop down').within(10).nearest();
+        const tree = await findSceneTarget(() => Locs.query().name('Tree').action('Chop down').within(10).nearest(), 2);
         if (!tree) {
-            await Execution.delayTicks(2);
             continue;
         }
         const before = Inventory.count(ER_ITEM.LOGS.name);
@@ -312,13 +312,12 @@ async function huntChickens(qty: number, log: (m: string) => void): Promise<bool
             await Execution.delayUntil(() => !Game.inCombat(), 60_000);
             continue;
         }
-        const target = Npcs.query()
+        const target = await findSceneTarget(() => Npcs.query()
             .where(n => n.id === CHICKEN_NPC_ID && !n.inCombat && !n.targetsAnotherPlayer())
             .action('Attack')
             .within(12)
-            .nearest();
+            .nearest(), 3);
         if (!target) {
-            await Execution.delayTicks(3);
             continue;
         }
         Game.setCombatStyle('strength');

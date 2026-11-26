@@ -299,6 +299,37 @@
             accent-color: #04A800;
         }
 
+        .rs2b0t-password {
+            position: relative;
+            display: flex;
+            flex: 1;
+            min-width: 64px;
+            max-width: 150px;
+        }
+
+        .rs2b0t-password .rs2b0t-input {
+            box-sizing: border-box;
+            width: 100%;
+            padding-right: 28px;
+        }
+
+        .rs2b0t-password button {
+            position: absolute;
+            inset: 1px 1px 1px auto;
+            width: 26px;
+            display: grid;
+            place-items: center;
+            padding: 0;
+            background: transparent;
+            border: 0;
+            color: #aaa;
+            cursor: pointer;
+        }
+
+        .rs2b0t-password input[type="password"] + button .eye-slash {
+            display: none;
+        }
+
         .rs2b0t-render-fps {
             width: 78px;
         }

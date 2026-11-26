@@ -1,9 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
-    bankPaceTicks,
     cookBatchAfterLoad,
     cookFilterLabel,
-    cookPaceTicks,
     cookedNameFromRaw,
     countMatching,
     countRawInBank,
@@ -202,16 +200,5 @@ describe('cook flow predicates', () => {
         expect(cookBatchAfterLoad(1, 'stop')).toBe('drain-more');
         expect(cookBatchAfterLoad(0, 'stop')).toBe('stop');
         expect(cookBatchAfterLoad(0, 'continue')).toBe('fish-again');
-    });
-});
-
-describe('pace ticks', () => {
-    test('cook is 1 tick; bank is 1–2 ticks', () => {
-        const low = () => 0.1;
-        const high = () => 0.9;
-        expect(cookPaceTicks(low)).toBe(1);
-        expect(cookPaceTicks(high)).toBe(1);
-        expect(bankPaceTicks(low)).toBe(2);
-        expect(bankPaceTicks(high)).toBe(1);
     });
 });

@@ -83,7 +83,7 @@ export type QuestStep =
     | { kind: 'withdraw'; items: { name: string; qty: number; id?: number }[]; bank?: Tile; leaveOpen?: boolean }
     | { kind: 'deposit'; keep: string[]; caps?: readonly { id: number; qty: number }[]; keepIds?: readonly number[]; bank?: Tile; leaveOpen?: boolean; exactKeep?: boolean }
     | { kind: 'mineRock'; rock: string; item: string; qty: number; anchor: Tile }
-    | { kind: 'buy'; item: string; qty: number; shop: { npc: string; anchor: Tile }; estGp: number; bank?: Tile }
+    | { kind: 'buy'; item: string; alternative?: string; qty: number; shop: { npc: string; anchor: Tile }; estGp: number; bank?: Tile }
     | { kind: 'custom'; name: string; cooperative?: boolean; run: (log: (m: string) => void) => Promise<boolean> }
     | { kind: 'wait'; reason: string; cooperative?: boolean }
     | { kind: 'done' };

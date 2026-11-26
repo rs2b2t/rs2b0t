@@ -1,3 +1,4 @@
+import { configuredLootNames } from '../../api/bank/bankRules.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { Game } from '../../api/game/Game.js';
@@ -117,7 +118,7 @@ export default class ArdyFighter extends TaskBot {
         LEASH = this.settings.num('leashRadius', 12);
         TARGET = this.settings.str('target', 'Guard');
         BANK_STAND = this.settings.tile('bankStand', DEFAULT_BANK_STAND);
-        LOOT = this.settings.list('loot', LOOT).map(s => s.toLowerCase());
+        LOOT = configuredLootNames(this.settings.list('loot', LOOT));
 
         PANIC_AT = this.settings.num('panicHp', 25) / 100;
         REST_UNTIL = this.settings.num('restUntilHp', 60) / 100;
@@ -390,7 +391,6 @@ class BankRun implements Task {
         }
 
         await Bank.depositAllMatching(depositMatcher(name => matchesAny(name, LOOT), BANK_COMMON));
-        await Execution.delayTicks(1);
         this.bot.countTrip();
         this.bot.log(`deposited the loot (trip ${this.bot.tripsTotal()})`);
 
@@ -529,7 +529,7 @@ class Fight implements Task {
                 await Execution.delayUntil(() => Game.inCombat() || ChatDialog.canContinue(), 5000);
                 continue;
             }
-            await Execution.delayTicks(2);
+            await Execution.delayTicks(1);
         }
     }
 }

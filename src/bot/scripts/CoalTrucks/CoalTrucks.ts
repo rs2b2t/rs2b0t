@@ -117,8 +117,8 @@ export default class CoalTrucks extends LoopingBot {
                 break;
             case 'await-rocks':
                 this.status = 'waiting for a coal respawn';
-                await Execution.delayTicks(RESPAWN_WAIT_TICKS);
-                break;
+                await Execution.delayUntilTicks(() => this.findRock() !== null, RESPAWN_WAIT_TICKS);
+                return;
             case 'deposit':
                 await this.deposit();
                 break;
@@ -309,7 +309,6 @@ export default class CoalTrucks extends LoopingBot {
             // Why: the keep-list is the one pickaxe in use, spares included.
             const keep = this.heldPickaxe();
             await Bank.depositAllMatching(depositAllExcept(keep ? [keep] : []));
-            await Execution.delayTicks(1);
             const moved = held - Inventory.count(COAL);
             this.banked += moved;
             if (moved > 0) {

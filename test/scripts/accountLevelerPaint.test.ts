@@ -25,13 +25,6 @@ test('queue keeps all wrapped action details and focuses the active action',()=>
     expect(result.focus).toBe(0);
 });
 
-test('paint explains combat-first training and the transition to other skills',()=>{
-    const phase=(levels:Record<string,number>)=>levelerLines({...view,levels},'Now',100).lines.map(line=>line.text).join(' ');
-    expect(phase({attack:1,strength:1,defence:1})).toContain('Build melee stats to 40');
-    expect(phase({attack:40,strength:40,defence:40,ranged:1})).toContain('Finish combat stats to 40');
-    expect(phase({attack:40,strength:40,defence:40,hitpoints:40,ranged:40,magic:40,prayer:40,agility:1})).toContain('Train remaining skills to 40');
-});
-
 test('paint makes the combat-15 food transition visible', () => {
     const text = (hitpoints: number) => levelerLines({ ...view, levels: { attack: 12, strength: 12, defence: 12, hitpoints, prayer: 1, ranged: 1, magic: 1 } }, 'Now', 100).lines.map(line => line.text).join(' ');
     expect(text(16)).toContain('Combat 14: melee death walking until 15');

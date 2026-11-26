@@ -6,7 +6,7 @@ import { Traversal } from '../../../../walking/Traversal.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
 import { GroundItems } from '../../../../grounditems/GroundItems.js';
 import { GameMessages } from '../../../../chatbox/gameMessages.js';
-import { promptLoc, settleScene, useOnLoc } from '../../exec/prompts.js';
+import { findSceneTarget, promptLoc, settleScene, useOnLoc } from '../../exec/prompts.js';
 import { EC_ID, EC_NAME, EC_TILE } from './areas.js';
 
 const held = (id: number): number => Inventory.countById(id);
@@ -20,8 +20,7 @@ async function takeSpawn(id: number, name: string, at: Tile, log: (m: string) =>
         log(`could not reach the ${name} spawn at (${at.x},${at.z},${at.level})`);
         return false;
     }
-    await settleScene();
-    const item = GroundItems.query().name(name).within(6).nearest();
+    const item = await findSceneTarget(() => GroundItems.query().name(name).within(6).nearest());
     if (!item) {
         log(`no ${name} on the ground at (${at.x},${at.z},${at.level})`);
         return false;

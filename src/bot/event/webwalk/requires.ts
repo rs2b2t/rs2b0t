@@ -25,6 +25,9 @@ export function meetsRequires(requires: TransportRequires | undefined, state: Wo
         return { ok: false, reason: `need ${requires.freeSlots} free inventory slots (have ${state.freeSlots})` };
     }
 
+    if (requires.minQuestPoints !== undefined && (state.questPoints ?? 0) < requires.minQuestPoints) {
+        return { ok: false, reason: `need ${requires.minQuestPoints} quest points (have ${state.questPoints ?? 0})` };
+    }
     if (requires.skills) {
         for (const sk of requires.skills) {
             const have = state.skills[sk.name.toLowerCase()] ?? state.skills[sk.name] ?? 0;
@@ -119,6 +122,7 @@ export function hasGatingRequires(requires: TransportRequires | undefined): bool
     }
     return (
         requires.members === true
+        || requires.minQuestPoints !== undefined
         || requires.freeSlots !== undefined
         || (requires.skills !== undefined && requires.skills.length > 0)
         || (requires.items !== undefined && requires.items.length > 0)

@@ -6,7 +6,7 @@ import { GroundItems } from '../../../../grounditems/GroundItems.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
 import { Locs } from '../../../../locs/Locs.js';
 import { Npcs } from '../../../../npcs/Npcs.js';
-import { settleScene } from '../../exec/prompts.js';
+import { findSceneTarget, settleScene } from '../../exec/prompts.js';
 import {
     ANY_BELLOWS,
     BELLOWS_IDS,
@@ -101,12 +101,11 @@ async function fillBellows(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(CB_TILE.SWAMP, 2, log))) {
         return false;
     }
-    await settleScene();
-    const bubbles = Locs.query()
+    const bubbles = await findSceneTarget(() => Locs.query()
         .name(CB_LOC.BUBBLES)
         .where(l => l.tile().distanceTo(CB_TILE.BUBBLE) <= 1)
         .within(6)
-        .nearest();
+        .nearest());
     const bellows = Inventory.items().find(i => i.id === id);
     if (!bubbles || !bellows) {
         log(`no usable Swamp bubbles beside (${CB_TILE.SWAMP.x},${CB_TILE.SWAMP.z})`);

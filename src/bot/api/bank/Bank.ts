@@ -318,11 +318,27 @@ export const Bank = {
         return clickInvButton(reader.bankSideItems(), name, op);
     },
 
+    async depositXById(id: number, count: number): Promise<boolean> {
+        if (count <= 0) return true;
+        if (!(await bankBackpackReady())) return false;
+        const held = Inventory.countById(id);
+        if (held < count) return false;
+        const amount = count === held ? 'All' : [1, 5, 10].includes(count) ? String(count) : 'X';
+        if (!(await clickInvButtonById(reader.bankSideItems(), id, 'Deposit-' + amount))) return false;
+        if (amount === 'X') {
+            await Execution.delayUntil(() => !Bank.isOpen() || reader.countDialogOpen(), 3000);
+            if (!Bank.isOpen() || !reader.countDialogOpen() || !actions.answerCountDialog(count)) return false;
+        }
+        const landed = () => Bank.isOpen() && reader.bankSideSnapshotReady() && Inventory.countById(id) === held - count;
+        await Execution.delayUntil(() => !Bank.isOpen() || landed(), 4000);
+        return landed();
+    },
+
     async depositInventory(): Promise<void> {
         await Bank.depositAllMatching(() => true);
     },
 
-    async depositAllMatching(match: (name: string, id: number) => boolean, log?: (msg: string) => void): Promise<void> {
+    async depositAllMatching(match: (name: string, id: number) => boolean, log?: (msg: string) => void, batchSize: 1 | 5 = 1): Promise<void> {
         for (let guard = 0; guard < 32; guard++) {
             let items = reader.bankSideItems();
             if (items.length === 0 && Bank.isOpen() && !reader.bankSideSnapshotReady()) {
@@ -330,20 +346,23 @@ export const Bank = {
                 await Execution.delayUntil(() => reader.bankSideSnapshotReady() || reader.bankSideItems().length > 0 || !Bank.isOpen(), 1200);
                 items = reader.bankSideItems();
             }
-            // a nameless obj (cache miss) is still an item taking a slot, let the matcher decide
-            const item = items.find(i => match(i.name ?? '', i.id));
-            if (!item) {
-                return;
+            const batch = new Map<number, InvItemSnapshot>();
+            for (const item of items) {
+                if (batch.has(item.id) || !match(item.name ?? '', item.id)) continue;
+                const allOp = item.ops.findIndex(op => op?.toLowerCase().includes('all'));
+                const op = allOp !== -1 ? allOp + 1 : bestOpIndex(item.ops);
+                if (op === -1) continue;
+                batch.set(item.id, item);
+                Input.invButton(item.id, item.slot, item.comId, op);
+                if (batch.size === batchSize) break;
             }
-
-            const allOp = item.ops.findIndex(op => op?.toLowerCase().includes('all'));
-            const op = allOp !== -1 ? allOp + 1 : bestOpIndex(item.ops);
-            if (op === -1) {
-                return;
-            }
-
-            Input.invButton(item.id, item.slot, item.comId, op);
-            await Execution.delayUntil(() => !reader.bankSideItems().some(i => i.slot === item.slot && i.id === item.id), 2000);
+            if (!batch.size) return;
+            const changed = await Execution.delayUntil(() => {
+                const current = reader.bankSideItems();
+                return !Bank.isOpen() || [...batch.values()].some(item =>
+                    !current.some(row => row.slot === item.slot && row.id === item.id && row.count === item.count));
+            }, 2000);
+            if (!Bank.isOpen() || (!changed && batchSize > 1)) return;
         }
     },
 

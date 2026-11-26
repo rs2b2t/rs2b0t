@@ -60,6 +60,38 @@ interface Lcb {
 }
 interface LcbWindow extends Window { rs2b0t?: Lcb; }
 
+class FrameStartupQueue {
+    private active = 0;
+    private waiting = new Set<() => void>();
+
+    constructor(private limit: number) {}
+
+    enqueue(start: () => void): () => void {
+        let running = false;
+        const admit = (): void => {
+            running = true;
+            this.active++;
+            start();
+        };
+        this.waiting.add(admit);
+        this.advance();
+        return () => {
+            this.waiting.delete(admit);
+            if (!running) return;
+            running = false;
+            this.active--;
+            this.advance();
+        };
+    }
+
+    private advance(): void {
+        const next = this.waiting.values().next().value;
+        if (this.active >= this.limit || !next) return;
+        this.waiting.delete(next);
+        next();
+    }
+}
+
 class DomSlotHandle implements SlotHandle {
     readonly el: HTMLDivElement;
 
@@ -71,10 +103,11 @@ class DomSlotHandle implements SlotHandle {
     private win: LcbWindow | null = null;
     private pending: Array<(l: Lcb) => void> = [];
     private destroyed = false;
+    private cancelStartup: () => void = () => {};
     private mode: RenderMode = 'background';
     private onResize = (): void => this.applyLayout();
 
-    constructor(private account: Account, private worldRouting: boolean) {
+    constructor(private account: Account, private worldRouting: boolean, private startups: FrameStartupQueue) {
         this.el = document.createElement('div');
         this.el.className = 'mbx-slot';
         this.el.draggable = true;
@@ -130,7 +163,7 @@ class DomSlotHandle implements SlotHandle {
         clip.className = 'mbx-clip';
         this.scaler = document.createElement('div');
         this.scaler.className = 'mbx-scaler';
-        this.iframe = this.createFrame(account.world);
+        this.iframe = this.createFrame();
         this.scaler.appendChild(this.iframe);
         clip.appendChild(this.scaler);
 
@@ -152,31 +185,52 @@ class DomSlotHandle implements SlotHandle {
         this.el.append(scriptStatus, body);
         this.mirrorTimer = window.setInterval(this.paintMirror, 1000);
         this.applyLayout();
-        this.poll();
     }
 
     reloadWorld(world: WorldNumber): void {
         if (this.destroyed || !this.worldRouting) return;
-        const frame = this.createFrame(world, true);
+        this.cancelStartup();
+        const frame = this.createFrame();
         if (this.pollTimer !== null) window.clearTimeout(this.pollTimer);
         this.win = null;
         this.pending = [];
         this.iframe.replaceWith(frame);
         this.iframe = frame;
         this.account = { ...this.account, world };
-        this.poll();
+        this.startFrame(true);
     }
 
-    private createFrame(world?: WorldNumber, switching = false): HTMLIFrameElement {
+    private createFrame(): HTMLIFrameElement {
         const frame = document.createElement('iframe');
         frame.className = 'mbx-frame';
         frame.title = this.account.username;
+        return frame;
+    }
+
+    startFrame(switching = false): void {
+        const frame = this.iframe;
         const wall = new URL(location.href);
         if (!this.worldRouting) wall.searchParams.delete('world');
-        const url = botFrameUrl(wall, this.account.username, this.worldRouting ? world : undefined);
+        const url = botFrameUrl(wall, this.account.username, this.worldRouting ? this.account.world : undefined);
         if (switching) url.searchParams.set('autologin', '0');
-        frame.src = url.href;
-        return frame;
+        this.el.dataset.startup = 'Queued to load';
+        let timeout: number;
+        const finish = (): void => {
+            window.clearTimeout(timeout);
+            frame.removeEventListener('mbx-client-initialized', finish);
+            frame.removeEventListener('error', finish);
+            delete this.el.dataset.startup;
+            release();
+        };
+        const release = this.startups.enqueue(() => {
+            this.el.dataset.startup = 'Loading';
+            frame.addEventListener('mbx-client-initialized', finish);
+            frame.addEventListener('error', finish);
+            timeout = window.setTimeout(finish, 180_000);
+            frame.src = url.href;
+            this.poll();
+        });
+        this.cancelStartup = finish;
     }
 
     cancelWorldSwitch(): void {
@@ -241,6 +295,7 @@ class DomSlotHandle implements SlotHandle {
 
     destroy(): void {
         this.destroyed = true;
+        this.cancelStartup();
         window.clearInterval(this.mirrorTimer);
         if (this.pollTimer !== null) window.clearTimeout(this.pollTimer);
         window.removeEventListener('resize', this.onResize);
@@ -315,11 +370,15 @@ export function orderedSlotElements(root: ParentNode): HTMLElement[] {
 }
 
 export class DomSlotOps implements SlotOps {
-    constructor(private railEl: HTMLElement, private beforeEl: HTMLElement, private worldRouting = supportsWorldRouting()) {}
+    private startups: FrameStartupQueue;
+    constructor(private railEl: HTMLElement, private beforeEl: HTMLElement, private worldRouting = supportsWorldRouting(), parallelism = 4) {
+        this.startups = new FrameStartupQueue(parallelism);
+    }
 
     spawn(account: Account): SlotHandle {
-        const handle = new DomSlotHandle(account, this.worldRouting);
+        const handle = new DomSlotHandle(account, this.worldRouting, this.startups);
         this.railEl.insertBefore(handle.el, this.beforeEl);
+        handle.startFrame();
         this.applyVisualOrder(orderedSlotElements(this.railEl));
         return handle;
     }

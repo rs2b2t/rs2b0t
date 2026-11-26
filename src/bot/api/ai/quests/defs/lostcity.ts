@@ -1,4 +1,5 @@
-import { actions, reader } from '../../../../adapter/ClientAdapter.js';
+import { Modals } from '../../../ui/widgets/Modals.js';
+import { findSceneTarget } from '../exec/prompts.js';
 import { Execution } from '../../../execution/Execution.js';
 import { Game } from '../../../game/Game.js';
 import Tile from '../../../../geometry/Tile.js';
@@ -54,10 +55,7 @@ async function readLostCityStage(): Promise<number | undefined> {
 
     const lines = await Quests.journal('Lost City');
     const stage = parseLostCityJournal(lines);
-    if (reader.modals().main !== -1) {
-        actions.closeModal();
-        await Execution.delayTicks(1);
-    }
+    await Modals.closeIfOpen();
     return stage;
 }
 
@@ -367,14 +365,13 @@ async function acquireDungeonAxe(log: (m: string) => void): Promise<boolean> {
     if (await takeDungeonAxe()) {
         return true;
     }
-    const zombie = Npcs.query()
+    const zombie = await findSceneTarget(() => Npcs.query()
         .where(n => n.id === ENTRANA_ZOMBIE_ID && !n.inCombat && !n.targetsAnotherPlayer())
         .action('Attack')
         .within(15)
-        .nearest();
+        .nearest(), 2);
     if (!zombie) {
         log('waiting for an available Entrana Zombie');
-        await Execution.delayTicks(2);
         return false;
     }
     await restoreWithSelectedFood(0.7);

@@ -91,7 +91,7 @@ export default class ThievingBot extends TaskBot {
 
         this.target = this.settings.str('target', 'Man');
         this.action = this.settings.str('action', 'Pickpocket');
-        this.food = scriptFood(this.settings, '').toLowerCase();
+        this.food = (this.settings.str('food').trim() || scriptFood(this.settings, '')).toLowerCase();
 
         this.autoBank = autoFoodBanking(this.settings.str('banking', 'None'));
         this.foodWithdraw = this.settings.num('foodWithdraw', 22);
@@ -305,11 +305,7 @@ class FoodBank implements Task {
         }
 
         await Bank.depositAllMatching(name => !this.bot.isFood(name), message => this.bot.log(`  ${message}`));
-        await Execution.delayUntil(() => Bank.items().some(item => this.bot.isFood(item.name)), 3000);
-        if (!Bank.items().some(item => this.bot.isFood(item.name))) {
-            this.bot.stopSafely(`no '${this.bot.foodKeyword()}' food in the bank`);
-            return;
-        }
+        if (!(await Bank.waitReady(3000, log))) return;
 
         const bankFood = Bank.items().find(item => this.bot.isFood(item.name));
         if (!bankFood?.name) {

@@ -13,7 +13,7 @@ import { Skills } from '../../../../skills/Skills.js';
 import { Sustain } from '../../../../sustain/Sustain.js';
 import { Modals } from '../../../../ui/widgets/Modals.js';
 import { Traversal } from '../../../../walking/Traversal.js';
-import { clearBoxes, crossTeleportDoor, promptLoc, settleScene } from '../../exec/prompts.js';
+import { findSceneTarget, clearBoxes, crossTeleportDoor, promptLoc, settleScene } from '../../exec/prompts.js';
 import { EXPERIMENT_IDS, WH_LOC, WH_OBJ, WH_TILE, inGarden, inShed } from './areas.js';
 import { held } from './house.js';
 import { FOUNTAIN_STAND, GARDEN_ENTRY, GARDEN_SHED, walkGarden } from './patrol.js';
@@ -41,7 +41,6 @@ export async function fountainKey(log: (m: string) => void): Promise<boolean> {
             : 'never reached the garden. The witch throws a caught bot back to the boy');
         return false;
     }
-    await settleScene();
     const took = await promptLoc({
         name: 'Fountain',
         op: 'Check',
@@ -207,8 +206,7 @@ export async function takeBall(log: (m: string) => void): Promise<boolean> {
     if (!(await Traversal.walkResilient(WH_TILE.BALL, { radius: 1, attempts: 2, timeoutMs: 60_000, log }))) {
         return false;
     }
-    await settleScene();
-    const ball = ballDrop();
+    const ball = await findSceneTarget(() => ballDrop());
     if (!ball) {
         log('no ball on the shed floor. It respawns on its map timer');
         return false;

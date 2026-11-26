@@ -58,7 +58,7 @@ export async function readBook(log: (m: string) => void): Promise<boolean> {
     if (!(await book.interact('Read'))) {
         return false;
     }
-    await Execution.delayTicks(3);
+    await Execution.delayUntilTicks(() => Modals.isOpen(), 3);
     await Modals.close();
     return true;
 }

@@ -1,6 +1,6 @@
+import { Modals } from '../../../ui/widgets/Modals.js';
 import { normalizeJournal as normalize } from '../journalText.js';
 // docs/QUESTS.md
-import { actions, reader } from '../../../../adapter/ClientAdapter.js';
 import { DirectNavigator } from '../../../../event/webwalk/DirectNavigator.js';
 import Tile from '../../../../geometry/Tile.js';
 import { Execution } from '../../../execution/Execution.js';
@@ -127,10 +127,7 @@ export async function readClockTowerProgress(): Promise<QuestProgress | undefine
         return undefined;
     }
     const progress = parseClockTowerJournal(await Quests.journal(QUEST));
-    if (reader.modals().main !== -1) {
-        actions.closeModal();
-        await Execution.delayTicks(1);
-    }
+    await Modals.closeIfOpen();
     return progress;
 }
 

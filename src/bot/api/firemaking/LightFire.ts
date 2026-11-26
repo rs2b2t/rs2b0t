@@ -1,3 +1,4 @@
+import { reader } from '../../adapter/ClientAdapter.js';
 import { GameMessages } from '../chatbox/gameMessages.js';
 import { EventSignal } from '../execution/EventSignal.js';
 import { Execution } from '../execution/Execution.js';
@@ -9,8 +10,24 @@ import {
     FIRE_LIGHT_TICKS,
     FIRE_START_TICKS,
     TINDERBOX,
+    inFirePlot,
+    tileKey,
+    type FirePlot,
     type LightOutcome
 } from './Firemaking.js';
+
+export async function waitForFireSpace(plot: FirePlot, maxTicks: number): Promise<void> {
+    const fires = () => new Set(reader.locs()
+        .filter(loc => loc.name?.toLowerCase() === 'fire' && inFirePlot(loc.tile, plot))
+        .map(loc => tileKey(loc.tile)));
+    const burning = [...fires()];
+    await Execution.delayUntilTicks(() => {
+        if (EventSignal.pending()) return true;
+        if (!burning.length || !Game.sceneReady()) return false;
+        const current = fires();
+        return burning.some(tile => !current.has(tile));
+    }, maxTicks);
+}
 
 /**
  * One light attempt on the tile the player is standing on.

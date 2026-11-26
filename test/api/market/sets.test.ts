@@ -52,6 +52,18 @@ describe('set names', () => {
         expect(quote('rune sets', { ...book, rows }).kind).toBe('miss');
     });
 
+    test('quotes the stocked skirt variant at its own price and keeps the quoted pieces through appraisal', () => {
+        const stock = (id: number) => id === 1079 ? 0 : 2;
+        const prices = { ...book, rows: [...book.rows, { ...book.rows[2], id: 1093, mid: 150, sell: 200 }] };
+        const target = resolveQuote({ cat, book: prices, query: 'rune set', side: 'selling', qtyImplied: true, held: stock });
+        expect(target.kind).toBe('set');
+        if (target.kind !== 'set') throw Error('missing rune set');
+        const result = appraise({ cat, book: prices, coinId: 995, intent: { set: target.set, maxQty: 1 },
+            theirOffer: [], desk: { available: stock, held: stock, purse: 0 } });
+        expect([...result.owe]).toEqual([[1163, 1], [1127, 1], [1093, 1]]);
+        expect(result.total).toBe(503);
+    });
+
     test('does not confuse black armour with black dragonhide or a single item', () => {
         expect(quote('black dragonhide sets').kind).toBe('miss');
         expect(quote('rune full helm')).toEqual({ kind: 'hit', id: 1163, name: 'Rune full helm' });

@@ -1,3 +1,4 @@
+import { afterDialogueAction } from './primitives.js';
 // Default AIOQuester "need quest money" route: pickpocket Men, heal with Kebabs.
 // Why: the anchors match the Waterfall and Goblin Diplomacy funding legs, the Al Kharid Man stands next to the kebab shop, and the Varrock Man is used only to afford the 10 gp toll.
 import { Execution } from '../../../execution/Execution.js';
@@ -61,8 +62,7 @@ async function reachFundingMan(anchor: Tile, log: (m: string) => void): Promise<
 async function clearFundingDialog(): Promise<boolean> {
     for (let pages = 0; pages < 12 && ChatDialog.canContinue(); pages++) {
         if (EventSignal.pending()) return false;
-        await ChatDialog.continue();
-        await Execution.delayTicks(1);
+        await afterDialogueAction(await ChatDialog.continue(), 1);
     }
     return !EventSignal.pending();
 }
@@ -122,8 +122,7 @@ async function buyKebab(log: (m: string) => void): Promise<boolean> {
         if (EventSignal.pending()) return false;
         if (Inventory.count(KEBAB) > before) return true;
         if (ChatDialog.canContinue()) {
-            await ChatDialog.continue();
-            await Execution.delayTicks(1);
+            await afterDialogueAction(await ChatDialog.continue(), 1);
             continue;
         }
         const options = ChatDialog.options();

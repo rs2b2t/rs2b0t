@@ -1,6 +1,6 @@
+import { Modals } from '../../../../ui/widgets/Modals.js';
 import { normalizeJournal as normalize } from '../../journalText.js';
-import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
-import { Execution } from '../../../../execution/Execution.js';
+import { reader } from '../../../../../adapter/ClientAdapter.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 import { SM_QUEST, SM_STAGE, SM_VARP } from './areas.js';
@@ -72,10 +72,7 @@ export async function readMorttonProgress(): Promise<QuestProgress | undefined> 
     }
     const stage = parseMorttonJournal(await Quests.journal(SM_QUEST));
     // Why: a mesbox left on main blanks every journal read behind it, and the temple refuses in mesboxes.
-    if (reader.modals().main !== -1) {
-        actions.closeModal();
-        await Execution.delayTicks(1);
-    }
+    await Modals.closeIfOpen();
     if (stage !== undefined) {
         lastStage = stage;
     }

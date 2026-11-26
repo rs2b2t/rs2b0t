@@ -5,7 +5,7 @@ import { Npcs } from '../../../../npcs/Npcs.js';
 import { Sustain } from '../../../../sustain/Sustain.js';
 import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
 import { Traversal } from '../../../../walking/Traversal.js';
-import { openDialogue, pickPreferred } from '../../exec/primitives.js';
+import { afterDialogueAction, openDialogue, pickPreferred } from '../../exec/primitives.js';
 import { settleScene } from '../../exec/prompts.js';
 
 export type Log = (msg: string) => void;
@@ -27,9 +27,8 @@ export async function driveFully(prefer: readonly string[], log: Log, quietTicks
     for (let i = 0; i < 300 && quiet < quietTicks; i++) {
         await Sustain.run();
         if (ChatDialog.canContinue()) {
-            await ChatDialog.continue();
+            await afterDialogueAction(await ChatDialog.continue(), 1);
             quiet = 0;
-            await Execution.delayTicks(1);
             continue;
         }
         const options = ChatDialog.options();
@@ -39,9 +38,8 @@ export async function driveFully(prefer: readonly string[], log: Log, quietTicks
                 log(`no preferred option in [${options.join(' | ')}]`);
                 return false;
             }
-            await ChatDialog.chooseOption(pick);
+            await afterDialogueAction(await ChatDialog.chooseOption(pick), 1);
             quiet = 0;
-            await Execution.delayTicks(1);
             continue;
         }
         quiet++;
@@ -63,7 +61,6 @@ export async function talkFully(
     if (!(await walkTo(anchor, 4, log))) {
         return false;
     }
-    await settleScene();
     if (!(await openDialogue(npc, log))) {
         await Execution.delayTicks(3);
         if (!(await openDialogue(npc, log))) {

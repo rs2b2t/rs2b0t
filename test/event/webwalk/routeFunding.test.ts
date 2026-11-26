@@ -74,6 +74,24 @@ beforeEach(() => {
 afterEach(() => mock.restore());
 
 describe.skipIf(!packExists)('route funding with the real navigation pack', () => {
+    test('funds the Seers bank to Draynor trip for a law crafter carrying only its talisman', async () => {
+        here = { x: 2721, z: 3493, level: 0 };
+        coins = 0;
+        let balance = 100_000_000;
+        spyOn(Bank, 'withdrawX').mockImplementation(async (item, count) => {
+            if (!bankOpen || item !== 'Coins' || count > balance) return false;
+            balance -= count;
+            coins += count;
+            withdrawn += count;
+            return true;
+        });
+        expect(await WalkExecutor.walkTo(draynor, { avoidZones: ['white-wolf-mountain'], useTeleportCatalog: false })).toBe(true);
+        expect(balance).toBe(99_999_940);
+        expect(withdrawn).toBe(60);
+        expect(crossings).toBe(2);
+        expect(here).toEqual(draynor);
+    });
+
     test('withdraws the first fare when every route to Karamja requires coins', async () => {
         here = { x: 2615, z: 3332, level: 0 };
         coins = 0;

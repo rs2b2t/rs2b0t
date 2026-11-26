@@ -5,7 +5,7 @@ import { Traversal } from '../../../../walking/Traversal.js';
 import { Bank } from '../../../../bank/Bank.js';
 import { QuestFood } from '../../food.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
-import { settleScene, useOnLoc } from '../../exec/prompts.js';
+import { findSceneTarget, settleScene, useOnLoc } from '../../exec/prompts.js';
 import { SM_ID, SM_LOC, SM_LOC_ID, SM_NAME, SM_STAGE, SM_TILE, VARROCK_GENERAL } from './areas.js';
 
 export const COIN_TARGET = 30_000;
@@ -269,10 +269,9 @@ export function makeAshes(want: { ashes: number; logs: number }): (log: (m: stri
                 }
                 continue;
             }
-            const spawn = GroundItems.query().where(g => g.id === SM_ID.LOGS).within(8).nearest();
+            const spawn = await findSceneTarget(() => GroundItems.query().where(g => g.id === SM_ID.LOGS).within(8).nearest(), 4);
             if (!spawn) {
                 // Both spawns are taken; they come back on their own timer.
-                await Execution.delayTicks(4);
                 continue;
             }
             if (await spawn.interact('Take')) {

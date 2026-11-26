@@ -43,6 +43,7 @@ interface QuestRequirement {
 
 /** Planner-side gates; dialog and NPC side-trips live in specialCrossings. */
 export interface TransportRequires {
+    minQuestPoints?: number;
     members?: boolean;
     skills?: SkillRequirement[];
     /** Any-of sets can be expressed as multiple edges; each item is ANDed. */
@@ -123,6 +124,7 @@ export interface TransportEdge {
 
 /** Cheap snapshot for filtering edges at search time, built from reader / Skills / Quests / Inventory. */
 export interface WorldState {
+    questPoints?: number;
     members: boolean;
     skills: Readonly<Record<string, number>>;
     questStatus(quest: string): QuestProgress;

@@ -24,6 +24,8 @@ const original = {
     skillLevel: Skills.level,
     skillXp: Skills.xp,
     bankItems: Bank.items,
+    bankBackpackReady: Bank.backpackReady,
+    bankSnapshotReady: Bank.snapshotReady,
     bankLoaded: Bank.loaded,
     bankOpenNearest: Bank.openNearestAccess,
     bankIsOpen: Bank.isOpen,
@@ -119,6 +121,8 @@ beforeEach(() => {
     Skills.xp = () => 100_000;
 
     Bank.items = () => bankContents;
+    Bank.snapshotReady = () => false;
+    Bank.backpackReady = async () => bankOpen && sideReady;
     Bank.loaded = () => bankContents.length > 0;
     Bank.openNearestAccess = async () => true;
     Bank.isOpen = () => bankOpen;
@@ -165,6 +169,8 @@ afterEach(() => {
     Skills.level = original.skillLevel;
     Skills.xp = original.skillXp;
     Bank.items = original.bankItems;
+    Bank.backpackReady = original.bankBackpackReady;
+    Bank.snapshotReady = original.bankSnapshotReady;
     Bank.loaded = original.bankLoaded;
     Bank.openNearestAccess = original.bankOpenNearest;
     Bank.isOpen = original.bankIsOpen;
@@ -232,6 +238,13 @@ describe('LeatherCrafter bank withdrawals', () => {
         expect(logs.some(message => message.includes('no thread'))).toBe(false);
     });
 
+    test('a synchronized empty bank reports missing stock immediately', async () => {
+        Bank.snapshotReady = () => true;
+        await runBankLeg();
+        expect(stops).toEqual(['no needle in the bank']);
+        expect(clickedIds).toEqual([]);
+    });
+
     test('retries without stopping when the bank contents have not loaded', async () => {
         inventoryCounts.set(NEEDLE, 1);
         Bank.loaded = () => false;
@@ -261,8 +274,10 @@ describe('LeatherCrafter bank withdrawals', () => {
     test('retries while the main bank view rehydrates after a deposit', async () => {
         inventoryCounts.set(NEEDLE, 1);
         bankContents = [snapshot(THREAD, 500, 2), snapshot(LEATHER, 500, 3)];
-        let loadedReads = 0;
-        Bank.loaded = () => ++loadedReads === 1;
+        Bank.backpackReady = async () => {
+            Bank.loaded = () => false;
+            return true;
+        };
 
         await runBankLeg();
 

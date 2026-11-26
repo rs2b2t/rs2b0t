@@ -7,6 +7,7 @@ import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.j
 import { talkStrict } from '../../exec/primitives.js';
 import {
     ARROWS_WANTED,
+    IKOV_BOWS,
     IKOV_FOODS,
     IKOV_NAME,
     IKOV_OBJ,
@@ -30,7 +31,7 @@ import {
 import { fightFireWarrior, killLucien } from './fight.js';
 import { IKOV_GEAR_NAMES, RANGED_ARMOUR_NAMES, rangedArmourStep } from './gear.js';
 import { IKOV_STAGE, readIkovStage } from './journal.js';
-import { heldOrBanked, restockStep, sourcingShortfall, suppliesStep } from './supplies.js';
+import { heldOrBanked, restockStep, suppliesStep } from './supplies.js';
 import { joinTheGuardians, leaveTheFarSide } from './temple.js';
 
 const IKOV_ID = 'ikov';
@@ -45,7 +46,7 @@ const IKOV_TOOLS = [
     'yew logs',
     'flax',
     'bow string',
-    'yew shortbow',
+    ...IKOV_BOWS.map(bow => bow.name.toLowerCase()),
     'ice arrows',
     'boots of lightness',
     'pendant',
@@ -129,10 +130,18 @@ function dungeonKitStep(snap: QuestSnapshot): QuestStep | null {
     return withdrawFor(snap, wanted);
 }
 
-function warKitStep(snap: QuestSnapshot): QuestStep | null {
-    const bow = withdrawFor(snap, [{ name: IKOV_NAME.YEW_SHORTBOW, id: IKOV_OBJ.YEW_SHORTBOW, qty: 1 }]);
-    if (bow) {
-        return bow;
+function warriorStep(snap: QuestSnapshot): QuestStep {
+    const owned = IKOV_BOWS.filter(bow => heldOrBanked(snap, bow.id) > 0);
+    const usable = owned.filter(bow => bow.ranged <= (snap.ranged ?? 40));
+    const bow = usable.find(bow => snap.wornIds?.has(bow.id))
+        ?? usable.find(bow => held(snap, bow.id) > 0) ?? usable[0];
+    if (!bow) {
+        const first = owned[0];
+        return { kind: 'wait', reason: first ? `need Ranged ${first.ranged} to wield ${first.name}` : 'need a strung yew or magic bow' };
+    }
+    if (!snap.wornIds?.has(bow.id)) {
+        const withdraw = withdrawFor(snap, [{ ...bow, qty: 1 }]);
+        if (withdraw) return withdraw;
     }
     // Why: the ice-chest circuit is 4 minutes of damage that eats the engine's one-shot float, so the bot reaches the Fire Warrior's door on an empty pack unless this leg refills it.
     const food = restockStep(snap, WARRIOR_FOOD, WARRIOR_FOOD_FLOOR);
@@ -140,14 +149,11 @@ function warKitStep(snap: QuestSnapshot): QuestStep | null {
         return food;
     }
     const key = IKOV_NAME.ICE_ARROWS.toLowerCase();
-    if (snap.worn.has(key) || (snap.inv.get(key) ?? 0) > 0) {
-        return null;
-    }
     const banked = snap.bank?.get(key) ?? 0;
-    if (banked === 0) {
-        return null;
+    if (!snap.worn.has(key) && !snap.inv.get(key) && banked > 0) {
+        return { kind: 'withdraw', items: [{ name: IKOV_NAME.ICE_ARROWS, qty: Math.min(banked, ARROWS_WANTED) }] };
     }
-    return { kind: 'withdraw', items: [{ name: IKOV_NAME.ICE_ARROWS, qty: Math.min(banked, ARROWS_WANTED) }] };
+    return { kind: 'custom', name: 'shoot the Fire Warrior of Lesarkus', run: log => fightFireWarrior(log, bow.id) };
 }
 
 // Why: Lucien re-issues only when `obj_gettotal` reads zero, and that counts the bank, so a banked pendant is one he refuses to replace.
@@ -272,11 +278,7 @@ export function decide(snap: QuestSnapshot, fletchingLevel?: number): QuestStep 
         return { kind: 'custom', name: 'disarm and pull the trap lever', run: pullTrapLever };
     }
 
-    const war = warKitStep(snap);
-    if (war) {
-        return war;
-    }
-    return { kind: 'custom', name: 'shoot the Fire Warrior of Lesarkus', run: fightFireWarrior };
+    return warriorStep(snap);
 }
 
 export const ikov: QuestModule = {
@@ -289,8 +291,10 @@ export const ikov: QuestModule = {
     tools: IKOV_TOOLS,
     // Why: the ice cavern and the hobgoblin camp are crowds the bank may not dress for; 0.55 left 38 hp against 3 level-42 attackers and the bot died at 12 roots.
     sustain: { foods: ['Lobster', 'Swordfish', 'Tuna'], eatBelowHp: 0.75 },
-    readStage: readIkovStage,
-    warnReadiness: sourcingShortfall,
+    readProgress: async () => {
+        const stage = await readIkovStage();
+        return stage === undefined ? undefined : { stage, flags: new Set<string>() };
+    },
     observe: (snap, step) => {
         const t = snap.tile;
         const where = t ? `(${t.x},${t.z},${t.level})` : '(?)';

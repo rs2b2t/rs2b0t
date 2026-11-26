@@ -119,6 +119,7 @@ export default class BotPanel {
         settings.appendChild(this.settingsBox);
 
         const settingsBtns = el('div', 'rs2b0t-settings-btns');
+        const credentials = this.buildCredentials();
         const globalBtn = document.createElement('button');
         globalBtn.className = 'rs2b0t-button rs2b0t-param-edit';
         globalBtn.textContent = 'Global settings';
@@ -127,7 +128,8 @@ export default class BotPanel {
         globalBtn.addEventListener('click', () =>
             this.paramsModal.open('Global', GLOBAL_SETTINGS_CORE, {
                 title: 'Global settings',
-                showGlobalExtra: true
+                showGlobalExtra: true,
+                onClose: credentials.hidePassword
             })
         );
         const navBtn = document.createElement('button');
@@ -171,7 +173,7 @@ export default class BotPanel {
         this.paramsModal.onEditPriceBook = name => this.priceBookPanel.open(name);
         document.body.appendChild(this.loadoutPanel.root);
         document.body.appendChild(this.priceBookPanel.root);
-        this.paramsModal.setGlobalExtra(this.buildCredentials());
+        this.paramsModal.setGlobalExtra(credentials.section);
 
         ScriptRegistry.onChange(() => {
             this.ensureSelection();
@@ -455,7 +457,7 @@ export default class BotPanel {
         this.settingsBox.appendChild(edit);
     }
 
-    private buildCredentials(): HTMLElement {
+    private buildCredentials(): { section: HTMLElement; hidePassword: () => void } {
         const sec = el('div', 'rs2b0t-section');
         sec.appendChild(sectionTitle('credentials'));
         const saved = Credentials.get();
@@ -469,12 +471,28 @@ export default class BotPanel {
 
         const passInput = document.createElement('input');
         passInput.className = 'rs2b0t-input';
-        passInput.type = 'password';
         passInput.placeholder = 'password';
+        passInput.type = 'password';
         passInput.value = saved?.password ?? '';
-        sec.appendChild(labeled('pass', passInput));
+        const field = el('div', 'rs2b0t-password');
+        field.appendChild(passInput);
+        const toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.innerHTML = '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'
+            + '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/><path class="eye-slash" d="m3 3 18 18"/></svg>';
+        const setVisible = (visible: boolean): void => {
+            passInput.type = visible ? 'text' : 'password';
+            toggle.title = visible ? 'Hide password' : 'Show password';
+            toggle.setAttribute('aria-label', toggle.title);
+        };
+        const hidePassword = (): void => setVisible(false);
+        hidePassword();
+        toggle.addEventListener('click', () => setVisible(passInput.type === 'password'));
+        field.appendChild(toggle);
+        sec.appendChild(labeled('pass', field));
 
         Credentials.onChange(creds => {
+            hidePassword();
             userInput.value = creds?.username ?? '';
             passInput.value = creds?.password ?? '';
         });
@@ -522,7 +540,7 @@ export default class BotPanel {
         sec.appendChild(autoRow);
 
         sec.appendChild(status);
-        return sec;
+        return { section: sec, hidePassword };
     }
 
     private handleStart(rethrow = false): void {

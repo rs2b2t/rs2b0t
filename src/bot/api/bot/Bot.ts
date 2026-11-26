@@ -71,6 +71,7 @@ export abstract class AbstractBot {
     onPaint?(ctx: CanvasRenderingContext2D): void;
 
     recoveryAnchor?(): Tile | null;
+    stallDetails?(): string;
 
     grindTargets(): string[] {
         return [];

@@ -1,5 +1,10 @@
-import { expect, test } from 'bun:test';
+import { expect, spyOn, test } from 'bun:test';
 import '#/bot/scripts/index.js';
+import { Execution } from '#/bot/api/execution/Execution.js';
+import { ScriptActivity } from '#/bot/runtime/ScriptActivity.js';
+import { Game } from '#/bot/api/game/Game.js';
+import { Loadouts } from '#/bot/api/loadout/loadoutStore.js';
+import ThievingBot from '#/bot/scripts/ThievingBot/ThievingBot.js';
 import { ScriptRegistry } from '#/bot/runtime/ScriptRegistry.js';
 import { emptyMemory, enabledSkills, planNext } from '#/bot/scripts/AccountLeveler/planner.js';
 import { methodFor, producer } from '#/bot/scripts/AccountLeveler/methods.js';
@@ -111,11 +116,7 @@ test('high attack alone does not qualify a fragile account for stronger camps', 
 });
 
 test('delegated AutoFighter uses the requested combat style instead of saved standalone settings', async () => {
-    const { spyOn } = await import('bun:test');
-    const { Game } = await import('#/bot/api/game/Game.js');
     const { SettingsStore } = await import('#/bot/runtime/Settings.js');
-    const { Execution } = await import('#/bot/api/execution/Execution.js');
-    const { ScriptActivity } = await import('#/bot/runtime/ScriptActivity.js');
     const patches=[spyOn(Execution,'delayUntil').mockImplementation(async cond=>cond()),spyOn(Game,'ingame').mockReturnValue(true),spyOn(Game,'tile').mockReturnValue({x:3220,z:3218,level:0}),
         spyOn(SettingsStore,'displayString').mockReturnValue('melee'),spyOn(SettingsStore,'saved').mockReturnValue('strength')];
     const logs:string[]=[];const activity=new ScriptActivity(message=>logs.push(message));
@@ -148,4 +149,36 @@ test('Cooking 1 ignores banked trout when choosing a recipe it can cook', () => 
     const s=snapshot(40);s.levels.cooking=1;s.stock.trout=24;
     const plan=methodFor(s,'cooking',emptyMemory(),()=>0);
     expect(plan?.settings.fish).toBe('Raw shrimps');
+});
+
+test.each([
+    { loadoutFood: '', useFallback: false, expected: 'shark' },
+    { loadoutFood: 'Lobster', useFallback: false, expected: 'shark' },
+    { loadoutFood: 'Lobster', useFallback: true, expected: 'lobster' }
+])('Paladin rune collection starts with $expected (loadout "$loadoutFood", fallback $useFallback)', async ({ loadoutFood, useFallback, expected }) => {
+    const s = snapshot(70);
+    s.stock.shark = 24;
+    const plan = producer(s, 'magic', { item: 'Chaos rune', count: 68 }, emptyMemory(), () => 0)!;
+    const activity = new ScriptActivity(() => {});
+    const patches = [
+        spyOn(Execution, 'delayUntil').mockImplementation(async condition => condition()),
+        spyOn(Game, 'ingame').mockReturnValue(true),
+        spyOn(Game, 'tile').mockReturnValue({ x: 2655, z: 3311, level: 0 }),
+        spyOn(Loadouts, 'all').mockReturnValue(loadoutFood ? [{ name: 'Saved', worn: {}, carry: [{ item: loadoutFood, qty: 12 }] }] : [])
+    ];
+    try {
+        expect(plan.output).toEqual({ item: 'Chaos rune', count: 68 });
+        expect(plan.settings.food).toBe('Shark');
+        await activity.start(ScriptRegistry.get(plan.script)!, useFallback ? { ...plan.settings, food: '  ' } : plan.settings);
+        expect(activity.outcome).toBeNull();
+        const thiever = activity.child;
+        expect(thiever).toBeInstanceOf(ThievingBot);
+        if (!(thiever instanceof ThievingBot)) return;
+        expect(thiever.targetName()).toBe('Paladin');
+        expect(thiever.foodKeyword()).toBe(expected);
+        expect(thiever.foodTarget()).toBe(12);
+    } finally {
+        activity.stop();
+        for (const patch of patches) patch.mockRestore();
+    }
 });

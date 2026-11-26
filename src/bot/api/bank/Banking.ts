@@ -100,7 +100,6 @@ export async function purgePackAtBank(opts: {
         return false;
     }
     await Bank.depositAllMatching((name) => deposit(name));
-    await Execution.delayTicks(1);
     await Bank.close().catch(() => undefined);
     const left = Inventory.items().filter(i => deposit(i.name ?? ''));
     if (left.length > 0) {
@@ -312,7 +311,6 @@ export const Banking = {
         }
         await Bank.depositAllMatching(depositMatcher(opts.deposit, opts.commonJunk ?? true));
         await opts.afterDeposit?.();
-        await Execution.delayTicks(1);
         if (opts.returnTo) {
             // Soft arrive, no need to stand on the exact return pin.
             await Traversal.walkResilient(asTile(opts.returnTo), { radius: 6, timeoutMs: 120_000, log });
@@ -336,20 +334,9 @@ export async function bankPace(log?: (m: string) => void): Promise<void> {
     await Execution.delayTicks(ticks);
 }
 
-/** Wait for the bank item list after open. Counts stay 0 until it arrives, and without a pause this looks like an instant open, scan, close. */
-export async function waitBankReady(log?: (m: string) => void): Promise<boolean> {
-    if (!Bank.isOpen()) {
-        return false;
-    }
-    await bankPace(log);
-    // ~7 ticks for bank table load
-    await Execution.delayUntilTicks(() => Bank.ready() || !Bank.isOpen(), 7);
-    if (!Bank.isOpen()) {
-        return false;
-    }
-    await Execution.delayTicks(1);
-    await bankPace();
-    return Bank.isOpen();
+/** Wait for the current bank contents, including a confirmed empty bank. */
+export function waitBankReady(log?: (m: string) => void): Promise<boolean> {
+    return Bank.waitReady(4200, log);
 }
 
 /**
@@ -380,13 +367,8 @@ export async function withdrawCoins(
     }
     const amt = Math.min(take, opts.bankCoins);
     log(`acquire: withdraw ${amt}gp`);
-    await bankPace();
     if (!(await Bank.withdrawX(coin, amt))) {
         return false;
     }
-    const ok = await Execution.delayUntilTicks(() => Inventory.count(coin) >= Math.min(need, opts.invCoins + amt), 7);
-    if (ok) {
-        await bankPace();
-    }
-    return ok;
+    return Execution.delayUntilTicks(() => Inventory.count(coin) >= Math.min(need, opts.invCoins + amt), 7);
 }

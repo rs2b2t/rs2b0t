@@ -5,7 +5,7 @@ import { Npcs } from '../../../../npcs/Npcs.js';
 import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
 import { DirectNavigator } from '../../../../../event/webwalk/DirectNavigator.js';
 import type Tile from '../../../../../geometry/Tile.js';
-import { driveChoice, heldId, settleScene } from '../../exec/prompts.js';
+import { findSceneTarget, driveChoice, heldId, settleScene } from '../../exec/prompts.js';
 import { PC_ITEM, PC_LOC, PC_NPC, PC_TILE } from './areas.js';
 import { talkAt } from './east.js';
 import { area, goCellar, goUpstairs, locById, walkTo } from './travel.js';
@@ -29,8 +29,7 @@ async function openDoor(id: number, near: Tile, prefer: string[], log: (m: strin
     if (!(await walkTo(near, 1, log))) {
         return false;
     }
-    await settleScene();
-    const door = locById(id, 'Open', 6);
+    const door = await findSceneTarget(() => locById(id, 'Open', 6));
     if (!door) {
         log(`no shut door ${id} near (${near.x},${near.z}) — already open`);
         return true;
@@ -203,8 +202,7 @@ async function searchBarrel(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(PC_TILE.BARREL, 1, log))) {
         return false;
     }
-    await settleScene();
-    const barrel = locById(PC_LOC.BARREL, 'Search', 6);
+    const barrel = await findSceneTarget(() => locById(PC_LOC.BARREL, 'Search', 6));
     if (!barrel || !(await barrel.interact('Search'))) {
         log('no Barrel offering Search on the plague house floor');
         return false;
@@ -219,8 +217,7 @@ async function freeElena(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(PC_TILE.ELENA_GATE, 1, log))) {
         return false;
     }
-    await settleScene();
-    const gate = locById(PC_LOC.ELENA_GATE, 'Open', 6);
+    const gate = await findSceneTarget(() => locById(PC_LOC.ELENA_GATE, 'Open', 6));
     if (gate) {
         const key = Inventory.items().find(item => item.id === PC_ITEM.ELENA_KEY.id);
         if (!key) {

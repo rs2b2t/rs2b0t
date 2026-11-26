@@ -58,7 +58,6 @@ export class Fight implements Task {
                     continue;
                 }
                 this.bot.setStatus('waiting for moss giants');
-                await Execution.delayTicks(4);
                 return;
             }
 
@@ -75,13 +74,16 @@ export class Fight implements Task {
             }
 
             if (Game.inCombat()) {
-                await Execution.delayTicks(2);
+                await Execution.delayTicks(1);
                 continue;
             }
 
-            await target.interact('Attack');
+            if (!(await target.interact('Attack'))) return;
             this.targetIdx = target.index;
-            await Execution.delayUntil(() => Game.inCombat() || giants.length === 0 || !inHunt(new Tile(Game.tile()!.x, Game.tile()!.z, Game.tile()!.level)), 3000);
+            await Execution.delayUntil(() => {
+                const here = Game.tile();
+                return Game.inCombat() || !here || !inHunt(Tile.from(here)) || !huntGiants().some(g => g.index === target.index);
+            }, 3000);
         }
     }
 }

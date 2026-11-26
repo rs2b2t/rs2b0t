@@ -119,6 +119,11 @@ export async function handleSpecialCrossing(
         return false;
     }
 
+    if (sc.minQuestPoints !== undefined && Quests.points() < sc.minQuestPoints) {
+        log(`${sc.label}: need ${sc.minQuestPoints} quest points (have ${Quests.points()})`);
+        return false;
+    }
+
     if (sc.requiresSkill && !meetsSkill(Skills.level(sc.requiresSkill.name), sc.requiresSkill)) {
         log(`${sc.label}: need ${sc.requiresSkill.name} ${sc.requiresSkill.level} — skipping`);
         return false;
@@ -450,8 +455,13 @@ export async function handleSpecialCrossing(
             await Sustain.run();
             if (attempt < maxOpens) {
                 log(`${sc.label}: ${sc.retryOnGameMessage!.reason}; attempt ${attempt}/${maxOpens}; ` + `server='${retryMessage.text}' — retrying`);
-                // Why: the Brimhaven stones print the fall a tick before the telejump lands the player back on the bank, and an exact approach planned from the lava tile in between reads as unreachable.
-                await Execution.delayTicks(3);
+                const landing = sc.retryOnGameMessage!.landingTile;
+                if (landing) {
+                    await Execution.delayUntilTicks(() => {
+                        const tile = reader.worldTile();
+                        return tile !== null && isNearTile(tile, landing, 0);
+                    }, 3);
+                }
                 continue;
             }
             log(`${sc.label}: ${sc.retryOnGameMessage!.reason}; attempt ${attempt}/${maxOpens}; ` + `server='${retryMessage.text}' — bounded retries exhausted; repathing`);
@@ -606,7 +616,6 @@ async function ensureUnlockPackSpace(
         return false;
     }
     await Bank.depositAllMatching((name, id) => isDisposableGatherJunk(name, id));
-    await Execution.delayTicks(1);
     if (Bank.isOpen()) {
         await Bank.close().catch(() => undefined);
     }

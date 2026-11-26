@@ -16,7 +16,7 @@ test('prayer chooses green and blue dragons with burial, supplied gear and no cl
     const plans = [method(s), method(s, 'prayer', 0.999)];
     expect(plans.map(p => p.script).sort()).toEqual(['GreenDragon', 'JiveDragons']);
     for (const plan of plans) {
-        expect(plan.settings).toMatchObject({ buryBones: true, solveClues: false, usePotions: false, combatStyle: 'melee', weapon: 'Mithril scimitar' });
+        expect(plan.settings).toMatchObject({ buryBones: true, solveClues: false, usePotions: false, combatStyle: 'melee', weapon: 'Rune longsword' });
         expect(plan.needs).toContainEqual({ item: 'Dragonfire shield', count: 1, carry: 1, equip: true });
         expect(plan.food).toBe('Lobster');
         expect(plan.combat).toBe(true);
@@ -33,6 +33,8 @@ test('Wilderness preference, cooldowns and missing protection keep unsuitable dr
     delete s.stock['dragonfire shield'];
     expect(method(s).script).toBe('AutoFighter');
     s.stock['dragonfire shield'] = 1; s.levels.hitpoints = 20;
+    expect(method(s)).toBeNull();
+    s.levels.prayer = 49;
     expect(method(s).script).toBe('AutoFighter');
 });
 

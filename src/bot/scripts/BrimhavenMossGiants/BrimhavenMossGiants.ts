@@ -1,3 +1,4 @@
+import { configuredLootNames } from '../../api/bank/bankRules.js';
 import { rangedItem } from '../../api/combat/rangedSettings.js';
 import { TaskBot } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
@@ -54,7 +55,7 @@ export default class BrimhavenMossGiants extends TaskBot {
         cfg.runesWithdraw = this.settings.num('runesWithdraw', 150);
         cfg.ammoWithdraw = this.settings.num('ammoWithdraw', 500);
         cfg.foodWithdraw = this.settings.num('foodWithdraw', 20);
-        cfg.lootSet = new Set(this.settings.list('loot', DEFAULT_LOOT).map(s => s.toLowerCase()));
+        cfg.lootSet = new Set(configuredLootNames(this.settings.list('loot', DEFAULT_LOOT)));
         cfg.bankCommon = this.settings.bool('bankCommonJunk', true);
         cfg.buryBones = this.settings.bool('buryBones', false);
         if (cfg.buryBones) {

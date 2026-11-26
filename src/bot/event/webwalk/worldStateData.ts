@@ -4,6 +4,7 @@ import type { QuestProgress, WorldState } from './types.js';
 import { canonicalQuestName } from './transportQuestReqs.js';
 
 export interface WorldStateData {
+    questPoints?: number;
     members: boolean;
     skills: Record<string, number>;
     quests: Record<string, QuestProgress>;
@@ -46,6 +47,7 @@ export function worldStateFromData(data: WorldStateData): WorldState {
     const worn = data.worn ?? {};
     return {
         members: data.members,
+        questPoints: data.questPoints,
         skills: data.skills,
         freeSlots: data.freeSlots,
         entranaRestrictedGear: data.entranaRestrictedGear === true,

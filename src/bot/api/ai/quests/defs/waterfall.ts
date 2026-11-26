@@ -1,3 +1,4 @@
+import { Modals } from '../../../ui/widgets/Modals.js';
 import { normalizeJournal } from '../journalText.js';
 import { actions, reader } from '../../../../adapter/ClientAdapter.js';
 import { EventSignal } from '../../../execution/EventSignal.js';
@@ -16,7 +17,7 @@ import Tile from '../../../../geometry/Tile.js';
 import { GameMessages } from '../../../chatbox/gameMessages.js';
 import { QUESTS } from '../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
-import { talkThrough, walkWithHops, type LadderHop, type NpcStop } from '../exec/primitives.js';
+import { afterDialogueAction, talkThrough, walkWithHops, type LadderHop, type NpcStop } from '../exec/primitives.js';
 import { executeStep } from '../exec/steps.js';
 import { stealCakes } from '../../../thieving/CakeStall.js';
 import { FLEE_TILE, STAND } from '../../../thieving/cakeStallData.js';
@@ -212,10 +213,7 @@ export async function readWaterfallStage(): Promise<number | undefined> {
 
     // Varp 65 never reaches a revision-274 client, so the rendered journal is the stage oracle.
     const stage = parseWaterfallJournal(await Quests.journal('Waterfall Quest'));
-    if (reader.modals().main !== -1) {
-        actions.closeModal();
-        await Execution.delayTicks(1);
-    }
+    await Modals.closeIfOpen();
     return stage;
 }
 
@@ -318,8 +316,7 @@ async function reachFundingMan(anchor: Tile, log: (message: string) => void): Pr
 
 async function clearFundingContinues(): Promise<void> {
     for (let pages = 0; pages < 12 && ChatDialog.canContinue(); pages++) {
-        await ChatDialog.continue();
-        await Execution.delayTicks(1);
+        await afterDialogueAction(await ChatDialog.continue(), 1);
     }
 }
 
@@ -371,8 +368,7 @@ async function buyFundingKebab(log: (message: string) => void): Promise<boolean>
     for (let step = 0; step < 40; step++) {
         if (liveCount(ITEM.KEBAB) > kebabsBefore) return true;
         if (ChatDialog.canContinue()) {
-            await ChatDialog.continue();
-            await Execution.delayTicks(1);
+            await afterDialogueAction(await ChatDialog.continue(), 1);
             continue;
         }
         const options = ChatDialog.options();
@@ -715,8 +711,7 @@ async function boardRaft(log: (message: string) => void, driveHudon: boolean = f
         await Execution.delayUntil(() => ChatDialog.canContinue(), 12_000);
         // Why: stage 2 is set partway through the forced Hudon conversation, so finish it here or a gap between pages lets the engine walk off while the script is still suspended at stage 1.
         for (let page = 0; page < 14 && ChatDialog.canContinue(); page++) {
-            await ChatDialog.continue();
-            await Execution.delayTicks(1);
+            await afterDialogueAction(await ChatDialog.continue(), 1);
         }
     }
     return Execution.delayUntil(() => waterfallArea(Game.tile()) === 'hudonMound', 12_000);
@@ -739,10 +734,7 @@ async function readBook(): Promise<boolean> {
     const book = liveItem(ITEM.BOOK);
     if (!book || !(await book.interact('Read'))) return false;
     await Execution.delayUntil(() => reader.modals().main !== -1, 5000);
-    if (reader.modals().main !== -1) {
-        actions.closeModal();
-        await Execution.delayTicks(1);
-    }
+    await Modals.closeIfOpen();
     return true;
 }
 
@@ -934,7 +926,7 @@ async function prepareDungeonSprint(log: (message: string) => void): Promise<boo
                 loggedEnergyWait = true;
             }
             await Sustain.run();
-            await Execution.delayTicks(5);
+            await Execution.delayUntilTicks(() => Game.energy() >= DUNGEON_RUN_ENERGY, 5);
             continue;
         }
         if (readiness === 'heal') {

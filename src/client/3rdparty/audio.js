@@ -1,6 +1,9 @@
+import { audioEnabled } from '#/client/config/audio.js';
+
 // Fix iOS Audio Context by Blake Kus https://gist.github.com/kus/3f01d60569eeadefe3a1
 // MIT license
 (function () {
+    if (!audioEnabled) return;
     window.AudioContext = window.AudioContext || window.webkitAudioContext;
     if (window.AudioContext) {
         window.audioContext = new window.AudioContext({ sampleRate: 22050 });
@@ -45,6 +48,7 @@
 let waveGain;
 
 export async function playWave(data) {
+    if (!audioEnabled) return;
     try {
         const audioBuffer = await window.audioContext.decodeAudioData(new Uint8Array(data).buffer);
         let bufferSource = window.audioContext.createBufferSource();
@@ -57,6 +61,7 @@ export async function playWave(data) {
 }
 
 export function setWaveVolume(dB) {
+    if (!audioEnabled) return;
     if (!waveGain) {
         waveGain = window.audioContext.createGain();
         waveGain.connect(window.audioContext.destination);

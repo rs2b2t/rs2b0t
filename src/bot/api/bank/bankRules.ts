@@ -67,6 +67,12 @@ export const COMMON_BANK_LOOT: string[] = [
 
 export const RANDOM_EVENT_CASKET_ID = 405;
 
+export function configuredLootNames(names: readonly string[]): string[] {
+    const selected = new Set(names.map(name => name.trim().toLowerCase()).filter(Boolean));
+    if (selected.has('rune platelegs')) selected.add('rune plateskirt');
+    return [...selected];
+}
+
 export function matchesCommonBankLoot(name: string, id: number = -1): boolean {
     if (id === RANDOM_EVENT_CASKET_ID) {
         return true;

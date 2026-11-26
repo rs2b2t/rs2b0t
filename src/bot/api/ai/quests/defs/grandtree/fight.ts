@@ -4,7 +4,7 @@ import Tile from '../../../../../geometry/Tile.js';
 import { Locs } from '../../../../locs/Locs.js';
 import { Npcs, type Npc } from '../../../../npcs/Npcs.js';
 import { Traversal } from '../../../../walking/Traversal.js';
-import { driveUntil, settleScene } from '../../exec/prompts.js';
+import { findSceneTarget, driveUntil, settleScene } from '../../exec/prompts.js';
 import { DEMON_COVER, readyStrikes } from '../../strikeCombat.js';
 import { runFight } from '../fightarena/fights.js';
 import { GT_LOC, GT_NPC, GT_TILE, inCaves } from './areas.js';
@@ -37,8 +37,7 @@ export async function descendTrapdoor(log: Log): Promise<boolean> {
     if (!(await Traversal.walkResilient(GT_TILE.trapdoorStand, { radius: 0, attempts: 3, timeoutMs: 60_000, log }))) {
         return false;
     }
-    await settleScene();
-    const trapdoor = Locs.query().where(l => l.id === GT_LOC.TRAPDOOR_SHUT).action('Open').within(4).nearest();
+    const trapdoor = await findSceneTarget(() => Locs.query().where(l => l.id === GT_LOC.TRAPDOOR_SHUT).action('Open').within(4).nearest());
     if (!trapdoor) {
         log(`no trapdoor at (${GT_TILE.trapdoorStand.x},${GT_TILE.trapdoorStand.z})`);
         return false;

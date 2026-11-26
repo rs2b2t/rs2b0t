@@ -1388,6 +1388,11 @@ export const reader = {
         return raw?.dialogInputOpen === true;
     },
 
+    shopStockReady(): boolean {
+        const state = invState(3900);
+        return raw?.mainModalId === 3824 && state.transmitting && state.fullGeneration > 0;
+    },
+
     shopInv(comId: number): InvItemSnapshot[] {
         if (comId === -1) {
             return [];

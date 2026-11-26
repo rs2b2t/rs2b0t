@@ -1,7 +1,6 @@
+import { Modals } from '../../../../ui/widgets/Modals.js';
 import { normalizeJournal as normalize } from '../../journalText.js';
 // docs/QUESTS.md
-import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
-import { Execution } from '../../../../execution/Execution.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 import { ORDINAL, SHEEP, type SheepIndex } from './areas.js';
@@ -70,9 +69,6 @@ export async function readSheepHerderProgress(): Promise<QuestProgress | undefin
         return undefined;
     }
     const progress = parseSheepHerderJournal(await Quests.journal(QUEST));
-    if (reader.modals().main !== -1) {
-        actions.closeModal();
-        await Execution.delayTicks(1);
-    }
+    await Modals.closeIfOpen();
     return progress;
 }

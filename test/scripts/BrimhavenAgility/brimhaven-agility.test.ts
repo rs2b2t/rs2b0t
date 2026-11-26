@@ -25,6 +25,7 @@ import {
     inArenaPit,
     needsCoinsRestock,
     nextHop,
+    trainingHop,
     edgeApproachCandidates,
     edgeApproachPoint,
     obstacleAxis,
@@ -53,6 +54,18 @@ import {
     DEFAULT_BANK_TICKETS,
     DEFAULT_FOOD_PER_TRIP
 } from '#/bot/scripts/BrimhavenAgility/BrimhavenAgilityLogic.js';
+
+describe('training between ticket pillars', () => {
+    test.each([[13, 14], [14, 13], [8, 9], [9, 8], [16, 21], [21, 16], [0, 1], [24, 19], [12, 13], [4, 9], [19, 18]])('routes platform %i toward the nearest training trap through %i', (from, hop) => {
+        expect(trainingHop(from, 70)).toBe(hop);
+    });
+
+    test('cannot train below the trap requirement or outside the platform graph', () => {
+        expect(trainingHop(13, 19)).toBeNull();
+        expect(trainingHop(-1, 70)).toBeNull();
+        expect(trainingHop(25, 70)).toBeNull();
+    });
+});
 
 /** Direction-specific loc anchors selected by the live edge-loc scoring. */
 const DIRECTED_INTERACT_LOCS = [

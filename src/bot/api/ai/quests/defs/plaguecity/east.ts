@@ -5,7 +5,7 @@ import { Locs } from '../../../../locs/Locs.js';
 import { Reach } from '../../../../walking/Reach.js';
 import type Tile from '../../../../../geometry/Tile.js';
 import { talkStrict } from '../../exec/primitives.js';
-import { driveUntil, heldId, settleScene } from '../../exec/prompts.js';
+import { findSceneTarget, driveUntil, heldId, settleScene } from '../../exec/prompts.js';
 import { PC_ITEM, PC_LOC, PC_NPC, PC_TILE, type PlagueItem } from './areas.js';
 import { locById, walkTo } from './travel.js';
 
@@ -107,8 +107,7 @@ export async function takeFromHouse(item: PlagueItem, log: (m: string) => void):
     if (!(await walkTo(PC_TILE.HOUSE_FLOOR, 1, log))) {
         return false;
     }
-    await settleScene();
-    const drop = GroundItems.query().name(item.name).within(6).nearest();
+    const drop = await findSceneTarget(() => GroundItems.query().name(item.name).within(6).nearest());
     if (!drop) {
         log(`no ${item.name} on the floor of Edmond's house`);
         return false;
@@ -124,8 +123,7 @@ export async function searchCupboard(log: (m: string) => void): Promise<boolean>
     if (!(await walkTo(PC_TILE.CUPBOARD, 1, log))) {
         return false;
     }
-    await settleScene();
-    const open = locById(PC_LOC.CUPBOARD_OPEN, 'Search', 6);
+    const open = await findSceneTarget(() => locById(PC_LOC.CUPBOARD_OPEN, 'Search', 6));
     if (open) {
         if (!(await open.interact('Search'))) {
             return false;
@@ -157,8 +155,7 @@ export async function tieRope(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(PC_TILE.SEWER_PIPE, 1, log))) {
         return false;
     }
-    await settleScene();
-    const pipe = locById(PC_LOC.SEWER_PIPE, null, 8);
+    const pipe = await findSceneTarget(() => locById(PC_LOC.SEWER_PIPE, null, 8));
     const rope = Inventory.items().find(item => item.id === PC_ITEM.ROPE.id);
     if (!pipe || !rope) {
         log(`no ${pipe ? 'Rope' : 'Sewer pipe'} for the grill`);

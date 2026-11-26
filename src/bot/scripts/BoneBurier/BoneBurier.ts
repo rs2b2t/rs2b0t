@@ -30,7 +30,6 @@ export default class BoneBurier extends LoopingBot {
     private startedAt = Date.now();
     private xpStart = 0;
     private bankExhausted = false;
-    private emptyBankReads = 0;
 
     override async onStart(): Promise<void> {
         await Execution.delayUntil(
@@ -111,19 +110,11 @@ export default class BoneBurier extends LoopingBot {
             this.log('could not open a bank — retrying');
             return;
         }
-        if (!(await Execution.delayUntil(() => Bank.loaded(), 3000))) {
-            this.emptyBankReads++;
-            if (this.emptyBankReads >= 3) {
-                this.log(`bank stayed empty — no exact item '${this.boneName}' remains.`);
-                this.finishComplete();
-                return;
-            }
+        if (!(await Bank.waitReady(3000))) {
             this.log('bank contents are not ready — retrying');
             return;
         }
-        this.emptyBankReads = 0;
 
-        await Bank.setNoteMode(false);
         const wanted = this.boneName.toLowerCase();
         const bankItem = Bank.items().find(item => item.name?.toLowerCase() === wanted);
         if (!bankItem?.name) {
@@ -131,6 +122,7 @@ export default class BoneBurier extends LoopingBot {
             return;
         }
 
+        await Bank.setNoteMode(false);
         const op = withdrawOp(bankItem.ops, 'all') ?? withdrawOp(bankItem.ops, '10') ?? withdrawOp(bankItem.ops, '1');
         if (!op) {
             this.status = 'withdraw failed';
@@ -160,6 +152,8 @@ export default class BoneBurier extends LoopingBot {
         if (Bank.isOpen()) {
             actions.closeModal();
         }
-        ScriptRunner.stop(`bank is out of exact item '${this.boneName}' — complete.`);
+        const reason = `bank is out of exact item '${this.boneName}' — complete.`;
+        if (this.delegated) this.requestFinish(reason);
+        else ScriptRunner.stop(reason);
     }
 }

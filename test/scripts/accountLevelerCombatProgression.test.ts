@@ -78,13 +78,33 @@ test('unavailable lower camps cannot force normal training into a later combat g
     expect(combatPlan(s, 'attack', memory, () => 0)).toBeNull();
 });
 
-test('giant training enables Big bones burial so prayer sessions gain XP', () => {
+test.each([49, 50, 51])('giant training selects bones for base Prayer %i', prayer => {
     const s = snapshot(40);
     Object.assign(s.levels, { attack: 40, strength: 40, defence: 40 });
     const memory = emptyMemory();
     memory.cooldowns = Object.fromEntries(COMBAT_CAMPS.filter(c => c.id !== 'edgeville-dungeon-giants').map(c => [c.id, 2000]));
+    s.levels.prayer = prayer;
     const plan = combatPlan(s, 'prayer', memory, () => 0);
     expect(plan?.settings.target).toBe('Giant');
-    expect(plan?.settings.buryBones).toBe(true);
+    expect(plan?.settings.buryBones).toBe(prayer < 50);
+    expect(plan?.settings.loot).not.toContain('Bones');
     expect(plan?.settings.buryBigBones).toBe(true);
+});
+
+test('a supplied Karamja lesser demon trip banks loot when its pack fills', () => {
+    const s = snapshot(65);
+    Object.assign(s.levels, { attack: 65, defence: 65, strength: 65 });
+    s.stock.lobster = 100;
+    const memory = emptyMemory();
+    memory.cooldowns = Object.fromEntries(COMBAT_CAMPS.filter(c => c.id !== 'karamja-lesser-demons').map(c => [c.id, 2000]));
+    const plan = combatPlan(s, 'strength', memory, () => 0);
+    expect(plan?.id).toBe('karamja-lesser-demons');
+    expect(plan?.settings.bankEveryMinutes ?? 0).toBe(0);
+    expect(plan?.settings.bankAtLootSlots).toBe(27);
+});
+
+test('a Prayer 50 training trip requires a camp that drops qualifying bones', () => {
+    const s = snapshot(40);
+    Object.assign(s.levels, { attack: 40, strength: 40, defence: 40, prayer: 50 });
+    expect(combatPlan(s, 'prayer', emptyMemory(), () => 0, undefined, 'Cow')).toBeNull();
 });

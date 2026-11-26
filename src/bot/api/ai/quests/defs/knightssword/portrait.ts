@@ -1,3 +1,4 @@
+import { afterDialogueAction } from '../../exec/primitives.js';
 import type { WorldTile } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Game } from '../../../../game/Game.js';
@@ -68,8 +69,7 @@ function describe(pass: number): string {
 /** A caught search leaves a mesbox up that has to go before the next click. */
 async function dismissRefusal(): Promise<void> {
     for (let i = 0; i < 4 && ChatDialog.canContinue(); i++) {
-        await ChatDialog.continue();
-        await Execution.delayTicks(1);
+        await afterDialogueAction(await ChatDialog.continue(), 1);
     }
 }
 
@@ -95,7 +95,10 @@ export async function fetchPortrait(log: (m: string) => void): Promise<boolean> 
             refusals = 0;
             log('stepping away to give Sir Vyvin room to wander');
             await Traversal.walkResilient(KS_TILE.VYVIN_RETREAT, { radius: 1, attempts: 2, timeoutMs: 90_000, log });
-            await Execution.delayTicks(10);
+            await Execution.delayUntilTicks(() => {
+                const vyvin = vyvinTile();
+                return vyvin !== null && VYVIN_APPROACHES.some(tile => !vyvinTooClose(tile, vyvin));
+            }, 10);
         }
         const stand = bestApproach(VYVIN_APPROACHES, vyvinTile());
         const here = Game.tile();
@@ -110,7 +113,7 @@ export async function fetchPortrait(log: (m: string) => void): Promise<boolean> 
         const shut = locNear('Cupboard', 'Open', 5);
         if (shut) {
             await shut.interact('Open');
-            await Execution.delayTicks(2);
+            await Execution.delayUntilTicks(() => locNear('Cupboard', 'Search', 5) !== null, 2);
             continue;
         }
         const open = locNear('Cupboard', 'Search', 5);
@@ -121,7 +124,7 @@ export async function fetchPortrait(log: (m: string) => void): Promise<boolean> 
         }
         if (shouldWaitOut(skips, Game.tile(), vyvinTile())) {
             skips++;
-            await Execution.delayTicks(2);
+            await Execution.delayUntilTicks(() => !vyvinTooClose(Game.tile(), vyvinTile()), 2);
             continue;
         }
         skips = 0;

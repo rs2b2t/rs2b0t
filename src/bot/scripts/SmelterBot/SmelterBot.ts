@@ -127,7 +127,7 @@ class BankTrip implements Task {
         // Why: two empties look identical through Bank.count, the list refills asynchronously after a deposit, and the window can be closed outright when the run toggle clicks a controls-tab component and the server shuts the modal to serve it.
         // Why: either way every ore reads 0, which produced "'Coal' vanished from the bank mid-trip" (#117).
         // Why: ore does not vanish, so the window must be open and filled before anything it says is believed, and the log names which check failed.
-        if (!(await Execution.delayUntil(() => Bank.isOpen() && Bank.loaded(), 5000))) {
+        if (!(await Bank.waitReady(5000))) {
             this.bot.log(Bank.isOpen()
                 ? 'the bank list has not filled in yet — retrying this trip'
                 : 'the bank window closed — reopening and retrying this trip');
@@ -153,7 +153,7 @@ class BankTrip implements Task {
 
         for (const step of plan) {
             // re-checked per step: the window can shut between withdrawals too
-            if (!Bank.isOpen() || !Bank.loaded()) {
+            if (!Bank.ready()) {
                 this.bot.log('the bank window closed mid-withdrawal — reopening and retrying this trip');
                 return;
             }

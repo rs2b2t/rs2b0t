@@ -200,7 +200,7 @@ test('JiveDragons ranged clues keep the configured bow and ammunition instead of
         expect(ClueExecutor.solveHeldClue).toHaveBeenCalledTimes(1);
         expect(ClueExecutor.solveHeldClue).toHaveBeenCalledWith(expect.any(Function), expect.any(Function), {
             weapon: 'Magic shortbow', ammo: 'Rune arrow', quantity: 500, mode: 1
-        });
+        }, undefined);
         expect(worn.find(i => i.slot === 3)?.id).toBe(861);
         expect(worn.find(i => i.slot === 13)?.count).toBe(500);
         expect(bank.find(i => i.id === 1231)?.count).toBe(1);

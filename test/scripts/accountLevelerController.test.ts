@@ -1,5 +1,9 @@
 import { expect, spyOn, test } from 'bun:test';
+import * as bankSorting from '#/bot/api/bank/bankSort.js';
 import AccountLeveler from '#/bot/scripts/AccountLeveler/AccountLeveler.js';
+import AutoFighter from '#/bot/scripts/AutoFighter/AutoFighter.js';
+import { SolveClue } from '#/bot/api/ai/clues/SolveClue.js';
+import { reader } from '#/bot/adapter/ClientAdapter.js';
 import { planNext } from '#/bot/scripts/AccountLeveler/planner.js';
 import { LoopingBot } from '#/bot/api/bot/Bot.js';
 import { Bank } from '#/bot/api/bank/Bank.js';
@@ -10,9 +14,54 @@ import { Inventory, InvItem } from '#/bot/api/inventory/Inventory.js';
 import { Skills } from '#/bot/api/skills/Skills.js';
 import { Traversal } from '#/bot/api/walking/Traversal.js';
 import { BotHost } from '#/bot/runtime/BotHost.js';
+import { SettingsBag } from '#/bot/runtime/Settings.js';
 import { ScriptRegistry } from '#/bot/runtime/ScriptRegistry.js';
 import { ScriptAborted, ScriptContext } from '#/bot/runtime/ScriptContext.js';
 import { ScriptRunner } from '#/bot/runtime/ScriptRunner.js';
+
+test.each([false, true])('an expired combat session keeps its clue unless progress stalls: stalled=%s', async stalled => {
+    const bot = new AccountLeveler();
+    const fighter = new AutoFighter();
+    const plan = { id: 'falador-west-guards', objective: 'attack', label: 'Guards', script: 'AutoFighter', combat: true, needs: [], settings: { solveClues: true } };
+    const patches = [
+        spyOn(Game, 'sceneReady').mockReturnValue(true),
+        spyOn(Game, 'inCombat').mockReturnValue(false),
+        spyOn(Game, 'tile').mockReturnValue({ x: 3250, z: 3420, level: 0 }),
+        spyOn(Game, 'myName').mockReturnValue(null),
+        spyOn(Skills, 'level').mockReturnValue(40),
+        spyOn(Skills, 'xp').mockReturnValue(0),
+        spyOn(Bank, 'ready').mockReturnValue(false),
+        spyOn(Bank, 'items').mockReturnValue([]),
+        spyOn(reader, 'inventory').mockReturnValue([{ id: 3490, name: 'Clue scroll', count: 1, slot: 0, comId: 1, ops: ['Read'] }]),
+        spyOn(Equipment, 'items').mockReturnValue([])
+    ];
+    const loop = spyOn(fighter, 'loop').mockResolvedValue(undefined);
+    try {
+        fighter['solveClue'] = new SolveClue({ log: () => {}, setStatus: () => {}, foodName: () => '', foodWithdraw: () => 0, isFood: () => false });
+        bot['activity'].child = fighter;
+        bot['phase'] = 'train';
+        bot['session'].start(plan, Date.now(), () => 0);
+        bot['session'].remainingMs = 0;
+        if (stalled) bot['session'].observe('unchanged clue preparation', Date.now() - 180001);
+        await bot.loop();
+        if (stalled) {
+            expect(bot['activity'].child).toBeNull();
+            expect(String(bot['phase'])).toBe('bank');
+            expect(bot['lastFailure']?.reason).toContain('no progress');
+            return;
+        }
+        expect(bot['session'].plan).toBe(plan);
+        expect(loop).toHaveBeenCalledTimes(1);
+        spyOn(reader, 'inventory').mockReturnValue([]);
+        await bot.loop();
+        expect(bot['session'].plan).toBeNull();
+        expect(String(bot['phase'])).toBe('bank');
+    } finally {
+        bot.onStop();
+        loop.mockRestore();
+        for (const patch of patches) patch.mockRestore();
+    }
+});
 
 test('a pending bank operation reports its action and position without claiming progress', async () => {
     let now = 1000;
@@ -234,46 +283,6 @@ test('a sold-out tool returns to the bank and excludes the missing tier from rep
     } finally { bot.onStop(); for (const patch of patches) patch.mockRestore(); }
 });
 
-test('optional market procurement is World 1 only, capped, banked and attempted once', async () => {
-    const bot = new AccountLeveler();
-    const oldLocation = Object.getOwnPropertyDescriptor(globalThis, 'location');
-    const setWorld = (world: number) => Object.defineProperty(globalThis, 'location', { configurable: true, value: { host: 'localhost:8081', search: `?world=${world}` } });
-    const deposit = spyOn(bot['supplies'], 'deposit').mockResolvedValue();
-    const withdraw = spyOn(bot['supplies'], 'withdraw').mockResolvedValue(true);
-    const close = spyOn(bot['supplies'], 'closeBank').mockResolvedValue(true);
-    const bank = spyOn(bot['supplies'], 'bank').mockResolvedValue(true);
-    const buy = spyOn(bot['marketBuyer'], 'buy').mockResolvedValue(true);
-    const name = spyOn(Game, 'myName').mockReturnValue(null);
-    const tile = spyOn(Game, 'tile').mockReturnValue({ x: 2725, z: 3491, level: 0 });
-    const snapshot = { levels: {}, stock: { coins: 50000 }, bankReady: true, quests: {}, target: 40, wilderness: false, now: 1 };
-    try {
-        setWorld(2);
-        expect(await bot['tryMarketAxe'](snapshot)).toBe(false);
-        expect(buy).not.toHaveBeenCalled();
-        setWorld(1);
-        for (const here of [null, { x: 3092, z: 3245, level: 0 }, { x: 2725, z: 3491, level: 1 }, { x: 2725, z: 3620, level: 0 }]) {
-            tile.mockReturnValue(here);
-            expect(await bot['tryMarketAxe'](snapshot)).toBe(false);
-            expect(bot['marketChecked']).toBe(false);
-            expect(deposit).not.toHaveBeenCalled();
-            expect(buy).not.toHaveBeenCalled();
-        }
-        tile.mockReturnValue({ x: 2809, z: 3440, level: 0 });
-        expect(await bot['tryMarketAxe'](snapshot)).toBe(true);
-        expect(withdraw).toHaveBeenCalledWith('Coins', 5200);
-        expect(buy.mock.calls[0][0]).toMatchObject({ item: 'Rune axe', maxPrice: 5000, world: 1 });
-        expect(deposit).toHaveBeenCalledTimes(2);
-        expect(bank).toHaveBeenCalledTimes(1);
-        expect(await bot['tryMarketAxe'](snapshot)).toBe(false);
-        expect(buy).toHaveBeenCalledTimes(1);
-    } finally {
-        if (oldLocation) Object.defineProperty(globalThis, 'location', oldLocation);
-        else Reflect.deleteProperty(globalThis, 'location');
-        bot.onStop();
-        for (const patch of [deposit, withdraw, close, bank, buy, name, tile]) patch.mockRestore();
-    }
-});
-
 test('supply shopping walks avoid White Wolf Mountain when returning east', async () => {
     const bot = new AccountLeveler();
     const destination = { x: 3231, z: 3203, level: 0 };
@@ -285,7 +294,7 @@ test('supply shopping walks avoid White Wolf Mountain when returning east', asyn
     } finally { walk.mockRestore(); }
 });
 
-test.each([0, 200])('parent travel avoids White Wolf Mountain with fare %i and refuses unfunded crossings', async coins => {
+test.each([0, 200])('parent travel hands crossings to the safe route planner with %i carried coins', async coins => {
     const bot = new AccountLeveler();
     const travel = { x: 2809, z: 3440, level: 0 };
     const walk = spyOn(Traversal, 'walkResilient').mockResolvedValue(true);
@@ -296,7 +305,7 @@ test.each([0, 200])('parent travel avoids White Wolf Mountain with fare %i and r
         walk, start,
         spyOn(Game, 'myName').mockReturnValue(null),
         spyOn(Game, 'tile').mockReturnValue({ x: 3092, z: 3245, level: 0 }),
-        spyOn(Skills, 'level').mockImplementation(skill => skill === 'cooking' ? 20 : 60),
+        spyOn(Skills, 'level').mockImplementation(skill => skill === 'cooking' ? 20 : 70),
         spyOn(Skills, 'xp').mockReturnValue(0),
         spyOn(Bank, 'ready').mockReturnValue(true),
         spyOn(Bank, 'items').mockReturnValue([]),
@@ -311,12 +320,6 @@ test.each([0, 200])('parent travel avoids White Wolf Mountain with fare %i and r
     try {
         bot['shoppingChecked'] = true;
         bot['retry'] = { id: 'cook-catherby', label: 'Catherby cooking', script: 'CookBot', objective: 'cooking', settings: {}, needs: [], travel };
-        if (!coins) {
-            await expect(bot['selectAndStart']()).rejects.toThrow('60 Coins for the coastal boat route');
-            expect(walk).not.toHaveBeenCalled();
-            expect(start).not.toHaveBeenCalled();
-            return;
-        }
         await bot['selectAndStart']();
         expect(walk.mock.calls[0][0]).toEqual(travel);
         expect(walk.mock.calls[0][1]).toMatchObject({ avoidZones: expect.arrayContaining(['white-wolf-mountain']) });
@@ -339,9 +342,12 @@ test.each([true, false])('exhausted route replans without stopping and cools dow
         spyOn(Game, 'sceneReady').mockReturnValue(true),
         spyOn(Game, 'myName').mockReturnValue(null),
         spyOn(Game, 'tile').mockReturnValue({ x: 3092, z: 3245, level: 0 }),
-        spyOn(Skills, 'level').mockImplementation(skill => skill === objective ? 1 : 60),
+        spyOn(Skills, 'level').mockImplementation(skill => skill === objective ? 1 : 70),
         spyOn(Bank, 'ready').mockReturnValue(true),
-        spyOn(Bank, 'items').mockReturnValue([{ id: 995, name: 'Coins', count: 100000, slot: 0, comId: 5382, ops: [] }]),
+        spyOn(Bank, 'items').mockReturnValue([
+            { id: 995, name: 'Coins', count: 100000, slot: 0, comId: 5382, ops: [] },
+            { id: 385, name: 'Shark', count: 100, slot: 1, comId: 5382, ops: [] }
+        ]),
         spyOn(Inventory, 'items').mockReturnValue([]),
         spyOn(Equipment, 'items').mockReturnValue([]),
         spyOn(bot['supplies'], 'bank').mockResolvedValue(true),
@@ -494,6 +500,26 @@ test('consuming the last equipped arrow triggers resupply rather than a failed c
     } finally { bot.onStop(); for (const patch of patches) patch.mockRestore(); }
 });
 
+test('a mage handing back an understocked trip at the bank replans supplies even with combat still active', async () => {
+    const bot = new AccountLeveler();
+    const plan = { id: 'lesser-demons', objective: 'magic', label: 'Lesser demons', script: 'AutoFighter', needs: [], settings: { combatStyle: 'mage' }, combat: true };
+    const patches = [
+        spyOn(Game, 'sceneReady').mockReturnValue(true), spyOn(Game, 'inCombat').mockReturnValue(true),
+        spyOn(Game, 'myName').mockReturnValue(null), spyOn(Game, 'tile').mockReturnValue({ x: 2655, z: 3283, level: 0 }),
+        spyOn(Skills, 'level').mockReturnValue(40), spyOn(Bank, 'ready').mockReturnValue(false)
+    ];
+    try {
+        bot['session'].start(plan, Date.now(), () => 0);
+        bot['phase'] = 'train';
+        bot['activity'].outcome = { kind: 'finished', reason: 'Insufficient runes for spell training' };
+        await bot.loop();
+        expect(String(bot['phase'])).toBe('bank');
+        expect(bot['actions'].current).toContain('Supplies exhausted');
+        expect(bot['retry']).toBe(plan);
+        expect(bot['session'].memory.cooldowns).toEqual({});
+    } finally { bot.onStop(); for (const patch of patches) patch.mockRestore(); }
+});
+
 
 test('repeated bank failures keep retrying with bounded backoff and respect cancellation', async () => {
     const bot = new AccountLeveler();
@@ -604,11 +630,12 @@ test('blocked supplies are rechecked and training starts when supplies arrive', 
 
 test('reaching every target still finishes the leveler', async () => {
     const bot = new AccountLeveler();
+    bot.settings = new SettingsBag({ supplySeers: false });
     const finish = spyOn(bot, 'requestFinish').mockImplementation(() => {});
     const patches = [finish,
         spyOn(Game, 'sceneReady').mockReturnValue(true),
         spyOn(Game, 'myName').mockReturnValue(null),
-        spyOn(Skills, 'level').mockReturnValue(60),
+        spyOn(Skills, 'level').mockReturnValue(70),
         spyOn(Bank, 'ready').mockReturnValue(true),
         spyOn(Bank, 'items').mockReturnValue([]),
         spyOn(Bank, 'close').mockResolvedValue(true),
@@ -620,6 +647,140 @@ test('reaching every target still finishes the leveler', async () => {
         bot['shoppingChecked'] = true;
         await bot.loop();
         expect(finish).toHaveBeenCalledTimes(1);
-        expect(finish).toHaveBeenCalledWith('All 19 enabled skills reached 60');
+        expect(finish).toHaveBeenCalledWith('All 19 enabled skills reached 70');
+    } finally { bot.onStop(); for (const patch of patches) patch.mockRestore(); }
+});
+
+test('a crowded camp is replanned and its original deadline survives restart', async () => {
+    let now = 1000;
+    const tile = { x: 3175, z: 3427, level: 0 };
+    const plan = { id: 'varrock-west-guards', objective: 'attack', label: 'Guards', script: 'AutoFighter', needs: [], settings: {}, travel: tile };
+    const storage = new Map<string, string>();
+    const store = { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => { storage.set(key, value); } };
+    const bot = new AccountLeveler();
+    const previous = ScriptRunner.ctx;
+    ScriptRunner.ctx = new ScriptContext();
+    let frame = () => {};
+    const patches = [
+        spyOn(Execution, 'delayUntil').mockImplementation(async cond => cond()),
+        spyOn(Date, 'now').mockImplementation(() => now),
+        spyOn(Game, 'myName').mockReturnValue('Tester'),
+        spyOn(Game, 'sceneReady').mockReturnValue(true),
+        spyOn(Game, 'tile').mockReturnValue(tile),
+        spyOn(Bank, 'isOpen').mockReturnValue(false),
+        spyOn(BotHost, 'addFrameListener').mockImplementation(callback => { frame = callback; return () => {}; }),
+        spyOn(reader, 'players').mockReturnValue(['One', 'Two'].map((name, index) => ({ name, index, tile, distance: 1, inCombat: false, combatLevel: 30, faceEntity: -1 })))
+    ];
+    try {
+        bot['storage'] = () => store;
+        await bot.onStart();
+        bot['activity'].child = new AutoFighter();
+        bot['session'].start(plan, now, () => 0);
+        bot['phase'] = 'train';
+        bot['pendingPlans'] = [plan];
+        const key = 'crowd:3175,3427,0';
+        for (; now < 11000; now += 1000) frame();
+        expect(bot['session'].memory.cooldowns[key]).toBeUndefined();
+        frame();
+        const until = now + 30 * 60000;
+        expect(bot['session'].memory.cooldowns[key]).toBe(until);
+        await bot.loop();
+        expect(bot['activity'].child).toBeNull();
+        expect(String(bot['phase'])).toBe('bank');
+        expect(bot['pendingPlans']).toHaveLength(0);
+        const restarted = new AccountLeveler();
+        restarted['storage'] = () => store;
+        restarted['load']();
+        expect(restarted['session'].memory.cooldowns[key]).toBe(until);
+        now = until;
+        restarted['load']();
+        expect(restarted['session'].memory.cooldowns[key]).toBeUndefined();
+    } finally {
+        bot.onStop();
+        ScriptRunner.ctx = previous;
+        for (const patch of patches) patch.mockRestore();
+    }
+});
+
+test.each([
+    { food: 6, needsBank: false, move: true },
+    { food: 0, needsBank: true, move: false },
+    { food: 6, needsBank: true, move: false }
+])('crowded Crandor moss giants redirect only with a usable kit: %j', async ({ food, needsBank, move }) => {
+    const bot = new AccountLeveler();
+    const here = { x: 2831, z: 3244, level: 0 };
+    const plan = { id: 'crandor-moss-giants', objective: 'attack', label: 'Crandor moss giants', script: 'AutoFighter',
+        combat: true, food: 'Lobster', travel: here, needs: [{ item: 'Lobster', count: 24, carry: 12 }],
+        settings: { target: 'Moss giant', combatStyle: 'melee', meleeStyle: 'attack', food: 'Lobster', foodWithdraw: 12 } };
+    const held = (name: string) => name === 'Coins' ? 170 : name === 'Lobster' ? food : 0;
+    const walk = spyOn(bot['supplies'], 'walk').mockResolvedValue(true);
+    const bank = spyOn(bot['supplies'], 'bank').mockResolvedValue(false);
+    const start = spyOn(bot['activity'], 'start').mockResolvedValue();
+    const fighter = new AutoFighter();
+    bot['activity'].child = fighter;
+    const patches = [walk, bank, start, spyOn(fighter, 'needsBankBeforeTravel').mockReturnValue(needsBank), spyOn(bot['supplies'], 'held').mockImplementation(held),
+        spyOn(bot['supplies'], 'worn').mockReturnValue(0),
+        spyOn(Game, 'tile').mockReturnValue(here), spyOn(Game, 'sceneReady').mockReturnValue(true),
+        spyOn(Game, 'myName').mockReturnValue(null), spyOn(Game, 'inCombat').mockReturnValue(false),
+        spyOn(ScriptRegistry, 'get').mockReturnValue({ name: 'AutoFighter', description: '', create: () => new AutoFighter() })];
+    bot['snapshot'] = () => ({
+        levels: { attack: 65, strength: 65, defence: 65, hitpoints: 65, prayer: 50 }, stock: { coins: 100000, lobster: 100 },
+        quests: { 'Dragon Slayer': true }, target: 70, wilderness: false, now: 1000, bankReady: true
+    });
+    try {
+        bot['session'].start(plan, 1000, () => 0);
+        bot['phase'] = 'train';
+        bot['crowdedPlan'] = plan;
+        bot['session'].memory.cooldowns['crowd:2831,3244,0'] = 1900000;
+        await bot.loop();
+        if (move) {
+            expect(walk).toHaveBeenCalledTimes(1);
+            expect(start).toHaveBeenCalledTimes(1);
+            expect(bot['session'].plan?.id).not.toBe(plan.id);
+            expect(bot['session'].plan?.settings.target).toBe('Moss giant');
+            expect(bot['session'].plan?.id).not.toBe('brimhaven-dungeon-moss-giants');
+            expect(bot['phase']).toBe('train');
+            expect(bank).not.toHaveBeenCalled();
+        } else {
+            expect(walk).not.toHaveBeenCalled();
+            expect(String(bot['phase'])).toBe('bank');
+        }
+    } finally { bot.onStop(); for (const patch of patches) patch.mockRestore(); }
+});
+
+test('a banked clue gets the first activity even when shopping and training are pending', async () => {
+    const bot = new AccountLeveler();
+    const patches = [spyOn(Game, 'myName').mockReturnValue(null), spyOn(bot['supplies'], 'bank').mockResolvedValue(true),
+        spyOn(bot['supplies'], 'deposit').mockResolvedValue(), spyOn(bot['supplies'], 'withdraw').mockResolvedValue(true), spyOn(bot['supplies'], 'closeBank').mockResolvedValue(true),
+        spyOn(Inventory, 'countById').mockReturnValue(0), spyOn(Inventory, 'isFull').mockReturnValue(false),
+        spyOn(ScriptRegistry, 'get').mockImplementation(name => ({ name, description: '', create: () => bot })),
+        spyOn(bot['activity'], 'start').mockResolvedValue()];
+    bot['snapshot'] = () => ({ levels: { attack: 70 }, stock: { '#2677': 1, coins: 500000 }, bankReady: true, quests: {}, target: 70, wilderness: false, now: 1000 });
+    const queued = { id: 'fish', label: 'Fish', objective: 'fishing', script: 'Fisher', settings: {}, needs: [] };
+    bot['pendingPlans'] = [queued];
+    try {
+        await bot['selectAndStart']();
+        expect(bot['supplies'].withdraw).toHaveBeenCalledWith('#2677', 1);
+        expect(bot['activity'].start).toHaveBeenCalledWith(expect.objectContaining({ name: 'ClueSolver' }), expect.objectContaining({ allowClueWilderness: false }));
+        expect(bot['pendingPlans']).toEqual([queued]);
+        expect(bot['shoppingChecked']).toBe(false);
+        bot['activity'].outcome = { kind: 'finished', reason: 'clue solved' };
+        await bot['runBankClue']();
+        expect(bot['phase']).toBe('bank');
+        expect(bot['pendingPlans']).toEqual([queued]);
+    } finally { bot.onStop(); for (const patch of patches) patch.mockRestore(); }
+});
+
+test('a routine bank check sorts the open bank before selecting work', async () => {
+    const bot = new AccountLeveler();
+    bot.settings = new SettingsBag({ supplySeers: false });
+    const sort = spyOn(bankSorting, 'sortBank').mockResolvedValue({ sorted: true, moves: 1, mode: 'swap', unmatched: [], reason: 'sorted' });
+    const patches = [sort, spyOn(bot['supplies'], 'bank').mockResolvedValue(true), spyOn(Bank, 'close').mockResolvedValue(true),
+        spyOn(Game, 'myName').mockReturnValue(null), spyOn(Bank, 'items').mockReturnValue([]), spyOn(Skills, 'level').mockReturnValue(70),
+        spyOn(Bank, 'ready').mockReturnValue(true), spyOn(bot, 'requestFinish').mockImplementation(() => {})];
+    try {
+        bot['shoppingChecked'] = true;
+        await bot['selectAndStart']();
+        expect(sort).toHaveBeenCalledTimes(1);
     } finally { bot.onStop(); for (const patch of patches) patch.mockRestore(); }
 });

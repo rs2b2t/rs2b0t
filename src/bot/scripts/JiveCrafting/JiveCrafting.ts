@@ -178,7 +178,7 @@ class BankTrip implements Task {
         const products = Inventory.count(jewel.item);
         const keep = jewel.mould.toLowerCase();
         await Bank.depositAllMatching(name => name.toLowerCase() !== keep);
-        if (!(await Execution.delayUntil(() => Bank.isOpen() && Bank.loaded(), 5000))) {
+        if (!(await Bank.waitReady(5000))) {
             bot.log(Bank.isOpen() ? '[crafting] the bank list has not filled in, retrying this trip' : '[crafting] the bank window closed, retrying this trip');
             return;
         }
@@ -199,7 +199,7 @@ class BankTrip implements Task {
             lines.push([jewel.gem, plan.gems]);
         }
         for (const [name, count] of lines) {
-            if (!Bank.isOpen() || !Bank.loaded()) {
+            if (!Bank.ready()) {
                 bot.log('[crafting] the bank window closed mid-withdrawal, retrying this trip');
                 return;
             }

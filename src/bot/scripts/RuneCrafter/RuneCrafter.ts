@@ -2,6 +2,7 @@ import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { Game } from '../../api/game/Game.js';
 import Tile from '../../geometry/Tile.js';
+import { RUNES as ALTARS } from '../../data/runeCraftLocations.js';
 import { Bank } from '../../api/bank/Bank.js';
 import { withdrawOp } from '../../api/bank/bankOps.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
@@ -48,13 +49,15 @@ interface RuneType {
 // Each rune adds its runecraft row, ruins tile, and nearest bank.
 const RUNES: Record<string, RuneType> = {
     'Air runes': { talisman: 'Air talisman', rune: 'Air rune', level: 1, ruins: new Tile(2988, 3294, 0), bank: new Tile(3013, 3355, 0) },
+    'Water runes': { ...ALTARS['Water rune'], bank: new Tile(3093, 3243, 0) },
+    'Fire runes': { talisman: 'Fire talisman', rune: 'Fire rune', level: 14, ruins: new Tile(3310, 3252, 0), bank: new Tile(3269, 3167, 0) },
     'Earth runes': { talisman: 'Earth talisman', rune: 'Earth rune', level: 9, ruins: new Tile(3303, 3477, 0), bank: new Tile(3253, 3420, 0) }
 };
 const RUNE_OPTIONS = Object.keys(RUNES);
 const MODES = ['Solo', 'Runner', 'Mule Recipient'];
 
 export const SETTINGS: SettingsSchema = {
-    rune: { type: 'string', default: 'Air runes', options: RUNE_OPTIONS, label: 'Rune', help: 'which rune to craft — Air is the ruins south of Falador (Falador East bank), Earth is north-east of Varrock (Varrock East bank)' },
+    rune: { type: 'string', default: 'Air runes', options: RUNE_OPTIONS, label: 'Rune', help: 'which rune to craft — Air is the ruins south of Falador (Falador East bank), Water is in Lumbridge Swamp (Draynor bank), Earth is north-east of Varrock (Varrock East bank), Fire is north of Al Kharid (Al Kharid bank)' },
     mode: { type: 'string', default: 'Solo', options: MODES, label: 'Mode', help: 'Solo banks its own essence. A Runner needs its own talisman: it banks essence, enters the altar and hands the load over inside. The Mule Recipient camps next to the altar and never leaves — it takes every essence trade and crafts between them' },
     partner: { type: 'string', default: '', label: 'Trade essence to (IGN)', help: 'the Mule Recipient this runner delivers essence to', showIf: { key: 'mode', anyOf: ['Runner'] } }
 };
@@ -113,7 +116,6 @@ async function cleanPack(bot: RuneCrafter, keep: string[]): Promise<boolean> {
     const deposit = (): Promise<void> => Bank.depositAllMatching(name => !kept.has(name.toLowerCase()), m => bot.log(`  ${m}`));
     await Bank.setNoteMode(false);
     await deposit();
-    await Execution.delayTicks(1);
     if (packJunk(keep).length > 0) {
         // one more pass before calling it stuck: a click that landed late still shows in the side pack
         await deposit();
@@ -132,8 +134,7 @@ async function ensureTalisman(bot: RuneCrafter): Promise<boolean> {
     if (Inventory.contains(talisman)) {
         return true;
     }
-    // blank is not empty: the bank list reads [] for a beat after opening
-    await Execution.delayUntil(() => Bank.loaded(), 3000);
+    if (!(await Bank.waitReady(3000))) return false;
     const tal = Bank.items().find(i => i.name?.toLowerCase() === talisman.toLowerCase());
     if (!tal) {
         bot.requestFinish(`RuneCrafter: no ${talisman} in the bank or pack`);
@@ -327,14 +328,14 @@ class BankTrip implements Task {
         }
         if (!(await ensureTalisman(this.bot))) { return; }
 
+        if (!(await Bank.waitReady(3000))) return;
         if (Bank.count(ESSENCE) === 0) {
             this.bot.requestFinish('RuneCrafter: out of Rune essence in the bank');
             return;
         }
         const ess = Bank.items().find(i => i.name?.toLowerCase() === ESSENCE.toLowerCase());
         const op = (ess && withdrawOp(ess.ops, 'all')) ?? 'Withdraw-All';
-        await Bank.withdraw(ESSENCE, op);
-        await Execution.delayUntil(() => essCount() > 0 || Bank.count(ESSENCE) === 0, 4000);
+        if (!(await Bank.withdraw(ESSENCE, op)) || !(await Execution.delayUntil(() => essCount() > 0, 4000))) return;
         this.bot.log(`withdrew ${essCount()} rune essence (trip ${this.bot.tripsTotal()})`);
     }
 }
@@ -445,8 +446,7 @@ class RunnerRestock implements Task {
         if (!(await cleanPack(this.bot, [this.bot.talismanName()]))) { return; }
         if (!(await ensureTalisman(this.bot))) { return; }
 
-        // blank is not empty: the list reads [] for a beat after opening, believe it on the third read
-        await Execution.delayUntil(() => Bank.loaded(), 3000);
+        if (!(await Bank.waitReady(3000))) return;
         const banked = Bank.count(ESSENCE);
         if (banked === 0) {
             if (++this.emptyReads >= 3) {
@@ -455,8 +455,8 @@ class RunnerRestock implements Task {
             return;
         }
         this.emptyReads = 0;
-        await Bank.withdrawX(ESSENCE, Math.min(TRADE_LOAD, banked, Inventory.free()));
-        this.stocked = await Execution.delayUntil(() => essCount() > 0, 3000); // a withdraw that never landed must retry
+        if (!(await Bank.withdrawX(ESSENCE, Math.min(TRADE_LOAD, banked, Inventory.free()))) || essCount() === 0) return;
+        this.stocked = true;
         this.bot.countTrip();
         this.bot.log(`withdrew ${essCount()} essence (bank run ${this.bot.tripsTotal()})`);
     }

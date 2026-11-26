@@ -93,7 +93,7 @@ describe('RUNES (one row per rune the pair can run)', () => {
     });
 
     test('the dropdown offers exactly the configured runes, defaulting to the original nature loop', () => {
-        expect(RUNE_OPTIONS).toEqual(['Nature runes', 'Air runes', 'Cosmic runes']);
+        expect(RUNE_OPTIONS).toEqual(['Nature runes', 'Air runes', 'Law runes', 'Cosmic runes']);
         expect(RUNES[DEFAULT_RUNE]).toBeDefined();
         expect(DEFAULT_RUNE).toBe('Nature runes');
     });

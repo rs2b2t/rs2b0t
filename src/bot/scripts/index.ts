@@ -1,3 +1,5 @@
+import ShadesOfMortton from './ShadesOfMortton/ShadesOfMortton.js';
+import { SHADES_SETTINGS } from './ShadesOfMortton/settings.js';
 import AccountLeveler, { SETTINGS as ACCOUNT_LEVELER_SETTINGS } from './AccountLeveler/AccountLeveler.js';
 import { AGILITY_SETTINGS } from './AgilityBot/AgilityBot.js';
 import { FISHING_LOCATION_OPTIONS } from '../data/fishingLocations.js';
@@ -402,7 +404,7 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'RuneCrafter',
-    description: 'AIO Runecrafting (Air/Earth) — Solo banks its own essence and crafts at the altar; a Runner needs its own talisman and carries a full 26-essence load into the altar; the Mule Recipient camps next to the altar, never leaves, and crafts between the deliveries runners bring it',
+    description: 'AIO Runecrafting (Air/Earth/Fire). Solo banks its own essence and crafts at the altar; a Runner needs its own talisman and carries a full 26-essence load into the altar; the Mule Recipient camps next to the altar, never leaves, and crafts between deliveries.',
     category: 'Runecrafting',
     tags: ['runecrafting', 'banking', 'trade', 'runner', 'mule', 'afk'],
     settingsSchema: RUNECRAFTER_SETTINGS,
@@ -411,9 +413,9 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'JiveRC',
-    description: 'Master/runner crafting for Nature, Air and Cosmic runes. Nature runners unnote at Jiminua, Air runners bank at Falador East, and Cosmic runners bank in Zanaris. Start Cosmic accounts in Zanaris or the cosmic altar.',
+    description: 'Solo or master/runner crafting for Nature, Air, Cosmic and Law runes. Solo banks its own essence or unnotes Nature essence at Jiminua. Law uses Draynor bank and the direct Port Sarim ferry, banking equipment before boarding. Start Cosmic accounts in Zanaris or the cosmic altar.',
     category: 'Runecrafting',
-    tags: ['runecrafting', 'nature', 'air', 'cosmic', 'trade', 'master', 'runner', 'jive'],
+    tags: ['runecrafting', 'nature', 'air', 'cosmic', 'law', 'solo', 'trade', 'master', 'runner', 'jive'],
     settingsSchema: JIVERC_SETTINGS,
     create: () => new JiveRC()
 });
@@ -641,7 +643,7 @@ ScriptRegistry.register({
 ScriptRegistry.register({
     name: 'PotionMaker',
     description:
-        'Banks at the nearest bank, withdraws vials of water and a chosen herb, spam-makes 14 unfinished potions, then withdraws a chosen secondary to finish them and deposits the potions, repeating the cycle. Each leg picks an herb and a secondary from the dropdowns, or types one via Custom',
+        'Brews up to 14 potions per bank trip. Select a herb and secondary from the dropdowns or enter their names with Custom.',
     category: 'Herblore',
     tags: ['herblore', 'potion', 'banking', 'members', 'afk'],
     settingsSchema: POTION_MAKER_SETTINGS,
@@ -768,7 +770,7 @@ ScriptRegistry.register({
 ScriptRegistry.register({
     name: 'BrimhavenAgility',
     description:
-        'Brimhaven Agility Arena — banks food+coins at Ardougne south, ships to Brimhaven, pays Cap\'n Izzy, tags ticket pillars on the level-optimal path, and grinds centre spikes between tags. Optional steal restock (Thieving 20) takes cakes from the Baker\'s stall and coins from guards.',
+        'Brimhaven Agility Arena — banks food+coins at Ardougne south, ships to Brimhaven, pays Cap\'n Izzy, tags ticket pillars on the level-optimal path, and trains on the nearest usable spikes or pressure pads between tags. Uses Ardougne teleport when food runs out, stocking return runes from the bank when unlocked. Optional steal restock (Thieving 20) takes cakes from the Baker\'s stall and coins from guards.',
     category: 'Agility',
     tags: ['brimhaven', 'arena', 'tickets', 'banking', 'food'],
     settingsSchema: BRIMHAVEN_AGILITY_SETTINGS,
@@ -913,9 +915,9 @@ ScriptRegistry.register({
 
 ScriptRegistry.register({
     name: 'AccountLeveler',
-    description: 'Trains melee first, then remaining combat skills, then other enabled members skills to 60. Stocks essence in batches of 1,000 and uses Edgeville monkey bars from Agility 15. Buys supplies, runs required quests, and recovers from death. Wilderness training is optional and enabled by default.',
+    description: 'Randomly rotates between unfinished combat and skilling tasks up to level 70 and completes their supply and quest prerequisites. Optional Hard clue farming repeatedly hunts hellhounds, solves trails, and prepares supported quest and skill requirements while retaining the clue. Buys or gathers supplies and recovers from death. Wilderness training and clue steps follow the Wilderness setting. The dedicated Seers Market supplier gathers and sells goods in lots of 1,000 on World 1.',
     category: 'General',
-    tags: ['training', 'combat', 'skilling', 'quests', 'banking', 'death-recovery'],
+    tags: ['training', 'combat', 'skilling', 'quests', 'clues', 'banking', 'death-recovery'],
     settingsSchema: ACCOUNT_LEVELER_SETTINGS,
     create: () => new AccountLeveler()
 });
@@ -927,4 +929,13 @@ ScriptRegistry.register({
     tags: ['loot', 'wandering', 'banking', 'food', 'event', 'pumpkin'],
     settingsSchema: WANDER_LOOTER_SETTINGS,
     create: () => new WanderLooter()
+});
+
+ScriptRegistry.register({
+    name: 'ShadesOfMortton',
+    description: 'Fiyr shades, magic pyres and silver chests with automatic key progression, temple repair and renewable supplies',
+    category: 'Minigames',
+    tags: ['shades', 'mortton', 'firemaking', 'prayer', 'self-supplying'],
+    settingsSchema: SHADES_SETTINGS,
+    create: () => new ShadesOfMortton()
 });

@@ -15,8 +15,10 @@ export function renderRailTile(tile: HTMLElement, slot: SlotSnapshot): void {
     const pending = slot.switchingWorld;
     const status = tile.querySelector<HTMLElement>('.mbx-script-status');
     if (status) {
-        status.textContent = slot.worldSwitchError ?? (pending !== null ? `Switching to World ${pending}...` : !slot.ready ? 'Loading' : !slot.scriptName ? 'No script running'
-            : slot.scriptState === 'running' ? slot.scriptName : `${slot.scriptName} (${slot.scriptState})`);
+        const switching = pending !== null ? `Switching to World ${pending}...` : null;
+        const startup = tile.dataset.startup ?? (slot.ready ? null : 'Loading');
+        const script = !slot.scriptName ? 'No script running' : slot.scriptState === 'running' ? slot.scriptName : `${slot.scriptName} (${slot.scriptState})`;
+        status.textContent = slot.worldSwitchError ?? switching ?? startup ?? script;
     }
     const select = tile.querySelector<HTMLSelectElement>('.mbx-world-select');
     if (select) {

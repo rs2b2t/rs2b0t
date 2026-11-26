@@ -157,7 +157,6 @@ export default class MuleCrafter extends TaskBot implements MuleCrafterContext {
         const keep = new Set([talismanId, runeId, ESSENCE_ID].filter(id => id !== -1));
         await Bank.depositAllMatching((name, id) => name.length > 0 && !keep.has(id), message => this.log(`  ${message}`));
         this.log('Crafter cleanup: deposit pass complete');
-        await Execution.delayTicks(1);
         if (!await this.ensureTalisman()) {
             throw new Error(`MuleCrafter: ${this.conf.talisman} not found`);
         }
@@ -186,7 +185,6 @@ export default class MuleCrafter extends TaskBot implements MuleCrafterContext {
         const keep = new Set([runeId, ESSENCE_ID]);
         if (keepTalisman && talismanId !== -1) keep.add(talismanId);
         await Bank.depositAllMatching((name, id) => name.length > 0 && !keep.has(id), message => this.log(`  ${message}`));
-        await Execution.delayTicks(1);
         if (keepTalisman && !await this.ensureTalisman()) {
             throw new Error(`MuleCrafter: ${this.conf.talisman} not found`);
         }
@@ -194,8 +192,9 @@ export default class MuleCrafter extends TaskBot implements MuleCrafterContext {
     }
 
     private async openBank(): Promise<boolean> {
-        return await Bank.openBooth(this.bank, BOOTH.name, BOOTH.op, message => this.log(`  ${message}`))
+        const opened = await Bank.openBooth(this.bank, BOOTH.name, BOOTH.op, message => this.log(`  ${message}`))
             || await Bank.openNearest(BOOTH.name, BOOTH.op, message => this.log(`  ${message}`));
+        return opened && await Bank.waitReady(3000);
     }
 
     private async ensureTalisman(): Promise<boolean> {

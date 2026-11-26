@@ -1,10 +1,11 @@
+import { Modals } from '../../../../ui/widgets/Modals.js';
 import { MiniMenuAction } from '#/client/shell/MiniMenuAction.js';
 
 import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
 import { EventSignal } from '../../../../execution/EventSignal.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
-import { openDialogue, pickByLine, pickPreferred, type LineRule } from '../../exec/primitives.js';
+import { afterDialogueAction, openDialogue, pickByLine, pickPreferred, type LineRule } from '../../exec/primitives.js';
 
 const CONTINUE_LABEL = 'Click here to continue';
 
@@ -19,8 +20,8 @@ export async function clearBox(): Promise<boolean> {
     const cont = reader.mainModalButtonNearText(CONTINUE_LABEL);
     if (cont > 0 && !actions.menuAction(MiniMenuAction.PAUSE_BUTTON, 0, 0, cont)) {
         actions.ifButton(cont);
-    } else if (cont <= 0) {
-        actions.closeModal();
+    } else if (cont <= 0 && await Modals.close()) {
+        return true;
     }
     await Execution.delayTicks(1);
     return true;
@@ -97,10 +98,9 @@ async function driveBoxes(drive: BoxDrive, log: (m: string) => void): Promise<bo
             continue;
         }
         if (ChatDialog.canContinue()) {
-            await ChatDialog.continue();
+            await afterDialogueAction(await ChatDialog.continue(), 1);
             acted = true;
             quiet = 0;
-            await Execution.delayTicks(1);
             continue;
         }
         if (await clearBox()) {

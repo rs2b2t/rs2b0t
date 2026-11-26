@@ -639,3 +639,12 @@ test('a partner advancing its stage renews the cooperative progress timeout', as
     await engine.execute();
     expect(engine['restartCounts'].size).toBe(0);
 });
+
+test('a completed quest step returns to the tick-paced runner immediately', async () => {
+    const { engine, state } = fixture();
+    state.ok = true;
+    state.gain = true;
+    await engine.execute();
+    expect(state.attempts).toBe(1);
+    expect(Execution.delayTicks).not.toHaveBeenCalled();
+});

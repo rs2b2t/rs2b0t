@@ -10,7 +10,7 @@ import { Traversal } from '../../../../walking/Traversal.js';
 import Tile from '../../../../../geometry/Tile.js';
 import { Modals } from '../../../../ui/widgets/Modals.js';
 import { talkStrict } from '../../exec/primitives.js';
-import { driveUntil, heldId, settleScene } from '../../exec/prompts.js';
+import { findSceneTarget, driveUntil, heldId } from '../../exec/prompts.js';
 import { UP_ITEM, UP_LOC, UP_NPC, UP_TILE, upassArea } from './areas.js';
 import { BOW_IDS } from './supplies.js';
 import { travelTo } from './pass.js';
@@ -55,9 +55,8 @@ async function talkAt(npcId: number, near: Tile, prefer: string[], log: (m: stri
     if (!(await walkTo(near, 2, log))) {
         return false;
     }
-    await settleScene();
     // Why: 5 NPCs all render as "Koftik", so find the guide by id, then talk by name.
-    const guide = Npcs.query().where(npc => npc.id === npcId).within(12).nearest();
+    const guide = await findSceneTarget(() => Npcs.query().where(npc => npc.id === npcId).within(12).nearest());
     if (!guide) {
         log(`no npc ${npcId} near (${near.x},${near.z})`);
         return false;
@@ -76,8 +75,7 @@ async function openWallGate(from: Tile, to: Tile, log: (m: string) => void): Pro
     if (!(await walkTo(from, 1, log))) {
         return false;
     }
-    await settleScene();
-    const gate = locById(UP_LOC.WALL_DOOR_L, 'Open', 8) ?? locById(UP_LOC.WALL_DOOR_R, 'Open', 8);
+    const gate = await findSceneTarget(() => locById(UP_LOC.WALL_DOOR_L, 'Open', 8) ?? locById(UP_LOC.WALL_DOOR_R, 'Open', 8));
     if (!gate) {
         log(`no Ardougne wall gate within reach of (${from.x},${from.z})`);
         return false;
@@ -119,7 +117,6 @@ export async function startQuest(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(UP_TILE.LATHAS, 2, log))) {
         return false;
     }
-    await settleScene();
     return talkStrict('King Lathas', [], log);
 }
 
@@ -136,8 +133,7 @@ export async function enterCave(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(UP_TILE.CAVE_MOUTH, 3, log))) {
         return false;
     }
-    await settleScene();
-    const mouth = locById(UP_LOC.CAVE_ENTRANCE, 'Enter', 16);
+    const mouth = await findSceneTarget(() => locById(UP_LOC.CAVE_ENTRANCE, 'Enter', 16));
     if (!mouth) {
         log('no cave entrance at the far west of West Ardougne');
         return false;
@@ -160,8 +156,7 @@ export async function leavePass(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(UP_TILE.CAVE_EXIT, 3, log))) {
         return false;
     }
-    await settleScene();
-    const exit = locById(UP_LOC.CAVE_EXIT, null, 12);
+    const exit = await findSceneTarget(() => locById(UP_LOC.CAVE_EXIT, null, 12));
     const op = exit?.actions()[0];
     if (!exit || !op) {
         log('no cave exit in the landing chamber');
@@ -178,7 +173,6 @@ export async function reportToLathas(log: (m: string) => void): Promise<boolean>
     if (!(await walkTo(UP_TILE.LATHAS, 2, log))) {
         return false;
     }
-    await settleScene();
     return talkStrict('King Lathas', [], log);
 }
 
@@ -255,8 +249,7 @@ export async function shootGuiderope(log: (m: string) => void): Promise<boolean>
         if (!(await Traversal.walkResilient(stand, { radius: 0, attempts: 1, timeoutMs: 20_000 }))) {
             continue;
         }
-        await settleScene();
-        const rope = locById(UP_LOC.GUIDEROPE, null, 12);
+        const rope = await findSceneTarget(() => locById(UP_LOC.GUIDEROPE, null, 12));
         if (!rope) {
             log('no bridge guide rope in range of the shooting stand');
             return false;

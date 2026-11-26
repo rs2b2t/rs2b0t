@@ -13,6 +13,15 @@ const snapshot = (): LevelerSnapshot => ({
 });
 const isolate = (id: string) => ({ ...emptyMemory(), cooldowns: Object.fromEntries(COMBAT_CAMPS.filter(camp => camp.id !== id).map(camp => [camp.id, 2000])) });
 
+test('guard runs collect and solve clues while other camps keep their training focus', () => {
+    const plan = combatPlan(snapshot(), 'attack', isolate('falador-west-guards'), () => 0)!;
+    expect(plan.settings.target).toBe('Guard');
+    expect(plan.settings.solveClues).toBe(true);
+    expect(wantsAutoFighterLoot('Clue scroll', plan.settings.loot as string[], true)).toBe(true);
+    const other = combatPlan(snapshot(), 'attack', isolate('lumbridge-cows'), () => 0)!;
+    expect(other.settings.solveClues).toBe(false);
+});
+
 test('hobgoblin combat gathers secondary ingredients and runes without ending the training objective', () => {
     const plan = combatPlan(snapshot(), 'attack', isolate('rimmington-hobgoblins'), () => 0)!;
     expect(plan.objective).toBe('attack');

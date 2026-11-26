@@ -95,9 +95,13 @@ export function heldWithOffer(
     pack: readonly { id: number; count: number }[],
     offer: readonly { id: number; count: number }[]
 ): { id: number; count: number }[] {
+    return [...itemCounts([...pack, ...offer])].map(([id, count]) => ({ id, count }));
+}
+
+export function itemCounts(items: readonly { id: number; count: number }[]): Map<number, number> {
     const total = new Map<number, number>();
-    for (const item of [...pack, ...offer]) {
+    for (const item of items) {
         total.set(item.id, (total.get(item.id) ?? 0) + Math.max(1, item.count));
     }
-    return [...total].map(([id, count]) => ({ id, count }));
+    return total;
 }

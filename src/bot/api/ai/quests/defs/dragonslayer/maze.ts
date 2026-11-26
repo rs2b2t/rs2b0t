@@ -1,3 +1,4 @@
+import { findSceneTarget } from '../../exec/prompts.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Game } from '../../../../game/Game.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
@@ -129,15 +130,14 @@ async function killFor(leg: MazeLeg & { kind: 'kill' }, log: (m: string) => void
         return false;
     }
     await mazeSceneLoaded();
-    const target = find();
+    const target = await findSceneTarget(find, 3);
     if (!target) {
         log(`no ${leg.what} in the scene — it may still be respawning`);
-        await Execution.delayTicks(3);
         return false;
     }
     if (target.targetsMe() && reader.selfFaceEntity() === target.index) {
-        await Execution.delayTicks(2);
-        return heldById(leg.keyId);
+        await Execution.delayUntilTicks(() => !target.valid() || heldById(leg.keyId), 2);
+        return heldById(leg.keyId) || takeKey(leg.keyId, log);
     }
     if (target.distance() > 8 && !(await walk(target.tile(), log, 2))) {
         return false;

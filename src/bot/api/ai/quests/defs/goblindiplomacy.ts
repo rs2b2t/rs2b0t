@@ -7,7 +7,7 @@ import { Npcs } from '../../../npcs/Npcs.js';
 import { Traversal } from '../../../walking/Traversal.js';
 import Tile from '../../../../geometry/Tile.js';
 import { ITEM_DB } from '../../../../data/itemdb.js';
-import { gotoNpc, talkThrough, type NpcStop } from '../exec/primitives.js';
+import { afterDialogueAction, gotoNpc, talkThrough, type NpcStop } from '../exec/primitives.js';
 import { executeStep } from '../exec/steps.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { QUESTS } from '../data/quests.js';
@@ -86,8 +86,7 @@ async function reachFundingMan(anchor: Tile, log: (message: string) => void): Pr
 
 async function clearFundingDialog(): Promise<void> {
     for (let pages = 0; pages < 12 && ChatDialog.canContinue(); pages++) {
-        await ChatDialog.continue();
-        await Execution.delayTicks(1);
+        await afterDialogueAction(await ChatDialog.continue(), 1);
     }
 }
 
@@ -141,8 +140,7 @@ async function buyOneKebab(log: (message: string) => void): Promise<boolean> {
             return true;
         }
         if (ChatDialog.canContinue()) {
-            await ChatDialog.continue();
-            await Execution.delayTicks(1);
+            await afterDialogueAction(await ChatDialog.continue(), 1);
             continue;
         }
         const options = ChatDialog.options();

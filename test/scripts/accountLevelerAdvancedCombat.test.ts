@@ -106,14 +106,14 @@ test('lesser demons never become a Prayer training method', () => {
     expect(combatPlan(s, 'prayer', isolate('karamja-lesser-demons'), () => 0)).toBeNull();
 });
 
-test('higher combat bands retire guards and pirates without forcing locked dungeons', () => {
+test('higher combat bands retain guards for clues without forcing locked dungeons', () => {
     const s = snapshot(99);
     s.quests['Horror from the Deep'] = true;
     const targets = new Set<string>();
     for (let i = 0; i < 100; i++) targets.add(String(combatPlan(s, 'attack', emptyMemory(), () => i / 100)?.settings.target));
     expect(targets.has('Lesser demon')).toBe(true);
     expect(targets.has('Pirate')).toBe(false);
-    expect(targets.has('Guard')).toBe(false);
+    expect(targets.has('Guard')).toBe(true);
     expect(targets.has('Dagannoth')).toBe(false);
     s.levels = snapshot(30).levels;
     expect(combatPlan(s, 'attack', isolate('karamja-lesser-demons'), () => 0)).toBeNull();
@@ -168,7 +168,7 @@ test('an unavailable dungeon tool excludes the camp until the tool is owned', ()
 });
 
 test('baby blue dragons require the key and an equipped shield for the adult dragon transit', () => {
-    const s = snapshot(50);
+    const s = snapshot(60);
     const memory = isolate('taverley-baby-blue-dragons');
     expect(combatPlan(s, 'attack', memory, () => 0)).toBeNull();
     s.stock['dusty key'] = 1;
@@ -183,6 +183,6 @@ test('baby blue dragons require the key and an equipped shield for the adult dra
         expect(plan?.settings).toMatchObject({ target: 'Baby blue dragon', leashRadius: 4, travelItems: ['Dusty key'], buryBabyDragonBones: true });
     }
     expect(combatPlan(s, 'ranged', memory, () => 0)).toBeNull();
-    s.levels.hitpoints = 49;
+    s.levels.hitpoints = 59;
     expect(combatPlan(s, 'attack', memory, () => 0)).toBeNull();
 });

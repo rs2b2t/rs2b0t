@@ -1,6 +1,5 @@
 import { normalizeJournal as normalize } from '../journalText.js';
 // docs/QUESTS.md
-import { actions, reader } from '../../../../adapter/ClientAdapter.js';
 import { DirectNavigator } from '../../../../event/webwalk/DirectNavigator.js';
 import { Reachability } from '../../../../event/webwalk/geometry/Reachability.js';
 import Tile from '../../../../geometry/Tile.js';
@@ -17,7 +16,7 @@ import { Traversal } from '../../../walking/Traversal.js';
 import { QUESTS } from '../data/quests.js';
 import type { QuestModule, QuestProgress, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { gotoNpc, talkStrict, talkThrough, type NpcStop } from '../exec/primitives.js';
-import { driveUntil, heldId, settleScene } from '../exec/prompts.js';
+import { findSceneTarget, driveUntil, heldId, settleScene } from '../exec/prompts.js';
 import { gatherMilk } from './cooksassistant.js';
 
 const QUEST = "Gertrude's Cat";
@@ -156,10 +155,7 @@ export async function readGertrudesCatProgress(): Promise<QuestProgress | undefi
         return undefined;
     }
     const progress = parseGertrudesCatJournal(await Quests.journal(QUEST));
-    if (reader.modals().main !== -1) {
-        actions.closeModal();
-        await Execution.delayTicks(1);
-    }
+    await Modals.closeIfOpen();
     return progress;
 }
 
@@ -210,8 +206,7 @@ async function climbToCat(log: (m: string) => void): Promise<boolean> {
     if (!(await Traversal.walkResilient(LADDER_BASE, { radius: 1, attempts: 3, timeoutMs: 180_000, log }))) {
         return false;
     }
-    await settleScene();
-    const ladder = Locs.query().name('Ladder').action('Climb-up').within(4).nearest();
+    const ladder = await findSceneTarget(() => Locs.query().name('Ladder').action('Climb-up').within(4).nearest());
     if (!ladder) {
         log(`gertrudescat: no ladder up to Fluffs at (${LADDER_BASE.x},${LADDER_BASE.z})`);
         return false;

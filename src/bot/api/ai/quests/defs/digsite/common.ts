@@ -10,7 +10,7 @@ import { Modals } from '../../../../ui/widgets/Modals.js';
 import { Reach } from '../../../../walking/Reach.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import type { QuestSnapshot } from '../../engine/types.js';
-import { driveChoice, settleScene } from '../../exec/prompts.js';
+import { findSceneTarget, driveChoice, settleScene } from '../../exec/prompts.js';
 import { driveDialog } from '../../exec/primitives.js';
 import { QuestFood } from '../../food.js';
 import { DIG_ID, DIG_TILE, inDigCave } from './areas.js';
@@ -104,8 +104,9 @@ export async function driveUntilHeld(
             continue;
         }
         if (Modals.isOpen()) {
-            await Modals.close();
-            await Execution.delayTicks(1);
+            if (!(await Modals.close())) {
+                await Execution.delayTicks(1);
+            }
             continue;
         }
         await Execution.delayTicks(1);
@@ -129,8 +130,7 @@ export async function useOnLocIds(
     if (!(await walkTo(stand, 1, log))) {
         return false;
     }
-    await settleScene();
-    const target = locByIds(locIds, 8);
+    const target = await findSceneTarget(() => locByIds(locIds, 8));
     const item = Inventory.items().find(entry => entry.id === itemId) ?? null;
     if (!target || !item) {
         log(`no loc ${locIds.join('/')} or no item ${itemId} at (${stand.x},${stand.z})`);
@@ -157,8 +157,7 @@ export async function useOnNpcId(
     if (!npcById(npcId, 10) && !(await walkTo(anchor, 3, log))) {
         return false;
     }
-    await settleScene();
-    const target = npcById(npcId, 16);
+    const target = await findSceneTarget(() => npcById(npcId, 16));
     const item = Inventory.items().find(entry => entry.id === itemId) ?? null;
     if (!target || !item) {
         log(`no npc ${npcId} or no item ${itemId} near (${anchor.x},${anchor.z})`);

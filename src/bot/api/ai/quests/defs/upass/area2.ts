@@ -2,7 +2,7 @@ import { Game } from '../../../../game/Game.js';
 import { GroundItems } from '../../../../grounditems/GroundItems.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
 import { Npcs } from '../../../../npcs/Npcs.js';
-import { driveUntil, heldId, settleScene } from '../../exec/prompts.js';
+import { findSceneTarget, driveUntil, heldId, settleScene } from '../../exec/prompts.js';
 import type { QuestSnapshot } from '../../engine/types.js';
 import { UP_BADGES, UP_ITEM, UP_LOC, UP_NPC, UP_TILE, countHeld, type UpassItem } from './areas.js';
 import { locById, walkTo } from './bridge.js';
@@ -15,8 +15,7 @@ export async function takeRailing(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(UP_TILE.RAILINGS_LOOSE, 1, log))) {
         return false;
     }
-    await settleScene();
-    const cage = locById(UP_LOC.RAILINGS_LOOSE, 'Search', 8);
+    const cage = await findSceneTarget(() => locById(UP_LOC.RAILINGS_LOOSE, 'Search', 8));
     if (!cage || !(await cage.interact('Search'))) {
         log('no searchable cage bars at the loose railing');
         return false;
@@ -39,8 +38,7 @@ export async function dropBoulder(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(UP_TILE.BOULDER, 2, log))) {
         return false;
     }
-    await settleScene();
-    const boulder = Npcs.query().where(npc => npc.id === UP_NPC.BOULDER).within(10).nearest();
+    const boulder = await findSceneTarget(() => Npcs.query().where(npc => npc.id === UP_NPC.BOULDER).within(10).nearest());
     const railing = Inventory.items().find(item => item.id === UP_ITEM.RAILING.id);
     // Why: no boulder and a smashed cage means the job is done; the stage moved and the journal didn't.
     if (!boulder && locById(UP_LOC.UNICORN_CAGE, null, 16) !== null) {
@@ -70,8 +68,7 @@ export async function takeUnicornHorn(log: (m: string) => void): Promise<boolean
     if (!(await walkTo(UP_TILE.UNICORN_CAGE, 3, log))) {
         return false;
     }
-    await settleScene();
-    const cage = locById(UP_LOC.UNICORN_CAGE, null, 8);
+    const cage = await findSceneTarget(() => locById(UP_LOC.UNICORN_CAGE, null, 8));
     const op = cage?.actions()[0];
     if (!cage || !op || !(await cage.interact(op))) {
         log('no crushed unicorn cage to search');
@@ -122,13 +119,12 @@ export async function killPaladin(log: (m: string) => void, killed = new Set<num
     if (!(await walkTo(UP_TILE.PALADINS, 4, log))) {
         return false;
     }
-    await settleScene();
     // Why: which crest is owed can't be read once the well has eaten them, so the target is picked by who hasn't been killed yet.
-    const target = Npcs.query()
+    const target = await findSceneTarget(() => Npcs.query()
         .where(npc => PALADINS.some(p => p.npc === npc.id) && !killed.has(npc.id))
         .action('Attack')
         .within(14)
-        .nearest();
+        .nearest());
     if (!target) {
         log('no paladin left on the shelf that this crossing has not already killed');
         return false;
@@ -189,8 +185,7 @@ export async function enterMainCavern(log: (m: string) => void): Promise<boolean
     if (!(await walkTo(UP_TILE.TEMPLE_DOOR, 3, log))) {
         return false;
     }
-    await settleScene();
-    const door = locById(UP_LOC.TEMPLE_DOOR_L, null, 8) ?? locById(UP_LOC.TEMPLE_DOOR_R, null, 8);
+    const door = await findSceneTarget(() => locById(UP_LOC.TEMPLE_DOOR_L, null, 8) ?? locById(UP_LOC.TEMPLE_DOOR_R, null, 8));
     const op = door?.actions()[0];
     if (!door || !op || !(await door.interact(op))) {
         log('no temple double door at the west end of the shelf');

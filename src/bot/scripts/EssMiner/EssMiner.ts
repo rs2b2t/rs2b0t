@@ -209,8 +209,7 @@ class AcquireBestPick implements Task {
             return;
         }
         this.bot.resetBankFail();
-        await Execution.delayUntil(() => Bank.loaded() || !Bank.isOpen(), 4000);
-        if (!Bank.isOpen()) {
+        if (!(await Bank.waitReady(4000))) {
             return;
         }
 
@@ -218,7 +217,6 @@ class AcquireBestPick implements Task {
         if (bankItem) {
             if (Inventory.isFull()) {
                 await Bank.depositAllMatching(bankDeposit());
-                await Execution.delayTicks(1);
             }
             const op = withdrawOneOp(bankItem.ops);
             const before = Inventory.count(target.item);
@@ -353,7 +351,6 @@ class BankEss implements Task {
         this.bot.resetBankFail();
         const n = essCount();
         await Bank.depositAllMatching(bankDeposit());
-        await Execution.delayTicks(1);
         this.bot.countTrip(n);
         this.bot.log(`banked ${n} rune essence (trip ${this.bot.tripsTotal()})`);
     }
@@ -379,7 +376,6 @@ class GetPick implements Task {
         this.bot.resetBankFail();
         if (Inventory.isFull()) {
             await Bank.depositAllMatching(bankDeposit());
-            await Execution.delayTicks(1);
         }
         const bankNames = Bank.items().map(i => i.name ?? '').filter(n => n.length > 0);
         const res = resolvePick(PICK_CHOICE, Skills.level('mining'), heldNames(), bankNames);

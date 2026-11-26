@@ -54,7 +54,7 @@ export default class FlourCollector extends LoopingBot {
             return;
         }
         try {
-            if (!(await Execution.delayUntil(() => Bank.ready(), 5000))) {
+            if (!(await Bank.waitReady(5000))) {
                 return;
             }
             await Bank.depositAllMatching((_name, id) => id !== MURDER_OBJ.POT);

@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { QUESTS } from '#/bot/api/ai/quests/data/quests.js';
 import { questPreparationRequest } from '#/bot/api/ai/quests/engine/preparationPolicy.js';
 import type { QuestModule } from '#/bot/api/ai/quests/engine/types.js';
+import { DP_FLAG, DP_STAGE } from '#/bot/api/ai/quests/defs/deathplateau/journal.js';
 
 const moduleFor = (id: string, extra: Partial<QuestModule> = {}): QuestModule => ({
     record: QUESTS.find(record => record.id === id)!, decide: () => ({ kind: 'done' }), ...extra
@@ -9,6 +10,19 @@ const moduleFor = (id: string, extra: Partial<QuestModule> = {}): QuestModule =>
 const stock = (items: [string, number][]) => new Map(items);
 
 describe('quest preparation policy', () => {
+    test('resumed Death Plateau prepares the undelivered bread and trout', () => {
+        const progress = { stage: DP_STAGE.UNLOCKED_DOOR, flags: new Set([DP_FLAG.GIVEN_CERT]) };
+        const request = questPreparationRequest(moduleFor('death'), null, 'inProgress', stock([['spiked boots', 1]]), undefined, progress);
+        expect(request?.items).toEqual([{ item: 'Bread', count: 10 }, { item: 'Trout', count: 10 }]);
+        expect(questPreparationRequest(moduleFor('death'), null, 'inProgress', new Map(), undefined, progress)?.items)
+            .toContainEqual({ item: 'Iron bar', count: 1 });
+    });
+
+    test.each([DP_FLAG.SUPPLIES, DP_FLAG.GOT_MAP, DP_FLAG.SCOUTED])('Death Plateau does not replace delivery items after %s', flag => {
+        const progress = { stage: DP_STAGE.UNLOCKED_DOOR, flags: new Set([flag]) };
+        expect(questPreparationRequest(moduleFor('death'), null, 'inProgress', new Map(), undefined, progress)?.items).toBeUndefined();
+    });
+
     test('does not acquire supplies for unknown or completed quests', () => {
         expect(questPreparationRequest(moduleFor('upass'), 'Trout', 'unknown')).toBeNull();
         expect(questPreparationRequest(moduleFor('upass'), 'Trout', 'complete')).toBeNull();
@@ -70,6 +84,20 @@ describe('quest preparation policy', () => {
         expect(request?.skills?.some(req => req.skill === 'woodcutting' || req.skill === 'crafting')).toBe(false);
         expect(questPreparationRequest(moduleFor('ikov'), 'Trout', 'notStarted', stock([['yew shortbow', 1]]))?.skills)
             .toEqual([{ skill: 'thieving', level: 42 }, { skill: 'ranged', level: 40 }]);
+    });
+
+    test('uses a banked magic shortbow and only trains the Ranged level needed to wield it', () => {
+        const names = stock([['magic shortbow', 1]]);
+        const request = (ids: number[]) => questPreparationRequest(moduleFor('ikov'), null, 'notStarted', names,
+            new Map(ids.map(id => [id, 1])))?.skills;
+        expect(request([861])).toEqual([{ skill: 'thieving', level: 42 }, { skill: 'ranged', level: 50 }]);
+        expect(request([861, 855])).toEqual([{ skill: 'thieving', level: 42 }, { skill: 'ranged', level: 40 }]);
+        expect(request([72])).toContainEqual({ skill: 'fletching', level: 65 });
+        for (const [stage, ranged] of [[30, 50], [40, 40]]) {
+            const resumed = questPreparationRequest(moduleFor('ikov'), null, 'inProgress', names, new Map([[861, 1]]),
+                { stage, flags: new Set() });
+            expect(resumed?.skills).toContainEqual({ skill: 'ranged', level: ranged });
+        }
     });
 
     test('distinguishes unstrung and strung bows with the same display name', () => {

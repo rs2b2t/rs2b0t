@@ -168,7 +168,7 @@ export async function bankRoutine(bot: BrimhavenMossGiants, withdrawFood: boolea
     }
     await Bank.depositAllMatching(depositAllExcept(keepNames()), m => bot.log(`  ${m}`));
     // The bank's item list fills a beat after it opens, so withdrawals before that read 0.
-    if (!(await Execution.delayUntil(() => Bank.loaded(), 5000))) {
+    if (!(await Bank.waitReady(5000))) {
         bot.log('bank item list never loaded — will retry next bank trip');
         return;
     }

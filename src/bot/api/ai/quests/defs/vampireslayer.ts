@@ -1,4 +1,5 @@
-import { actions, reader } from '../../../../adapter/ClientAdapter.js';
+import { Modals } from '../../../ui/widgets/Modals.js';
+import { findSceneTarget } from '../exec/prompts.js';
 import { Execution } from '../../../execution/Execution.js';
 import { Game } from '../../../game/Game.js';
 import Tile from '../../../../geometry/Tile.js';
@@ -46,10 +47,7 @@ async function readVampireSlayerStage(): Promise<number | undefined> {
 
     const lines = await Quests.journal('Vampire Slayer');
     const stage = parseVampireSlayerJournal(lines);
-    if (reader.modals().main !== -1) {
-        actions.closeModal();
-        await Execution.delayTicks(1);
-    }
+    await Modals.closeIfOpen();
     return stage;
 }
 
@@ -302,10 +300,9 @@ async function fightCount(log: (message: string) => void): Promise<boolean> {
     }
     let count = liveCount();
     if (!count) {
-        const coffin = Locs.query().where(loc => loc.id === COFFIN_CLOSED_ID).action('Open').within(7).nearest();
+        const coffin = await findSceneTarget(() => Locs.query().where(loc => loc.id === COFFIN_CLOSED_ID).action('Open').within(7).nearest(), 2);
         if (!coffin) {
             log('waiting for Count Draynor\'s Coffin to close');
-            await Execution.delayTicks(2);
             return false;
         }
         if (!(await coffin.interact('Open'))) return false;

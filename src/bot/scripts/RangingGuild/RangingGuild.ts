@@ -4,7 +4,7 @@ import { Execution } from '../../api/execution/Execution.js';
 import { Game } from '../../api/game/Game.js';
 import type Tile from '../../geometry/Tile.js';
 import { Traversal } from '../../api/walking/Traversal.js';
-import { Reach } from '../../api/walking/Reach.js';
+import { findSceneTarget, Reach } from '../../api/walking/Reach.js';
 import { Banking, depositAllExcept } from '../../api/bank/Banking.js';
 import { Bank } from '../../api/bank/Bank.js';
 import { withdrawOp } from '../../api/bank/bankOps.js';
@@ -137,6 +137,7 @@ export default class RangingGuild extends LoopingBot {
         }
         await this.settle();
         const action = decide(this.view());
+        const shots = this.shots;
         switch (action.kind) {
             case 'redeem':
                 await this.redeem();
@@ -163,7 +164,7 @@ export default class RangingGuild extends LoopingBot {
                 await this.bank();
                 break;
         }
-        await Execution.delayTicks(1);
+        if (shots === this.shots && decide(this.view()).kind === action.kind) await Execution.delayTicks(1);
     }
 
     private coinsPerTrip(): number {
@@ -335,10 +336,9 @@ export default class RangingGuild extends LoopingBot {
             return;
         }
         this.status = 'shooting';
-        const target = Locs.query().name(TARGET).action(FIRE_OP).within(TARGET_RANGE).nearest();
+        const target = await findSceneTarget(() => Locs.query().name(TARGET).action(FIRE_OP).within(TARGET_RANGE).nearest());
         if (!target) {
             this.fail('no target in the scene');
-            await Execution.delayTicks(2);
             return;
         }
         const count = reader.varp(VARP_TARGET_COUNT);
@@ -427,7 +427,6 @@ export default class RangingGuild extends LoopingBot {
         this.trips++;
         try {
             await Bank.depositAllMatching(depositAllExcept(KEEP));
-            await Execution.delayTicks(1);
             const view = this.view();
             if (!view.bowWorn && !view.bowHeld) {
                 const bow = bestBow(Skills.level('ranged'), name => Bank.count(name) > 0);
@@ -441,7 +440,8 @@ export default class RangingGuild extends LoopingBot {
                 }
                 this.log(`withdrew a ${bow}`);
             }
-            const want = this.coinsPerTrip() - Inventory.countById(COINS);
+            const carried = Inventory.countById(COINS);
+            const want = this.coinsPerTrip() - carried;
             const banked = Bank.countById(COINS);
             this.bankedCoins = banked;
             const available = Math.max(0, banked - this.coinsReserve());
@@ -450,11 +450,10 @@ export default class RangingGuild extends LoopingBot {
                 const stack = Bank.items().find(i => i.id === COINS);
                 const all = stack ? withdrawOp(stack.ops, 'all') : null;
                 const ok = taken >= banked && all ? await Bank.withdrawById(COINS, all) : await Bank.withdrawXById(COINS, taken);
-                if (!ok) {
+                if (!ok || !(await Execution.delayUntil(() => Inventory.countById(COINS) >= carried + taken && Bank.countById(COINS) <= banked - taken, 4000))) {
                     this.fail('could not withdraw coins');
                     return;
                 }
-                await Execution.delayTicks(1);
                 this.bankedCoins = Bank.countById(COINS);
                 this.log(`withdrew ${taken} coins (${banked - taken} left in the bank)`);
             }

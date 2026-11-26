@@ -4,9 +4,8 @@ import { Inventory } from '../../../../inventory/Inventory.js';
 import { Locs } from '../../../../locs/Locs.js';
 import { Sustain } from '../../../../sustain/Sustain.js';
 import { Traversal } from '../../../../walking/Traversal.js';
-import { gearOf } from '../../../../loadout/loadoutPlan.js';
 import { FOOD_FLOAT, QuestFood } from '../../food.js';
-import { QuestLoadout } from '../../gear.js';
+import { questWornGear } from '../../gear.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { settleScene } from '../../exec/prompts.js';
 import { LOGS_WANTED, TG_ITEM, TG_NPC, TG_TILE } from './areas.js';
@@ -143,7 +142,7 @@ function bestAvailable(snap: QuestSnapshot, kinds: readonly string[]): string | 
 }
 
 function plannedGear(snap: QuestSnapshot): string[] {
-    const declared = gearOf(QuestLoadout.current);
+    const declared = Object.values(questWornGear(snap));
     const names = declared.length > 0
         ? declared
         : GEAR_SLOTS.filter(slot => !wearingKind(snap, slot.kinds))

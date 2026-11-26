@@ -19,6 +19,30 @@ afterEach(() => {
 });
 
 describe('DomSlotOps', () => {
+    test('queues a 61-profile launch and frees capacity on boot completion, removal and world reload', () => {
+        const ops = new DomSlotOps(document.getElementById('rail')!, document.getElementById('add')!, true);
+        for (let i = 0; i < 61; i++) handles.push(ops.spawn({ username: 'slot' + i, password: '' }));
+        const frames = Array.from(document.querySelectorAll('iframe'));
+        expect(frames.length).toBe(61);
+        expect(frames.filter(frame => frame.hasAttribute('src')).length).toBe(4);
+        frames[0].dispatchEvent(new Event('mbx-client-initialized'));
+        expect(frames[4].hasAttribute('src')).toBe(true);
+        handles[5].destroy();
+        handles[1].reloadWorld(2);
+        expect(frames[6].hasAttribute('src')).toBe(true);
+        frames[1].dispatchEvent(new Event('mbx-client-initialized'));
+        expect(frames[7].hasAttribute('src')).toBe(false);
+        handles[2].destroy();
+        expect(frames[7].hasAttribute('src')).toBe(true);
+        for (const frame of frames.slice(3)) {
+            if (frame.isConnected) {
+                expect(frame.hasAttribute('src')).toBe(true);
+                frame.dispatchEvent(new Event('mbx-client-initialized'));
+            }
+        }
+        expect(new URL(document.querySelector<HTMLIFrameElement>('iframe[title="slot1"]')!.src).searchParams.get('world')).toBe('2');
+    });
+
     test('roster exposes only the live ready bridge without queueing access', async () => {
         const ops = new DomSlotOps(document.getElementById('rail')!, document.getElementById('add')!, true);
         const handle = ops.spawn({ username: 'alice', password: '', world: 1 });

@@ -2,7 +2,7 @@ import { Execution } from '../../../../execution/Execution.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import { GameMessages } from '../../../../chatbox/gameMessages.js';
 import { Locs } from '../../../../locs/Locs.js';
-import { settleScene } from '../../exec/prompts.js';
+import { findSceneTarget } from '../../exec/prompts.js';
 import { PT_LOC, PT_TILE } from './areas.js';
 
 interface CrateState {
@@ -38,8 +38,7 @@ export async function searchBananaCrate(log: (m: string) => void): Promise<Crate
         log('could not reach the plantation crate');
         return null;
     }
-    await settleScene();
-    const crate = Locs.query().where(l => l.id === PT_LOC.BANANA_CRATE).action('Search').within(6).nearest();
+    const crate = await findSceneTarget(() => Locs.query().where(l => l.id === PT_LOC.BANANA_CRATE).action('Search').within(6).nearest());
     if (!crate) {
         log('no searchable Crate at the plantation');
         return null;

@@ -1,4 +1,5 @@
 // docs/QUESTS.md
+import { afterDialogueAction } from '../../exec/primitives.js';
 import { DirectNavigator } from '../../../../../event/webwalk/DirectNavigator.js';
 import type Tile from '../../../../../geometry/Tile.js';
 import { Equipment } from '../../../../equipment/Equipment.js';
@@ -65,8 +66,7 @@ function locById(id: number, within = 8): Loc | null {
 async function clearBox(): Promise<void> {
     for (let i = 0; i < 12; i++) {
         if (ChatDialog.canContinue()) {
-            await ChatDialog.continue();
-            await Execution.delayTicks(1);
+            await afterDialogueAction(await ChatDialog.continue(), 1);
             continue;
         }
         if (!ChatDialog.isOpen()) {

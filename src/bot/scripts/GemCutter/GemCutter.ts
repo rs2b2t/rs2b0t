@@ -53,7 +53,7 @@ export default class GemCutter extends TaskBot {
 
         if (this.eligible.length === 0) {
             this.log(`No gems to cut — Crafting ${Skills.level('crafting')} with no selectable gem at or above level. Stopping.`);
-            ScriptRunner.stop('no selectable gems at the player\'s Crafting level');
+            this.requestFinish('no selectable gems at the player\'s Crafting level');
             return;
         }
 
@@ -83,7 +83,7 @@ export default class GemCutter extends TaskBot {
         const remaining = this.eligible.filter(g => !this.confirmedEmpty.has(g.key));
         if (remaining.length === 0) {
             this.log('All selected gems confirmed empty in bank — stopping');
-            ScriptRunner.stop('all gems confirmed empty in bank');
+            this.requestFinish('all gems confirmed empty in bank');
             return;
         }
         return super.loop();
@@ -111,7 +111,7 @@ export default class GemCutter extends TaskBot {
         this.log(`Crafting ${gem.level} required for ${gem.name} — skipping it`);
         if (this.eligible.length === 0) {
             this.log('no cuttable gems remain — stopping');
-            ScriptRunner.stop('no cuttable gems remain');
+            this.requestFinish('no cuttable gems remain');
         }
     }
     takeRefusal(): boolean {
@@ -260,63 +260,40 @@ class BankTrip implements Task {
 
         // 1. Deposit everything EXCEPT chisel
         this.bot.log('depositing inventory (keeping chisel)');
+        if (!(await Bank.waitReady()) || !(await Bank.backpackReady())) return;
+        const occupied = Inventory.used();
         await Bank.depositAllMatching((_name, id) => id !== CHISEL_ID);
-        await Execution.delayTicks(1);
+        const deposited = occupied - Inventory.used();
 
         // 2. Ensure we have a chisel
         if (Inventory.countById(CHISEL_ID) === 0) {
             this.bot.log('withdrawing chisel');
-            if (!(await Bank.withdrawXById(CHISEL_ID, 1))) {
-                this.bot.log('no chisel in bank — stopping');
-                ScriptRunner.stop('no chisel in bank');
+            if (Bank.countById(CHISEL_ID) === 0) {
+                this.bot.requestFinish('no chisel in bank');
                 return;
             }
+            if (!(await Bank.withdrawXById(CHISEL_ID, 1))) return;
             this.bot.log('got chisel');
         }
 
         // 3. Withdraw gems
         let withdrew = 0;
-        let deposited = 0;
-        const startMs = Date.now();
-        const maxBankTime = 15_000;
-
-        while (Date.now() - startMs < maxBankTime) {
-            let gotAny = false;
-            for (const gem of this.bot.targets()) {
-                if (Inventory.isFull()) {
-                    this.bot.log(`pack full, need to deposit before withdrawing ${gem.name}`);
-                    break;
-                }
-                const want = Inventory.free();
-                if (want <= 0) break;
-                const before = Inventory.countById(gem.uncutId);
-                this.bot.log(`trying to withdraw ${want} ${gem.name} (have ${before})`);
-                if (await Bank.withdrawXById(gem.uncutId, want)) {
-                    const got = Inventory.countById(gem.uncutId) - before;
-                    withdrew += got;
-                    gotAny = true;
-                    this.bot.log(`withdrew ${got} ${gem.name}`);
-                } else {
-                    this.bot.log(`withdraw ${gem.name} failed — marking empty in bank`);
-                    this.bot.markEmpty(gem);
-                }
-            }
-
-            if (gotAny) {
-                this.bot.log('got gems, closing bank');
-                break;
-            }
-
-            if (Inventory.isFull()) {
-                this.bot.log('pack full, depositing everything (keeping chisel)');
-                const beforeDeposit = Inventory.used();
-                await Bank.depositAllMatching((_name, id) => id !== CHISEL_ID);
-                deposited = Math.max(deposited, beforeDeposit - Inventory.used());
-                this.bot.log(`deposited ${deposited} items`);
+        for (const gem of this.bot.targets()) {
+            if (!Bank.ready() || Inventory.free() <= 0) break;
+            if (Bank.countById(gem.uncutId) === 0) {
+                this.bot.markEmpty(gem);
                 continue;
             }
-
-            await Execution.delayTicks(1);
+            const want = Inventory.free();
+            const before = Inventory.countById(gem.uncutId);
+            this.bot.log(`trying to withdraw ${want} ${gem.name} (have ${before})`);
+            if (!(await Bank.withdrawXById(gem.uncutId, want))) {
+                this.bot.log(`withdraw ${gem.name} did not complete, retrying next trip`);
+                break;
+            }
+            const got = Inventory.countById(gem.uncutId) - before;
+            withdrew += got;
+            this.bot.log(`withdrew ${got} ${gem.name}`);
         }
 
         if (!(await Bank.close())) {
@@ -327,9 +304,9 @@ class BankTrip implements Task {
         if (withdrew > 0 || deposited > 0) {
             this.bot.countTrip();
             this.bot.log(`banked @ ${bank.name}: gave ${deposited} items, took ${withdrew} uncut gems`);
-        } else {
+        } else if (this.bot.targets().length === 0) {
             this.bot.log('nothing to deposit and the bank has no eligible gems — stopping');
-            ScriptRunner.stop('bank has no eligible gems');
+            this.bot.requestFinish('bank has no eligible gems');
         }
     }
 }

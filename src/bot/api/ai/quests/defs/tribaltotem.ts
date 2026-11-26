@@ -138,10 +138,7 @@ async function readTribalTotemProgress(): Promise<QuestProgress | undefined> {
         return undefined;
     }
     const progress = parseTribalTotemJournal(await Quests.journal(QUEST));
-    if (reader.modals().main !== -1) {
-        actions.closeModal();
-        await Execution.delayTicks(1);
-    }
+    await Modals.closeIfOpen();
     return progress;
 }
 

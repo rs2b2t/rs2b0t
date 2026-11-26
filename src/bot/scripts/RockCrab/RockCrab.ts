@@ -1,3 +1,4 @@
+import { configuredLootNames } from '../../api/bank/bankRules.js';
 import { CUSTOM_RANGED_SETTINGS, rangedItem } from '../../api/combat/rangedSettings.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
@@ -165,7 +166,7 @@ export default class RockCrab extends TaskBot {
 
         FOOD_NAME = scriptFood(this.settings, 'Lobster');
         FOOD_WITHDRAW = this.settings.num('foodWithdraw', 20);
-        LOOT_NAMES = this.settings.list('loot', LOOT_NAMES).map(s => s.toLowerCase());
+        LOOT_NAMES = configuredLootNames(this.settings.list('loot', LOOT_NAMES));
         BANK_COMMON = this.settings.bool('bankCommonJunk', true);
         SOLVE_CLUES = this.settings.bool('solveClues', true);
         STYLE = this.settings.str('combatStyle', 'melee').toLowerCase() as typeof STYLE;
@@ -651,7 +652,6 @@ class ArmAutocast implements Task {
 
     async execute(): Promise<void> {
         this.bot.setStatus(`arming autocast: ${SPELL}`);
-        await Execution.delayTicks(3);
         if (await Autocast.arm(SPELL, m => this.bot.log(m))) {
             this.fails = 0;
         } else if (++this.fails >= ASSERT_BATCH) {
@@ -945,7 +945,7 @@ class Fight implements Task {
                 await crab.interact('Attack');
                 await Execution.delayUntil(() => Game.inCombat() || activeCrabs().length === 0, 4000);
             } else {
-                await Execution.delayTicks(2);
+                await Execution.delayTicks(1);
             }
 
             const remaining = activeCrabs().length;
@@ -1024,8 +1024,6 @@ class ResetAggro implements Task {
         if (low) {
             this.bot.log(`resting at the reset tile (${Skills.effective('hitpoints')}/${Skills.level('hitpoints')} hp)`);
             await Execution.delayUntil(() => Skills.hpFraction() >= REST_HP, 120000);
-        } else {
-            await Execution.delayTicks(5);
         }
 
         await Traversal.walkResilient(currentSpot(), { radius: 3, attempts: 5, timeoutMs: 90_000, log: m => this.bot.log(`  ${m}`) });

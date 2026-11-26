@@ -51,7 +51,23 @@ test('fishing can fall back to a net below 40 but never stays on nets after 40 f
     const s = snapshot(); s.levels.fishing = 25; s.stock = { 'small fishing net': 1, coins: 200 };
     expect(method(s, 'fishing').settings.fishMethod).toBe('Small net — shrimp/anchovy');
     s.levels.fishing = 40;
+    Object.assign(s.stock, { 'fly fishing rod': 1, feather: 200 });
     expect(method(s, 'fishing').settings.fishMethod).toBe('Fly fishing — trout/salmon');
+});
+
+test('Fishing 76 prefers sharks with an empty food bank and falls back to lobsters without a harpoon', () => {
+    const s = snapshot(76);
+    s.stock = { coins: 200, 'lobster pot': 1, harpoon: 1 };
+    expect(method(s, 'fishing').settings.fishMethod).toBe('Harpoon — sharks');
+    delete s.stock.harpoon;
+    expect(method(s, 'fishing').settings.fishMethod).toBe('Lobster cage — lobster');
+});
+
+test('food dependencies never send a high-level fisher for shrimp or fly fish', () => {
+    const s = snapshot(76);
+    for (const fish of ['Raw shrimps', 'Raw trout', 'Raw salmon']) expect(supply(s, fish)).toBeNull();
+    s.levels.cooking = 45;
+    expect(method(s, 'cooking').settings.fish).toBe('Raw lobster');
 });
 
 test('higher cooking uses banked salmon and can supply lobster without Karamja ferries', () => {

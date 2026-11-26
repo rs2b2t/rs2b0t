@@ -4,6 +4,7 @@ import { Game } from '../../../game/Game.js';
 import Tile from '../../../../geometry/Tile.js';
 import { Inventory } from '../../../inventory/Inventory.js';
 import { Locs } from '../../../locs/Locs.js';
+import { findSceneTarget } from '../../../walking/Reach.js';
 import { Traversal } from '../../../walking/Traversal.js';
 
 export const GARLIC = 'Garlic';
@@ -30,7 +31,7 @@ async function climbMorganStairs(log: (message: string) => void): Promise<boolea
 
 // Why: the cupboard restocks, so the leg is repeatable and a second clove is one more Search.
 
-/** Take one clove from Morgan's cupboard. False until the clove is in the pack, the climb and the Open each cost a pass. */
+/** Take one clove from Morgan's cupboard. Returns true when the clove lands in the pack. */
 export async function takeGarlic(log: (message: string) => void): Promise<boolean> {
     if (Inventory.contains(GARLIC)) {
         return true;
@@ -42,12 +43,8 @@ export async function takeGarlic(log: (message: string) => void): Promise<boolea
         return false;
     }
     const shut = Locs.query().where(loc => loc.id === CUPBOARD_SHUT).action('Open').within(6).nearest();
-    if (shut) {
-        await shut.interact('Open');
-        await Execution.delayTicks(2);
-        return false;
-    }
-    const open = Locs.query().where(loc => loc.id === CUPBOARD_OPEN).action('Search').within(6).nearest();
+    if (shut && !(await shut.interact('Open'))) return false;
+    const open = await findSceneTarget(() => Locs.query().where(loc => loc.id === CUPBOARD_OPEN).action('Search').within(6).nearest());
     if (!open) {
         log("Morgan's garlic Cupboard is neither open nor searchable");
         return false;

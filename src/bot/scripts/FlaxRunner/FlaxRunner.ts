@@ -293,7 +293,6 @@ export default class FlaxRunner extends TaskBot {
         // Keep flax; dump random-event trash and anything else.
         await Bank.depositAllMatching(depositAllExcept([FLAX]), log);
         await Bank.close();
-        await Execution.delayTicks(1);
         this.log(`deposited non-flax junk — holding ${flaxCount()} flax, capacity ${this.flaxCapacity()}`);
         return true;
     }

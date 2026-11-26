@@ -10,7 +10,7 @@ import { Reach } from '../../../../walking/Reach.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import type Tile from '../../../../../geometry/Tile.js';
 import { talkStrict } from '../../exec/primitives.js';
-import { driveUntil, heldId, settleScene } from '../../exec/prompts.js';
+import { findSceneTarget, driveUntil, heldId, settleScene } from '../../exec/prompts.js';
 import { RG_ITEM, RG_LOC, RG_NPC, RG_TILE } from './areas.js';
 import { RG_STAGE } from './journal.js';
 import { pocketAt, travelTirannwn } from './pockets.js';
@@ -77,7 +77,6 @@ export async function briefFromLathas(log: (m: string) => void): Promise<boolean
     if (!(await Traversal.walkResilient(RG_TILE.LATHAS, { radius: 2, attempts: 3, timeoutMs: 300_000, log }))) {
         return false;
     }
-    await settleScene();
     return talkStrict('King Lathas', [], log);
 }
 
@@ -110,8 +109,7 @@ export async function followTracks(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(RG_TILE.FOOTPRINTS, 2, RG_STAGE.SHOWN_PENDANT, log))) {
         return false;
     }
-    await settleScene();
-    const tracks = Locs.query().where(loc => loc.id === RG_LOC.FOOTPRINTS).action('Follow').within(10).nearest();
+    const tracks = await findSceneTarget(() => Locs.query().where(loc => loc.id === RG_LOC.FOOTPRINTS).action('Follow').within(10).nearest());
     if (!tracks || !(await tracks.interact('Follow'))) {
         log('no tracks at the west end of the old camp');
         return false;
@@ -170,16 +168,14 @@ export async function killSoldier(log: (m: string) => void): Promise<boolean> {
         if (!(await walkTo(RG_TILE.OLD_CAMP_WEST, 1, stage, log))) {
             return false;
         }
-        await Execution.delayTicks(4);
-        if (soldierNear()) {
+        if (await findSceneTarget(soldierNear, 4)) {
             return fightSoldier(log);
         }
     }
     if (!(await walkTo(RG_TILE.CAMP_ENTRANCE, 1, stage, log))) {
         return false;
     }
-    await settleScene();
-    const crossing = Locs.query().where(loc => loc.id === 3998).action('Enter').within(8).nearest();
+    const crossing = await findSceneTarget(() => Locs.query().where(loc => loc.id === 3998).action('Enter').within(8).nearest());
     if (!crossing || !(await crossing.interact('Enter'))) {
         log('no camp crossing to draw the guard out');
         return false;

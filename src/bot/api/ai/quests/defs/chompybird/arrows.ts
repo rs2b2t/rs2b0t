@@ -7,7 +7,7 @@ import { Npcs } from '../../../../npcs/Npcs.js';
 import type Tile from '../../../../../geometry/Tile.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
-import { settleScene } from '../../exec/prompts.js';
+import { findSceneTarget, settleScene } from '../../exec/prompts.js';
 import { CB_ID, CB_LOC, CB_NAME, CB_NPC, CB_TILE } from './areas.js';
 import { ARROW_TARGET, heldId } from './supplies.js';
 
@@ -41,8 +41,7 @@ async function chopAchey(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(CB_TILE.ACHEY, 6, log))) {
         return false;
     }
-    await settleScene();
-    const tree = Locs.query().name(CB_LOC.ACHEY).action('Chop').within(12).nearest();
+    const tree = await findSceneTarget(() => Locs.query().name(CB_LOC.ACHEY).action('Chop').within(12).nearest());
     if (!tree) {
         log('no Achey Tree offering Chop near the grove');
         return false;
@@ -65,8 +64,7 @@ async function killWolfForBones(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(CB_TILE.WOLVES, 6, log))) {
         return false;
     }
-    await settleScene();
-    const wolf = Npcs.query().name(CB_NPC.WOLF).action('Attack').within(14).nearest();
+    const wolf = await findSceneTarget(() => Npcs.query().name(CB_NPC.WOLF).action('Attack').within(14).nearest());
     if (!wolf) {
         log('no Wolf in reach of the Feldip pack');
         return false;

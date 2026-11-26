@@ -1,7 +1,7 @@
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { Game } from '../../api/game/Game.js';
-import { Inventory, type InvItem } from '../../api/inventory/Inventory.js';
+import { Inventory } from '../../api/inventory/Inventory.js';
 import { Bank } from '../../api/bank/Bank.js';
 import { openBankAccess } from '../../api/bank/Banking.js';
 import { Skills } from '../../api/skills/Skills.js';
@@ -122,6 +122,34 @@ export default class PotionMaker extends TaskBot {
         this.batches++;
     }
 
+    async mixBatch(ingredientId: number, solventId: number, description: string): Promise<boolean> {
+        let failures = 0;
+        let mixed = 0;
+        for (;;) {
+            const items = Inventory.items();
+            const ingredients = items.filter(item => item.id === ingredientId);
+            const ingredient = ingredients.at(-1);
+            const solvent = items.findLast(item => item.id === solventId);
+            if (!ingredient || !solvent) {
+                if (mixed) this.log(`Mixed ${mixed} pairs of ${description}`);
+                return true;
+            }
+
+            await ingredient.useOn(solvent);
+            if (await Execution.delayUntil(() => Inventory.countById(ingredientId) < ingredients.length, 3000)) {
+                Execution.noteProgress();
+                mixed++;
+                failures = 0;
+                continue;
+            }
+            this.log(`No progress mixing ${description} (${++failures}/3)`);
+            if (failures === 3) {
+                this.requestFinish(`could not mix ${description}`);
+                return false;
+            }
+        }
+    }
+
     async waitForDeposit(): Promise<boolean> {
         if (this.pendingBankGeneration === null) {
             return true;
@@ -141,7 +169,6 @@ export default class PotionMaker extends TaskBot {
         if (Inventory.used() > 0) {
             this.pendingBankGeneration = Bank.snapshotGeneration();
             await Bank.depositAllMatching(() => true);
-            await Execution.delayTicks(1);
         }
         return this.waitForDeposit();
     }
@@ -169,9 +196,6 @@ export default class PotionMaker extends TaskBot {
     }
 }
 
-// Why: it runs only when the pack holds neither herbs nor unfinished potions, so it never interrupts the middle of a make.
-
-/** First leg: withdraws the water and herb halves of a batch into an empty pack, then closes the bank. */
 class RestockIngredients implements Task {
     private failedWithdraws = 0;
 
@@ -182,7 +206,8 @@ class RestockIngredients implements Task {
         if (!herb) {
             return false;
         }
-        return Inventory.countById(herb.id) === 0 && Inventory.countById(herb.unfId) === 0;
+        if (Inventory.countById(herb.id) > 0) return Inventory.countById(VIAL_OF_WATER_ID) === 0;
+        return Inventory.countById(herb.unfId) === 0;
     }
 
     async execute(): Promise<void> {
@@ -248,7 +273,8 @@ class RestockIngredients implements Task {
             this.bot.requestFinish(`no ${missing} in the bank`);
             return;
         }
-        if (!(await Bank.withdrawXById(VIAL_OF_WATER_ID, batch))) {
+        const pairs = Math.min(batch, vialCount, herbCount);
+        if (!(await Bank.withdrawXById(VIAL_OF_WATER_ID, pairs))) {
             this.bot.log(`ingredient withdrawal failed (${++this.failedWithdraws}/3)`);
             if (this.failedWithdraws >= 3) {
                 this.bot.log('withdrawing vials of water failed three times — stopping');
@@ -256,7 +282,7 @@ class RestockIngredients implements Task {
             }
             return;
         }
-        if (!(await Bank.withdrawXById(herb.id, batch))) {
+        if (!(await Bank.withdrawXById(herb.id, pairs))) {
             this.bot.log(`ingredient withdrawal failed (${++this.failedWithdraws}/3)`);
             if (this.failedWithdraws >= 3) {
                 this.bot.log(`withdrawing ${herb.name} failed three times — stopping`);
@@ -276,9 +302,6 @@ class RestockIngredients implements Task {
     }
 }
 
-// Why: clicking the last slots lets the game drain the stacks from the end, the same way GemCutter's cut spam does.
-
-/** Second leg: spam-uses the last herb on the last vial of water to turn the batch into unfinished potions. */
 class MakeUnfinished implements Task {
     constructor(private bot: PotionMaker) {}
 
@@ -301,37 +324,10 @@ class MakeUnfinished implements Task {
         }
         this.bot.setStatus(`making ${herb.name} unfinished potions`);
 
-        const herbItem = this.lastItem(herb.id);
-        const vialItem = this.lastItem(VIAL_OF_WATER_ID);
-        if (!herbItem || !vialItem) {
-            return;
-        }
-
-        const startXp = Skills.xp('herblore');
-        const maxSpam = BATCH * 4; // safety cap
-
-        for (let i = 0; i < maxSpam; i++) {
-            if (Inventory.countById(herb.id) === 0) break;
-            if (Inventory.countById(VIAL_OF_WATER_ID) === 0) break;
-            herbItem.useOn(vialItem); // fire and forget - true spam
-        }
-
-        // Settle: wait for the batch to convert into unfinished potions (xp tick).
-        await Execution.delayUntil(
-            () => Inventory.countById(herb.id) === 0 || Skills.xp('herblore') > startXp,
-            8000
-        );
-
-        await Execution.delayTicks(1);
-    }
-
-    private lastItem(id: number): InvItem | null {
-        const items = Inventory.items().filter(i => i.id === id);
-        return items.length === 0 ? null : items[items.length - 1];
+        await this.bot.mixBatch(herb.id, VIAL_OF_WATER_ID, `${herb.name} with vials of water`);
     }
 }
 
-/** Third leg: withdraws the secondary, spam-uses it on the unfinished potions, then deposits the finished batch. */
 class FinishPotions implements Task {
     private failedSecondaryWithdraws = 0;
 
@@ -408,36 +404,13 @@ class FinishPotions implements Task {
         }
 
         this.bot.setStatus(`finishing ${herb.name} potions`);
-        const secItem = this.lastItem(secondary.id);
-        const unfItem = this.lastItem(herb.unfId);
-        if (secItem && unfItem) {
-            const startXp = Skills.xp('herblore');
-            const maxSpam = BATCH * 4; // safety cap
+        if (!(await this.bot.mixBatch(secondary.id, herb.unfId, `${secondary.name} with unfinished potions`))) return;
 
-            for (let i = 0; i < maxSpam; i++) {
-                if (Inventory.countById(herb.unfId) === 0) break;
-                if (Inventory.countById(secondary.id) === 0) break;
-                secItem.useOn(unfItem); // fire and forget - true spam
-            }
-
-            // Settle: wait for the unfinished potions to convert into finished ones.
-            await Execution.delayUntil(
-                () => Inventory.countById(herb.unfId) === 0 || Skills.xp('herblore') > startXp,
-                8000
-            );
-        }
-
-        // Why: the bank is left open, since the next cycle's RestockIngredients reuses it and each loop runs bank-open → empty pack → bank-open with no reopen.
         this.bot.setStatus('banking finished potions');
         if (!(await openBankAccess(bank, access, m => this.bot.log(`  ${m}`)))) {
             this.bot.log('could not open the bank — retrying');
             return;
         }
         await this.bot.depositInventory();
-    }
-
-    private lastItem(id: number): InvItem | null {
-        const items = Inventory.items().filter(i => i.id === id);
-        return items.length === 0 ? null : items[items.length - 1];
     }
 }

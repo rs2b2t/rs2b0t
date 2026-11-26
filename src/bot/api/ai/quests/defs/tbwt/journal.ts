@@ -1,6 +1,6 @@
+import { Modals } from '../../../../ui/widgets/Modals.js';
 import { normalizeJournal as normalize } from '../../journalText.js';
-import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
-import { Execution } from '../../../../execution/Execution.js';
+import { reader } from '../../../../../adapter/ClientAdapter.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 import { TBWT_QUEST, TB_LUBUFU, TB_MAIN, TB_TAMAYU, TB_TINSAY, TB_VARP } from './areas.js';
@@ -131,10 +131,7 @@ export async function readTbwtProgress(): Promise<QuestProgress | undefined> {
     }
 
     const flags = parseTbwtJournal(await Quests.journal(TBWT_QUEST));
-    if (reader.modals().main !== -1) {
-        actions.closeModal();
-        await Execution.delayTicks(1);
-    }
+    await Modals.closeIfOpen();
     // A page that rendered nothing is a failed read.
     if (!flags) {
         return lastGood;

@@ -7,17 +7,16 @@ import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
 import { GroundItems } from '../../../../grounditems/GroundItems.js';
 import { Locs } from '../../../../locs/Locs.js';
-import { Npcs } from '../../../../npcs/Npcs.js';
+import { GameMessages } from '../../../../chatbox/gameMessages.js';
 import { QUESTS } from '../../data/quests.js';
 import type { QuestModule, QuestProgress, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { hasFlag } from '../../engine/types.js';
-import { driveDialog, openDialogue } from '../../exec/primitives.js';
-import { settleScene } from '../../exec/prompts.js';
+import { afterDialogueAction, driveDialog, openDialogue } from '../../exec/primitives.js';
+import { findSceneTarget, promptLoc, settleScene } from '../../exec/prompts.js';
 import {
     ALL_BALL_IDS,
     ALE_PRICE,
     BALL_PICKUP,
-    BLURBERRY_SHOP,
     COIN_FLOAT,
     DEATH_ITEM,
     DENULTH_FINISH,
@@ -38,6 +37,7 @@ import {
 import {
     gambleWithHarold,
     giveAleToHarold,
+    insideHaroldRoom,
     reclaimIouFromHarold,
     talkInHaroldRoom
 } from './harold.js';
@@ -81,11 +81,6 @@ function liveId(id: number): number {
     return Inventory.items().filter(i => i.id === id).reduce((n, i) => n + i.count, 0);
 }
 
-function anyBallHeld(snap: QuestSnapshot): number {
-    return ALL_BALL_IDS.reduce((n, id) => n + heldId(snap, id), 0);
-}
-
-
 function inSabaCave(tile: QuestSnapshot['tile']): boolean {
     return tile !== null
         && tile !== undefined
@@ -103,9 +98,6 @@ export function equipFloor(snap: QuestSnapshot, progress: QuestProgress | undefi
     }
     if (heldId(snap, DEATH_ITEM.IOU.id) > 0 && stage < DP_STAGE.GIVEN_IOU) {
         stage = DP_STAGE.GIVEN_IOU;
-    }
-    if (anyBallHeld(snap) > 0 && stage < DP_STAGE.FOUND_COMBO) {
-        stage = DP_STAGE.FOUND_COMBO;
     }
     return stage;
 }
@@ -126,18 +118,16 @@ export function effectiveMap(snap: QuestSnapshot, progress: QuestProgress | unde
     scouted: boolean;
 } {
     const f = (name: string) => mapFlag(progress, name);
-    const climbing = heldId(snap, DEATH_ITEM.CLIMBING_BOOTS.id) > 0;
-    const spiked = heldId(snap, DEATH_ITEM.SPIKED_BOOTS.id) > 0;
     const cert = heldId(snap, DEATH_ITEM.ENTRANCE_CERT.id) > 0;
     const secretMap = heldId(snap, DEATH_ITEM.SECRET_MAP.id) > 0;
 
     const scouted = f(DP_FLAG.SCOUTED);
     const got_map = scouted || f(DP_FLAG.GOT_MAP) || secretMap;
     const supplies = got_map || f(DP_FLAG.SUPPLIES);
-    const given_cert = supplies || f(DP_FLAG.GIVEN_CERT) || spiked;
+    const given_cert = supplies || f(DP_FLAG.GIVEN_CERT);
     const entrancecert = given_cert || f(DP_FLAG.ENTRANCE_CERT) || cert;
     const smithy = entrancecert || f(DP_FLAG.SMITHY);
-    const tenzing = smithy || f(DP_FLAG.TENZING) || climbing || spiked;
+    const tenzing = smithy || f(DP_FLAG.TENZING);
     const saba = tenzing || f(DP_FLAG.SABA);
 
     return { saba, tenzing, smithy, entrancecert, given_cert, supplies, got_map, scouted };
@@ -169,8 +159,8 @@ function withdraw(items: { name: string; qty: number; id?: number }[]): QuestSte
     return { kind: 'withdraw', items, bank: FALADOR_WEST_BANK };
 }
 
-function depositKeep(keep: string[] = KEEP): QuestStep {
-    return { kind: 'deposit', keep, bank: FALADOR_WEST_BANK, exactKeep: true };
+function depositKeep(keep: string[] = KEEP, keepIds?: number[]): QuestStep {
+    return { kind: 'deposit', keep, keepIds, bank: FALADOR_WEST_BANK, exactKeep: true };
 }
 
 function makeSpace(snap: QuestSnapshot, slots: number): QuestStep | null {
@@ -199,13 +189,18 @@ function sourceCoins(snap: QuestSnapshot, need: number): QuestStep | null {
         ?? withdraw([{ name: 'Coins', qty: Math.min(COIN_FLOAT, inBank) }]);
 }
 
+function sourceGamblingCoins(snap: QuestSnapshot, aleCost = 0): QuestStep | null {
+    if (heldName(snap, 'Coins') > aleCost && snap.bankKnown && bankedName(snap, 'Coins') === 0) return null;
+    return sourceCoins(snap, GAMBLE_STAKE_FLOAT + aleCost);
+}
+
 function sourceNamed(
     snap: QuestSnapshot,
     name: string,
     id: number,
     qty: number
 ): QuestStep | null {
-    const have = Math.max(heldName(snap, name), heldId(snap, id));
+    const have = snap.invIds ? heldId(snap, id) : heldName(snap, name);
     if (have >= qty) {
         return null;
     }
@@ -214,20 +209,13 @@ function sourceNamed(
     }
     const short = qty - have;
     const inBank = Math.max(bankedName(snap, name), bankedId(snap, id));
+    if (inBank < short && heldName(snap, name) > have) {
+        return depositKeep(KEEP.filter(item => item !== name.toLowerCase()), [id]);
+    }
     if (inBank <= 0) {
         return { kind: 'wait', reason: `need ${qty}× ${name} in bank for Death Plateau` };
     }
     return makeSpace(snap, short) ?? withdraw([{ name, qty: Math.min(short, inBank), id }]);
-}
-
-function sourceCocktail(snap: QuestSnapshot): QuestStep | null {
-    const drinks = [DEATH_ITEM.BLURBERRY_SPECIAL, DEATH_ITEM.PREMADE_BLURBERRY_SPECIAL];
-    if (drinks.some(drink => heldId(snap, drink.id) > 0)) return null;
-    if (!snap.bankKnown) return scanBank();
-    const banked = drinks.find(drink => bankedId(snap, drink.id) > 0);
-    return makeSpace(snap, 1) ?? (banked
-        ? withdraw([{ ...banked, qty: 1 }])
-        : { kind: 'buy', item: DEATH_ITEM.BLURBERRY_SPECIAL.name, qty: 1, shop: BLURBERRY_SHOP, estGp: 30 });
 }
 
 function normalizePack(snap: QuestSnapshot): QuestStep | null {
@@ -263,8 +251,7 @@ async function enterSabaCave(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(TILE.SABA_ENTRANCE, 2, log))) {
         return false;
     }
-    await settleScene();
-    const entrance = Locs.query().name('Cave Entrance').within(8).nearest();
+    const entrance = await findSceneTarget(() => Locs.query().name('Cave Entrance').within(8).nearest());
     if (!entrance) {
         log('no Cave Entrance near Saba');
         return false;
@@ -277,25 +264,17 @@ async function enterSabaCave(log: (m: string) => void): Promise<boolean> {
 }
 
 async function openTenzingDoor(log: (m: string) => void): Promise<boolean> {
-    if (Npcs.query().name('Tenzing').within(6).nearest()) {
-        return true;
-    }
-    if (!(await walkTo(TILE.TENZING_DOOR, 2, log))) {
-        return false;
-    }
-    const door = Locs.query().name('Door').within(6).nearest();
-    if (!door) {
-        return true;
-    }
-    if (!(await door.interact('Open'))) {
-        return false;
-    }
-    // After Saba: knock, "No milk today!", auto "I'm not the milkman", open.
-    if (await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), 3000)) {
-        await driveDialog(["I'm not the milkman", 'I need your help'], log);
-    }
-    await Execution.delayTicks(2);
-    return true;
+    const inside = () => {
+        const tile = Game.tile();
+        return tile !== null && tile.level === 0 && tile.x >= 2818 && tile.x <= 2822
+            && tile.z >= 3553 && tile.z <= 3557;
+    };
+    if (inside()) return true;
+    if (!(await walkTo(TILE.TENZING_DOOR, 0, log))) return false;
+    return promptLoc({
+        name: 'Door', id: 3745, op: 'Open', near: TILE.TENZING_DOOR, within: 4,
+        expect: inside, expectMs: 25_000
+    }, log);
 }
 
 async function readIou(log: (m: string) => void): Promise<boolean> {
@@ -320,8 +299,7 @@ async function readIou(log: (m: string) => void): Promise<boolean> {
             break;
         }
         if (ChatDialog.canContinue()) {
-            await ChatDialog.continue();
-            await Execution.delayTicks(1);
+            await afterDialogueAction(await ChatDialog.continue(), 1);
             continue;
         }
         if (ChatDialog.isOpen()) {
@@ -335,10 +313,10 @@ async function readIou(log: (m: string) => void): Promise<boolean> {
                 if (!actions.menuAction(MiniMenuAction.PAUSE_BUTTON, 0, 0, cont)) {
                     actions.ifButton(cont);
                 }
-            } else {
-                actions.closeModal();
+                await Execution.delayTicks(2);
+            } else if (!(await Modals.close())) {
+                await Execution.delayTicks(1);
             }
-            await Execution.delayTicks(2);
             continue;
         }
         await Execution.delayTicks(1);
@@ -347,21 +325,8 @@ async function readIou(log: (m: string) => void): Promise<boolean> {
     return liveId(DEATH_ITEM.COMBINATION.id) > 0;
 }
 
-function ballOnTile(at: Tile, ballId?: number): boolean {
-    return GroundItems.query()
-        .where(item => {
-            const t = item.tile();
-            if (t.x !== at.x || t.z !== at.z || t.level !== at.level) {
-                return false;
-            }
-            return ballId === undefined ? ALL_BALL_IDS.includes(item.id) : item.id === ballId;
-        })
-        .within(20)
-        .nearest() !== null;
-}
-
-function allPedestalsCorrect(): boolean {
-    return PEDESTALS.every(p => ballOnTile(p.at, p.ballId));
+function pedestalBall(at: Tile) {
+    return GroundItems.query().where(item => ALL_BALL_IDS.includes(item.id) && at.equals(item.tile())).within(20).nearest();
 }
 
 async function takeGroundBall(ballId: number, near: Tile, log: (m: string) => void): Promise<boolean> {
@@ -371,11 +336,10 @@ async function takeGroundBall(ballId: number, near: Tile, log: (m: string) => vo
     if (!(await walkTo(near, 2, log))) {
         return false;
     }
-    await settleScene();
-    const g = GroundItems.query()
+    const g = await findSceneTarget(() => GroundItems.query()
         .where(item => item.id === ballId)
         .within(10)
-        .nearest();
+        .nearest());
     if (!g) {
         log(`stone ball ${ballId} not on the ground near (${near.x},${near.z})`);
         return false;
@@ -391,36 +355,19 @@ async function takeGroundBall(ballId: number, near: Tile, log: (m: string) => vo
 
 /** Place the 5 coloured balls on the mechanism. */
 async function solveStoneMechanism(log: (m: string) => void): Promise<boolean> {
-    if (allPedestalsCorrect()) {
-        log('all stone balls already correctly placed');
-        return true;
-    }
-
-    // Clear wrong balls off pedestals first.
+    if (!(await walkTo(TILE.STONE_STAND, 2, log))) return false;
+    await settleScene();
+    const mark = GameMessages.mark();
+    const unlocked = () => GameMessages.sawSince(mark, /the equipment room door has unlocked/i);
+    const replace = PEDESTALS.every(p => pedestalBall(p.at)?.id === p.ballId) ? PEDESTALS[0] : undefined;
     for (const ped of PEDESTALS) {
-        if (ballOnTile(ped.at, ped.ballId) || !ballOnTile(ped.at)) {
-            continue;
-        }
-        if (!(await walkTo(ped.at, 2, log))) {
-            return false;
-        }
-        const wrong = GroundItems.query()
-            .where(item => ALL_BALL_IDS.includes(item.id)
-                && item.tile().x === ped.at.x
-                && item.tile().z === ped.at.z)
-            .within(8)
-            .nearest();
-        if (wrong) {
-            log(`removing wrong ball from (${ped.at.x},${ped.at.z})`);
-            await wrong.interact('Take');
-            await Execution.delayUntil(() => !ballOnTile(ped.at) || liveId(wrong.id) > 0, 5000);
-        }
+        const stone = pedestalBall(ped.at);
+        if (!stone || (stone.id === ped.ballId && ped !== replace)) continue;
+        if (!(await stone.interact('Take')) || !(await Execution.delayUntil(() => !pedestalBall(ped.at), 6000))) return false;
     }
 
     for (const ped of PEDESTALS) {
-        if (ballOnTile(ped.at, ped.ballId)) {
-            continue;
-        }
+        if (pedestalBall(ped.at)?.id === ped.ballId) continue;
         // Source the ball: inv, then the ground pile, then anywhere nearby.
         if (liveId(ped.ballId) <= 0) {
             const pile = BALL_PICKUP.find(b => b.id === ped.ballId);
@@ -445,16 +392,8 @@ async function solveStoneMechanism(log: (m: string) => void): Promise<boolean> {
         if (!(await walkTo(ped.at, 2, log))) {
             return false;
         }
-        await settleScene();
-        // Exact loc_coord match, content drops the ball on the mechanism tile; nearest() within 1 hit the wrong pedestal (6 mechanisms in a 2x3 grid).
-        const mech = Locs.query()
-            .name('Stone Mechanism')
-            .where(loc => {
-                const t = loc.tile();
-                return t.x === ped.at.x && t.z === ped.at.z && t.level === ped.at.level;
-            })
-            .within(10)
-            .nearest();
+        const mech = await findSceneTarget(() => Locs.query().name('Stone Mechanism')
+            .where(loc => ped.at.equals(loc.tile())).within(10).nearest());
         const ball = Inventory.items().find(i => i.id === ped.ballId);
         if (!mech || !ball) {
             log(`no Stone Mechanism or ${ped.color} ball at (${ped.at.x},${ped.at.z})`);
@@ -464,25 +403,12 @@ async function solveStoneMechanism(log: (m: string) => void): Promise<boolean> {
         if (!(await ball.useOn(mech))) {
             return false;
         }
-        if (!(await Execution.delayUntil(() => ballOnTile(ped.at, ped.ballId), 8000))) {
-            // Content drops at loc_coord, accept any ball of this id within 1 of ped.
-            const ok = GroundItems.query()
-                .where(item => item.id === ped.ballId && item.tile().distanceTo(ped.at) <= 1)
-                .within(8)
-                .nearest() !== null;
-            if (!ok) {
-                log(`${ped.color} ball did not land on pedestal`);
-                return false;
-            }
+        if (!(await Execution.delayUntil(() => unlocked() || pedestalBall(ped.at)?.id === ped.ballId, 8000))) {
+            log(`${ped.color} ball did not land on pedestal`);
+            return false;
         }
     }
-
-    if (allPedestalsCorrect()) {
-        log('stone mechanism complete, door should unlock');
-        await Execution.delayTicks(2);
-        return true;
-    }
-    return false;
+    return Execution.delayUntil(unlocked, 3000);
 }
 
 async function scoutSecretPath(log: (m: string) => void): Promise<boolean> {
@@ -492,7 +418,6 @@ async function scoutSecretPath(log: (m: string) => void): Promise<boolean> {
     if (!(await walkSecretPath(TILE.SCOUT, log))) {
         return false;
     }
-    await settleScene();
     // Zone script fires chat once the tile is entered with got_map.
     if (await Execution.delayUntil(() => ChatDialog.isOpen() || ChatDialog.canContinue(), 5000)) {
         await driveDialog([], log);
@@ -518,8 +443,7 @@ async function drainUntil(done: () => boolean, log: (m: string) => void, max = 4
             return true;
         }
         if (ChatDialog.canContinue()) {
-            await ChatDialog.continue();
-            await Execution.delayTicks(1);
+            await afterDialogueAction(await ChatDialog.continue(), 1);
             continue;
         }
         if (ChatDialog.isOpen() && ChatDialog.options().length > 0) {
@@ -532,10 +456,10 @@ async function drainUntil(done: () => boolean, log: (m: string) => void, max = 4
                 if (!actions.menuAction(MiniMenuAction.PAUSE_BUTTON, 0, 0, cont)) {
                     actions.ifButton(cont);
                 }
-            } else {
-                actions.closeModal();
+                await Execution.delayTicks(2);
+            } else if (!(await Modals.close())) {
+                await Execution.delayTicks(1);
             }
-            await Execution.delayTicks(2);
             continue;
         }
         if (!ChatDialog.isOpen()) {
@@ -684,21 +608,23 @@ export function decide(snap: QuestSnapshot): QuestStep {
         }
     }
 
-    // finish: both tracks done
+    if (map.supplies && heldId(snap, DEATH_ITEM.SECRET_MAP.id) === 0) {
+        if (map.got_map && !snap.bankKnown) return scanBank();
+        const item = DEATH_ITEM.SECRET_MAP;
+        return makeSpace(snap, 1)
+            ?? (bankedId(snap, item.id) > 0
+                ? withdraw([{ ...item, qty: 1 }])
+                : custom('get the secret way map from Tenzing', async log => {
+                    if (!(await openTenzingDoor(log))) return false;
+                    return talkAt(TENZING_SUPPLIES, log);
+                }));
+    }
+
     if (stage >= DP_STAGE.UNLOCKED_DOOR && map.scouted) {
-        if (heldId(snap, DEATH_ITEM.SECRET_MAP.id) === 0 && !map.scouted) {
-            // should not happen
-        }
         // Need map + combination in pack for the hand-in bits.
         if (heldId(snap, DEATH_ITEM.COMBINATION.id) === 0) {
             // Already unlocked without the paper, Denulth still asks for it; reclaim from Harold.
             return custom('reclaim combination from Harold', reclaimIouFromHarold);
-        }
-        if (heldId(snap, DEATH_ITEM.SECRET_MAP.id) === 0) {
-            return custom('reclaim secret way map from Tenzing', async log => {
-                if (!(await openTenzingDoor(log))) return false;
-                return talkAt(TENZING_SUPPLIES, log);
-            });
         }
         return custom('give map and combination to Denulth', handInToDenulth);
     }
@@ -706,8 +632,10 @@ export function decide(snap: QuestSnapshot): QuestStep {
     // equip-room track
     if (stage < DP_STAGE.UNLOCKED_DOOR) {
         if (stage === DP_STAGE.NOT_STARTED || snap.journal === 'notStarted') {
+            const ale = DEATH_ITEM.ASGARNIAN_ALE.id;
+            const needsAle = heldId(snap, ale) === 0 && bankedId(snap, ale) === 0;
             return normalizePack(snap)
-                ?? sourceCoins(snap, 200)
+                ?? sourceGamblingCoins(snap, needsAle ? ALE_PRICE : 0)
                 ?? custom('start Death Plateau with Denulth', log => talkAt(DENULTH_START, log));
         }
         if (stage === DP_STAGE.STARTED) {
@@ -721,7 +649,9 @@ export function decide(snap: QuestSnapshot): QuestStep {
         }
         if (stage === DP_STAGE.SPOKEN_EOHRIC2) {
             if (heldId(snap, DEATH_ITEM.ASGARNIAN_ALE.id) === 0) {
-                return sourceCoins(snap, ALE_PRICE + 50)
+                const ale = DEATH_ITEM.ASGARNIAN_ALE;
+                if (bankedId(snap, ale.id) > 0) return makeSpace(snap, 1) ?? withdraw([{ ...ale, qty: 1 }]);
+                return sourceCoins(snap, ALE_PRICE)
                     ?? makeSpace(snap, 1)
                     ?? {
                         kind: 'buy',
@@ -734,10 +664,17 @@ export function decide(snap: QuestSnapshot): QuestStep {
             return custom('buy Harold an Asgarnian ale', giveAleToHarold);
         }
         if (stage === DP_STAGE.GIVEN_ALE) {
-            const cocktail = sourceCocktail(snap);
-            return sourceCoins(snap, GAMBLE_STAKE_FLOAT + (cocktail?.kind === 'buy' ? cocktail.estGp ?? 0 : 0))
-                ?? cocktail
-                ?? custom('give Harold a Blurberry special and gamble for the IOU', gambleWithHarold);
+            const needCoins = sourceGamblingCoins(snap);
+            if (needCoins) return needCoins;
+            const drinks = [DEATH_ITEM.BLURBERRY_SPECIAL, DEATH_ITEM.PREMADE_BLURBERRY_SPECIAL];
+            if (drinks.some(item => heldId(snap, item.id) > 0)) {
+                return custom('give Harold a Blurberry special and gamble for the IOU', gambleWithHarold);
+            }
+            const space = makeSpace(snap, 1);
+            if (space) return space;
+            const banked = drinks.find(item => bankedId(snap, item.id) > 0);
+            if (banked && !insideHaroldRoom(snap.tile)) return withdraw([{ ...banked, qty: 1 }]);
+            return custom('gamble with Harold for the IOU', gambleWithHarold);
         }
         if (stage === DP_STAGE.GIVEN_IOU) {
             if (heldId(snap, DEATH_ITEM.IOU.id) === 0 && heldId(snap, DEATH_ITEM.COMBINATION.id) === 0) {
@@ -782,52 +719,48 @@ export function decide(snap: QuestSnapshot): QuestStep {
                 return talkAt(DUNSTAN_SPIKES, log);
             });
         }
-        if (!map.entrancecert || (map.entrancecert && heldId(snap, DEATH_ITEM.ENTRANCE_CERT.id) === 0 && !map.given_cert)) {
-            // Denulth grants the certificate via inv_add, full pack drops it.
-            return makeSpace(snap, 1)
-                ?? custom("get Dunstan's son signed up with Denulth (certificate)", getEntranceCertFromDenulth);
-        }
         if (!map.given_cert) {
-            return custom('give Dunstan the entrance certificate', giveCertToDunstan);
+            const item = DEATH_ITEM.ENTRANCE_CERT;
+            if (heldId(snap, item.id) > 0) {
+                return custom('give Dunstan the entrance certificate', giveCertToDunstan);
+            }
+            if (map.entrancecert && !snap.bankKnown) return scanBank();
+            return makeSpace(snap, 1)
+                ?? (bankedId(snap, item.id) > 0
+                    ? withdraw([{ ...item, qty: 1 }])
+                    : custom("get Dunstan's son signed up with Denulth (certificate)", getEntranceCertFromDenulth));
         }
         // Spiked boots + supplies for Tenzing.
         if (!map.supplies) {
-            if (heldId(snap, DEATH_ITEM.SPIKED_BOOTS.id) === 0) {
-                const needBar = sourceNamed(snap, DEATH_ITEM.IRON_BAR.name, DEATH_ITEM.IRON_BAR.id, 1);
-                if (needBar) return needBar;
-                if (heldId(snap, DEATH_ITEM.CLIMBING_BOOTS.id) === 0) {
-                    return custom('reclaim climbing boots from Tenzing', async log => {
-                        if (!(await openTenzingDoor(log))) return false;
-                        return talkAt(TENZING_SUPPLIES, log);
-                    });
+            const spiked = heldId(snap, DEATH_ITEM.SPIKED_BOOTS.id) > 0;
+            if (!spiked) {
+                if (!snap.bankKnown) return scanBank();
+                const bankedBoots = [DEATH_ITEM.SPIKED_BOOTS, DEATH_ITEM.CLIMBING_BOOTS].find(item =>
+                    heldId(snap, item.id) === 0 && Math.max(bankedId(snap, item.id), bankedName(snap, item.name)) > 0);
+                if (bankedBoots) return makeSpace(snap, 1) ?? withdraw([{ ...bankedBoots, qty: 1 }]);
+                if (heldId(snap, DEATH_ITEM.CLIMBING_BOOTS.id) > 0) {
+                    const needBar = sourceNamed(snap, DEATH_ITEM.IRON_BAR.name, DEATH_ITEM.IRON_BAR.id, 1);
+                    if (needBar) return needBar;
+                    return custom('have Dunstan spike the climbing boots', log => talkAt({
+                        npc: 'Dunstan',
+                        anchor: TILE.DUNSTAN,
+                        leash: 8,
+                        prefer: ['Yes, but I still want them.']
+                    }, log));
                 }
-                return custom('have Dunstan spike the climbing boots', log => talkAt({
-                    npc: 'Dunstan',
-                    anchor: TILE.DUNSTAN,
-                    leash: 8,
-                    prefer: ['Yes, but I still want them.']
-                }, log));
             }
             const needBread = sourceNamed(snap, DEATH_ITEM.BREAD.name, DEATH_ITEM.BREAD.id, 10);
             if (needBread) return needBread;
             const needTrout = sourceNamed(snap, DEATH_ITEM.TROUT.name, DEATH_ITEM.TROUT.id, 10);
             if (needTrout) return needTrout;
-            return custom('deliver supplies and spiked boots to Tenzing', async log => {
-                if (!(await openTenzingDoor(log))) return false;
-                return talkAt(TENZING_SUPPLIES, log);
-            });
-        }
-        if (!map.got_map) {
-            // Supplies flag without map, talk again for the map hand-over.
-            if (heldId(snap, DEATH_ITEM.SECRET_MAP.id) === 0) {
-                return custom('get the secret way map from Tenzing', async log => {
+            if (!spiked) {
+                return makeSpace(snap, 1) ?? custom('reclaim climbing boots from Tenzing', async log => {
                     if (!(await openTenzingDoor(log))) return false;
-                    return talkAt(TENZING_SUPPLIES, log);
+                    if (!(await talkAt(TENZING_SUPPLIES, log))) return false;
+                    return Execution.delayUntil(() => liveId(DEATH_ITEM.CLIMBING_BOOTS.id) > 0, 3000);
                 });
             }
-        }
-        if (heldId(snap, DEATH_ITEM.SECRET_MAP.id) === 0 && map.got_map) {
-            return custom('reclaim secret way map from Tenzing', async log => {
+            return custom('deliver supplies and spiked boots to Tenzing', async log => {
                 if (!(await openTenzingDoor(log))) return false;
                 return talkAt(TENZING_SUPPLIES, log);
             });

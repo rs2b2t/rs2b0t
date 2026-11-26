@@ -1,3 +1,4 @@
+import { findSceneTarget } from '../exec/prompts.js';
 import { Execution } from '../../../execution/Execution.js';
 import { Game } from '../../../game/Game.js';
 import { ChatDialog } from '../../../ui/dialogue/ChatDialog.js';
@@ -10,7 +11,7 @@ import { Npcs } from '../../../npcs/Npcs.js';
 import { Reach } from '../../../walking/Reach.js';
 import { Traversal } from '../../../walking/Traversal.js';
 import Tile from '../../../../geometry/Tile.js';
-import { gotoNpc, isUnderground, talkThrough, type NpcStop } from '../exec/primitives.js';
+import { afterDialogueAction, gotoNpc, isUnderground, talkThrough, type NpcStop } from '../exec/primitives.js';
 import { executeStep } from '../exec/steps.js';
 import { gpShort } from '../engine/provisioning.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
@@ -170,9 +171,8 @@ async function drainLeg(log: (m: string) => void): Promise<boolean> {
         const closed = Locs.query().name('Manhole').action('Open').within(6).nearest();
         if (closed) {
             await closed.interact('Open');
-            await Execution.delayTicks(2);
         }
-        const open = Locs.query().name('Manhole').action('Climb down').within(6).nearest();
+        const open = await findSceneTarget(() => Locs.query().name('Manhole').action('Climb down').within(6).nearest(), closed ? 2 : 0);
         if (open) {
             await open.interact('Climb down');
             await Execution.delayUntil(() => { const t = Game.tile(); return t !== null && isUnderground(t); }, 12_000);
@@ -260,8 +260,7 @@ async function keyHunt(log: (m: string) => void): Promise<boolean> {
         }
         const beforeHand = Inventory.count('Bones');
         await talkThrough('Traiborn', TRAIBORN.prefer, log);
-        await Execution.delayTicks(2);
-        if (Inventory.count('Bones') < beforeHand || ChatDialog.isOpen()) {
+        if (await Execution.delayUntilTicks(() => Inventory.count('Bones') < beforeHand || ChatDialog.isOpen(), 2)) {
             let lastBones = Inventory.count('Bones');
             let settled = 0;
             for (let i = 0; i < 60 && !heldId(TRAIBORN_KEY_ID); i++) {
@@ -311,13 +310,11 @@ async function driveIncantation(_log: (m: string) => void): Promise<boolean> {
         const opts = ChatDialog.options();
         if (opts.length > 0) {
             const inc = opts.find(o => o.toLowerCase().includes(INCANTATION.toLowerCase()));
-            await ChatDialog.chooseOption(inc ?? opts[opts.length - 1]);
-            await Execution.delayTicks(1);
+            await afterDialogueAction(await ChatDialog.chooseOption(inc ?? opts[opts.length - 1]), 1);
             continue;
         }
         if (ChatDialog.canContinue()) {
-            await ChatDialog.continue();
-            await Execution.delayTicks(1);
+            await afterDialogueAction(await ChatDialog.continue(), 1);
             continue;
         }
         if (!Game.inCombat()) {

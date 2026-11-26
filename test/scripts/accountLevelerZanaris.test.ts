@@ -8,8 +8,9 @@ import { Quests } from '#/bot/api/ui/questlog/Quests.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { gunzipSync } from 'fflate';
 import { PathFinder } from '#/bot/event/webwalk/PathFinder.js';
+import { refreshConsumables } from '#/bot/scripts/AccountLeveler/catalog.js';
 import { auditDragonWeapons } from '#/bot/scripts/AccountLeveler/dragonWeapons.js';
-import { enabledSkills } from '#/bot/scripts/AccountLeveler/planner.js';
+import { emptyMemory, enabledSkills, dragonSwordSupply } from '#/bot/scripts/AccountLeveler/planner.js';
 import type { LevelerSnapshot } from '#/bot/scripts/AccountLeveler/types.js';
 
 const snapshot = (): LevelerSnapshot => ({
@@ -41,6 +42,42 @@ test('weapon audit defers locked, inaccessible, failed and unaffordable purchase
     expect(auditDragonWeapons(s).needs).toEqual([]);
     s.stock.coins = 1000000; s.unavailableItems = ['dragon dagger', 'dragon longsword'];
     expect(auditDragonWeapons(s).needs).toEqual([]);
+});
+
+test('the sword budget survives sourcing a missing gate diamond', () => {
+    const s = snapshot();
+    delete s.stock.diamond;
+    s.levels.crafting = 42;
+    s.marketItem = need => need.item === 'Diamond' ? 1601 : undefined;
+    const supply = () => dragonSwordSupply(s, emptyMemory(), () => 0);
+    expect(supply()).toMatchObject({ script: 'SeersMarket', output: { item: 'Diamond', count: 1 }, settings: { reserve: expect.any(Number) } });
+    expect(Number(supply()?.settings.reserve)).toBeGreaterThanOrEqual(100200);
+    s.marketItem = undefined;
+    s.stock.shark = 100;
+    expect(supply()).toMatchObject({ prerequisiteLevels: { crafting: 43 } });
+    s.levels.crafting = 43;
+    expect(supply()).toMatchObject({ script: 'AutoFighter', output: { item: 'Uncut diamond', count: 1 } });
+    s.stock['uncut diamond'] = 1;
+    expect(supply()).toBeNull();
+    delete s.stock['uncut diamond'];
+    s.stock.coins = 105000;
+    s.stock.diamond = 1;
+    expect(auditDragonWeapons(s).needs).toEqual([{ item: 'Dragon longsword', count: 1 }]);
+    delete s.stock.diamond;
+    s.stock.coins = 60000;
+    expect(supply()).toBeNull();
+    s.stock.diamond = 1;
+    expect(auditDragonWeapons(s).needs).toEqual([]);
+});
+
+test('a queued dragon hunt equips the new longsword and keeps its shield', () => {
+    const s = snapshot();
+    s.stock['dragon longsword'] = 1;
+    const plan = refreshConsumables(s, { script: 'JiveDragons', id: 'queued', label: 'Blue dragons', objective: 'prayer',
+        settings: { combatStyle: 'melee', weapon: 'Rune longsword' },
+        needs: ['Rune longsword', 'Dragonfire shield'].map(item => ({ item, count: 1, carry: 1, equip: true })) });
+    expect(plan.settings.weapon).toBe('Dragon longsword');
+    expect(plan.needs.map(need => need.item)).toEqual(['Dragon longsword', 'Dragonfire shield']);
 });
 
 test('a usable uncut Diamond adds affordable chisel preparation before buying weapons', () => {

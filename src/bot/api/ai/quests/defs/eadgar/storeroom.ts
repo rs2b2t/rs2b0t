@@ -2,7 +2,7 @@ import { Execution } from '../../../../execution/Execution.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
 import { Locs } from '../../../../locs/Locs.js';
 import { Traversal } from '../../../../walking/Traversal.js';
-import { promptLoc, settleScene } from '../../exec/prompts.js';
+import { findSceneTarget, promptLoc } from '../../exec/prompts.js';
 import { ER_ITEM, ER_LOC, ER_TILE } from './areas.js';
 
 const heldId = (id: number): number => Inventory.countById(id);
@@ -15,8 +15,7 @@ export async function takeStoreroomKey(log: (m: string) => void): Promise<boolea
     if (!(await Traversal.walkResilient(ER_TILE.KITCHEN_DRAWERS, { radius: 2, attempts: 3, timeoutMs: 240_000, log }))) {
         return false;
     }
-    await settleScene();
-    const shut = Locs.query().where(loc => loc.id === ER_LOC.KITCHEN_DRAWERS).action('Open').within(6).nearest();
+    const shut = await findSceneTarget(() => Locs.query().where(loc => loc.id === ER_LOC.KITCHEN_DRAWERS).action('Open').within(6).nearest());
     if (shut) {
         if (!(await shut.interact('Open'))) {
             return false;
@@ -50,7 +49,6 @@ export async function unlockStoreroom(log: (m: string) => void): Promise<boolean
     if (!(await Traversal.walkResilient(ER_TILE.STOREROOM_DOOR_OUT, { radius: 1, attempts: 3, timeoutMs: 240_000, log }))) {
         return false;
     }
-    await settleScene();
     return promptLoc(
         {
             name: 'Storeroom Door',

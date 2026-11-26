@@ -2,7 +2,7 @@ import { Execution } from '../../../../execution/Execution.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
 import { Modals } from '../../../../ui/widgets/Modals.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
-import { settleScene } from '../../exec/prompts.js';
+import { findSceneTarget } from '../../exec/prompts.js';
 import { DIG_ID, DIG_LOC, DIG_NPC, DIG_TILE } from './areas.js';
 import { driveUntilHeld, locByIdAction, talkToNpcId, useOnNpcId, walkTo } from './common.js';
 import { DIG_STAGE } from './journal.js';
@@ -70,8 +70,7 @@ export function searchBush(): QuestStep {
             if (!(await walkTo(DIG_TILE.BUSH_STAND, 1, log))) {
                 return false;
             }
-            await settleScene();
-            const bush = locByIdAction([DIG_LOC.BUSH_SAMPLE], 'Search', 6);
+            const bush = await findSceneTarget(() => locByIdAction([DIG_LOC.BUSH_SAMPLE], 'Search', 6));
             if (!bush) {
                 log('no sample bush within six tiles of (3358,3372)');
                 return false;

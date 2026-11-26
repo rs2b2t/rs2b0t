@@ -247,6 +247,19 @@ describe('Temple of Ikov decide', () => {
         expect(step.kind).toBe('withdraw');
     });
 
+    test('takes the strung magic shortbow to the warrior with low Fletching', () => {
+        const state = snap(IKOV_STAGE.PULLED_LEVER, {
+            inv: [[IKOV_OBJ.PENDANT_LUCIEN, 1], [IKOV_OBJ.BOOTS, 1], [72, 1]],
+            bank: [[861, 1]],
+            invNames: [[ARROWS, ARROWS_WANTED]]
+        });
+        state.ranged = 50;
+        expect(decide(state, 1)).toEqual({ kind: 'withdraw', items: [{ name: 'Magic shortbow', id: 861, qty: 1 }] });
+        expect(decide({ ...state, ranged: 40 }, 1)).toEqual({ kind: 'wait', reason: 'need Ranged 50 to wield Magic shortbow' });
+        state.wornIds = new Set([861]);
+        expect(label(decide(state, 1))).toBe('custom:shoot the Fire Warrior of Lesarkus');
+    });
+
     // Why: the ice-chest circuit spends the engine's one-shot float, and the bot walked up to his door on an empty pack and stood there.
     test('an empty pack is refilled before the Fire Warrior', () => {
         const step = decide(snap(IKOV_STAGE.PULLED_LEVER, {

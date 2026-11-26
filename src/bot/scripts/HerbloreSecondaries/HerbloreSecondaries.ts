@@ -13,7 +13,7 @@ import { Equipment } from '../../api/equipment/Equipment.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Paint } from '../../paint/Paint.js';
 import { Skills } from '../../api/skills/Skills.js';
-import { Shop } from '../../api/shop/Shop.js';
+import { buyWithRestockWait, Shop } from '../../api/shop/Shop.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
 import { foodCount as foodCountIn, foodForms } from '../../api/combat/food.js';
 import { GroundItems } from '../../api/grounditems/GroundItems.js';
@@ -87,7 +87,7 @@ export default class HerbloreSecondaries extends TaskBot {
         const pick = this.settings.str('secondary', "Red spiders' eggs");
         const def = secondaryByName(pick);
         if (!def) {
-            ScriptRunner.stop(`unknown secondary '${pick}'`);
+            this.requestFinish(`unknown secondary '${pick}'`);
             return;
         }
         this.def = def;
@@ -96,7 +96,7 @@ export default class HerbloreSecondaries extends TaskBot {
             return;
         }
         this._site = site;
-        this.foodName = scriptFood(this.settings, FOOD_DEFAULT);
+        this.foodName = scriptFood(this.settings, this.settings.str('food', FOOD_DEFAULT));
         this.foodWant = Math.min(this.settings.num('foodWithdraw', FOOD_DEFAULT_COUNT), def.keyName ? 25 : 27);
         this.startedAt = Date.now();
 
@@ -134,7 +134,7 @@ export default class HerbloreSecondaries extends TaskBot {
     private resolveSite(def: SecondaryDef): Site | null {
         if (def.mode !== 'bank_grind') {
             if (!def.anchor || !def.bank || !def.bankName) {
-                ScriptRunner.stop(`${def.name} has no site`);
+                this.requestFinish(`${def.name} has no site`);
                 return null;
             }
             return { anchor: def.anchor, bank: def.bank, bankName: def.bankName };
@@ -142,7 +142,7 @@ export default class HerbloreSecondaries extends TaskBot {
         const here = Game.tile();
         const bank = here ? nearestBank(here) : null;
         if (!bank) {
-            ScriptRunner.stop('no reachable bank');
+            this.requestFinish('no reachable bank');
             return null;
         }
         return { anchor: bank.tile, bank: bank.tile, bankName: bank.name, access: bank.access, npcAccess: bank.npcAccess };
@@ -293,6 +293,7 @@ class BankTrip implements Task {
     constructor(private bot: HerbloreSecondaries) {}
     validate(): boolean {
         const { def, foodWant } = this.bot.cfg();
+        const packFull = def.mode === 'buy_grind' ? Inventory.free() <= 1 : Inventory.isFull();
         return needsRestock({
             def,
             foodCount: this.bot.foodInPack(),
@@ -301,7 +302,7 @@ class BankTrip implements Task {
             hasShield: this.bot.hasShield(),
             hasKey: !def.keyName || Inventory.contains(def.keyName),
             hasTool: this.bot.hasTool(),
-            packFull: Inventory.isFull() && this.bot.productCount() + this.bot.sourceCount() > 0,
+            packFull: packFull && this.bot.productCount() + this.bot.sourceCount() > 0,
             grindLeft: this.bot.grindLeft()
         });
     }
@@ -326,7 +327,7 @@ class BankTrip implements Task {
         if (def.needShield && !this.bot.hasShield()) {
             if (Bank.count(SHIELD_NAME) < 1) {
                 await Bank.close();
-                ScriptRunner.stop(`no ${SHIELD_NAME} banked for ${def.name}`);
+                this.bot.requestFinish(`no ${SHIELD_NAME} banked for ${def.name}`);
                 return;
             }
             await Bank.withdrawX(SHIELD_NAME, 1);
@@ -335,7 +336,7 @@ class BankTrip implements Task {
         if (def.keyName && !Inventory.contains(def.keyName)) {
             if (Bank.count(def.keyName) < 1) {
                 await Bank.close();
-                ScriptRunner.stop(`no ${def.keyName} banked for ${def.name}`);
+                this.bot.requestFinish(`no ${def.keyName} banked for ${def.name}`);
                 return;
             }
             if (!(await Bank.withdrawX(def.keyName, 1)) || !Inventory.contains(def.keyName)) {
@@ -349,7 +350,7 @@ class BankTrip implements Task {
             if (have < foodWant) {
                 if (Bank.count(food) < 1 && have < 1) {
                     await Bank.close();
-                    ScriptRunner.stop(`out of ${food} in the bank`);
+                    this.bot.requestFinish(`out of ${food} in the bank`);
                     return;
                 }
                 await Bank.withdrawX(food, foodWant - have);
@@ -361,7 +362,7 @@ class BankTrip implements Task {
             if (need > 0) {
                 if (Bank.count('Coins') < need && this.bot.coinCount() < 50) {
                     await Bank.close();
-                    ScriptRunner.stop('not enough coins in the bank for shopping');
+                    this.bot.requestFinish('not enough coins in the bank for shopping');
                     return;
                 }
                 await Bank.withdrawX('Coins', need);
@@ -378,7 +379,7 @@ class BankTrip implements Task {
                 await Bank.withdrawX(def.toolName, 1);
             } else if (def.mode === 'bank_grind') {
                 await Bank.close();
-                ScriptRunner.stop(`no ${def.toolName} in the bank`);
+                this.bot.requestFinish(`no ${def.toolName} in the bank`);
                 return;
             }
         }
@@ -386,7 +387,7 @@ class BankTrip implements Task {
         if (def.mode === 'bank_grind' && def.grindFrom) {
             if (Bank.count(def.grindFrom) < 1) {
                 await Bank.close();
-                ScriptRunner.stop(`out of ${def.grindFrom} in the bank`);
+                this.bot.requestFinish(`out of ${def.grindFrom} in the bank`);
                 return;
             }
             await Bank.withdrawLoad(def.grindFrom);
@@ -436,7 +437,7 @@ class BuyGoods implements Task {
             if (def.grindFrom && Inventory.count(def.grindFrom) > 0 && this.bot.hasTool()) {
                 return false;
             }
-            return this.bot.hasTool() && this.bot.coinCount() > 0 && !Inventory.isFull() && Inventory.count(def.grindFrom ?? '') + this.bot.productCount() < 27;
+            return this.bot.hasTool() && this.bot.coinCount() > 0 && Inventory.free() > 1 && Inventory.count(def.grindFrom ?? '') + this.bot.productCount() < 27;
         }
         return false;
     }
@@ -455,7 +456,7 @@ class BuyGoods implements Task {
             return;
         }
         const room = Math.max(0, Inventory.free() - (def.mode === 'buy_grind' ? 1 : 0));
-        const bought = await Shop.buy(buyName, Math.min(room, 50));
+        const bought = await buyWithRestockWait(buyName, Math.min(room, 50), 20);
         await Shop.close();
         if (bought > 0) {
             this.bot.log(`bought ${bought}× ${buyName}`);
@@ -463,8 +464,7 @@ class BuyGoods implements Task {
                 this.bot.countGathered(bought);
             }
         } else {
-            this.bot.log(`${buyName} out of stock — waiting`);
-            await Execution.delayTicks(20);
+            this.bot.log(`could not buy ${buyName}`);
         }
     }
 }

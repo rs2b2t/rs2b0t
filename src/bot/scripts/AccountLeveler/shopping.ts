@@ -2,21 +2,23 @@ import Skill from '../../../client/shell/Skill.js';
 import type { WorldTile } from '../../adapter/ClientAdapter.js';
 import { magicEquipment } from './magic.js';
 import { gatheringTool, meleeEquipment, rangedBow } from './equipment.js';
-import { purchaseBudget, supplyOffer, supplyOffers } from './offers.js';
+import { purchaseBudget, SHOPPING_RESERVE, shoppingReserve, supplyOffer, supplyOffers } from './offers.js';
 import { requirementKey, type LevelerSnapshot, type Requirement } from './types.js';
 
-export const SHOPPING_RESERVE = 200;
+import { utilityMagicPlan } from './utilityMagic.js';
+
+export { SHOPPING_RESERVE };
 export interface SupplyAudit { needs: Requirement[]; budget: number; reserve: number; skipped: string[] }
 export interface ShoppingStop { keeper: string; tile: WorldTile; needs: Requirement[] }
 
-export function auditSupplies(s: LevelerSnapshot): SupplyAudit {
+export function auditSupplies(s: LevelerSnapshot, runeGearOnly = false): SupplyAudit {
     const gold = Math.max(0, s.stock.coins ?? 0);
-    const result: SupplyAudit = { needs: [], budget: 0, reserve: Math.min(gold, Math.max(SHOPPING_RESERVE, Math.floor(gold / 10))), skipped: [] };
+    const result: SupplyAudit = { needs: [], budget: 0, reserve: shoppingReserve(gold), skipped: [] };
     if (!s.bankReady) return { ...result, skipped: ['Bank contents have not loaded'] };
     const unfinished = new Set(Skill.names.filter((skill, index) => Skill.used[index] && s.levels[skill] > 0 && s.levels[skill] < s.target));
     const any = (...skills: string[]) => skills.some(skill => unfinished.has(skill));
-    const flyFishing = s.levels.fishing >= 20 && (any('fishing') || (any('cooking') && s.levels.cooking >= 15));
-    const netFishing = (any('fishing') && s.levels.fishing < 20) || (any('cooking') && (s.levels.fishing < 20 || s.levels.cooking < 15));
+    const flyFishing = s.levels.fishing >= 20 && any('fishing');
+    const netFishing = (any('fishing') && s.levels.fishing < 20) || (any('cooking') && s.levels.fishing < 40);
     const available = (): LevelerSnapshot => ({ ...s, stock: { ...s.stock, coins: gold - result.reserve - result.budget + SHOPPING_RESERVE } });
     const add = (item: string, count = 1, id?: number) => {
         const need = { item, count, ...(id === undefined ? {} : { id }) };
@@ -37,11 +39,19 @@ export function auditSupplies(s: LevelerSnapshot): SupplyAudit {
         result.budget += budget;
     };
     const gear = (need: Requirement) => add(need.item, need.count, need.id);
-    if (any('attack', 'strength', 'defence', 'hitpoints', 'prayer') || (any('herblore') && !s.quests['Druidic Ritual']) || (any('crafting') && s.levels.crafting < 10)) {
-        meleeEquipment(available()).forEach(gear);
+    const melee = !runeGearOnly && (any('attack', 'strength', 'defence', 'hitpoints', 'prayer') || (any('herblore') && !s.quests['Druidic Ritual']) || (any('crafting') && s.levels.crafting < 10));
+    if (melee || s.quests['Dragon Slayer']) {
+        for (const need of meleeEquipment(available())) {
+            if (melee || need.item.startsWith('Rune ')) gear(need);
+        }
     }
+    if (runeGearOnly) return result;
     if (any('ranged')) gear(rangedBow(available()));
-    if (any('magic')) magicEquipment(available()).needs.forEach(gear);
+    if (any('magic')) {
+        const spell = utilityMagicPlan(s, 'magic');
+        if (spell) spell.needs.filter(need => need.equip).forEach(gear);
+        else magicEquipment(available()).needs.forEach(gear);
+    }
     if (any('woodcutting', 'firemaking', 'fletching')) gear(gatheringTool(available(), 'axe'));
     if (any('mining', 'smithing', 'runecraft')) {
         const pickaxe = gatheringTool(available(), 'pickaxe');

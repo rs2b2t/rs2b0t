@@ -29,7 +29,7 @@ test('action preview explains the shopping destination and why fishing is queued
     expect(actions.find(a=>a.id==='shop:Gerrant')?.destination).toMatchObject({x:3013,z:3224});
     expect(describeActivity(decision.plan)).toContain('28 Raw shrimps');
     expect(actions.some(a=>a.label.includes('cook'))).toBe(true);
-    expect(actions.find(a=>a.id===`later:${decision.queue[2].id}`)?.detail).toContain('attack');
+    expect(actions.find(a=>a.id===`later:${decision.queue[2].id}`)?.detail).toContain('strength 25');
 });
 
 test('queue advances from real events, retains failures and caps action history', () => {
@@ -51,9 +51,9 @@ test('queued goals are revalidated while combat supply dependencies remain eligi
     const { canResumeObjective }=await import('#/bot/scripts/AccountLeveler/priority.js');
     const s=snapshot();
     Object.assign(s.levels,{attack:25,strength:20,defence:5});
-    expect(canResumeObjective(s.levels,s.target,'agility')).toBe(false);
-    expect(canResumeObjective(s.levels,s.target,'attack')).toBe(false);
-    expect(canResumeObjective(s.levels,s.target,'defence')).toBe(true);
-    for(const skill of ['attack','strength','defence','hitpoints','ranged','magic','prayer'])s.levels[skill]=40;
     expect(canResumeObjective(s.levels,s.target,'agility')).toBe(true);
+    expect(canResumeObjective(s.levels,s.target,'attack')).toBe(true);
+    expect(canResumeObjective(s.levels,s.target,'defence')).toBe(true);
+    s.levels.agility = s.target;
+    expect(canResumeObjective(s.levels,s.target,'agility')).toBe(false);
 });

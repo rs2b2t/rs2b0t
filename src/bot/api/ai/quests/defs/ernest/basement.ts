@@ -8,7 +8,7 @@ import { Inventory } from '../../../../inventory/Inventory.js';
 import { GroundItems } from '../../../../grounditems/GroundItems.js';
 import { Locs } from '../../../../locs/Locs.js';
 import { GameMessages } from '../../../../chatbox/gameMessages.js';
-import { settleScene } from '../../exec/prompts.js';
+import { findSceneTarget, settleScene } from '../../exec/prompts.js';
 import { EC_ID, EC_NAME, EC_TILE } from './areas.js';
 
 type BasementRegion = 'entry' | 'r1r4' | 'r2' | 'r5' | 'r3' | 'r6' | 'r9' | 'outside';
@@ -132,8 +132,7 @@ async function setLever(lever: LeverName, want: 'up' | 'down', log: (m: string) 
             log(`could not reach lever ${lever} at (${stand.x},${stand.z})`);
             return false;
         }
-        await settleScene();
-        const loc = Locs.query().name(`Lever ${lever}`).action('Pull').within(3).nearest();
+        const loc = await findSceneTarget(() => Locs.query().name(`Lever ${lever}`).action('Pull').within(3).nearest());
         if (!loc) {
             log(`no 'Lever ${lever}' in the scene at (${stand.x},${stand.z})`);
             return false;
@@ -168,8 +167,7 @@ async function crossDoor(
         log(`could not reach the ${move.door} stand (${move.stand.x},${move.stand.z})`);
         return 'failed';
     }
-    await settleScene();
-    const door = Locs.query().name('Door').action('Open').within(3).nearest();
+    const door = await findSceneTarget(() => Locs.query().name('Door').action('Open').within(3).nearest());
     if (!door) {
         log(`no ${move.door} in the scene`);
         return 'failed';
@@ -227,7 +225,6 @@ async function enterBasement(log: (m: string) => void): Promise<boolean> {
         log('could not reach the ladder alcove — is the bookcase crossing in transports.json?');
         return false;
     }
-    await settleScene();
     const status = await Reach.locOp({
         name: 'Ladder',
         op: 'Climb-down',
@@ -282,7 +279,6 @@ async function leaveAlcove(log: (m: string) => void): Promise<boolean> {
         log('could not reach the alcove lever');
         return false;
     }
-    await settleScene();
     const status = await Reach.locOp({
         name: 'Lever',
         op: 'Pull',
@@ -312,8 +308,7 @@ async function takeOilCan(log: (m: string) => void): Promise<boolean> {
     if (!(await Traversal.walkResilient(EC_TILE.OIL_CAN_SPAWN, { radius: 1, attempts: 4, timeoutMs: 60_000, log }))) {
         return false;
     }
-    await settleScene();
-    const can = GroundItems.query().name(EC_NAME.OIL_CAN).within(6).nearest();
+    const can = await findSceneTarget(() => GroundItems.query().name(EC_NAME.OIL_CAN).within(6).nearest());
     if (!can) {
         log('no Oil can on the floor of the west room');
         return false;

@@ -9,7 +9,7 @@ import { FOOD_FLOAT, QuestFood } from '../../food.js';
 import { QuestLoadout } from '../../gear.js';
 import { weaponOf } from '../../../../loadout/loadoutPlan.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
-import { useOnLoc } from '../../exec/prompts.js';
+import { findSceneTarget, useOnLoc } from '../../exec/prompts.js';
 import { smithNails } from '../dragonslayer/supplies.js';
 import { PICKAXES, bankedPickaxe, liveBestWeapon } from '../../weapons.js';
 import {
@@ -194,8 +194,7 @@ async function useOnLocFrom(
         log(`could not stand on (${stand.x},${stand.z}) to use the ${locName}`);
         return false;
     }
-    await Execution.delayTicks(2);
-    const loc = Locs.query().name(locName).within(6).nearest();
+    const loc = await findSceneTarget(() => Locs.query().name(locName).within(6).nearest());
     const item = Inventory.items().find(entry => entry.id === itemId);
     if (!loc || !item) {
         log(`no ${locName} in reach, or nothing to use on it`);

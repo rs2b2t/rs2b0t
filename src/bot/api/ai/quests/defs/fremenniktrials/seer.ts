@@ -9,8 +9,8 @@ import { Modals } from '../../../../ui/widgets/Modals.js';
 import { Reach } from '../../../../walking/Reach.js';
 import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
 import { hasFlag, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
-import { pickPreferred } from '../../exec/primitives.js';
-import { promptLoc, settleScene, useOnLoc } from '../../exec/prompts.js';
+import { afterDialogueAction, pickPreferred } from '../../exec/primitives.js';
+import { findSceneTarget, promptLoc, settleScene, useOnLoc } from '../../exec/prompts.js';
 import { FT_ID, FT_LOC, FT_TILE, PEER, inPuzzleRoom, inSeerEast, inSeerWest } from './areas.js';
 import { combine, walkTo } from './supplies.js';
 
@@ -303,8 +303,7 @@ async function unlockExit(log: (m: string) => void): Promise<boolean> {
     if (!(await walkTo(FT_TILE.SEER_DOOR2_INNER, 0, log))) {
         return false;
     }
-    await settleScene();
-    const door = Locs.query().where(l => l.id === FT_LOC.SEER_DOOR2).within(4).nearest();
+    const door = await findSceneTarget(() => Locs.query().where(l => l.id === FT_LOC.SEER_DOOR2).within(4).nearest());
     const key = Inventory.items().find(i => i.id === FT_ID.SEERS_KEY);
     if (!door || !key) {
         log('no locked door or no key in range');
@@ -406,8 +405,7 @@ async function readRiddle(log: (m: string) => void): Promise<string | null> {
                 log(`the lock offered [${options.join(' | ')}] with no way to read the riddle`);
                 return null;
             }
-            await ChatDialog.chooseOption(pick);
-            await Execution.delayTicks(2);
+            await afterDialogueAction(await ChatDialog.chooseOption(pick), 2);
             continue;
         }
         if (ChatDialog.canContinue()) {

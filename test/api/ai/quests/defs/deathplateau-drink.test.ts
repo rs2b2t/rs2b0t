@@ -7,7 +7,7 @@ import { Modals } from '#/bot/api/ui/widgets/Modals.js';
 import { ChatDialog } from '#/bot/api/ui/dialogue/ChatDialog.js';
 import { stubProps } from '../../../../lib/stubSingletons.js';
 
-test('never submits a stake without confirming the second drink', async () => {
+test('submits a stake after the ale without a cocktail', async () => {
     let stakes = 0;
     const restores = [
         stubProps(Game, { tile: () => ({ x: 2905, z: 3539, level: 1 }) }),
@@ -18,7 +18,7 @@ test('never submits a stake without confirming the second drink', async () => {
     ];
     try {
         expect(await gambleWithHarold(() => {})).toBe(false);
-        expect(stakes).toBe(0);
+        expect(stakes).toBe(1);
     } finally {
         for (const restore of restores.reverse()) restore();
     }

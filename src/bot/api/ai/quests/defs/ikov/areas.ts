@@ -28,6 +28,13 @@ export const IKOV_OBJ = {
     FLAX: 1779
 } as const;
 
+export const IKOV_BOWS = [
+    { name: 'Yew shortbow', id: IKOV_OBJ.YEW_SHORTBOW, ranged: 40 },
+    { name: 'Yew longbow', id: 855, ranged: 40 },
+    { name: 'Magic shortbow', id: 861, ranged: 50 },
+    { name: 'Magic longbow', id: 859, ranged: 50 }
+] as const;
+
 export const IKOV_LOC = {
     LEVER_BRACKET: 86,
     MENDED_LEVER: 87,

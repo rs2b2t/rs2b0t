@@ -94,52 +94,31 @@ test('a shopping dependency accounts for travel money before selecting an unaffo
     expect(result.kind==='blocked'&&result.reason).toContain('budget 230');
 });
 
-test('unfinished melee takes priority over an older saved skilling objective', () => {
-    const s=fresh();s.stock.shrimps=100;
-    const memory={...emptyMemory(),objective:'agility',attempted:{attack:999,strength:999,defence:999}};
-    for(const random of [0,0.3,0.8,0.99]) {
-        const next=planNext(s,memory,()=>random);
-        expect(next.kind).toBe('activity');
-        if(next.kind==='activity') {
-            expect(['attack','strength','defence']).toContain(next.plan.objective);
-            expect(next.plan.script).toBe('AutoFighter');
-        }
+test('identical fresh accounts can draw both combat and gathering tasks in different locations', () => {
+    const s = fresh();
+    const objectives = new Set<string>();
+    const destinations = new Set<string>();
+    for (let i = 0; i < enabledSkills.length; i++) {
+        const decision = planNext(s, emptyMemory(), () => (i + 0.5) / enabledSkills.length);
+        if (decision.kind !== 'activity') throw new Error(JSON.stringify(decision));
+        objectives.add(decision.plan.objective);
+        destinations.add(JSON.stringify(decision.plan.travel));
     }
+    for (const skill of ['strength', 'mining', 'fishing', 'woodcutting']) expect(objectives.has(skill)).toBe(true);
+    expect(destinations.size).toBeGreaterThan(4);
 });
 
-test('low Defence supersedes a saved higher-level Attack objective', () => {
-    const s=fresh();s.stock.shrimps=100;
-    Object.assign(s.levels,{attack:30,strength:25,defence:5});
-    const next=planNext(s,{...emptyMemory(),objective:'attack'},()=>0);
-    expect(next.kind==='activity'&&next.plan.objective).toBe('defence');
-    expect(next.kind==='activity'&&next.plan.settings.meleeStyle).toBe('defence');
+test('a blocked combat draw falls through to another unfinished skill', () => {
+    const s = trained();
+    s.levels.attack = 20;
+    s.levels.woodcutting = 1;
+    s.stock = { coins: 0, 'bronze axe': 1 };
+    expect(planNext(s, emptyMemory(), () => 0)).toMatchObject({ kind: 'activity', plan: { objective: 'woodcutting' } });
 });
 
-test('food production serves the combat objective even when the saved goal was skilling', () => {
-    const s=fresh(); Object.assign(s.levels,{attack:20,strength:20,defence:20,hitpoints:25});
-    const next=planNext(s,{...emptyMemory(),objective:'woodcutting'},()=>0);
-    expect(next.kind==='activity'&&next.plan.script).toBe('Fisher');
-    expect(next.kind==='activity'&&next.plan.objective).toBe('attack');
-});
-
-test('other combat stats precede skilling after melee reaches the target', () => {
-    const s=fresh();s.stock.shrimps=100;
-    Object.assign(s.levels,{attack:40,strength:40,defence:40});
-    const next=planNext(s,{...emptyMemory(),objective:'runecraft'},()=>0);
-    expect(next.kind==='activity'&&['hitpoints','ranged','magic','prayer'].includes(next.plan.objective)).toBe(true);
-});
-
-test('skilling unlocks once combat reaches the configured target', () => {
-    const s=fresh();s.target=10;
-    for(const skill of ['attack','strength','defence','hitpoints','ranged','magic','prayer'])s.levels[skill]=10;
-    const next=planNext(s,{...emptyMemory(),objective:'woodcutting'},()=>0);
-    expect(next.kind==='activity'&&next.plan.objective).toBe('woodcutting');
-});
-
-test('blocked combat does not send a fragile account on an unrelated training trip', () => {
-    const s=fresh();s.stock={coins:0,'bronze axe':1};
-    const next=planNext(s,{...emptyMemory(),objective:'woodcutting'},()=>0);
-    expect(next.kind).toBe('blocked');
+test('a saved skilling objective can resume while melee is unfinished', () => {
+    expect(planNext(fresh(), { ...emptyMemory(), objective: 'woodcutting' }, () => 0))
+        .toMatchObject({ kind: 'activity', plan: { objective: 'woodcutting', script: 'Woodcutter' } });
 });
 
 test('legacy shrimp cooldowns cannot block the food dependency for every melee objective', () => {
@@ -148,4 +127,49 @@ test('legacy shrimp cooldowns cannot block the food dependency for every melee o
     const decision = planNext(s, memory, () => 0);
     expect(decision.kind).toBe('activity');
     expect(decision.kind === 'activity' && decision.plan.script).toBe('Fisher');
+});
+
+test('after a session a different runnable objective gets the next turn', () => {
+    const s = trained();
+    Object.assign(s.levels, { attack: 20, woodcutting: 1 });
+    s.stock.shrimps = 100;
+    const memory = { ...emptyMemory(), attempted: { attack: 999 } };
+    expect(planNext(s, memory, () => 0)).toMatchObject({ plan: { objective: 'woodcutting' } });
+    s.levels.woodcutting = s.target;
+    expect(planNext(s, memory, () => 0)).toMatchObject({ plan: { objective: 'attack' } });
+});
+
+test('melee rotates at paired five-level milestones, upgrades weapons and then catches up Defence', () => {
+    const s = { ...trained(), target: 60, allowQuests: false };
+    Object.assign(s.levels, { attack: 1, strength: 1, defence: 1 });
+    Object.assign(s.stock, { lobster: 100, 'black scimitar': 1, 'adamant scimitar': 1, 'rune scimitar': 1 });
+    const memory = { ...emptyMemory(), objective: 'defence' };
+    const weapons = ['Iron', 'Steel', 'Black', 'Black', 'Mithril', 'Mithril', 'Adamant', 'Adamant', 'Rune'];
+    for (let level = 5; level <= 40; level += 5) {
+        for (const skill of ['strength', 'attack']) {
+            const decision = planNext(s, memory, () => 0);
+            expect(decision).toMatchObject({ kind: 'activity', plan: {
+                objective: skill, settings: { meleeStyle: skill }, prerequisiteLevels: { [skill]: level }
+            } });
+            if (decision.kind !== 'activity') throw new Error('Expected a melee activity');
+            expect(decision.plan.needs).toContainEqual({ item: weapons[Math.floor(s.levels.attack / 5)] + ' scimitar', count: 1, carry: 1, equip: true });
+            s.levels[skill] = level;
+            memory.objective = skill;
+        }
+    }
+    expect(planNext(s, memory, () => 0)).toMatchObject({ plan: {
+        objective: 'defence', settings: { meleeStyle: 'defence' }, needs: expect.arrayContaining([expect.objectContaining({ item: 'Rune scimitar', equip: true })])
+    } });
+});
+
+test('uneven melee levels catch up to the next milestone and respect a lower profile target', () => {
+    const s = { ...trained(), target: 23, allowQuests: false };
+    Object.assign(s.levels, { attack: 17, strength: 32, defence: 7 });
+    s.stock.lobster = 100;
+    const memory = { ...emptyMemory(), objective: 'defence' };
+    expect(planNext(s, memory, () => 0)).toMatchObject({ plan: { objective: 'attack', prerequisiteLevels: { attack: 20 } } });
+    s.levels.attack = 20;
+    expect(planNext(s, memory, () => 0)).toMatchObject({ plan: { objective: 'attack', prerequisiteLevels: { attack: 23 } } });
+    s.levels.attack = 23;
+    expect(planNext(s, memory, () => 0)).toMatchObject({ plan: { objective: 'defence' } });
 });

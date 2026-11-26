@@ -69,6 +69,29 @@ test('tab and search filters clear selected targets without changing wall scope'
     expect(get<HTMLInputElement>('#mbx-roster-search').value).toBe('alice');
 });
 
+test('Enter moves selected loaded and saved profiles into a new group', async () => {
+    const { panel, actions, profiles } = fixture();
+    panel.close(); panel.el.remove();
+    const tabs = ['Main', 'Miners'];
+    const manager = new RosterPanel(actions, { tabs: () => tabs, activeTab: () => 'Miners', worldRouting: true, edit: () => {},
+        assignGroup: async (names, group) => {
+            tabs.push(group);
+            for (const profile of profiles) if (names.includes(profile.username)) profile.tab = group;
+        }
+    });
+    document.body.append(manager.el); manager.open();
+    get('[data-scope="all"]').click();
+    select('alice'); select('bob');
+    const selector = '[aria-label="Profile group name"]';
+    change(selector, 'Group 4');
+    get(selector).dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await settle();
+    expect(profiles.map(p => p.tab)).toEqual(['Group 4', 'Group 4', 'Main']);
+    expect(get('[data-profile="alice"] small').textContent).toContain('Group 4');
+    expect(get('#mbx-roster-count').textContent).toBe('0 selected');
+    expect(manager.el.textContent).toContain('Moved 2 profiles to Group 4.');
+});
+
 test('copy uses the chosen source/script and preserves the target selected script', async () => {
     const { panel, profiles } = fixture();
     profiles.push({ username: 'carol', tab: 'Main', world: 1 });

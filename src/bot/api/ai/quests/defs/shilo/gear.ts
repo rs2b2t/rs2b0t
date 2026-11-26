@@ -1,6 +1,6 @@
 import { ITEM_DB } from '../../../../../data/itemdb.js';
 import { Equipment } from '../../../../equipment/Equipment.js';
-import { QuestLoadout } from '../../gear.js';
+import { QuestLoadout, questWornGear } from '../../gear.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { foodNames, scanBank, withdrawFrom } from './supplies.js';
 import { SV_ITEM, SV_TILE } from './areas.js';
@@ -22,7 +22,7 @@ export function resetCombatGear(): void {
 function candidates(snap: QuestSnapshot): string[][] {
     const worn = ITEM_DB.filter(item => snap.worn.has(item.name.toLowerCase()));
     const wornSlots = new Set(worn.map(item => item.slot));
-    const declared = QuestLoadout.current?.worn ?? {};
+    const declared = questWornGear(snap);
     const twoHanded = worn.some(item => item.twoHanded)
         || ITEM_DB.some(item => item.twoHanded && item.name.toLowerCase() === declared.righthand?.toLowerCase());
     return SLOTS.flatMap(({ slot, kinds }) => {

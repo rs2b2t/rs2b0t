@@ -5,7 +5,7 @@ import { Locs, type Loc } from '../../../../locs/Locs.js';
 import { Npcs } from '../../../../npcs/Npcs.js';
 import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
 import { Traversal } from '../../../../walking/Traversal.js';
-import { driveUntil, heldId, settleScene, useOnLoc } from '../../exec/prompts.js';
+import { findSceneTarget, driveUntil, heldId, settleScene, useOnLoc } from '../../exec/prompts.js';
 import { gotoNpc, openDialogue, type NpcStop } from '../../exec/primitives.js';
 import {
     ANITA,
@@ -180,8 +180,7 @@ export async function anitaKey(log: Log): Promise<boolean> {
         if (!(await Traversal.walkResilient(GT_TILE.anitaStairs, { radius: 1, attempts: 3, timeoutMs: 120_000, log }))) {
             return false;
         }
-        await settleScene();
-        const stairs = Locs.query().name('Staircase').action('Climb-up').within(4).nearest();
+        const stairs = await findSceneTarget(() => Locs.query().name('Staircase').action('Climb-up').within(4).nearest());
         if (!stairs || !(await stairs.interact('Climb-up'))) {
             log(`no staircase up to Anita at (${GT_TILE.anitaStairs.x},${GT_TILE.anitaStairs.z})`);
             return false;
@@ -239,8 +238,7 @@ export async function climbToPillars(log: Log): Promise<boolean> {
     if (!(await Traversal.walkResilient(GT_TILE.climbTreeStand, { radius: 1, attempts: 3, timeoutMs: 120_000, log }))) {
         return false;
     }
-    await settleScene();
-    const tree = Locs.query().where(l => l.id === GT_LOC.CLIMB_TREE).action('Climb-up').within(4).nearest();
+    const tree = await findSceneTarget(() => Locs.query().where(l => l.id === GT_LOC.CLIMB_TREE).action('Climb-up').within(4).nearest());
     if (!tree || !(await tree.interact('Climb-up'))) {
         log(`no climbable tree at (${GT_TILE.climbTreeStand.x},${GT_TILE.climbTreeStand.z})`);
         return false;
@@ -264,8 +262,7 @@ export async function descendGloughTree(log: Log): Promise<boolean> {
         if (!(await Traversal.walkResilient(GT_TILE.downTreeStand, { radius: 1, attempts: 3, timeoutMs: 60_000, log }))) {
             return false;
         }
-        await settleScene();
-        const tree = Locs.query().where(l => l.id === GT_LOC.DOWN_TREE).action('Climb-down').within(4).nearest();
+        const tree = await findSceneTarget(() => Locs.query().where(l => l.id === GT_LOC.DOWN_TREE).action('Climb-down').within(4).nearest());
         if (!tree || !(await tree.interact('Climb-down'))) {
             log(`no tree down from the pillar floor at (${GT_TILE.downTreeStand.x},${GT_TILE.downTreeStand.z})`);
             return false;
@@ -317,14 +314,13 @@ export async function searchNextRoot(log: Log): Promise<boolean> {
     if (!(await Traversal.walkResilient(root.stand, { radius: 1, attempts: 3, timeoutMs: 120_000, log }))) {
         return false;
     }
-    await settleScene();
     // Why: both root models render "Root" and the closest pair stands 3 tiles apart, so match on placement.
-    const loc = Locs.query()
+    const loc = await findSceneTarget(() => Locs.query()
         .name('Root')
         .action('Search')
         .where(l => l.tile().distanceTo(root.sw) <= 1)
         .within(6)
-        .nearest();
+        .nearest());
     if (!loc) {
         log(`no Root at (${root.sw.x},${root.sw.z})`);
         return false;

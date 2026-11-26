@@ -1,4 +1,5 @@
-import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
+import { Modals } from '../../../../ui/widgets/Modals.js';
+import { reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Game } from '../../../../game/Game.js';
 import { Sustain } from '../../../../sustain/Sustain.js';
@@ -73,10 +74,7 @@ export async function readMessage(log: (m: string) => void): Promise<boolean> {
         return false;
     }
     await Execution.delayUntil(() => reader.modals().main !== -1, 6000);
-    if (reader.modals().main !== -1) {
-        actions.closeModal();
-        await Execution.delayTicks(1);
-    }
+    await Modals.closeIfOpen();
     return true;
 }
 
@@ -141,7 +139,7 @@ export async function digTreasure(log: (m: string) => void): Promise<boolean> {
         }
         if (await Execution.delayUntil(() => GameMessages.sawSince(mark, DUG), 8000)) {
             // Why: `queue(hunt_quest_complete, 0, 0)` lands 4 ticks after the dig line, so the leg is not finished when the message is.
-            await Execution.delayTicks(8);
+            await Execution.delayUntilTicks(() => GameMessages.sawSince(mark, /find a little bag of treasure/i), 8);
             return true;
         }
         log(`the dig landed nothing — said: [${GameMessages.since(mark).map(m => m.text).join(' | ')}]`);

@@ -1,3 +1,4 @@
+import { findSceneTarget } from '../../exec/prompts.js';
 import { Execution } from '../../../../execution/Execution.js';
 import Tile from '../../../../../geometry/Tile.js';
 import { Game } from '../../../../game/Game.js';
@@ -92,8 +93,7 @@ async function useOnLocFrom(
         log(`observatory: could not stand on (${stand.x},${stand.z}) to use the ${locName}`);
         return false;
     }
-    await Execution.delayTicks(2);
-    const loc = Locs.query().name(locName).within(6).nearest();
+    const loc = await findSceneTarget(() => Locs.query().name(locName).within(6).nearest());
     const item = Inventory.items().find(entry => entry.id === itemId);
     if (!loc || !item) {
         log(`observatory: no ${locName} in reach, or nothing to use on it`);

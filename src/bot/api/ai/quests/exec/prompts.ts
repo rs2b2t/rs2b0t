@@ -4,13 +4,13 @@ import { Execution } from '../../../execution/Execution.js';
 import { GameMessages } from '../../../chatbox/gameMessages.js';
 import { Modals } from '../../../ui/widgets/Modals.js';
 import { Sustain } from '../../../sustain/Sustain.js';
-import { Reach } from '../../../walking/Reach.js';
+import { findSceneTarget, Reach } from '../../../walking/Reach.js';
 import type Tile from '../../../../geometry/Tile.js';
 import { Traversal } from '../../../walking/Traversal.js';
 import { ChatDialog } from '../../../ui/dialogue/ChatDialog.js';
 import { Inventory } from '../../../inventory/Inventory.js';
 import { Locs, type Loc } from '../../../locs/Locs.js';
-import { pickPreferred } from './primitives.js';
+import { afterDialogueAction, pickPreferred } from './primitives.js';
 import { prayerUpkeep } from '../prayer.js';
 
 export function heldId(id: number): number {
@@ -31,6 +31,8 @@ export async function settleScene(): Promise<void> {
     await Execution.delayTicks(2);
 }
 
+export { findSceneTarget };
+
 // Why: loc prompts often list the refusal first ("I don't think so, it might animate and attack me!"), so an unmatched list stops here instead of falling through.
 
 /**
@@ -40,8 +42,7 @@ export async function settleScene(): Promise<void> {
 export async function driveChoice(prefer: string[], log: (m: string) => void): Promise<boolean> {
     for (let i = 0; i < 60; i++) {
         if (ChatDialog.canContinue()) {
-            await ChatDialog.continue();
-            await Execution.delayTicks(1);
+            await afterDialogueAction(await ChatDialog.continue(), 1);
             continue;
         }
         const opts = ChatDialog.options();
@@ -51,8 +52,7 @@ export async function driveChoice(prefer: string[], log: (m: string) => void): P
                 log(`no preferred option in [${opts.join(' | ')}]`);
                 return false;
             }
-            await ChatDialog.chooseOption(pick);
-            await Execution.delayTicks(2);
+            await afterDialogueAction(await ChatDialog.chooseOption(pick), 2);
             continue;
         }
         if (!ChatDialog.isOpen()) {
@@ -82,9 +82,8 @@ export async function driveUntil(
             return true;
         }
         if (ChatDialog.isOpen() || ChatDialog.canContinue()) {
-            if (!(await driveChoice(prefer, log))) {
-                return expect();
-            }
+            if (!(await driveChoice(prefer, log))) return expect();
+            if (expect()) return true;
         }
         await prayerUpkeep();
         await Execution.delayTicks(1);
@@ -122,13 +121,11 @@ export async function driveBoxes(
             }
             // Why: `driveToEnd` logs every choice it takes, and without this a wrong topic and a right topic that led nowhere look the same in the log.
             log(`chose "${pick}" from [${opts.join(' | ')}]`);
-            await ChatDialog.chooseOption(pick);
-            await Execution.delayTicks(2);
+            await afterDialogueAction(await ChatDialog.chooseOption(pick), 2);
             continue;
         }
         if (ChatDialog.canContinue()) {
-            await ChatDialog.continue();
-            await Execution.delayTicks(1);
+            await afterDialogueAction(await ChatDialog.continue(), 1);
             continue;
         }
         if (Modals.isOpen()) {
@@ -150,8 +147,7 @@ export async function driveBoxes(
 export async function clearBoxes(max = 8): Promise<void> {
     for (let i = 0; i < max; i++) {
         if (ChatDialog.canContinue()) {
-            await ChatDialog.continue();
-            await Execution.delayTicks(1);
+            await afterDialogueAction(await ChatDialog.continue(), 1);
             continue;
         }
         if (Modals.isOpen()) {
@@ -326,13 +322,12 @@ export async function useOnLoc(
     if (!(await Traversal.walkResilient(loc.near, { radius: 2, attempts: 3, timeoutMs: 180_000, log }))) {
         return false;
     }
-    await settleScene();
     // Why: quest areas have same-named locs a tile apart, and `nearest` picks the decoy.
-    const target = Locs.query()
+    const target = await findSceneTarget(() => Locs.query()
         .name(loc.name)
         .where(l => loc.id === undefined || l.id === loc.id)
         .within(loc.within ?? 12)
-        .nearest();
+        .nearest());
     const item = Inventory.items().find(entry => entry.id === itemId);
     if (!target || !item) {
         log(`no '${loc.name}'${loc.id === undefined ? '' : ` id ${loc.id}`} or no item ${itemId} to use on it near (${loc.near.x},${loc.near.z})`);

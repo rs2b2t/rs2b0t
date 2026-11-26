@@ -1,6 +1,9 @@
 import { afterEach, expect, mock, spyOn, test } from 'bun:test';
 import { Bank } from '#/bot/api/bank/Bank.js';
 import { Banking } from '#/bot/api/bank/Banking.js';
+import { Equipment } from '#/bot/api/equipment/Equipment.js';
+import { Skills } from '#/bot/api/skills/Skills.js';
+import { ChatDialog } from '#/bot/api/ui/dialogue/ChatDialog.js';
 import { Execution } from '#/bot/api/execution/Execution.js';
 import { Game } from '#/bot/api/game/Game.js';
 import Tile from '#/bot/geometry/Tile.js';
@@ -183,4 +186,38 @@ test('trip provisioning handles a synchronized empty bank as missing stock', asy
     await bot.withdrawTripProvisionsAtBank();
     expect(coins).toHaveBeenCalledTimes(1);
     expect(withdraw).toHaveBeenCalledTimes(3);
+});
+
+test('normal banking resumes as soon as the bank confirms closure', async () => {
+    const bot = new GatheringBot();
+    spyOn(Bank, 'isOpen').mockReturnValue(true);
+    const close = spyOn(Bank, 'close').mockResolvedValue(true);
+    const pause = spyOn(Execution, 'delayTicks').mockResolvedValue(undefined);
+    expect(await bot.closeScriptBank(() => {}, { allowForgetful: false })).toBe(true);
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(pause).not.toHaveBeenCalled();
+});
+
+test('equipping a banked tool waits for its Wield action to reach the backpack', async () => {
+    const bot = new GatheringBot();
+    const item = new InvItem({ name: 'Bronze pickaxe', id: 1265, slot: 0, comId: 3214, count: 1, ops: ['Deposit-1'] });
+    spyOn(Skills, 'level').mockReturnValue(50);
+    spyOn(Bank, 'isOpen').mockReturnValue(true);
+    spyOn(Bank, 'close').mockResolvedValue(true);
+    spyOn(ChatDialog, 'isMainMakePanel').mockReturnValue(false);
+    spyOn(ChatDialog, 'isOpen').mockReturnValue(false);
+    spyOn(Game, 'openSideTab').mockResolvedValue(true);
+    spyOn(Equipment, 'contains').mockReturnValue(false);
+    spyOn(Equipment, 'items').mockReturnValue([]);
+    spyOn(Inventory, 'first').mockReturnValue(item);
+    spyOn(Execution, 'delayUntilTicks').mockImplementation(async ready => {
+        expect(ready()).toBe(false);
+        item.snap.ops = ['Wield'];
+        return ready();
+    });
+    const equip = spyOn(Equipment, 'equip').mockImplementation(async () => item.actions().includes('Wield'));
+    const pause = spyOn(Execution, 'delayTicks').mockResolvedValue(undefined);
+    expect(await bot.equipTools(['Bronze pickaxe'], () => {}, { bankDisplaced: false })).toBe(true);
+    expect(equip).toHaveBeenCalledTimes(1);
+    expect(pause).not.toHaveBeenCalled();
 });
