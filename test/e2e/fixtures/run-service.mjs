@@ -26,7 +26,7 @@ if (mode === 'service') {
     const service = owned ? ownedService('node', process.env) : { executablePath: 'node', env: process.env };
     const fd = flags.includes('private') ? openSync(prefix + '.log', 'w') : 'inherit';
     const child = spawn(service.executablePath, [process.argv[1], 'service', prefix, lifetime, ...flags], {
-        detached, env: service.env, stdio: ['ignore', fd, fd, 'ipc']
+        detached, cwd: flags.includes('change-cwd') ? '/' : undefined, env: service.env, stdio: ['ignore', fd, fd, 'ipc']
     });
     if (fd !== 'inherit') closeSync(fd);
     if (flags.includes('brief-child')) {

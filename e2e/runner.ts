@@ -180,7 +180,7 @@ if (!has('gates-only')) {
                     const budget = (c.budgetMin ?? DEFAULT_BUDGET) * 60_000;
                     const cmd = ['bun', join('e2e', c.harness), ...(c.args ?? []), '--no-deploy'];
                     if (engine) cmd.push('--base', engine);
-                    const r = await run(`[${i + 1}/${cases.length}] ${c.id}`, cmd, join(LOGS, `${c.id}.log`), budget, undefined, c.env);
+                    const r = await run(`[${i + 1}/${cases.length}] ${c.id}`, cmd, join(LOGS, `${c.id}.log`), budget, undefined, c.env, c.ownsServices);
                     now.results.push({ name: c.id, kind: 'harness', status: r.status, ms: r.ms, note: r.status === 'pass' ? '' : r.tail });
                     done += 1;
                     console.log(`  ${ICON[r.status]} [${done}/${cases.length}] ${c.id} (${mins(r.ms)})${r.status === 'pass' ? '' : `\n      ${r.tail}`}`);

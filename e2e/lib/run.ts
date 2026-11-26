@@ -1,10 +1,8 @@
 import { spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, renameSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { getSystemErrorName } from 'node:util';
+import { join, resolve } from 'node:path';
 import { errorTail } from '../../tools/lib/e2e-report.js';
-import { ownedService } from './ownedService.mjs';
 
 export type Status = 'pass' | 'fail' | 'timeout' | 'skip';
 
@@ -16,7 +14,7 @@ const CLEANUP_MS = 500;
 const active = new Set<() => void>();
 
 function openGroups() {
-    let prefix = join(tmpdir(), 'e2e-groups-');
+    let prefix = resolve(tmpdir(), 'e2e-groups-');
     // Why: macOS sockaddr_un has 104 bytes including the terminating NUL.
     if (Buffer.byteLength(prefix + 'XXXXXX/owner') >= 104) prefix = '/tmp/e2e-groups-';
     const dir = mkdtempSync(prefix);
@@ -63,18 +61,17 @@ function statusLine(label: string, started: number, last: string): void {
     else console.log(text);
 }
 
-export async function run(label: string, cmd: string[], logFile: string, budgetMs: number, verdict?: (text: string) => Status, caseEnv?: Readonly<Record<string, string>>): Promise<{ status: Status; ms: number; tail: string }> {
+export async function run(label: string, cmd: string[], logFile: string, budgetMs: number, verdict?: (text: string) => Status, caseEnv?: Readonly<Record<string, string>>, ownsServices = false): Promise<{ status: Status; ms: number; tail: string }> {
     const started = Date.now();
     const log = Bun.file(logFile).writer();
     let groups: ReturnType<typeof openGroups> | undefined;
     const launch = () => {
-        if (process.platform !== 'win32') groups = openGroups();
+        if (ownsServices && process.platform !== 'win32') groups = openGroups();
         const env = { ...process.env, HEADED: '0', ...caseEnv, E2E_SERVICE_GROUPS: groups?.dir };
-        const service = ownedService(cmd[0], env, groups?.dir);
-        return spawn(service.executablePath, cmd.slice(1), {
-            detached: !!groups,
+        return spawn(cmd[0], cmd.slice(1), {
+            detached: process.platform !== 'win32',
             stdio: ['ignore', 'pipe', 'pipe'],
-            env: service.env
+            env
         });
     };
     let proc: ReturnType<typeof launch>;
@@ -85,11 +82,22 @@ export async function run(label: string, cmd: string[], logFile: string, budgetM
         await log.end();
         throw error;
     }
+    let harnessGroup = process.platform !== 'win32' ? proc.pid : undefined;
+    proc.once('exit', () => {
+        if (harnessGroup && !groupExists(harnessGroup)) harnessGroup = undefined;
+    });
     let stoppingGroups: number[] = [];
     function stop(killHarness = true): void {
         if (!active.delete(stop)) return;
         if (groups) stoppingGroups = closeGroups(groups);
-        else if (killHarness) proc.kill('SIGKILL');
+        if (harnessGroup && groupExists(harnessGroup)) {
+            try {
+                process.kill(-harnessGroup, 'SIGKILL');
+                stoppingGroups.push(harnessGroup);
+            } catch (error) {
+                if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
+            }
+        } else if (killHarness && process.platform === 'win32') proc.kill('SIGKILL');
     }
     active.add(stop);
     const completion = Promise.withResolvers<number | null | 'timeout'>();
@@ -128,15 +136,6 @@ export async function run(label: string, cmd: string[], logFile: string, budgetM
     let code;
     try {
         code = await completion.promise;
-        if (groups && code === 127) {
-            const file = join(groups.dir, proc.pid + '.errno');
-            if (existsSync(file)) {
-                const errno = -Number(readFileSync(file, 'utf8'));
-                const code = getSystemErrorName(errno);
-                const syscall = 'spawn ' + cmd[0];
-                throw Object.assign(new Error(syscall + ' ' + code), { code, errno, syscall, path: cmd[0], spawnargs: cmd.slice(1) });
-            }
-        }
     } finally {
         clearTimeout(timer);
         proc.stdout?.destroy();

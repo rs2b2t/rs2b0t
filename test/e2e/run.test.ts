@@ -32,6 +32,31 @@ async function waitFor(check: () => boolean) {
 
 const serviceFixture = join(import.meta.dirname, 'fixtures/run-service.mjs');
 
+test.skipIf(process.platform === 'win32')('a detached service can change cwd under a relative TMPDIR', async () => {
+    mkdirSync(join(dir, 'tmp'));
+    const cmd = ['node', serviceFixture, 'parent', join(dir, 'service'), '10', 'detached', 'change-cwd'];
+    const script = `
+        import { run } from ${JSON.stringify(import.meta.resolve('../../e2e/lib/run.ts'))};
+        const result = await run('cwd', ${JSON.stringify(cmd)}, 'case.log', 1500, undefined, undefined, true);
+        console.log(result.status, result.tail);
+    `;
+    const owner = Bun.spawn([process.execPath, '--no-env-file', '-e', script], { cwd: dir, env: { ...process.env, TMPDIR: 'tmp' } });
+    expect(await new Response(owner.stdout).text()).toContain('pass ready | survived');
+    expect(await owner.exited).toBe(0);
+});
+
+test.skipIf(process.platform === 'win32')('ordinary commands allocate no ownership files at startup', async () => {
+    const script = `
+        import { run } from ${JSON.stringify(import.meta.resolve('../../e2e/lib/run.ts'))};
+        run('true', ['/usr/bin/true'], 'case.log', 1500);
+        process.kill(process.pid, 'SIGKILL');
+    `;
+    const owner = Bun.spawn([process.execPath, '--no-env-file', '-e', script], { cwd: dir, env: { ...process.env, TMPDIR: dir } });
+    await owner.exited;
+    expect(owner.signalCode).toBe('SIGKILL');
+    expect(readdirSync(dir).filter(file => file.startsWith('e2e-groups-'))).toEqual([]);
+});
+
 test.skipIf(process.platform === 'win32')('a harness can reap all its children before exiting', async () => {
     const script = 'import os\nif os.fork() == 0: os._exit(0)\ntry:\n while True: os.wait()\nexcept ChildProcessError: pass';
     expect((await run('wait', ['/usr/bin/python3', '-I', '-c', script], join(dir, 'log'), 1000)).status).toBe('pass');
@@ -62,7 +87,7 @@ test.skipIf(process.platform === 'win32')('a detached service starts under a lon
     const previous = process.env.TMPDIR;
     process.env.TMPDIR = longDir;
     try {
-        const result = await run('long', ['node', serviceFixture, 'parent', join(dir, 'service'), '10', 'detached'], join(dir, 'log'), 1500);
+        const result = await run('long', ['node', serviceFixture, 'parent', join(dir, 'service'), '10', 'detached'], join(dir, 'log'), 1500, undefined, undefined, true);
         expect(result.status).toBe('pass');
         expect(result.tail).toContain('survived');
     } finally {
@@ -74,8 +99,8 @@ test.skipIf(process.platform === 'win32')('a detached service starts under a lon
 test.skipIf(process.platform === 'win32')('teardown tolerates an owned service and its last child exiting early', async () => {
     const prefix = join(dir, 'short');
     const cmd = ['node', serviceFixture, 'parent'];
-    const sibling = run('sibling', [...cmd, join(dir, 'sibling'), '1800', 'detached'], join(dir, 'sibling.log'), 5000);
-    const harness = run('short', [...cmd, prefix, '0', 'detached', 'private', 'brief-child'], join(dir, 'case'), 5000);
+    const sibling = run('sibling', [...cmd, join(dir, 'sibling'), '1800', 'detached'], join(dir, 'sibling.log'), 5000, undefined, undefined, true);
+    const harness = run('short', [...cmd, prefix, '0', 'detached', 'private', 'brief-child'], join(dir, 'case'), 5000, undefined, undefined, true);
     let leader: number;
     let last: number;
     try {
@@ -111,9 +136,9 @@ test.skipIf(process.platform === 'win32').each([
     const prefix = join(dir, 'service');
     const runtime = flags.includes('private') ? [process.execPath, '--no-env-file'] : ['node'];
     const cmd = [...runtime, serviceFixture, 'parent'];
-    const concurrent = run('concurrent', [...cmd, join(dir, 'sibling'), '1800', 'detached'], join(dir, 'concurrent'), 4000);
+    const concurrent = run('concurrent', [...cmd, join(dir, 'sibling'), '1800', 'detached'], join(dir, 'concurrent'), 4000, undefined, undefined, true);
     const start = performance.now();
-    const result = await run('case', [...cmd, prefix, '6000', 'lock', ...flags], join(dir, 'case'), 1500, () => 'pass');
+    const result = await run('case', [...cmd, prefix, '6000', 'lock', ...flags], join(dir, 'case'), 1500, () => 'pass', undefined, flags.includes('detached'));
     const elapsed = performance.now() - start;
     const serviceExited = exited(Number(readFileSync(prefix + '.pid', 'utf8')));
     const lock = spawnSync('/usr/bin/python3', ['-I', '-c', 'import fcntl, sys; fcntl.flock(open(sys.argv[1], "r+"), fcntl.LOCK_EX | fcntl.LOCK_NB)', prefix + '.lock']);
@@ -215,7 +240,7 @@ test.skipIf(process.platform === 'win32')('runner exit stops registered services
         import { run, stopRuns } from ${JSON.stringify(import.meta.resolve('../../e2e/lib/run.ts'))};
         process.once('exit', stopRuns);
         import { existsSync } from 'node:fs';
-        run('interrupted', ${JSON.stringify(['node', serviceFixture, 'parent', join(dir, 'service'), '6000', 'detached', 'private'])}, ${JSON.stringify(log)}, 8000);
+        run('interrupted', ${JSON.stringify(['node', serviceFixture, 'parent', join(dir, 'service'), '6000', 'detached', 'private'])}, ${JSON.stringify(log)}, 8000, undefined, undefined, true);
         const pidFile = ${JSON.stringify(join(dir, 'service.pid'))};
         const deadline = Date.now() + 3000;
         while (!existsSync(pidFile) && Date.now() < deadline) await Bun.sleep(10);
@@ -235,7 +260,7 @@ test.skipIf(process.platform === 'win32').each(['SIGHUP', 'SIGKILL'] as const)('
     const cmd = ['node', serviceFixture, 'parent', prefix, '4000', 'detached', 'exit'];
     const script = `
         import { run } from ${JSON.stringify(import.meta.resolve('../../e2e/lib/run.ts'))};
-        await run('interrupted', ${JSON.stringify(cmd)}, ${JSON.stringify(join(dir, 'case.log'))}, 8000);
+        await run('interrupted', ${JSON.stringify(cmd)}, ${JSON.stringify(join(dir, 'case.log'))}, 8000, undefined, undefined, true);
     `;
     const owner = Bun.spawn([process.execPath, '--no-env-file', '-e', script], { env: { ...process.env, TMPDIR: dir } });
     try {
@@ -257,9 +282,9 @@ test.skipIf(process.platform === 'win32').each(['SIGHUP', 'SIGKILL'] as const)('
     await waitFor(() => readdirSync(dir).every(file => !file.startsWith('e2e-groups-')));
 });
 
-test.skipIf(process.platform === 'win32')('SIGHUP stops the live runner gate and removes its ownership directory', async () => {
+test.skipIf(process.platform === 'win32')('SIGHUP stops the live runner gate', async () => {
     writeFileSync(join(dir, 'git'), '#!/bin/sh\necho fixture\n', { mode: 0o755 });
-    writeFileSync(join(dir, 'bun'), '#!/bin/sh\necho "$E2E_SERVICE_GROUPS" > groups\necho "$$" > pid\nexec /bin/sleep 6\n', { mode: 0o755 });
+    writeFileSync(join(dir, 'bun'), '#!/bin/sh\necho "$$" > pid\nexec /bin/sleep 6\n', { mode: 0o755 });
     const pidFile = join(dir, 'pid');
     const runner = Bun.spawn([process.execPath, '--no-env-file', join(import.meta.dirname, '../../e2e/runner.ts'), '--gates-only'], {
         cwd: dir, env: { PATH: dir, TMPDIR: dir }, stdout: 'ignore', stderr: 'inherit'
@@ -271,12 +296,10 @@ test.skipIf(process.platform === 'win32')('SIGHUP stops the live runner gate and
         await runner.exited;
     }
     const pid = Number(readFileSync(pidFile, 'utf8'));
-    const groups = readFileSync(join(dir, 'groups'), 'utf8').trimEnd();
     try {
         expect(runner.exitCode).toBe(129);
-        await waitFor(() => exited(pid) && !existsSync(groups));
+        await waitFor(() => exited(pid));
     } finally {
         if (!exited(pid)) process.kill(pid, 'SIGKILL');
-        rmSync(groups, { recursive: true, force: true });
     }
 });
