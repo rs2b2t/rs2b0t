@@ -4,7 +4,7 @@ export const WORLDS = [
     { number: 3, nodeId: 12, origin: 'https://w3.rs2b2t.com' }
 ] as const;
 
-export type WorldNumber = 1 | 2 | 3;
+export type WorldNumber = (typeof WORLDS)[number]['number'];
 
 export type BotMode = 'single' | 'wall';
 
@@ -13,20 +13,27 @@ export function hostedWorld(host: string) {
     return WORLDS.find(world => new URL(world.origin).hostname === hostname);
 }
 
-export function resolveWorldNumber(host: string, params: URLSearchParams): WorldNumber {
-    if (params.has('world')) {
+function explicitWorld(params: URLSearchParams, number?: WorldNumber) {
+    let world;
+    if (number != null) {
+        world = WORLDS.find(candidate => candidate.number === number);
+    } else {
         const values = params.getAll('world');
-        if (values.length !== 1 || (values[0] !== '1' && values[0] !== '2' && values[0] !== '3')) {
-            throw new Error('world must be 1, 2 or 3');
+        if (values.length === 0) return undefined;
+        if (values.length === 1) {
+            world = WORLDS.find(candidate => String(candidate.number) === values[0]);
         }
-        return Number(values[0]) as WorldNumber;
     }
-    return hostedWorld(host)?.number ?? 1;
+    if (!world) throw new Error('world must be 1, 2 or 3');
+    return world;
+}
+
+export function resolveWorldNumber(host: string, params: URLSearchParams): WorldNumber {
+    return (explicitWorld(params) ?? hostedWorld(host))?.number ?? 1;
 }
 
 export function resolveNodeId(host: string, params: URLSearchParams): number {
-    if (params.has('world')) return resolveWorldNumber(host, params) + 9;
-    const world = hostedWorld(host);
+    const world = explicitWorld(params) ?? hostedWorld(host);
     if (world) {
         return world.nodeId;
     }
@@ -68,12 +75,11 @@ export function worldSwitchUrl(number: number, mode: BotMode, current: URL): URL
 export function botFrameUrl(wall: URL, username: string, world?: WorldNumber): URL {
     const url = new URL('bot.html', wall);
     copyOptions(wall.searchParams, url.searchParams);
-    const selected = world ?? (wall.searchParams.has('world') ? resolveWorldNumber(wall.host, wall.searchParams) : undefined);
-    if (selected !== undefined) {
-        if (selected !== 1 && selected !== 2 && selected !== 3) throw new Error('world must be 1, 2 or 3');
-        url.searchParams.set('world', String(selected));
+    const selected = explicitWorld(wall.searchParams, world);
+    if (selected) {
+        url.searchParams.set('world', String(selected.number));
     }
-    url.searchParams.set('nodeid', String(selected === undefined ? resolveNodeId(wall.host, wall.searchParams) : selected + 9));
+    url.searchParams.set('nodeid', String(selected?.nodeId ?? resolveNodeId(wall.host, wall.searchParams)));
     url.searchParams.set('box', username);
     return url;
 }
