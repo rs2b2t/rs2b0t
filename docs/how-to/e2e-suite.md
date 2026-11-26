@@ -145,5 +145,6 @@ choose the JSON and screenshot directory. The default is
 
 - [The live-harness ABI](write-a-harness.md)
 - [GnomeMagicChopper full-pack Strange fruit](gnome-magic-full-pack-fruit.md)
+- [FireGiant last food](firegiant-last-food.md)
 - [Test suites](../reference/test-suites.md)
 - [Brimhaven landing plank harness](brimhaven-landing-plank.md)
