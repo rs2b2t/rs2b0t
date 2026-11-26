@@ -33,7 +33,7 @@ const versionlist = {
 
 class WorkerFixture {
     constructor(_url: URL, readonly options: WorkerOptions) {}
-    postMessage(_message: { type: string; id?: number; archive?: number; file?: number }) {}
+    postMessage(_message: { type: string; id?: number; archive?: number; file?: number; files?: number[] }) {}
     terminate() {}
 }
 
@@ -142,9 +142,11 @@ test('worker load failure reaches the startup error screen while requesting anim
 async function checkStartupAssets(optional: boolean, responseDelay?: number) {
     const files = {
         read(name: string) {
+            if (name === 'model_version') return Uint8Array.of(0, 1, 0, 1, 0, 0);
+            if (name === 'model_crc') return new Uint8Array(12);
             if (name.endsWith('_version')) return Uint8Array.of(0, 1);
             if (name.endsWith('_crc')) return new Uint8Array(4);
-            if (name === 'model_index') return Uint8Array.of(1);
+            if (name === 'model_index') return Uint8Array.of(1, 2, 1);
             if (name === 'map_index') return Uint8Array.of(48, 47, 0, 0, 0, 0, 0);
             return new Uint8Array();
         }
@@ -181,13 +183,16 @@ async function checkStartupAssets(optional: boolean, responseDelay?: number) {
     });
     spyOn(console, 'error').mockImplementation(() => {});
     const requests: number[][] = [];
-    spyOn(WorkerFixture.prototype, 'postMessage').mockImplementation((message) => {
+    const posts = spyOn(WorkerFixture.prototype, 'postMessage').mockImplementation((message) => {
         if (message.type === 'prefetchPriority') {
             client['onDemand']!.worker!.onmessage!(new MessageEvent('message', { data: { type: 'ack', id: message.id } }));
-        } else if (message.type === 'request' && message.archive !== undefined && message.file !== undefined) {
-            const { archive, file } = message;
-            requests.push([archive, file]);
-            const reply = () => completeFile(client['onDemand']!, archive, file, Uint8Array.of(archive, file));
+        } else if ((message.type === 'request' || message.type === 'requestBatch') && message.archive !== undefined) {
+            const { archive } = message;
+            const files = message.files ?? [message.file!];
+            for (const file of files) requests.push([archive, file]);
+            const reply = () => {
+                for (const file of files) completeFile(client['onDemand']!, archive, file, Uint8Array.of(archive, file));
+            };
             if (responseDelay === undefined) deliver = reply;
             else setTimeout(reply, responseDelay);
         }
@@ -205,6 +210,10 @@ async function checkStartupAssets(optional: boolean, responseDelay?: number) {
     if (optional) stages.push(['Requesting maps', 75]);
     expect(progress).toEqual([...stages, ['Unpacking media', 80]]);
     expect(requests).toEqual(optional ? [[2, 0], [1, 0], [0, 0], [3, 0]] : [[1, 0], [0, 0]]);
+    expect(posts.mock.calls.map(([message]) => message).filter(message => message.type === 'requestBatch')).toEqual([
+        { type: 'requestBatch', archive: 1, files: [0] },
+        { type: 'requestBatch', archive: 0, files: [0] }
+    ]);
     expect(animation.mock.calls).toEqual([[Uint8Array.of(1, 0)]]);
     expect(model.mock.calls).toEqual([[0, Uint8Array.of(0, 0)]]);
     expect(saveMidi.mock.calls).toEqual(optional ? [[Uint8Array.of(2, 0), true]] : []);
@@ -279,6 +288,18 @@ test('a healthy worker delivers the requested animation exactly once', async () 
     expect(loader.loop()).toMatchObject({ archive: 1, file: 0, data: Uint8Array.of(42) });
     expect(loader.remaining()).toBe(0);
     expect(loader.loop()).toBeNull();
+});
+
+test.each([0, 32, 35])('startup batches %i animations and suppresses pending duplicates', count => {
+    const loader = loaderFixture();
+    loader.versions[1] = new Uint16Array(count).fill(1);
+    const post = spyOn(WorkerFixture.prototype, 'postMessage');
+    loader.requestStartupFiles(1);
+    loader.requestStartupFiles(1);
+    const files = Array.from({ length: count }, (_, file) => file);
+    const batches = [files.slice(0, 32), files.slice(32)].filter(ids => ids.length);
+    expect(post.mock.calls.map(([message]) => message)).toEqual(batches.map(files => ({ type: 'requestBatch', archive: 1, files })));
+    expect(loader.remaining()).toBe(count);
 });
 
 test('requests stay distinct by archive and suppress duplicates until drained', () => {

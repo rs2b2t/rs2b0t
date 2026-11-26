@@ -907,9 +907,7 @@ export class Client extends GameShell {
             await this.drawProgress('Requesting animations', 65);
 
             const animCount = this.onDemand.getFileCount(1);
-            for (let i = 0; i < animCount; i++) {
-                this.onDemand.request(1, i);
-            }
+            this.onDemand.requestStartupFiles(1);
 
             while (this.onDemand.remaining() > 0) {
                 const progress = animCount - this.onDemand.remaining();
@@ -925,13 +923,7 @@ export class Client extends GameShell {
 
             await this.drawProgress('Requesting models', 70);
 
-            const modelCount = this.onDemand.getFileCount(0);
-            for (let i = 0; i < modelCount; i++) {
-                const flags = this.onDemand.getModelUse(i);
-                if ((flags & 0x1) != 0) {
-                    this.onDemand.request(0, i);
-                }
-            }
+            this.onDemand.requestStartupFiles(0);
 
             const modelPrefetch = this.onDemand.remaining();
             while (this.onDemand.remaining() > 0) {
