@@ -286,6 +286,29 @@ test('a generated descent is unreachable when only another floor has stairs', ()
     runEnricher(['--check']);
 });
 
+test('a generated dungeon descent requires a down action at the surface entrance', () => {
+    placeStairs('0 5 5: 1 10\n', '1=stairs\n', '[stairs]\nname=Stairs\nop1=Walk-Up\n');
+    const from = { x: 3205, z: 3205, level: 0 };
+    const edge = { from, to: { ...from, z: 9605 }, locName: 'Stairs', action: 'Climb-down', kind: 'dungeon' };
+    const edges = enrich([{ ...edge, autoReverse: true }]);
+    expect(edges).toEqual([{ ...edge, options: ['Climb-down'], disabledReason: expect.any(String) }]);
+    runEnricher(['--check']);
+});
+
+test('a generated dungeon descent with different action casing keeps the scripted landing', () => {
+    placeStairs('0 5 5: 1 10\n', '1=stairs\n', '[stairs]\nname=Stairs\nop1=Walk-Down\n');
+    const loc = { x: 3205, z: 3205, level: 0 };
+    const scripted = {
+        from: { ...loc, x: 3204 }, to: { ...loc, x: 3208, z: 9605 }, locName: 'Stairs', action: 'Walk-Down', kind: 'dungeon'
+    };
+    const edges = enrich([
+        { ...scripted, to: { ...loc, z: 9605 }, action: 'Walk-down', autoReverse: true },
+        { ...scripted, scriptedLocs: [{ ...loc, debugName: 'stairs', action: scripted.action }] }
+    ]);
+    expect(edges).toEqual([{ ...scripted, locX: loc.x, locZ: loc.z, locId: 1, debugName: 'stairs', options: ['Walk-Down'] }]);
+    runEnricher(['--check']);
+});
+
 test('a snapped edge retains each distinct scripted placement with the same landing', () => {
     placeStairs('0 5 9: 1 10\n0 7 9: 1 10\n');
     const from = { x: 3206, z: 3209, level: 0 };

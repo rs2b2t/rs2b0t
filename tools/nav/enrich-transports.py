@@ -166,6 +166,8 @@ def resolve_source_loc(
     configs: dict[int, LocConfig],
     candidates: Iterable[tuple[int, Placement]],
     allowed_stair_debugs: set[str],
+    *,
+    generated_stair: bool,
 ) -> tuple[LocConfig, Placement] | None:
     wanted_name = normalized(edge.get("locName"))
     wanted_action = normalized(edge.get("action"))
@@ -215,11 +217,7 @@ def resolve_source_loc(
                 or (kind in {"dungeon", "shortcut"} and action_match)
             )
 
-            # Stairs must expose the exact action; otherwise an auto-generated
-            # reverse edge can be incorrectly attached to an up-only ladder.
-            if kind == "stair" and not action_match:
-                continue
-            if kind != "stair" and not (name_match or action_match):
+            if not action_match and (generated_stair or kind == "stair" or not name_match):
                 continue
             score = 0
             if name_match:
@@ -368,9 +366,9 @@ def main() -> None:
             edge = {**raw, "action": key[-1]}
             stair_rows.append((edge, resolved))
             if raw.get("scriptedLocs"):
-                scripted_edges[key].append(edge)
+                scripted_edges[(*key[:-1], normalized(edge["action"]))].append(edge)
 
-    def enrich(rows: Iterable[tuple[dict, tuple[LocConfig, Placement] | None]], *, source_floor_only: bool) -> list[dict]:
+    def enrich(rows: Iterable[tuple[dict, tuple[LocConfig, Placement] | None]], *, generated_stairs: bool) -> list[dict]:
         enriched: list[dict] = []
         for raw, resolved in rows:
             edge = dict(raw)
@@ -386,13 +384,13 @@ def main() -> None:
                 enriched.append(edge)
                 continue
             if resolved is None and not scripted_locs:
-                levels = (edge["from"]["level"],) if source_floor_only else range(4)
+                levels = (edge["from"]["level"],) if generated_stairs else range(4)
                 candidates = candidates_near(spatial, edge["from"], levels)
-                resolved = resolve_source_loc(edge, configs, candidates, allowed_stair_debugs)
+                resolved = resolve_source_loc(edge, configs, candidates, allowed_stair_debugs, generated_stair=generated_stairs)
             if resolved:
                 config, placement = resolved
                 if auto_reverse and not edge.get("disabledReason"):
-                    key = (placement.x, placement.z, placement.level, config.debug_name, edge["action"])
+                    key = (placement.x, placement.z, placement.level, config.debug_name, normalized(edge["action"]))
                     matches = scripted_edges.get(key, [])
                     if matches and all(e["to"] == matches[0]["to"] for e in matches):
                         if any(e["from"] == edge["from"] for e in matches):
@@ -417,8 +415,8 @@ def main() -> None:
             enriched.append(edge)
         return enriched
 
-    enriched_curated = enrich(((edge, None) for edge in curated), source_floor_only=False)
-    enriched_stairs = enrich(stair_rows, source_floor_only=True)
+    enriched_curated = enrich(((edge, None) for edge in curated), generated_stairs=False)
+    enriched_stairs = enrich(stair_rows, generated_stairs=True)
 
     def write_json(path: Path, edges: list[dict]) -> None:
         text = "[\n" + ",\n".join("    " + json.dumps(edge, separators=(",", ":")) for edge in edges) + "\n]\n"
