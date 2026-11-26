@@ -6,7 +6,9 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const artifacts = [...['botclient', 'ondemandworker', 'navworker', 'multibox'].flatMap(name => [`${name}.js`, `${name}.js.map`]), 'tinymidipcm.wasm', 'version.json'];
+import { browserBundleArtifacts, browserBundles } from '../fixtures/browser-bundles.js';
+
+const artifacts = [...browserBundleArtifacts, 'tinymidipcm.wasm', 'version.json'];
 
 const repo = join(import.meta.dir, '../..');
 
@@ -80,8 +82,8 @@ cp current/* "$dir/"
 }
 
 const workers = {
-    ondemandworker: 'src/client/io/OnDemandWorker.ts',
-    navworker: 'src/bot/event/webwalk/NavWorker.ts'
+    ondemandworker: browserBundles['ondemandworker.js'],
+    navworker: browserBundles['navworker.js']
 };
 
 for (const [changed, entry] of Object.entries(workers)) {
@@ -92,9 +94,9 @@ for (const [changed, entry] of Object.entries(workers)) {
             symlinkSync(join(repo, 'bot.bundle.ts'), join(root, 'bot.bundle.ts'));
             await Bun.write(join(root, 'package.json'), JSON.stringify({ type: 'module', scripts: { 'build:bot': 'bun --no-install bot.bundle.ts' } }));
             await Bun.write(join(root, 'src/client/3rdparty/tinymidipcm/tinymidipcm.wasm'), '');
-            await Bun.write(join(root, 'src/bot/multibox/main.ts'), '');
+            await Bun.write(join(root, browserBundles['multibox.js']), '');
             await Bun.write(
-                join(root, 'src/bot/main.ts'),
+                join(root, browserBundles['botclient.js']),
                 `
                 import OnDemand from ${JSON.stringify(join(repo, 'src/client/io/OnDemand.ts'))};
                 import { NavWorkerClient } from ${JSON.stringify(join(repo, 'src/bot/event/webwalk/NavWorkerClient.ts'))};
