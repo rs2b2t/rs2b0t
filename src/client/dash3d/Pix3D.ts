@@ -2,7 +2,7 @@ import Pix2D from '#/client/graphics/Pix2D.js';
 import Pix8 from '#/client/graphics/Pix8.js';
 
 import JagFile from '#/client/io/JagFile.js';
-import { Int32Array2d, TypedArray1d } from '#/client/util/Arrays.js';
+import { TypedArray1d } from '#/client/util/Arrays.js';
 
 export default class Pix3D extends Pix2D {
     static lowMem: boolean = false;
@@ -25,7 +25,8 @@ export default class Pix3D extends Pix2D {
     static originY: number = 0;
     static texelPool: (Int32Array | null)[] | null = null;
     static poolSize: number = 0;
-    private static texelBuffers: Int32Array[] = [];
+    private static texelBuffers: (Int32Array | null)[] = [];
+    private static texelLength = 0;
     private static retainedPoolSize = 0;
     private static opaque: boolean = false;
 
@@ -78,8 +79,9 @@ export default class Pix3D extends Pix2D {
         }
 
         const texelLength = this.lowMem ? 16384 : 65536;
-        if (this.texelBuffers.length !== size || this.texelBuffers[0]?.length !== texelLength) {
-            this.texelBuffers = new Int32Array2d(size, texelLength);
+        if (this.texelBuffers.length !== size || this.texelLength !== texelLength) {
+            this.texelLength = texelLength;
+            this.texelBuffers = new TypedArray1d(size, null);
             this.retainedPoolSize = 0;
         } else {
             this.retainedPoolSize = size;
@@ -159,6 +161,10 @@ export default class Pix3D extends Pix2D {
             if (this.poolSize < this.retainedPoolSize) {
                 this.retainedPoolSize = this.poolSize;
                 if (!texture || !palette) texels?.fill(0);
+            }
+            if (!texels) {
+                texels = new Int32Array(this.texelLength);
+                this.texelBuffers[this.poolSize] = texels;
             }
         } else {
             let cycle: number = 0;
