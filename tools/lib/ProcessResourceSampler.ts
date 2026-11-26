@@ -2,6 +2,7 @@ import { execFile as execFileCallback } from 'node:child_process';
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { cpus } from 'node:os';
 import { promisify } from 'node:util';
+import { SampleQueue } from './SampleQueue.js';
 
 export type ProcessMemorySource = 'pss' | 'rss';
 export type AggregateMemorySource = ProcessMemorySource | 'unavailable';
@@ -133,7 +134,7 @@ export class ProcessResourceSampler {
     private readonly now: () => number;
     private registeredRootIdentity: string | null = null;
     private previous: PreviousSample | null = null;
-    private samplingTail: Promise<void> = Promise.resolve();
+    private readonly sampleQueue = new SampleQueue();
 
     constructor(options: ProcessResourceSamplerOptions) {
         this.rootPid = options.rootPid;
@@ -142,12 +143,7 @@ export class ProcessResourceSampler {
     }
 
     sample(): Promise<ProcessResourceSample> {
-        const result = this.samplingTail.then(() => this.sampleOnce());
-        this.samplingTail = result.then(
-            () => undefined,
-            () => undefined
-        );
-        return result;
+        return this.sampleQueue.enqueue(() => this.sampleOnce());
     }
 
     private async sampleOnce(): Promise<ProcessResourceSample> {
