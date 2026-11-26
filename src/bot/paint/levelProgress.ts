@@ -1,23 +1,15 @@
 // RuneScape experience curve, for "how far to the next level" readouts.
 
+import { buildExperienceThresholds, MAX_LEVEL } from '#/shared/experience.js';
+
 import { fmtDuration, fmtXpHr, paintSkillShort } from './paintLogic.js';
 
-// Why: the curve is the classic sum of `floor(l + 300 * 2^(l/7)) / 4`, so the table is built once rather than transcribed and left to drift.
-const MAX_LEVEL = 99;
-
-const XP_AT_LEVEL: number[] = (() => {
-    const out = [0, 0];
-    let points = 0;
-    for (let level = 1; level < MAX_LEVEL; level++) {
-        points += Math.floor(level + 300 * Math.pow(2, level / 7));
-        out[level + 1] = Math.floor(points / 4);
-    }
-    return out;
-})();
+const EXPERIENCE_THRESHOLDS = buildExperienceThresholds();
 
 /** Total experience required to reach `level` (1–99). */
 export function xpAtLevel(level: number): number {
-    return XP_AT_LEVEL[Math.min(MAX_LEVEL, Math.max(1, Math.floor(level)))] ?? 0;
+    const clampedLevel = Math.min(MAX_LEVEL, Math.max(1, Math.floor(level)));
+    return EXPERIENCE_THRESHOLDS[clampedLevel - 2] ?? 0;
 }
 
 interface LevelProgress {
