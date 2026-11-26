@@ -44,7 +44,7 @@ if ((TARGET_NAME === 'live' || TARGET_NAME === 'proxy' || TARGET_NAME === 'prod'
 
 const identity = resolveBuildIdentity();
 
-const define = {
+const define: Record<string, string> = {
     'process.env.SECURE_ORIGIN': JSON.stringify(process.env.SECURE_ORIGIN ?? 'false'),
     'process.env.RS2B0T_TARGET': JSON.stringify(TARGET_NAME),
     'process.env.LOGIN_RSAE': JSON.stringify(rsa.rsae),
@@ -63,17 +63,18 @@ fs.mkdirSync(out, { recursive: true });
 
 fs.copyFileSync('src/client/3rdparty/tinymidipcm/tinymidipcm.wasm', join(out, 'tinymidipcm.wasm'));
 
-const entrypoints: [entry: string, output: string][] = [
+const entrypoints: [entry: string, output: string, workerUrlDefine?: string][] = [
+    ['src/client/io/OnDemandWorker.ts', 'ondemandworker.js', 'ONDEMAND_WORKER_URL'],
+    ['src/bot/event/webwalk/NavWorker.ts', 'navworker.js', 'NAV_WORKER_URL'],
     ['src/bot/main.ts', 'botclient.js'],
-    ['src/bot/multibox/main.ts', 'multibox.js'],
-    ['src/client/io/OnDemandWorker.ts', 'ondemandworker.js'],
-    ['src/bot/event/webwalk/NavWorker.ts', 'navworker.js']
+    ['src/bot/multibox/main.ts', 'multibox.js']
 ];
 
-for (const [entry, output] of entrypoints) {
+for (const [entry, output, workerUrlDefine] of entrypoints) {
     const build = await Bun.build({
         entrypoints: [entry],
-        sourcemap: 'external',
+        naming: output,
+        sourcemap: 'linked',
         define,
         minify: prod
     });
@@ -83,15 +84,15 @@ for (const [entry, output] of entrypoints) {
         process.exit(1);
     }
 
-    let source = await build.outputs[0].text();
+    const source = await build.outputs[0].text();
     const sourcemap = build.outputs[0].sourcemap ? await build.outputs[0].sourcemap.text() : '';
-
-    // the bundle is renamed on disk; keep the sourcemap pointer in sync
-    const generatedName = build.outputs[0].path.split('/').pop()!;
-    source = source.replace(`sourceMappingURL=${generatedName}.map`, `sourceMappingURL=${output}.map`);
 
     fs.writeFileSync(join(out, output), source);
     fs.writeFileSync(join(out, `${output}.map`), sourcemap);
+    if (workerUrlDefine && TARGET_NAME === 'prod') {
+        const hash = createHash('sha256').update(source).digest('hex').slice(0, 10);
+        define[workerUrlDefine] = JSON.stringify(`./${output}?v=${hash}`);
+    }
 }
 
 writeVersionJson(join(out, 'version.json'), identity);

@@ -8,7 +8,7 @@
 
 // The harness builds and deploys its own isolated client; no manual redeploy needed.
 import type { Page } from 'playwright-core';
-import { deployIsolatedClient, launchBrowser, parseArgs } from './lib/harness.js';
+import { deployIsolatedClient, fail, launchBrowser, parseArgs } from './lib/harness.js';
 import { cheatQuiet, clearChatDialogs, mainlandAccount, maxmeAndClearDialogs, startScript, seedItemsToBank } from './tutorial/harness.js';
 
 const { base } = parseArgs(process.argv.slice(2), { base: process.env.BASE ?? 'http://localhost:8890' });
@@ -77,11 +77,6 @@ type Abi = {
         registry: { get(n: string): unknown };
     };
 };
-
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
-}
 
 const t0 = Date.now();
 const at = (): string => `[${Math.round((Date.now() - t0) / 1000)}s]`;

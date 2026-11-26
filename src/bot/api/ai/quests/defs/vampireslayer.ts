@@ -1,3 +1,4 @@
+import { customStep, talkTo, waitForJournal, waitStep } from '../engine/questSteps.js';
 import { Modals } from '../../../ui/widgets/Modals.js';
 import { findSceneTarget } from '../exec/prompts.js';
 import { Execution } from '../../../execution/Execution.js';
@@ -10,6 +11,7 @@ import { Locs } from '../../../locs/Locs.js';
 import { Npcs } from '../../../npcs/Npcs.js';
 import { Traversal } from '../../../walking/Traversal.js';
 import { QUESTS } from '../data/quests.js';
+import { bankedName as banked, hasName as held, heldName as heldCount, wornName as worn } from '../engine/snapshotItems.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { talkThrough, type NpcStop } from '../exec/primitives.js';
 import { GARLIC, MORGAN_STAIRS_TOP, takeGarlic } from '../exec/garlic.js';
@@ -123,11 +125,6 @@ export function vampireSlayerArea(tile: QuestSnapshot['tile']): VampireSlayerAre
     return 'unknown';
 }
 
-const heldCount = (snap: QuestSnapshot, name: string): number => snap.inv.get(name.toLowerCase()) ?? 0;
-const held = (snap: QuestSnapshot, name: string): boolean => heldCount(snap, name) > 0;
-const banked = (snap: QuestSnapshot, name: string): number => snap.bank?.get(name.toLowerCase()) ?? 0;
-const worn = (snap: QuestSnapshot, name: string): boolean => snap.worn.has(name.toLowerCase());
-
 function foodNames(): string[] {
     const configured = QuestFood.name?.trim();
     const names = [configured, ...BANK_FOODS].filter((name): name is string => Boolean(name));
@@ -176,7 +173,7 @@ function sourceCoins(snap: QuestSnapshot): QuestStep | null {
     // One 5k withdrawal covers the beer, hammer, sword and kebabs; don't cross the map to refill a couple of coins.
     if (inPack >= COIN_RESERVE) return null;
     const inBank = banked(snap, 'Coins');
-    if (inBank <= 0) return { kind: 'wait', reason: 'need coins for Vampire Slayer supplies' };
+    if (inBank <= 0) return waitStep('need coins for Vampire Slayer supplies');
     const space = inPack === 0 ? makeSpace(snap, 1) : null;
     return space ?? withdraw([{ name: 'Coins', qty: Math.min(COIN_FLOAT - inPack, inBank) }]);
 }
@@ -344,14 +341,14 @@ function completeCombatLoadout(snap: QuestSnapshot): boolean {
 
 function stageTwo(snap: QuestSnapshot, area: VampireSlayerArea): QuestStep {
     if (area === 'crypt' && !completeCombatLoadout(snap)) {
-        return { kind: 'custom', name: 'leave the crypt to recover supplies', run: leaveCrypt };
+        return customStep('leave the crypt to recover supplies', leaveCrypt);
     }
     if (area === 'morganUpper') {
         return held(snap, ITEM.GARLIC)
-            ? { kind: 'custom', name: "leave Morgan's upper floor", run: leaveMorganUpper }
-            : { kind: 'custom', name: "take garlic from Morgan's cupboard", run: takeGarlic };
+            ? customStep("leave Morgan's upper floor", leaveMorganUpper)
+            : customStep("take garlic from Morgan's cupboard", takeGarlic);
     }
-    if (area === 'unknown') return { kind: 'wait', reason: 'return to the mainland to resume Vampire Slayer' };
+    if (area === 'unknown') return waitStep('return to the mainland to resume Vampire Slayer');
     if (!snap.bankKnown) return scanBank();
     const normalize = normalizePack(snap);
     if (normalize) return normalize;
@@ -360,17 +357,15 @@ function stageTwo(snap: QuestSnapshot, area: VampireSlayerArea): QuestStep {
         if (banked(snap, ITEM.STAKE) > 0) {
             return makeSpace(snap, 1) ?? withdraw([{ name: ITEM.STAKE, qty: 1 }]);
         }
-        if (held(snap, ITEM.BEER)) return { kind: 'talk', stop: HARLOW_STAKE };
+        if (held(snap, ITEM.BEER)) return talkTo(HARLOW_STAKE);
         if (banked(snap, ITEM.BEER) > 0) {
             return makeSpace(snap, 1) ?? withdraw([{ name: ITEM.BEER, qty: 1 }]);
         }
         const coins = sourceCoins(snap);
-        return coins ?? { kind: 'custom', name: 'buy Dr Harlow a Beer', run: buyBeer };
+        return coins ?? customStep('buy Dr Harlow a Beer', buyBeer);
     }
 
-    const garlic = sourceBankedOr(snap, ITEM.GARLIC, () => ({
-        kind: 'custom', name: "take garlic from Morgan's cupboard", run: takeGarlic
-    }));
+    const garlic = sourceBankedOr(snap, ITEM.GARLIC, () => customStep("take garlic from Morgan's cupboard", takeGarlic));
     if (garlic) return garlic;
 
     const hammer = sourceBankedOr(snap, ITEM.HAMMER, () => {
@@ -389,42 +384,40 @@ function stageTwo(snap: QuestSnapshot, area: VampireSlayerArea): QuestStep {
         return { kind: 'buy', item: ITEM.SWORD, qty: 1, shop: VARROCK_SWORDS, estGp: 1000 };
     }
 
-    return { kind: 'custom', name: 'enter the crypt and defeat Count Draynor', run: fightCount };
+    return customStep('enter the crypt and defeat Count Draynor', fightCount);
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'complete' || (snap.stage ?? 0) >= VAMPIRE_SLAYER_STAGE.COMPLETE) {
         return { kind: 'done' };
     }
-    if (snap.journal === 'unknown') return { kind: 'wait', reason: 'quest journal not loaded' };
-    if (snap.stage === undefined) return { kind: 'wait', reason: 'Vampire Slayer journal stage unavailable' };
+    if (snap.journal === 'unknown') return waitForJournal();
+    if (snap.stage === undefined) return waitStep('Vampire Slayer journal stage unavailable');
 
     const area = vampireSlayerArea(snap.tile);
     if (area === 'crypt') {
         return snap.stage === VAMPIRE_SLAYER_STAGE.SPOKEN_TO_HARLOW
             ? stageTwo(snap, area)
-            : { kind: 'custom', name: 'leave the crypt before continuing the quest', run: leaveCrypt };
+            : customStep('leave the crypt before continuing the quest', leaveCrypt);
     }
     if (area === 'morganUpper') {
         if (snap.stage === VAMPIRE_SLAYER_STAGE.STARTED && !held(snap, ITEM.GARLIC)) {
-            return { kind: 'custom', name: "take garlic from Morgan's cupboard", run: takeGarlic };
+            return customStep("take garlic from Morgan's cupboard", takeGarlic);
         }
-        return { kind: 'custom', name: "leave Morgan's upper floor", run: leaveMorganUpper };
+        return customStep("leave Morgan's upper floor", leaveMorganUpper);
     }
-    if (area === 'unknown') return { kind: 'wait', reason: 'return to the mainland to resume Vampire Slayer' };
+    if (area === 'unknown') return waitStep('return to the mainland to resume Vampire Slayer');
     if (!snap.bankKnown) return scanBank();
     const normalize = normalizePack(snap);
     if (normalize) return normalize;
 
-    if (snap.stage === VAMPIRE_SLAYER_STAGE.NOT_STARTED) return { kind: 'talk', stop: MORGAN };
+    if (snap.stage === VAMPIRE_SLAYER_STAGE.NOT_STARTED) return talkTo(MORGAN);
     if (snap.stage === VAMPIRE_SLAYER_STAGE.STARTED) {
-        const garlic = sourceBankedOr(snap, ITEM.GARLIC, () => ({
-            kind: 'custom', name: "take garlic from Morgan's cupboard", run: takeGarlic
-        }));
-        return garlic ?? { kind: 'talk', stop: HARLOW_FIRST };
+        const garlic = sourceBankedOr(snap, ITEM.GARLIC, () => customStep("take garlic from Morgan's cupboard", takeGarlic));
+        return garlic ?? talkTo(HARLOW_FIRST);
     }
     if (snap.stage === VAMPIRE_SLAYER_STAGE.SPOKEN_TO_HARLOW) return stageTwo(snap, area);
-    return { kind: 'wait', reason: `unrecognized Vampire Slayer stage ${snap.stage}` };
+    return waitStep(`unrecognized Vampire Slayer stage ${snap.stage}`);
 }
 
 export const vampireslayer: QuestModule = {

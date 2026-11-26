@@ -8,6 +8,7 @@ import Square from '#/client/dash3d/Square.js';
 import Ground from '#/client/dash3d/Ground.js';
 import { TerrainOverlayShape } from '#/client/dash3d/TerrainOverlayShape.js';
 import QuickGround from '#/client/dash3d/QuickGround.js';
+import { emptyVisibilityTable, getVisibilityTable } from '#/client/dash3d/VisibilityTable.js';
 import Wall from '#/client/dash3d/Wall.js';
 import Decor from '#/client/dash3d/Decor.js';
 
@@ -113,7 +114,7 @@ export default class World {
     static groundX: number = -1;
     static groundZ: number = -1;
 
-    private static visBacking: boolean[][][][] = new TypedArray4d(8, 32, 51, 51, false);
+    private static visBacking: boolean[][][][];
     private static visBackingDirty: boolean[][] | null = null;
 
     static numActiveOccluders: number = 0;
@@ -204,7 +205,7 @@ export default class World {
                 tile.level--;
 
                 for (let i = 0; i < tile.spriteCount; i++) {
-                    const sprite = tile.sprites[i];
+                    const sprite = tile.sprites![i];
                     if (sprite && ((sprite.typecode >> 29) & 0x3) == 2 && sprite.minTileX == stx && sprite.minTileZ == stz) {
                         sprite.level--;
                     }
@@ -330,7 +331,7 @@ export default class World {
         const tile: Square | null = this.squares[level][stx][stz];
         if (tile) {
             for (let l: number = 0; l < tile.spriteCount; l++) {
-                const sprite: Sprite | null = tile.sprites[l];
+                const sprite: Sprite | null = tile.sprites![l];
                 if (!sprite || !sprite.model || !(sprite.model instanceof Model)) {
                     continue;
                 }
@@ -482,7 +483,7 @@ export default class World {
         }
 
         for (let l: number = 0; l < tile.spriteCount; l++) {
-            const loc: Sprite | null = tile.sprites[l];
+            const loc: Sprite | null = tile.sprites![l];
             if (loc && ((loc.typecode >> 29) & 0x3) === 2 && loc.minTileX === x && loc.minTileZ === z) {
                 this.delSprite(loc);
                 return;
@@ -520,7 +521,7 @@ export default class World {
         }
 
         for (let l: number = 0; l < tile.spriteCount; l++) {
-            const sprite: Sprite | null = tile.sprites[l];
+            const sprite: Sprite | null = tile.sprites![l];
             if (sprite && ((sprite.typecode >> 29) & 0x3) === 2 && sprite.minTileX === x && sprite.minTileZ === z) {
                 return sprite;
             }
@@ -555,7 +556,7 @@ export default class World {
         }
 
         for (let l: number = 0; l < tile.spriteCount; l++) {
-            const sprite: Sprite | null = tile.sprites[l];
+            const sprite: Sprite | null = tile.sprites![l];
             if (sprite && ((sprite.typecode >> 29) & 0x3) === 2 && sprite.minTileX === x && sprite.minTileZ === z) {
                 return sprite;
             }
@@ -581,7 +582,7 @@ export default class World {
             return tile.groundDecor.typecode2 & 0xff;
         } else {
             for (let i: number = 0; i < tile.spriteCount; i++) {
-                const sprite: Sprite | null = tile.sprites[i];
+                const sprite: Sprite | null = tile.sprites![i];
                 if (sprite && sprite.typecode === typecode) {
                     return sprite.typecode2 & 0xff;
                 }
@@ -614,7 +615,7 @@ export default class World {
                     }
 
                     for (let i: number = 0; i < tile.spriteCount; i++) {
-                        const sprite: Sprite | null = tile.sprites[i];
+                        const sprite: Sprite | null = tile.sprites![i];
                         if (sprite && sprite.model && sprite.model.pointNormal) {
                             this.shareLightLoc(level, tileX, tileZ, sprite.maxTileX + 1 - sprite.minTileX, sprite.maxTileZ - sprite.minTileZ + 1, sprite.model as Model);
                             (sprite.model as Model).light(ambient, attenuation, lightSrcX, lightSrcY, lightSrcZ);
@@ -705,7 +706,7 @@ export default class World {
                     }
 
                     for (let i: number = 0; i < tile.spriteCount; i++) {
-                        const sprite: Sprite | null = tile.sprites[i];
+                        const sprite: Sprite | null = tile.sprites![i];
                         if (!sprite || !sprite.model || !sprite.model.pointNormal) {
                             continue;
                         }
@@ -867,6 +868,11 @@ export default class World {
         this.xOrig = (viewportWidth / 2) | 0;
         this.yOrig = (viewportHeight / 2) | 0;
 
+        const key = [frustumStart, frustumEnd, viewportWidth, viewportHeight, ...pitchDistance].join(',');
+        this.visBacking = getVisibilityTable(key, table => this.fillVisibilityTable(table, pitchDistance, frustumStart, frustumEnd));
+    }
+
+    private static fillVisibilityTable(table: boolean[][][][], pitchDistance: Int32Array, frustumStart: number, frustumEnd: number): void {
         const visBacking: boolean[][][][] = new TypedArray4d(9, 32, 53, 53, false);
         for (let pitch: number = 128; pitch <= 384; pitch += 32) {
             for (let yaw: number = 0; yaw < 2048; yaw += 64) {
@@ -926,7 +932,7 @@ export default class World {
                             }
                         }
 
-                        this.visBacking[pitchLevel][yawLevel][x + 25][z + 25] = visible;
+                        table[pitchLevel][yawLevel][x + 25][z + 25] = visible;
                     }
                 }
             }
@@ -975,6 +981,7 @@ export default class World {
         World.cameraSinY = Pix3D.sinTable[eyeYaw];
         World.cameraCosY = Pix3D.cosTable[eyeYaw];
 
+        World.visBacking ??= emptyVisibilityTable();
         World.visBackingDirty = World.visBacking[((eyePitch - 128) / 32) | 0][(eyeYaw / 64) | 0];
         World.cx = eyeX;
         World.cy = eyeY;
@@ -1197,6 +1204,8 @@ export default class World {
 
                 const tile: Square | null = this.squares[level][tx][tz];
                 if (tile) {
+                    tile.sprites ??= new TypedArray1d(5, null);
+                    tile.spriteSpan ??= new Int32Array(5);
                     tile.sprites[tile.spriteCount] = sprite;
                     tile.spriteSpan[tile.spriteCount] = spans;
                     tile.spriteSpans |= spans;
@@ -1216,7 +1225,7 @@ export default class World {
         for (let tx: number = sprite.minTileX; tx <= sprite.maxTileX; tx++) {
             for (let tz: number = sprite.minTileZ; tz <= sprite.maxTileZ; tz++) {
                 const tile: Square | null = this.squares[sprite.level][tx][tz];
-                if (!tile) {
+                if (!tile?.sprites || !tile.spriteSpan) {
                     continue;
                 }
 
@@ -1474,7 +1483,7 @@ export default class World {
                     }
 
                     for (let i: number = 0; i < linkedSquare.spriteCount; i++) {
-                        const sprite: Sprite | null = linkedSquare.sprites[i];
+                        const sprite: Sprite | null = linkedSquare.sprites![i];
 
                         if (sprite) {
                             sprite.model?.worldRender(sprite.yaw, World.cameraSinX, World.cameraCosX, World.cameraSinY, World.cameraCosY, sprite.x - World.cx, sprite.y - World.cy, sprite.z - World.cz, sprite.typecode);
@@ -1641,12 +1650,12 @@ export default class World {
             if (tile.cornerSides !== 0) {
                 let draw: boolean = true;
                 for (let i: number = 0; i < tile.spriteCount; i++) {
-                    const sprite: Sprite | null = tile.sprites[i];
+                    const sprite: Sprite | null = tile.sprites![i];
                     if (!sprite) {
                         continue;
                     }
 
-                    if (sprite.cycle !== World.cycleNo && (tile.spriteSpan[i] & tile.cornerSides) === tile.sidesBeforeCorner) {
+                    if (sprite.cycle !== World.cycleNo && (tile.spriteSpan![i] & tile.cornerSides) === tile.sidesBeforeCorner) {
                         draw = false;
                         break;
                     }
@@ -1669,7 +1678,7 @@ export default class World {
                 let spriteBufferSize: number = 0;
 
                 iterate_sprites: for (let i: number = 0; i < spriteCount; i++) {
-                    const sprite: Sprite | null = tile.sprites[i];
+                    const sprite: Sprite | null = tile.sprites![i];
 
                     if (!sprite || sprite.cycle === World.cycleNo) {
                         continue;

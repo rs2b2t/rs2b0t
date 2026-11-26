@@ -1,3 +1,4 @@
+import { customStep as custom, talkTo, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { QUESTS } from '../../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { BLOOM_MAX_COST, DREZEL, inGrotto, NS_HOPS, NS_ID, NS_STAGE } from './areas.js';
@@ -6,9 +7,6 @@ import { bloomWithSickle, fillPouch, killGhast } from './ghasts.js';
 import { blessSickle, enterGrotto, exitAfterQuest, leaveGrotto, rechargePrayer, replacePouch, talkInGrotto } from './grotto.js';
 import { NS_FLAG, readDruidProgress } from './journal.js';
 import { amulet, bankedId, heldId, NS_TOOLS, sickleStep } from './supplies.js';
-
-const custom = (name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep =>
-    ({ kind: 'custom', name, run });
 
 const GHOST_TOPIC = "I'm wearing an amulet of ghost speak!";
 const ANOTHER_SCROLL = 'Could I have another bloom scroll please?';
@@ -79,14 +77,14 @@ function ghastLoop(snap: QuestSnapshot): QuestStep {
 
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     if (snap.journal === 'complete') {
         return { kind: 'done' };
     }
     const stage = snap.progress?.stage ?? snap.stage;
     if (stage === undefined) {
-        return { kind: 'wait', reason: 'quest stage not readable' };
+        return waitStep('quest stage not readable');
     }
     // Why: Both spirits require the amulet; equipping it before starting avoids an extra Lumbridge round trip.
     const wearing = amulet(snap);
@@ -94,7 +92,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return outside(snap, wearing);
     }
     if (stage === NS_STAGE.NOT_STARTED) {
-        return outside(snap, { kind: 'talk', stop: DREZEL });
+        return outside(snap, talkTo(DREZEL));
     }
     switch (stage) {
         case NS_STAGE.STARTED:
@@ -108,7 +106,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         case NS_STAGE.GIVEN_JOURNAL:
             return outside(snap, custom('offer to help', askToHelp));
         case NS_STAGE.RECEIVED_SPELL:
-            return outside(snap, { kind: 'talk', stop: DREZEL });
+            return outside(snap, talkTo(DREZEL));
         // Why: a held fungus proves the pick landed and the journal read trails it by a tick; branching on the page alone sent the bot back to Filliman for a scroll it didn't need.
         case NS_STAGE.BLESSED:
         case NS_STAGE.CASTED_SPELL:

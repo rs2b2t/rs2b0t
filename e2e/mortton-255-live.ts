@@ -8,9 +8,11 @@
 //   HEADED=1 bun e2e/mortton-255-live.ts --stage 15 --until 47 --minutes 45 --tick 200
 //   HEADED=1 bun e2e/mortton-255-live.ts --stage 47 --until 65 --minutes 60 --tick 200
 //   HEADED=1 bun e2e/mortton-255-live.ts --stage 65 --until 85 --minutes 45 --tick 200
+import { parseQuestArgs, type QuestArgs } from './lib/questArgs.js';
+import { printQuestLogs, teleportToQuestStart } from './lib/questHarness.js';
 import type { Page } from 'playwright-core';
 
-import { deployIsolatedClient, launchBrowser } from './lib/harness.js';
+import { deployIsolatedClient, fail, launchBrowser, logBotConsole } from './lib/harness.js';
 import {
     cheatQuiet,
     clearChatDialogs,
@@ -20,17 +22,10 @@ import {
     relog,
     seedItemsToBank,
     startScript,
-    teleTo,
     type BankSeedItem
 } from './tutorial/harness.js';
 
-interface Args {
-    base: string;
-    user: string;
-    stage: number;
-    until: number;
-    minutes: number;
-    tickMs: number;
+interface Args extends QuestArgs {
     food: string;
     /** Level every skill is raised to before the run. */
     levels: number;
@@ -38,48 +33,27 @@ interface Args {
     stocked: boolean;
     /** Turn Global `navTeleports` on. */
     teleports: boolean;
-    deploy: boolean;
 }
 
-function parse(argv: string[]): Args {
-    const out: Args = {
-        base: process.env.BASE ?? 'http://localhost:8890',
-        user: `sm${Date.now().toString(36).slice(-7)}`,
-        stage: 0,
-        until: 85,
-        minutes: 180,
-        tickMs: 200,
-        food: 'Lobster',
-        levels: 70,
-        stocked: false,
-        teleports: false,
-        deploy: true
-    };
-    for (let i = 0; i < argv.length; i++) {
-        const flag = argv[i];
-        if (flag === '--no-deploy') { out.deploy = false; continue; }
-        if (flag === '--stocked') { out.stocked = true; continue; }
-        if (flag === '--teleports') { out.teleports = true; continue; }
-        const value = argv[++i];
-        if (value === undefined) { break; }
-        if (flag === '--base') { out.base = value; }
-        else if (flag === '--user') { out.user = value; }
-        else if (flag === '--stage') { out.stage = Number(value); }
-        else if (flag === '--until') { out.until = Number(value); }
-        else if (flag === '--minutes') { out.minutes = Number(value); }
-        else if (flag === '--tick') { out.tickMs = Number(value); }
-        else if (flag === '--food') { out.food = value; }
-        else if (flag === '--levels') { out.levels = Number(value); }
-    }
-    return out;
-}
-
-const args = parse(process.argv.slice(2));
-
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
-}
+const args = parseQuestArgs<Args>(process.argv.slice(2), {
+    base: process.env.BASE ?? 'http://localhost:8890',
+    user: `sm${Date.now().toString(36).slice(-7)}`,
+    stage: 0,
+    until: 85,
+    minutes: 180,
+    tickMs: 200,
+    food: 'Lobster',
+    levels: 70,
+    stocked: false,
+    teleports: false,
+    deploy: true
+}, {
+    switches: {
+        '--stocked': { stocked: true },
+        '--teleports': { teleports: true }
+    },
+    values: { '--levels': value => ({ levels: Number(value) }) }
+});
 
 const QUEST = 'Shades of Mortton';
 const COMPLETE = 85;
@@ -202,13 +176,7 @@ const browser = await launchBrowser({ swiftshader: true });
 try {
     const page = await browser.newPage();
     const t0 = Date.now();
-    page.on('pageerror', e => console.log(`pageerror: ${e}`));
-    page.on('console', m => {
-        const txt = m.text();
-        if (txt.startsWith('[bot]')) {
-            console.log(`  [${Math.round((Date.now() - t0) / 1000)}s] ${txt}`);
-        }
-    });
+    logBotConsole(page, t0);
 
     await mainlandAccount(page, args.base, args.user, clientPage);
     console.log(`mainland-ready as '${args.user}'`);
@@ -279,12 +247,7 @@ try {
     await clearChatDialogs(page, 'post-relog dialog(s)');
 
     const start = STAGE_START[args.stage] ?? VARROCK_BANK;
-    if (!(await teleTo(page, start, 10, 25_000))) {
-        await clearChatDialogs(page, 'pre-tele dialog(s)');
-        if (!(await teleTo(page, start, 10, 25_000))) {
-            fail(`tele to ${start.x},${start.z} did not arrive`);
-        }
-    }
+    await teleportToQuestStart(page, start);
     console.log(`start tile → ${start.x},${start.z},${start.level}`);
 
     await page.evaluate(() => sessionStorage.setItem('rs2b0t:set:AIOQuester:quests', 'mortton'));
@@ -308,10 +271,7 @@ try {
             + ` temple=${last.temple.repaired}%/${last.temple.resources}%/${last.temple.sanctity}%`
             + (last.modal.main === -1 ? '' : ` MAIN-MODAL=${last.modal.main}`)
         );
-        for (const l of last.logs) {
-            if (l.time > lastLogTime) { console.log(`      · [${l.level}] ${l.msg}`); }
-        }
-        if (last.logs.length > 0) { lastLogTime = Math.max(lastLogTime, ...last.logs.map(l => l.time)); }
+        lastLogTime = printQuestLogs(last.logs, lastLogTime);
 
         // A full run waits for the journal to go green: the recolour and the QP award land a tick behind %morttonquest.
         const done = args.until >= COMPLETE ? last.status === 'complete' : stage >= args.until;

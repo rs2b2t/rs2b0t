@@ -9,24 +9,18 @@ import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
 import { Modals } from '../../../../ui/widgets/Modals.js';
 import { Reach } from '../../../../walking/Reach.js';
 import { Traversal } from '../../../../walking/Traversal.js';
+import { bankedId, heldId } from '../../engine/snapshotItems.js';
 import type { QuestSnapshot } from '../../engine/types.js';
 import { findSceneTarget, driveChoice, settleScene } from '../../exec/prompts.js';
 import { driveDialog } from '../../exec/primitives.js';
 import { QuestFood } from '../../food.js';
 import { DIG_ID, DIG_TILE, inDigCave } from './areas.js';
 
+export { bankedId, heldId };
+
 export const WALK_MS = 180_000;
 const DIALOGUE_MS = 12_000;
 const CLIMB_MS = 15_000;
-
-export function heldId(snap: QuestSnapshot, id: number): number {
-    return snap.invIds?.get(id) ?? 0;
-}
-
-/** Return unknown until the bank has been read, instead of treating it as empty. */
-export function bankedId(snap: QuestSnapshot, id: number): number {
-    return snap.bankKnown ? (snap.bankIds?.get(id) ?? 0) : 0;
-}
 
 export function heldOrBanked(snap: QuestSnapshot, id: number): number {
     return heldId(snap, id) + bankedId(snap, id);

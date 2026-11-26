@@ -36,6 +36,7 @@ export const CASES: readonly Case[] = [
     {
         id: 'desktop-storage-ipc',
         harness: 'desktop-storage-ipc-test.ts',
+        ownsServices: true,
         covers: { subsystems: ['multibox'] },
         status: 'vetted',
         provenAt: '8c750b2b',
@@ -55,6 +56,7 @@ export const CASES: readonly Case[] = [
     {
         id: 'desktop-instances',
         harness: 'desktop-instances-test.ts',
+        ownsServices: true,
         covers: { subsystems: ['multibox'] },
         status: 'vetted',
         provenAt: 'dc9ded2f381c756a06a21483ed733b85b9bf4b5b',
@@ -789,6 +791,7 @@ export const CASES: readonly Case[] = [
     {
         id: 'jivedragons-clue-transitions-live',
         harness: 'jivedragons-clue-transitions-live.ts',
+        ownsServices: true,
         covers: { scripts: ['JiveDragons'], subsystems: ['clues'] },
         status: 'documented',
         documentedIn: 'docs/how-to/test-clue-transitions.md',

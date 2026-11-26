@@ -2,7 +2,7 @@ import { configuredLootNames } from '../../api/bank/bankRules.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import Tile from '../../geometry/Tile.js';
 import { findSceneTarget } from '../../api/walking/Reach.js';
 import { Traversal } from '../../api/walking/Traversal.js';
@@ -74,7 +74,7 @@ export default class HillGiant extends TaskBot {
     private startedAt = Date.now();
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
 
         this.meleeStyle = parseCombatStyle(this.settings.str('meleeStyle', 'strength'));
         this.weapon = this.settings.str('weapon', '').trim();

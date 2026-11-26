@@ -1,8 +1,9 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
 import { LoopingBot } from '#/bot/api/bot/Bot.js';
 import type { BotHostImpl } from '#/bot/runtime/BotHost.js';
 import { ScriptRegistry } from '#/bot/runtime/ScriptRegistry.js';
 import { ScriptRunner } from '#/bot/runtime/ScriptRunner.js';
+import * as loader from '#/bot/runtime/loader.js';
 import BotPanel from '#/bot/panel/BotPanel.js';
 import { Credentials } from '#/bot/runtime/Credentials.js';
 import { TARGET, resolveTarget } from '#/client/config/target.js';
@@ -137,6 +138,160 @@ test('render controls appear below the log and persist per bot', () => {
     expect(toggle.checked).toBe(false);
     expect(enabled).toEqual([false, true, false]);
     expect(localStorage.getItem('rs2b0t:alice:rendererEnabled')).toBe('0');
+});
+
+function openLibrary() {
+    const root = document.createElement('div');
+    const panel = new BotPanel(root, { selfTestMissing: [], addDrawListener: () => {} } as unknown as BotHostImpl);
+    const browse = Array.from(root.querySelectorAll('button')).find(b => b.textContent === 'Browse…')!;
+    browse.click();
+    const picker = document.querySelector<HTMLInputElement>('.rs2b0t-library-load input[type=file]')!;
+    const backdrop = picker.closest<HTMLElement>('.rs2b0t-modal-backdrop')!;
+    const loadFile = loader.loadFromFile;
+    const fileLoad = spyOn(loader, 'loadFromFile');
+
+    function startImport(name: string, manifestVersion = 1) {
+        const ready = Promise.withResolvers<void>();
+        fileLoad.mockImplementationOnce(file => ready.promise.then(() => loadFile(file)));
+        const transfer = new DataTransfer();
+        const source = `export default { __rs2b0tManifest: ${manifestVersion}, name: ${JSON.stringify(name)}, create() {} }`;
+        transfer.items.add(new File([source], 'fixture.js', { type: 'text/javascript' }));
+        picker.files = transfer.files;
+        picker.dispatchEvent(new Event('change'));
+        const result = fileLoad.mock.results.at(-1)!.value;
+        return async () => {
+            ready.resolve();
+            await result;
+        };
+    }
+
+    function expectSelected(name: string) {
+        expect(panel.selectedScriptName()).toBe(name);
+        expect(localStorage.getItem('rs2b0t:selectedScript')).toBe(name);
+        expect(sessionStorage.getItem('rs2b0t:selectedScript')).toBe(name);
+    }
+
+    return { panel, browse, backdrop, startImport, expectSelected, restore: () => fileLoad.mockRestore() };
+}
+
+test.each([
+    ['select another card', 'Picked fixture'],
+    ['assign from roster', 'Picked fixture'],
+    ['dismiss', 'Previous fixture'],
+    ['wait', 'Imported fixture']
+])('file load after %s leaves %s selected', async (action, selected) => {
+    const key = 'rs2b0t:selectedScript';
+    for (const name of ['Previous fixture', 'Picked fixture']) {
+        ScriptRegistry.register({ name, description: '', create: () => { throw new Error('unused'); } });
+    }
+    localStorage.setItem(key, 'Previous fixture');
+    sessionStorage.setItem(key, 'Previous fixture');
+    const library = openLibrary();
+    const { backdrop, browse } = library;
+    try {
+        const finish = library.startImport('Imported fixture');
+        if (action === 'select another card') {
+            const cardName = Array.from(backdrop.querySelectorAll('.rs2b0t-card-name')).find(el => el.textContent === 'Picked fixture')!;
+            cardName.closest<HTMLElement>('.rs2b0t-library-card')!.click();
+            browse.click();
+        } else if (action === 'dismiss') {
+            backdrop.click();
+            browse.click();
+        } else if (action === 'assign from roster') {
+            await library.panel.configureScript('Picked fixture', null, false);
+        }
+        await finish();
+
+        library.expectSelected(selected);
+        expect(backdrop.style.display).toBe(selected === 'Imported fixture' ? 'none' : 'flex');
+        expect(Array.from(backdrop.querySelectorAll('.rs2b0t-card-name'), el => el.textContent)).toContain('Imported fixture ⇪');
+    } finally {
+        backdrop.click();
+        library.restore();
+        for (const name of ['Imported fixture', 'Picked fixture', 'Previous fixture']) ScriptRegistry.unregister(name);
+    }
+});
+
+test.each(['success', 'failure'])('selects the older valid import when the newer import fails (%s first)', async first => {
+    ScriptRegistry.register({ name: 'Previous fixture', description: '', create: () => { throw new Error('unused'); } });
+    const library = openLibrary();
+    try {
+        await library.panel.configureScript('Previous fixture', null, false);
+        const finishValid = library.startImport('Imported fixture');
+        const finishInvalid = library.startImport('Invalid fixture', 0);
+        if (first === 'success') {
+            await finishValid();
+            library.expectSelected('Imported fixture');
+            expect(library.backdrop.style.display).toBe('none');
+            await finishInvalid();
+        } else {
+            await finishInvalid();
+            expect(library.backdrop.querySelector('.rs2b0t-load-error')).not.toBeNull();
+            await finishValid();
+        }
+        library.expectSelected('Imported fixture');
+        expect(library.backdrop.style.display).toBe('none');
+    } finally {
+        library.backdrop.click();
+        library.restore();
+        ScriptRegistry.unregister('Imported fixture');
+        ScriptRegistry.unregister('Previous fixture');
+    }
+});
+
+test('an earlier import leaves WalkTo selected after roster travel stops', async () => {
+    attach({ ingame: true });
+    const previous = ScriptRegistry.get('WalkTo');
+    class TravelFixture extends LoopingBot { override loop(): void {} }
+    ScriptRegistry.register({ name: 'WalkTo', description: '', create: () => new TravelFixture() });
+    const library = openLibrary();
+    try {
+        const finish = library.startImport('Imported fixture');
+        await library.panel.travelTo('Varrock');
+        library.panel.stopScript();
+        await finish();
+
+        library.expectSelected('WalkTo');
+        expect(library.backdrop.style.display).toBe('flex');
+        expect(library.backdrop.querySelector('.rs2b0t-library-list')?.textContent).toContain('Imported fixture ⇪');
+    } finally {
+        library.backdrop.click();
+        library.restore();
+        ScriptRegistry.unregister('Imported fixture');
+        ScriptRegistry.unregister('WalkTo');
+        if (previous) ScriptRegistry.register(previous);
+    }
+});
+
+test.each(['older', 'newer'])('latest import stays selected when the %s import finishes first', async first => {
+    ScriptRegistry.register({ name: 'Previous fixture', description: '', create: () => { throw new Error('unused'); } });
+    const library = openLibrary();
+    try {
+        await library.panel.configureScript('Previous fixture', null, false);
+        const finishOlder = library.startImport('Older fixture');
+        const finishNewer = library.startImport('Newer fixture');
+        if (first === 'older') {
+            await finishOlder();
+            library.expectSelected('Older fixture');
+            expect(library.backdrop.style.display).toBe('none');
+            await finishNewer();
+        } else {
+            await finishNewer();
+            expect(library.backdrop.style.display).toBe('none');
+            library.browse.click();
+            await finishOlder();
+        }
+        library.expectSelected('Newer fixture');
+        expect(library.backdrop.style.display).toBe(first === 'older' ? 'none' : 'flex');
+        library.browse.click();
+        const names = Array.from(library.backdrop.querySelectorAll('.rs2b0t-card-name'), el => el.textContent);
+        expect(names).toContain('Older fixture ⇪');
+        expect(names).toContain('Newer fixture ⇪');
+    } finally {
+        library.backdrop.click();
+        library.restore();
+        for (const name of ['Older fixture', 'Newer fixture', 'Previous fixture']) ScriptRegistry.unregister(name);
+    }
 });
 
 test('wall start and stop use the script selected in the bot panel', async () => {

@@ -208,6 +208,10 @@ export class RosterPanel {
     refresh(): void {
         if (this.el.hidden) return;
         const profiles = this.actions.profiles();
+        if (!this.pending && this.groupName.value.trim() && this.scope !== null &&
+            profiles.some(profile => this.selected.has(profile.username) && profile.tab !== this.scope)) {
+            this.scope = null;
+        }
         if (this.scope !== null && !this.options.tabs().includes(this.scope)) {
             const active = this.options.activeTab();
             this.scope = this.options.tabs().includes(active) ? active : null;

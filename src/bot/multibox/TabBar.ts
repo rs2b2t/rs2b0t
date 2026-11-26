@@ -27,9 +27,6 @@ export class TabBar {
     ) {}
 
     render(tabs: string[], active: string): void {
-        if (this.editing) {
-            return;
-        }
         // Rebuild only on changes so the 1 Hz repaint keeps drag markers intact.
         const sig = JSON.stringify([tabs, active]);
         if (sig === this.lastSig) {
@@ -38,7 +35,7 @@ export class TabBar {
         this.lastSig = sig;
         this.tabs = [...tabs];
         this.active = active;
-        this.rebuild();
+        if (!this.editing) this.rebuild();
     }
 
     private rebuild(): void {
@@ -166,9 +163,7 @@ export class TabBar {
         input.value = initial;
         const close = (): void => {
             this.editing = false;
-            // A successful commit rerenders through the owner; otherwise restore the chips.
             if (this.container.contains(input)) {
-                this.lastSig = null;
                 this.rebuild();
             }
         };
@@ -176,14 +171,12 @@ export class TabBar {
             ev.stopPropagation();
             if (ev.key === 'Enter') {
                 ev.preventDefault();
-                this.editing = false;
                 const result = commit(input.value);
                 const changed = typeof result === 'boolean' ? result : await result;
                 if (!this.container.contains(input)) return;
                 if (changed) {
                     close();
                 } else {
-                    this.editing = true;
                     input.classList.add('is-invalid');
                 }
             } else if (ev.key === 'Escape') {

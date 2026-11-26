@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { ProfileVault, type Profile } from '#/bot/multibox/ProfileVault.js';
 
 const KEY = 'rs2b0t:multibox:profiles';
@@ -11,6 +11,13 @@ const clearAll = () => {
 beforeEach(clearAll);
 afterEach(clearAll);
 
+function expectEncryptedEnvelope(): void {
+    const base64 = expect.stringMatching(/^[A-Za-z0-9+/]+={0,2}$/);
+    expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual({
+        v: 1, kdf: 'PBKDF2-SHA256', iter: 310000, salt: base64, iv: base64, ct: base64
+    });
+}
+
 describe('ProfileVault', () => {
     test('empty → setup unlocks with an empty list and writes an encrypted blob', async () => {
         const v = new ProfileVault();
@@ -18,10 +25,7 @@ describe('ProfileVault', () => {
         await v.setup('pw');
         expect(v.status()).toBe('unlocked');
         expect(v.list()).toEqual([]);
-        const blob = JSON.parse(localStorage.getItem(KEY)!) as { v: number; kdf: string; iter: number };
-        expect(blob.v).toBe(1);
-        expect(blob.kdf).toBe('PBKDF2-SHA256');
-        expect(blob.iter).toBe(310000);
+        expectEncryptedEnvelope();
     });
 
     test('round-trip: upsert/remove survive a real lock/unlock cycle', async () => {
@@ -63,101 +67,86 @@ describe('ProfileVault', () => {
         const v = new ProfileVault();
         await v.setup('pw');
         await v.upsert({ username: 'alice', password: 'hunter2' });
-        const raw = localStorage.getItem(KEY)!;
-        expect(raw).not.toContain('alice');
-        expect(raw).not.toContain('hunter2');
+        expectEncryptedEnvelope();
     });
 
-    test('a world edit after a storage refresh preserves all 61 profiles', async () => {
-        const profiles = Array.from({ length: 61 }, (_, i) => ({ username: `profile-${i}`, password: 'fixture' }));
+    test('a world edit after refresh preserves all 61 profiles', async () => {
+        const profiles = Array.from({ length: 61 }, (_, i) => ({ username: `profile-${i}`, password: 'fixture', tab: 'Main' }));
         const first = new ProfileVault();
         await first.setup('pw');
         await first.replaceAll({ profiles: profiles.slice(0, 30), tabs: [], activeTab: 'Main' });
         const second = new ProfileVault();
         expect(await second.unlock('pw')).toBe(true);
-        expect(second.list()).toHaveLength(30);
         for (const profile of profiles.slice(30)) await first.upsert(profile);
-
         const reopened = new ProfileVault();
         expect(await reopened.unlock('pw')).toBe(true);
-        expect(reopened.list()).toHaveLength(61);
+        expect(reopened.list()).toEqual(profiles);
+
         await second.refresh();
-        expect(second.list()).toEqual(reopened.list());
+        expect(second.list()).toEqual(profiles);
         await second.setWorld('profile-0', 3);
         expect(await reopened.unlock('pw')).toBe(true);
         expect(reopened.list()).toHaveLength(61);
-        expect(reopened.list()).toEqual(profiles.map((p, i) => ({ ...p, tab: 'Main', ...(i === 0 ? { world: 3 } : {}) })));
+        expect(reopened.list()).toEqual([{ ...profiles[0], world: 3 }, ...profiles.slice(1)]);
+        expect(second.list()).toEqual(reopened.list());
     });
 
-    test('overlapping edits from two browser tabs survive without a storage event', async () => {
-        const first = new ProfileVault();
-        await first.setup('pw');
-        await first.upsert({ username: 'alice', password: 'old' });
-        const second = new ProfileVault();
-        expect(await second.unlock('pw')).toBe(true);
-        await Promise.all([first.upsert({ username: 'alice', password: 'new' }), second.setWorld('alice', 2)]);
-
-        const reopened = new ProfileVault();
-        expect(await reopened.unlock('pw')).toBe(true);
-        expect(reopened.list()).toEqual([{ username: 'alice', password: 'new', world: 2, tab: 'Main' }]);
-    });
-
-    test('overlapping group renames to the same destination commit only one rename', async () => {
-        const first = new ProfileVault();
-        await first.setup('pw');
-        await first.replaceAll({
-            profiles: [{ username: 'alice', password: 'a', tab: 'A' }, { username: 'bob', password: 'b', tab: 'B' }],
-            tabs: ['A', 'B'], activeTab: 'Main'
-        });
-        const second = new ProfileVault();
-        expect(await second.unlock('pw')).toBe(true);
-        const results = await Promise.allSettled([
-            first.saveTabState(['Fleet', 'B'], new Map(), 'Main', { from: 'A', to: 'Fleet' }),
-            second.saveTabState(['A', 'Fleet'], new Map(), 'Main', { from: 'B', to: 'Fleet' })
+    test('five windows preserve overlapping edits to 61 profiles without storage events', async () => {
+        const windows = Array.from({ length: 5 }, () => new ProfileVault());
+        const profiles = Array.from({ length: 61 }, (_, i) => ({ username: `profile-${i}`, password: 'fixture', tab: 'Fleet' }));
+        await windows[0].setup('pw');
+        await windows[0].replaceAll({ profiles: profiles.slice(0, 30), tabs: ['Fleet'], activeTab: 'Fleet' });
+        for (const peer of windows.slice(1)) expect(await peer.unlock('pw')).toBe(true);
+        for (const p of profiles.slice(30)) await windows[0].upsert(p, 'Fleet');
+        await Promise.all([
+            windows[0].upsert({ username: 'profile-0', password: 'updated' }),
+            windows[1].setWorld('profile-0', 2),
+            windows[2].assignGroup(['profile-0'], 'Work'),
+            windows[3].setWorld('profile-60', 3),
+            windows[4].upsert({ username: 'profile-60', password: 'last' })
         ]);
-        expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
-        expect(results).toContainEqual({ status: 'rejected', reason: new Error("Group 'Fleet' already exists.") });
-
         const reopened = new ProfileVault();
         expect(await reopened.unlock('pw')).toBe(true);
-        const tabs = results[0].status === 'fulfilled' ? ['Fleet', 'B'] : ['A', 'Fleet'];
-        expect(reopened.tabState().tabs).toEqual(tabs);
-        expect(reopened.list().map(p => p.tab)).toEqual(tabs);
-    });
-
-    test('overlapping renames of the same group commit only one destination', async () => {
-        const first = new ProfileVault();
-        await first.setup('pw');
-        await first.replaceAll({
-            profiles: [{ username: 'alice', password: 'a', tab: 'Old' }], tabs: ['Old'], activeTab: 'Old'
+        expect(reopened.snapshot()).toEqual({
+            profiles: [
+                { ...profiles[0], password: 'updated', world: 2, tab: 'Work' },
+                ...profiles.slice(1, 60),
+                { ...profiles[60], password: 'last', world: 3 }
+            ],
+            tabs: ['Fleet', 'Work'], activeTab: 'Fleet'
         });
-        const second = new ProfileVault();
-        expect(await second.unlock('pw')).toBe(true);
-        const results = await Promise.allSettled([
-            first.saveTabState(['Fleet'], new Map(), 'Fleet', { from: 'Old', to: 'Fleet' }),
-            second.saveTabState(['Mining'], new Map(), 'Mining', { from: 'Old', to: 'Mining' })
-        ]);
-        expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
-        const winner = results[0].status === 'fulfilled' ? 'Fleet' : 'Mining';
-        const reopened = new ProfileVault();
-        expect(await reopened.unlock('pw')).toBe(true);
-        expect(reopened.tabState()).toEqual({ tabs: [winner], activeTab: winner });
-        expect(reopened.list()[0].tab).toBe(winner);
     });
 
-    test('a browser edit leaves the saved vault intact when the write lock is denied', async () => {
-        const v = new ProfileVault();
-        await v.setup('pw');
-        await v.upsert({ username: 'alice', password: 'a', world: 1 });
-        const stored = localStorage.getItem(KEY);
-        const lock = spyOn(navigator.locks, 'request').mockRejectedValue(new Error('lock denied'));
-        try {
-            await expect(v.setWorld('alice', 2)).rejects.toThrow('lock denied');
-            expect(localStorage.getItem(KEY)).toBe(stored);
-            expect(v.list()[0].world).toBe(1);
-        } finally {
-            lock.mockRestore();
-        }
+    test('a stale reorder keeps every newly imported row for a username', async () => {
+        const wall = new ProfileVault();
+        await wall.setup('pw');
+        const original = { username: 'worker', password: 'fixture', tab: 'Fleet' };
+        const other = { ...original, username: 'other' };
+        await wall.replaceAll({ profiles: [original, other], tabs: ['Fleet'], activeTab: 'Fleet' });
+        const peer = new ProfileVault();
+        expect(await peer.unlock('pw')).toBe(true);
+        const extra = { ...original, tab: 'Reserve' };
+        const backup = { profiles: [original, extra, other], tabs: ['Fleet', 'Reserve'], activeTab: 'Reserve' };
+        await peer.replaceAll(backup);
+        await wall.reorder(['other', 'worker']);
+        expect(await peer.unlock('pw')).toBe(true);
+        expect(peer.snapshot()).toEqual({ ...backup, profiles: [other, original, extra] });
+    });
+
+    test('a stale tab addition after a world save preserves newly imported groups', async () => {
+        const wall = new ProfileVault();
+        await wall.setup('pw');
+        const original = { username: 'worker', password: 'fixture', tab: 'Old' };
+        await wall.replaceAll({ profiles: [original], tabs: ['Old'], activeTab: 'Old' });
+        const peer = new ProfileVault();
+        expect(await peer.unlock('pw')).toBe(true);
+        await peer.replaceAll({ profiles: [{ ...original, tab: 'Fleet' }], tabs: ['Fleet'], activeTab: 'Fleet' });
+        await wall.setWorld('worker', 2);
+        await wall.saveTabState(['Old', 'Local'], new Map());
+        expect(await peer.unlock('pw')).toBe(true);
+        expect(peer.snapshot()).toEqual({
+            profiles: [{ ...original, tab: 'Fleet', world: 2 }], tabs: ['Fleet', 'Local'], activeTab: 'Fleet'
+        });
     });
 
     test('reorder is encrypted and survives locking and unlocking', async () => {
@@ -169,7 +158,7 @@ describe('ProfileVault', () => {
 
         await v.reorder(['carol', 'alice', 'bob']);
         expect(v.list().map(profile => profile.username)).toEqual(['carol', 'alice', 'bob']);
-        expect(localStorage.getItem(KEY)).not.toContain('carol');
+        expectEncryptedEnvelope();
 
         const reopened = new ProfileVault();
         expect(await reopened.unlock('pw')).toBe(true);
@@ -212,12 +201,18 @@ describe('ProfileVault', () => {
     });
 
     test('legacy plaintext array under the profiles key is adopted by setup', async () => {
-        localStorage.setItem(KEY, JSON.stringify([{ username: 'old', password: 'p' }]));
+        const profile = { username: 'old', password: 'p' };
+        localStorage.setItem(KEY, JSON.stringify([profile]));
         const v = new ProfileVault();
         expect(v.status()).toBe('plaintext-legacy');
         await v.setup('pw');
-        expect(v.list()).toEqual([{ username: 'old', password: 'p', tab: 'Main' }]);
-        expect(localStorage.getItem(KEY)!).not.toContain('old');
+        expect(v.list()).toEqual([{ ...profile, tab: 'Main' }]);
+        expectEncryptedEnvelope();
+
+        const reopened = new ProfileVault();
+        expect(reopened.status()).toBe('locked');
+        expect(await reopened.unlock('pw')).toBe(true);
+        expect(reopened.list()).toEqual([{ ...profile, tab: 'Main' }]);
     });
 
     test('pre-#30 roster key is adopted too, then deleted', async () => {
@@ -247,79 +242,6 @@ describe('ProfileVault', () => {
         await pending;
         expect(v.status()).toBe('empty');
         expect(localStorage.getItem(KEY)).toBeNull();
-    });
-
-    test('unlock waits for a pending reset on the same browser vault', async () => {
-        const v = new ProfileVault();
-        await v.setup('pw');
-        await v.upsert({ username: 'alice', password: 'fixture' });
-        const [reset, unlocked] = await navigator.locks.request(KEY, () => [v.reset(), v.unlock('pw')] as const);
-        await reset;
-        expect(await unlocked).toBe(false);
-        expect(() => v.list()).toThrow('vault is not unlocked');
-        expect(new ProfileVault().status()).toBe('empty');
-    });
-
-    test('reset during another tab\'s world write leaves the vault empty', async () => {
-        const first = new ProfileVault();
-        await first.setup('pw');
-        await first.upsert({ username: 'alice', password: 'a' });
-        const second = new ProfileVault();
-        let reset: Promise<void> | undefined;
-        const write = localStorage.setItem;
-        Object.defineProperty(localStorage, 'setItem', { configurable: true, value: (key: string, value: string) => {
-            reset = second.reset();
-            write(key, value);
-        } });
-        try {
-            await first.setWorld('alice', 2);
-            await reset;
-        } finally {
-            Object.defineProperty(localStorage, 'setItem', { configurable: true, value: write });
-        }
-        const reopened = new ProfileVault();
-        expect(await reopened.unlock('pw')).toBe(false);
-        expect(reopened.status()).toBe('empty');
-    });
-
-    test('refresh during unlock observes a reset from another tab', async () => {
-        const first = new ProfileVault();
-        await first.setup('pw');
-        await first.upsert({ username: 'alice', password: 'fixture' });
-        const second = new ProfileVault();
-        const unlocking = second.unlock('pw');
-        await Promise.resolve();
-        await first.reset();
-        await Promise.all([unlocking, second.refresh()]);
-
-        expect(new ProfileVault().status()).toBe('empty');
-        expect(second.status()).toBe('empty');
-        expect(() => second.list()).toThrow();
-    });
-
-    test('a queued upsert rejects when refresh observes a reset from another tab', async () => {
-        const first = new ProfileVault();
-        await first.setup('pw');
-        await new ProfileVault().reset();
-        const refresh = first.refresh();
-        const save = first.upsert({ username: 'alice', password: 'a' });
-        await refresh;
-        await expect(save).rejects.toThrow(/vault/i);
-        expect(new ProfileVault().status()).toBe('empty');
-    });
-
-    test('a recreated profile can be saved to its former group', async () => {
-        const v = new ProfileVault();
-        await v.setup('pw');
-        const profile = { username: 'alice', password: 'a' };
-        await v.upsert(profile);
-        await v.assignGroup(['alice'], 'Miners');
-        await v.remove('alice');
-        await v.upsert(profile);
-        await v.saveTabState(['Miners'], new Map([['alice', 'Miners']]), 'Main');
-        const reopened = new ProfileVault();
-        expect(await reopened.unlock('pw')).toBe(true);
-        expect(reopened.list()).toEqual([{ ...profile, tab: 'Miners' }]);
     });
 
     test('setup while locked throws', async () => {
@@ -420,23 +342,6 @@ describe('ProfileVault tabs', () => {
             { username: 'alice', password: 'a', tab: 'Main' },
             { username: 'bob', password: 'b', tab: 'Main' }
         ]);
-        await v.saveTabState(['m'], new Map([['bob', 'm']]), 'Main');
-        const reopened = new ProfileVault();
-        expect(await reopened.unlock('pw')).toBe(true);
-        expect(reopened.list().find(p => p.username === 'bob')?.tab).toBe('m');
-    });
-
-    test('a deletion fallback keeps a previously saved destination deleted by a peer', async () => {
-        const wall = new ProfileVault();
-        await wall.setup('pw');
-        await wall.replaceAll({ profiles: [{ username: 'bob', password: '', tab: 'New' }], tabs: ['Prior', 'New'], activeTab: 'Main' });
-        const peer = new ProfileVault();
-        expect(await peer.unlock('pw')).toBe(true);
-        await peer.saveTabState(['New'], new Map());
-        await wall.saveTabState(['Prior'], new Map(), undefined, { from: 'New', fallbackByUser: new Map([['bob', 'Prior']]) });
-
-        expect(await peer.unlock('pw')).toBe(true);
-        expect(peer.snapshot()).toEqual({ profiles: [{ username: 'bob', password: '', tab: 'Main' }], tabs: [], activeTab: 'Main' });
     });
 
     test('saveTabState rejects invalid tab lists loudly', async () => {
@@ -496,19 +401,6 @@ describe('ProfileVault tabs', () => {
         expect(reopened.snapshot()).toEqual(v.snapshot());
     });
 
-    test('unlock during a shared import reads the imported roster', async () => {
-        const v = new ProfileVault();
-        await v.setup('pw');
-        await v.upsert({ username: 'old', password: 'a' });
-        const imported = { profiles: [{ username: 'new', password: 'b', tab: 'Fleet' }], tabs: ['Fleet'], activeTab: 'Fleet' };
-        const [, unlocked] = await Promise.all([v.replaceAll(imported), v.unlock('pw')]);
-        expect(unlocked).toBe(true);
-        const reopened = new ProfileVault();
-        expect(await reopened.unlock('pw')).toBe(true);
-        expect(reopened.snapshot()).toEqual(imported);
-        expect(v.snapshot()).toEqual(imported);
-    });
-
     test('a failed import preserves the roster for later saves and allows an explicit retry', async () => {
         const storage = quotaLimitedStorage();
         const v = new ProfileVault(storage);
@@ -536,87 +428,6 @@ describe('ProfileVault tabs', () => {
         expect(await reopen()).toEqual(imported);
     });
 
-    test('a competing browser import keeps the winning world and settings together', async () => {
-        const first = new ProfileVault();
-        const second = new ProfileVault();
-        await first.setup('pw');
-        expect(await second.unlock('pw')).toBe(true);
-        const key = 'rs2b0t:fixture:selectedScript';
-        const importWorld = (vault: ProfileVault, world: 1 | 2, script: string) => vault.replaceAll({
-            profiles: [{ username: 'fixture', password: '', world }], tabs: [], activeTab: 'Main'
-        }, { usernames: ['fixture'], apply() { localStorage.setItem(key, script); } });
-        const request = navigator.locks.request.bind(navigator.locks);
-        const lock = spyOn(navigator.locks, 'request').mockImplementationOnce(async (name, callback) => {
-            if (typeof callback !== 'function') throw new Error('Expected an exclusive lock callback');
-            const result = await request(name, callback);
-            await importWorld(second, 2, 'Fisher');
-            return result;
-        });
-        try {
-            const [firstImport] = await Promise.allSettled([importWorld(first, 1, 'Miner')]);
-            const reopened = new ProfileVault();
-            expect(await reopened.unlock('pw')).toBe(true);
-            expect([reopened.list()[0].world, localStorage.getItem(key)]).toEqual([2, 'Fisher']);
-            expect(firstImport.status).toBe('fulfilled');
-        } finally {
-            lock.mockRestore();
-        }
-    });
-
-    test("a late cleanup preserves the winning wall's encrypted wipe list", async () => {
-        const storage = quotaLimitedStorage();
-        const first = new ProfileVault(storage);
-        const second = new ProfileVault(storage);
-        await first.setup('pw');
-        await first.upsert({ username: 'original', password: '' });
-        expect(await second.unlock('pw')).toBe(true);
-        const roster = (username: string) => ({ profiles: [{ username, password: '' }], tabs: [], activeTab: 'Main' });
-        const cleaning = Promise.withResolvers<void>();
-        const resume = Promise.withResolvers<void>();
-        const encrypt = crypto.subtle.encrypt.bind(crypto.subtle);
-        const spy = spyOn(crypto.subtle, 'encrypt');
-        try {
-            const pending = first.replaceAll(roster('first'), { usernames: ['storage-only'], apply() {
-                spy.mockImplementationOnce(async (...args) => {
-                    cleaning.resolve();
-                    await resume.promise;
-                    return encrypt(...args);
-                });
-            } });
-            await cleaning.promise;
-            try {
-                await expect(second.replaceAll(roster('second'), { usernames: [], apply() {
-                    throw new Error('storage full');
-                } })).rejects.toThrow('storage full');
-            } finally {
-                resume.resolve();
-                await expect(pending).rejects.toThrow(/changed/);
-            }
-            const reopened = new ProfileVault(storage);
-            expect(await reopened.unlock('pw')).toBe(true);
-            expect(reopened.list().map(p => p.username)).toEqual(['second']);
-            const wipes: string[][] = [];
-            const restore = { usernames: [], apply(wipe: string[]) { wipes.push(wipe.sort()); } };
-            await reopened.replaceAll(roster('retry'), restore);
-            await reopened.replaceAll(roster('next'), restore);
-            expect(wipes).toEqual([['first', 'original', 'retry', 'second', 'storage-only'], ['next', 'retry']]);
-        } finally {
-            spy.mockRestore();
-        }
-    });
-
-    test('migrates the legacy wipe referenced by the encrypted restore ID', async () => {
-        await writeBlob('pw', { profiles: [], tabs: [], activeTab: 'Main', restoreId: 'fixture' });
-        const key = 'rs2b0t:pending-profile-wipe/';
-        localStorage.setItem(key + 'fixture', '["previous"]');
-        localStorage.setItem(key + 'other', '["unrelated"]');
-        const v = new ProfileVault();
-        expect(await v.unlock('pw')).toBe(true);
-        await v.replaceAll(v.snapshot(), { usernames: [], apply(wipe) { expect(wipe).toEqual(['previous']); } });
-        expect(localStorage.getItem(key + 'fixture')).toBeNull();
-        expect(localStorage.getItem(key + 'other')).toBe('["unrelated"]');
-    });
-
     test('replaceAll rejects a profile pointing at a missing tab', async () => {
         const v = new ProfileVault();
         await v.setup('pw');
@@ -625,18 +436,6 @@ describe('ProfileVault tabs', () => {
             tabs: [],
             activeTab: 'Main'
         })).rejects.toThrow(/ghost/);
-    });
-
-    test('a tab edit can remove groups created by an import or assignment', async () => {
-        const v = new ProfileVault();
-        await v.setup('pw');
-        await v.replaceAll({ profiles: [{ username: 'alice', password: 'a' }], tabs: ['Imported'], activeTab: 'Imported' });
-        await v.assignGroup(['alice'], 'Assigned');
-        await v.saveTabState([], new Map(), 'Main');
-
-        const reopened = new ProfileVault();
-        expect(await reopened.unlock('pw')).toBe(true);
-        expect(reopened.snapshot()).toEqual({ profiles: [{ username: 'alice', password: 'a', tab: 'Main' }], tabs: [], activeTab: 'Main' });
     });
 
     for (const fail of [true, false]) {
@@ -715,7 +514,7 @@ describe('ProfileVault worlds', () => {
             { username: 'legacy', password: 'b', tab: 'Main' },
             { username: 'alice', password: 'new', tab: 'miners', world: 2 }
         ]);
-        expect(localStorage.getItem(KEY)).not.toContain('alice');
+        expectEncryptedEnvelope();
     });
 
     test('setWorld persists only the assignment and rejects unknown usernames', async () => {

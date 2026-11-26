@@ -15,8 +15,7 @@ cd "$ROOT"
 
 [ -d "$ENGINE/public" ] || { echo "engine public/ not found at $ENGINE" >&2; exit 1; }
 
-TARGET=prod PROD_RSAN="$PROD_RSAN" bun run build
-TARGET=prod PROD_RSAN="$PROD_RSAN" bun run build:bot
+TARGET=prod PROD_RSAN="$PROD_RSAN" B0T_OUT_DIR=out bun run build:bot
 
 # the nav worker needs the baked collision pack; build it once if absent
 [ -f out/collision.lcnav.gz ] || bun tools/nav/build-collision.ts --engine "$ENGINE"
@@ -55,12 +54,13 @@ V="$(shasum out/botclient.js | cut -c1-10)"
 M="$(shasum out/multibox.js | cut -c1-10)"
 
 stamp() {
-    sed -i '' "$2" "$1" 2>/dev/null || sed -i "$2" "$1"
+    expr="s#src=\"\./bot/$2\.js(\?v=[^\"]*)?\"#src=\"./bot/$2.js?v=$3\"#g"
+    sed -E -i '' "$expr" "$1" 2>/dev/null || sed -E -i "$expr" "$1"
 }
 
-stamp "$DEST/index.html" "s#\./bot/botclient\.js#./bot/botclient.js?v=$V#g"
-stamp "$DEST/bot.html" "s#\./bot/botclient\.js#./bot/botclient.js?v=$V#g"
-stamp "$DEST/multibox.html" "s#\./bot/multibox\.js#./bot/multibox.js?v=$M#g"
+stamp "$DEST/index.html" botclient "$V"
+stamp "$DEST/bot.html" botclient "$V"
+stamp "$DEST/multibox.html" multibox "$M"
 
 # soundfont lives in the engine repo; the bot bundle resolves it relative to itself
 if [ -f "$ENGINE/public/client/SCC1_Florestan.sf2" ]; then

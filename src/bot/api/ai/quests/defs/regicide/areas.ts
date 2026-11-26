@@ -1,6 +1,15 @@
 import Tile from '../../../../../geometry/Tile.js';
 import type { QuestSnapshot } from '../../engine/types.js';
 
+export {
+    bankedItem as banked,
+    countHeldItems as countHeld,
+    heldItem as held,
+    heldOrBankedItem as owned,
+    heldOrWornItem as carried,
+    wornItem as worn
+} from '../../engine/snapshotItems.js';
+
 export interface RegicideItem {
     id: number;
     name: string;
@@ -150,29 +159,4 @@ export function regicideArea(tile: QuestSnapshot['tile']): RegicideArea {
         return 'tirannwn';
     }
     return 'mainland';
-}
-
-export function held(snap: QuestSnapshot, item: RegicideItem): number {
-    return snap.invIds?.get(item.id) ?? 0;
-}
-
-export function banked(snap: QuestSnapshot, item: RegicideItem): number {
-    return snap.bankIds?.get(item.id) ?? 0;
-}
-
-export function worn(snap: QuestSnapshot, item: RegicideItem): boolean {
-    return snap.wornIds?.has(item.id) ?? false;
-}
-
-export function carried(snap: QuestSnapshot, item: RegicideItem): number {
-    return held(snap, item) + (worn(snap, item) ? 1 : 0);
-}
-
-export function owned(snap: QuestSnapshot, item: RegicideItem): number {
-    return held(snap, item) + banked(snap, item);
-}
-
-/** How many of a set the pack holds; the 2 half-mixes share a display name. */
-export function countHeld(snap: QuestSnapshot, items: readonly RegicideItem[]): number {
-    return items.filter(item => held(snap, item) > 0).length;
 }

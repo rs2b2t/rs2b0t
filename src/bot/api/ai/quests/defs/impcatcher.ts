@@ -1,3 +1,4 @@
+import { customStep, talkTo, waitForJournal, waitStep } from '../engine/questSteps.js';
 import { EventSignal } from '../../../execution/EventSignal.js';
 import { Execution } from '../../../execution/Execution.js';
 import { Game } from '../../../game/Game.js';
@@ -387,7 +388,7 @@ const BEAD_IDS: readonly number[] = IMP_BEADS.map(bead => bead.id);
 export function gatherBead(snap: QuestSnapshot): QuestStep {
     const missing = missingBeads(snap);
     if (missing.length === 0) {
-        return { kind: 'wait', reason: 'every bead is already held' };
+        return waitStep('every bead is already held');
     }
     // Why: an unread bank may hold a bead from an earlier run, which is 50 imp kills cheaper than farming another.
     if (!snap.bankKnown) {
@@ -411,11 +412,7 @@ export function gatherBead(snap: QuestSnapshot): QuestStep {
             items: [{ name: 'Coins', qty: Math.min(COIN_RESERVE - coins, snap.bankCoins) }]
         };
     }
-    return {
-        kind: 'custom',
-        name: `kill imps for ${missing.map(bead => bead.name).join(', ')}`,
-        run: farmBeads
-    };
+    return customStep(`kill imps for ${missing.map(bead => bead.name).join(', ')}`, farmBeads);
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
@@ -423,14 +420,14 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return { kind: 'done' };
     }
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     // Why: the imp drop table is unconditional, so beads can be farmed before talking to Mizgog.
     // Why: the strip is 625 of walking and 2 ship fares from him, so gathering first pays that once.
     if (missingBeads(snap).length > 0) {
         return gatherBead(snap);
     }
-    return { kind: 'talk', stop: MIZGOG };
+    return talkTo(MIZGOG);
 }
 
 export const impcatcher: QuestModule = {

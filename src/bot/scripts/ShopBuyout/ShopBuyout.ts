@@ -1,7 +1,7 @@
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { Game } from '../../api/game/Game.js';
+import { waitForPlayerTile } from '../../api/game/Game.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { Bank } from '../../api/bank/Bank.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
@@ -51,7 +51,7 @@ export default class ShopBuyout extends TaskBot {
     rec: ShopRecord | null = null;
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
 
         this.budgetGp = this.settings.num('budgetGp', 250_000);
         this.perTripGp = this.settings.num('perTripGp', 100_000);

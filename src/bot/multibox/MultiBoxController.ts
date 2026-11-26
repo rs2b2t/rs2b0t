@@ -5,13 +5,30 @@ import type {
     LoginCoordinationRegistry
 } from '../runtime/LoginCoordination.js';
 import { LoginCoordinator } from './LoginCoordinator.js';
-import { indexSavedProfiles, normalizeUsername } from './profileUsername.js';
+import JString from '../../client/datastruct/JString.js';
 import { waitForWorldSwitch } from '../runtime/WorldSwitch.js';
 import type { WorldNumber } from '../../client/config/worlds.js';
 
-export { normalizeUsername } from './profileUsername.js';
-
 export const MAIN_TAB = 'Main';
+
+export function normalizeUsername(username: string): string {
+    const hash = JString.toUserhash(username);
+    return hash === 0n ? '' : JString.toRawUsername(hash);
+}
+
+export function indexByUsername<T>(entries: Iterable<readonly [string, T]>) {
+    const exact = new Map<string, T>();
+    const firstByIdentity = new Map<string, T>();
+    for (const [username, value] of entries) {
+        if (!exact.has(username)) exact.set(username, value);
+        const identity = normalizeUsername(username);
+        if (identity && !firstByIdentity.has(identity)) firstByIdentity.set(identity, value);
+    }
+    return {
+        get: (username: string) => exact.get(username) ?? firstByIdentity.get(normalizeUsername(username)),
+        firstByIdentity
+    };
+}
 
 interface Slot {
     id: number;
@@ -63,12 +80,12 @@ export class MultiBoxController {
     }
 
     restoreProfiles(profiles: Account[], tabs: string[], activeTab: string, loadMissing = true): void {
-        const { find, byIdentity: remaining } = indexSavedProfiles(profiles);
+        const savedProfiles = indexByUsername(profiles.map(p => [p.username, p] as const));
         const knownTabs = new Set([MAIN_TAB, ...tabs]);
         const retained = new Set<string>();
-        let modesChanged = false;
+        let modesChanged = this.active !== activeTab;
         for (const slot of this.slots) {
-            const saved = find(slot.account.username);
+            const saved = savedProfiles.get(slot.account.username);
             if (!saved) {
                 retained.add(slot.tab);
                 continue;
@@ -79,20 +96,15 @@ export class MultiBoxController {
                 slot.tab = next;
                 modesChanged = true;
             }
-            remaining.delete(normalizeUsername(saved.username));
+            savedProfiles.firstByIdentity.delete(normalizeUsername(slot.account.username));
         }
         for (const tab of this.customTabs) {
             if (retained.has(tab)) knownTabs.add(tab);
             else if (!knownTabs.has(tab)) this.lastFocusByTab.delete(tab);
         }
-        if (!knownTabs.has(activeTab)) {
-            const prior = this.tabs().slice(0, this.tabs().indexOf(activeTab));
-            activeTab = prior.reverse().find(tab => knownTabs.has(tab)) ?? MAIN_TAB;
-        }
-        modesChanged ||= this.active !== activeTab;
         this.customTabs = [...knownTabs].slice(1);
         this.active = activeTab;
-        this.addGroup(loadMissing ? [...remaining.values()] : [], modesChanged);
+        this.addGroup(loadMissing ? [...savedProfiles.firstByIdentity.values()] : [], modesChanged);
     }
 
     addGroup(accounts: Account[], modesChanged = false): void {

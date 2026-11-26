@@ -1,4 +1,5 @@
 // docs/QUESTS.md
+import { customStep } from '../../engine/questSteps.js';
 import { afterDialogueAction } from '../../exec/primitives.js';
 import { DirectNavigator } from '../../../../../event/webwalk/DirectNavigator.js';
 import type Tile from '../../../../../geometry/Tile.js';
@@ -521,7 +522,7 @@ export function bootsStep(snap: QuestSnapshot): QuestStep | null {
     if ((snap.bankIds?.get(IKOV_OBJ.BOOTS) ?? 0) > 0) {
         return { kind: 'withdraw', items: [{ name: IKOV_NAME.BOOTS, id: IKOV_OBJ.BOOTS, qty: 1 }] };
     }
-    return { kind: 'custom', name: 'fetch the boots of lightness', run: fetchBoots };
+    return customStep('fetch the boots of lightness', fetchBoots);
 }
 
 /**

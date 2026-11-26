@@ -1,14 +1,9 @@
-import { launchBrowser } from './lib/harness.js';
+import { fail, launchBrowser } from './lib/harness.js';
 
 const base = process.argv[2] ?? 'http://localhost:8890';
 const tag = Date.now().toString(36).slice(-6);
 const u1 = `hw${tag}a`;
 const u2 = `hw${tag}b`;
-
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
-}
 
 interface Snap { id: number; username: string; ingame: boolean }
 type Mbx = { multibox: { add(a: { username: string; password: string }): unknown; slots(): Snap[] } };

@@ -1,3 +1,4 @@
+import { customStep as custom, talkTo, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { QUESTS } from '../../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import type { NpcStop } from '../../exec/primitives.js';
@@ -27,16 +28,13 @@ const MONTAI: NpcStop = {
     prefer: ["Ok, I'll gather some wood.", "I'll try my best."]
 };
 
-const custom = (name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep =>
-    ({ kind: 'custom', name, run });
-
 const LEAVE = custom('walk out of the Khazard stronghold', leaveStronghold);
 const TAKE_ORB = custom("search the Khazard chest for the gnomes' orb", takeTheOrb);
 const KILL_WARLORD = custom('kill the Khazard warlord for the last two orbs', killTheWarlord);
 
 function logsLeg(snap: QuestSnapshot): QuestStep {
     if (held(snap, TG_ITEM.LOGS) >= LOGS_WANTED) {
-        return { kind: 'talk', stop: MONTAI };
+        return talkTo(MONTAI);
     }
     return sourceAxe(snap) ?? custom(`chop ${LOGS_WANTED} logs on the battlefield`, chopLogs);
 }
@@ -47,10 +45,10 @@ const CEREMONY_RANGE = 12;
 // Why: Bolren deletes the orbs a tick before the queue that finishes the quest, so an empty pack at his feet is that gap.
 function reclaim(snap: QuestSnapshot, item: TgItem, earn: QuestStep): QuestStep {
     if (held(snap, item) > 0) {
-        return { kind: 'talk', stop: BOLREN };
+        return talkTo(BOLREN);
     }
     if (snap.tile && TG_TILE.BOLREN.distanceTo(snap.tile) <= CEREMONY_RANGE) {
-        return { kind: 'wait', reason: 'King Bolren is running the ceremony' };
+        return waitStep('King Bolren is running the ceremony');
     }
     if (snap.bankKnown !== true) {
         return scanBank();
@@ -63,10 +61,10 @@ function reclaim(snap: QuestSnapshot, item: TgItem, earn: QuestStep): QuestStep 
 function stageStep(snap: QuestSnapshot, stage: number): QuestStep {
     switch (stage) {
         case TG_STAGE.NOT_STARTED:
-            return { kind: 'talk', stop: BOLREN };
+            return talkTo(BOLREN);
         case TG_STAGE.STARTED:
         case TG_STAGE.GAVE_LOGS:
-            return { kind: 'talk', stop: MONTAI };
+            return talkTo(MONTAI);
         case TG_STAGE.SPOKEN_MONTAI:
             return logsLeg(snap);
         case TG_STAGE.FINDING_TRACKERS:
@@ -80,7 +78,7 @@ function stageStep(snap: QuestSnapshot, stage: number): QuestStep {
         case TG_STAGE.DEFEATED_WARLORD:
             return reclaim(snap, TG_ITEM.ORBS, KILL_WARLORD);
         default:
-            return { kind: 'wait', reason: `Tree Gnome Village stage ${stage} is not implemented` };
+            return waitStep(`Tree Gnome Village stage ${stage} is not implemented`);
     }
 }
 
@@ -97,14 +95,14 @@ function chestBusiness(snap: QuestSnapshot, stage: number): boolean {
 
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     if (snap.journal === 'complete') {
         return { kind: 'done' };
     }
     const stage = snap.progress?.stage ?? snap.stage;
     if (stage === undefined) {
-        return { kind: 'wait', reason: 'Tree Gnome Village journal stage unavailable' };
+        return waitStep('Tree Gnome Village journal stage unavailable');
     }
     if (inStronghold(snap.tile)) {
         return chestBusiness(snap, stage) ? TAKE_ORB : LEAVE;

@@ -6,7 +6,7 @@ import { DEFAULT_MARGIN, DEFAULT_MAX_TRADE, removeBook, rowOf, uniqueBookName, u
 import { CATEGORIES, shelves, type Category } from '../api/market/categories.js';
 import { el } from './dom.js';
 import { itemIconDataUrl } from './itemIcon.js';
-import { addRow, addRows, displayRows, dropRow, formatPrice, nextSort, parseAmount, parsePrice, pickerRows, setField, setMargin, setMaxTradeValue, toggleSide, viewRows, type DisplayRow, type SortDir, type SortKey } from './priceBookPanelLogic.js';
+import { addRow, addRows, displayRows, dropRow, formatPrice, nextSort, parseAmount, parsePrice, pickerRows, setField, setMargin, setMaxTradeValue, setSide, viewRows, type DisplayRow, type SortDir, type SortKey } from './priceBookPanelLogic.js';
 
 const ICON_FILL_MS = 500;
 const ICON_FILL_TRIES = 12;
@@ -104,6 +104,15 @@ export class PriceBookPanel {
         this.render();
     }
 
+    private editCurrent(edit: (book: PriceBook) => PriceBook): void {
+        const current = this.current();
+        if (current) {
+            this.commit(edit(current));
+        } else {
+            this.open();
+        }
+    }
+
     // Why: every edit commits through the store and rebuilds the panel, which would drop the scroll position and caret and send an edit on row 80 back to row 1.
     private render(): void {
         const held = this.hold();
@@ -119,7 +128,7 @@ export class PriceBookPanel {
             this.window.appendChild(this.bookFields(book));
             this.window.appendChild(this.shelfBar(all));
             this.window.appendChild(this.filterBar(shown.length, onShelf.length));
-            this.window.appendChild(this.table(book, shown));
+            this.window.appendChild(this.table(shown));
             this.window.appendChild(this.addBar());
             if (this.adding) {
                 this.window.appendChild(this.picker(book, cat));
@@ -428,7 +437,7 @@ export class PriceBookPanel {
                 book.margin,
                 'margin',
                 value => {
-                    this.commit(setMargin(book, value));
+                    this.editCurrent(current => setMargin(current, value));
                 },
                 'total spread, split either side of mid'
             )
@@ -440,7 +449,7 @@ export class PriceBookPanel {
                 book.maxTradeValue,
                 'max-trade',
                 value => {
-                    this.commit(setMaxTradeValue(book, value));
+                    this.editCurrent(current => setMaxTradeValue(current, value));
                 },
                 'refuse any single trade worth more than this',
                 true
@@ -521,7 +530,7 @@ export class PriceBookPanel {
         return wrap;
     }
 
-    private table(book: PriceBook, rows: readonly DisplayRow[]): HTMLElement {
+    private table(rows: readonly DisplayRow[]): HTMLElement {
         const table = el('div', 'rs2b0t-pricebook-table');
         table.dataset.scroll = 'table';
         table.appendChild(this.headRow());
@@ -532,7 +541,7 @@ export class PriceBookPanel {
             return table;
         }
         for (const row of rows) {
-            table.appendChild(this.itemRow(book, row));
+            table.appendChild(this.itemRow(row));
         }
         return table;
     }
@@ -671,14 +680,7 @@ export class PriceBookPanel {
             const add = el('button', 'rs2b0t-button rs2b0t-pricebook-shelf-add');
             add.textContent = missing.length === 0 ? '✓' : `+ add ${missing.length}`;
             add.disabled = missing.length === 0;
-            add.addEventListener('click', () =>
-                this.commit(
-                    addRows(
-                        book,
-                        missing.map(r => ({ id: r.id, cost: r.cost }))
-                    )
-                )
-            );
+            add.addEventListener('click', () => this.editCurrent(current => addRows(current, missing)));
             line.appendChild(add);
 
             list.appendChild(line);
@@ -687,7 +689,7 @@ export class PriceBookPanel {
         return box;
     }
 
-    private itemRow(book: PriceBook, row: DisplayRow): HTMLElement {
+    private itemRow(row: DisplayRow): HTMLElement {
         const line = el('div', 'rs2b0t-pricebook-row');
         line.dataset.item = String(row.id);
         if (!row.valid) {
@@ -701,20 +703,22 @@ export class PriceBookPanel {
         name.textContent = row.name;
         line.appendChild(name);
 
-        line.appendChild(this.priceCell('mid', row.mid, false, value => this.commit(setField(book, row.id, 'mid', value))));
-        line.appendChild(this.priceCell('buy', row.buy, row.pinnedBuy, value => this.commit(setField(book, row.id, 'buy', value))));
-        line.appendChild(this.priceCell('sell', row.sell, row.pinnedSell, value => this.commit(setField(book, row.id, 'sell', value))));
-        line.appendChild(this.priceCell('cap', row.cap, false, value => this.commit(setField(book, row.id, 'cap', value))));
+        line.appendChild(this.priceCell(row, 'mid'));
+        line.appendChild(this.priceCell(row, 'buy', row.pinnedBuy));
+        line.appendChild(this.priceCell(row, 'sell', row.pinnedSell));
+        line.appendChild(this.priceCell(row, 'cap'));
 
-        line.appendChild(this.sideToggle('buying', row.buying, () => this.commit(toggleSide(book, row.id, 'buying'))));
-        line.appendChild(this.sideToggle('selling', row.selling, () => this.commit(toggleSide(book, row.id, 'selling'))));
+        line.appendChild(this.sideToggle(row, 'buying'));
+        line.appendChild(this.sideToggle(row, 'selling'));
 
-        line.appendChild(this.action('drop', '✕', () => this.commit(dropRow(book, row.id))));
+        line.appendChild(this.action('drop', '✕', () => this.editCurrent(book => dropRow(book, row.id))));
         return line;
     }
 
     /** A pinned cell holds an override; clicking the pin clears it back to the derived price. */
-    private priceCell(role: string, value: number, pinned: boolean, onChange: (value: number) => void): HTMLElement {
+    private priceCell(row: DisplayRow, role: 'mid' | 'buy' | 'sell' | 'cap', pinned = false): HTMLElement {
+        const value = row[role];
+        const onChange = (next: number | null) => this.editCurrent(book => setField(book, row.id, role, next));
         const cell = el('span', 'rs2b0t-pricebook-cell');
         const input = el('input', 'rs2b0t-loadout-qty');
         // Why: the box shows 1.25M, which a number input will not hold, so it takes text and parses it back.
@@ -722,11 +726,7 @@ export class PriceBookPanel {
         input.inputMode = 'numeric';
         input.dataset.role = role;
         input.value = formatPrice(value);
-        if (pinned) {
-            input.dataset.pinned = 'true';
-            input.title = 'pinned override, click the dot to clear';
-        }
-        input.addEventListener('change', () => {
+        const savePrice = (): void => {
             const parsed = parsePrice(input.value);
             if (parsed === null) {
                 // Why: an unreadable edit would store NaN, so the box goes back to the old value.
@@ -734,19 +734,52 @@ export class PriceBookPanel {
                 return;
             }
             onChange(parsed);
-        });
+        };
+        input.addEventListener('change', savePrice);
         cell.appendChild(input);
+        if (pinned) {
+            input.dataset.pinned = 'true';
+            input.title = 'pinned override, click the dot to clear';
+            const clear = this.action(`clear-${role}`, '●', () => {
+                if (this.renaming) {
+                    this.window.querySelector<HTMLInputElement>('[data-role=book-name]')?.blur();
+                }
+                const selected = this.selected;
+                input.removeEventListener('change', savePrice);
+                try {
+                    input.focus({ preventScroll: true });
+                    if (this.selected === selected) {
+                        onChange(null);
+                    }
+                } finally {
+                    if (this.window.contains(input)) {
+                        input.addEventListener('change', savePrice);
+                    }
+                }
+            });
+            clear.type = 'button';
+            clear.classList.add('rs2b0t-pricebook-unpin');
+            clear.title = `Clear pinned ${role} price`;
+            clear.setAttribute('aria-label', clear.title);
+            clear.addEventListener('mousedown', event => {
+                if (event.button === 0) {
+                    event.preventDefault();
+                }
+            });
+            cell.appendChild(clear);
+        }
         return cell;
     }
 
-    private sideToggle(side: 'buying' | 'selling', on: boolean, onClick: () => void): HTMLElement {
+    private sideToggle(row: DisplayRow, side: 'buying' | 'selling'): HTMLElement {
+        const on = row[side];
         const cell = el('span', 'rs2b0t-pricebook-cell');
         const btn = el('button', 'rs2b0t-button rs2b0t-pricebook-toggle');
         btn.dataset.role = side;
         btn.dataset.on = String(on);
         btn.textContent = on ? '✓' : '–';
         btn.title = `${side} is ${on ? 'on' : 'off'}`;
-        btn.addEventListener('click', onClick);
+        btn.addEventListener('click', () => this.editCurrent(book => setSide(book, row.id, side, !on)));
         cell.appendChild(btn);
         return cell;
     }
@@ -803,7 +836,7 @@ export class PriceBookPanel {
             if (hit.added) {
                 line.dataset.added = 'true';
             } else {
-                line.addEventListener('click', () => this.commit(addRow(book, hit.id, hit.cost)));
+                line.addEventListener('click', () => this.editCurrent(current => addRow(current, hit.id, hit.cost)));
             }
             results.appendChild(line);
         }

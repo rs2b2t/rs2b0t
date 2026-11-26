@@ -3,8 +3,9 @@ import { TARGET, supportsWorldRouting } from '../../client/config/target.js';
 import { hostedWorld } from '../../client/config/worlds.js';
 import { reader } from '../adapter/ClientAdapter.js';
 import type { BotHostImpl } from '../runtime/BotHost.js';
+import type { LogLine, ScriptContext } from '../runtime/ScriptContext.js';
 import { AutoRelogin } from '../runtime/AutoRelogin.js';
-import { boxId, boxKey, wallLinkHref } from '../runtime/box.js';
+import { boxId, boxKey, boxKeyTail, profileStorageKeys, wallLinkHref } from '../runtime/box.js';
 import { Credentials } from '../runtime/Credentials.js';
 import { ScriptRegistry, type ScriptMeta } from '../runtime/ScriptRegistry.js';
 import { resolveDestination } from '../api/map/WalkDestinations.js';
@@ -21,6 +22,7 @@ import { desktopStorage } from '../runtime/desktopStorage.js';
 // Why: boxId() reads the live URL, so freezing this at module load pins the key to whatever box was current when BotPanel was first imported.
 const selectedScriptKey = (): string => boxKey('selectedScript');
 const rendererEnabledKey = (): string => boxKey('rendererEnabled');
+const VISIBLE_LOG_LINES = 200;
 
 interface RendererControl {
     enabled(): boolean;
@@ -41,6 +43,8 @@ export default class BotPanel {
     private stopBtn: HTMLButtonElement;
     private scriptStatus: HTMLElement;
     private logBox: HTMLElement;
+    private logContext: ScriptContext | null = null;
+    private logScroll: { requested: number; actual: number } | null = null;
     private unsubLog: (() => void) | null = null;
     private settingsBox: HTMLElement;
     private paramsModal!: ParamsModal;
@@ -202,7 +206,7 @@ export default class BotPanel {
 
         this.runner.onChange(() => {
             this.renderScriptControls();
-            this.renderLog();
+            this.bindLog();
             this.renderSettings();
         });
 
@@ -216,6 +220,7 @@ export default class BotPanel {
             });
         }
         this.render();
+        this.bindLog();
         this.ensureSelection();
         this.renderScriptControls();
         this.renderSettings();
@@ -250,6 +255,7 @@ export default class BotPanel {
     assignScript(name: string): void {
         this.assertScriptIdle();
         this.selectScript(this.requireScript(name).name);
+        this.library.cancelPendingSelection();
     }
 
     copyScriptSettings(name: string, values: Record<string, string>): void {
@@ -270,18 +276,14 @@ export default class BotPanel {
             if (!Object.hasOwn(schema, key) || typeof value !== 'string') throw new Error(`Invalid setting: ${name}.${key}`);
         }
         const keys = new Set(Object.keys(schema));
-        const prefixes = (name === 'JiveRC' ? ['NatureCrafter', name] : [name]).map(script => boxKey(`set:${script}:`));
-        const savedKeys = desktopStorage ? desktopStorage.keys() : [];
-        for (const storage of desktopStorage ? [sessionStorage] : [sessionStorage, localStorage]) {
-            const length = storage.length;
-            for (let i = 0; i < length; i++) {
-                const key = storage.key(i);
-                if (key) savedKeys.push(key);
-            }
-        }
+        const box = boxId();
+        const prefixes = (name === 'JiveRC' ? ['NatureCrafter', name] : [name]).map(script => `set:${script}:`);
+        const savedKeys = [localStorage, sessionStorage].flatMap(store => profileStorageKeys(store, box));
         for (const key of savedKeys) {
-            const prefix = prefixes.find(prefix => key.startsWith(prefix));
-            if (prefix) keys.add(key.slice(prefix.length));
+            for (const prefix of prefixes) {
+                const setting = boxKeyTail(key, prefix, box);
+                if (setting !== null) keys.add(setting);
+            }
         }
         this.assertNoUrlOverrides(name, keys);
         return { name, keys };
@@ -327,7 +329,7 @@ export default class BotPanel {
             this.assertNoUrlOverrides('WalkTo', ['destination', 'customTile']);
             SettingsStore.save('WalkTo', 'destination', target.name);
             SettingsStore.save('WalkTo', 'customTile', '0,0,0');
-            this.applyScriptSelection('WalkTo');
+            this.assignScript('WalkTo');
             this.handleStart(true);
         });
     }
@@ -555,12 +557,7 @@ export default class BotPanel {
         } catch (err) {
             if (rethrow) throw err;
             console.error('[rs2b0t] start failed', err);
-            return;
         }
-
-        this.unsubLog?.();
-        this.unsubLog = this.runner.ctx?.onLog(() => this.renderLog()) ?? null;
-        this.renderLog();
     }
 
     private handlePause(): void {
@@ -594,26 +591,45 @@ export default class BotPanel {
         this.scriptStatus.className = `rs2b0t-value rs2b0t-state-${state}`;
     }
 
-    private renderLog(): void {
+    private bindLog(): void {
         const ctx = this.runner.ctx;
-        if (!ctx) {
-            this.logBox.replaceChildren();
-            return;
-        }
-
-        const atBottom = this.logBox.scrollTop + this.logBox.clientHeight >= this.logBox.scrollHeight - 4;
-
+        if (ctx === this.logContext) return;
+        this.unsubLog?.();
+        this.logContext = ctx;
+        this.logScroll = null;
         this.logBox.replaceChildren();
-        for (const line of ctx.log.slice(-200)) {
-            const div = el('div', `rs2b0t-log-line rs2b0t-log-${line.level}`);
-            const time = new Date(line.time).toTimeString().slice(0, 8);
-            div.textContent = `${time} ${line.msg}`;
-            this.logBox.appendChild(div);
-        }
-
-        if (atBottom) {
+        if (ctx) {
+            for (const line of ctx.log.slice(-VISIBLE_LOG_LINES)) this.appendLogRow(line);
             this.logBox.scrollTop = this.logBox.scrollHeight;
         }
+        this.unsubLog = ctx?.onLog(line => this.appendLog(line)) ?? null;
+    }
+
+    private appendLog(line: LogLine): void {
+        const box = this.logBox;
+        const top = box.scrollTop;
+        const atBottom = top + box.clientHeight >= box.scrollHeight - 4;
+        const oldest = box.childElementCount === VISIBLE_LOG_LINES ? box.firstElementChild : null;
+        const removedHeight = !atBottom && oldest ? oldest.getBoundingClientRect().height : 0;
+        oldest?.remove();
+        this.appendLogRow(line);
+        if (atBottom) {
+            this.logScroll = null;
+            box.scrollTop = box.scrollHeight;
+        } else if (oldest) {
+            const previous = this.logScroll;
+            const start = previous?.actual === top ? previous.requested : top;
+            const requested = Math.max(0, start - removedHeight);
+            box.scrollTop = requested;
+            this.logScroll = { requested, actual: box.scrollTop };
+        }
+    }
+
+    private appendLogRow(line: LogLine): void {
+        const div = el('div', `rs2b0t-log-line rs2b0t-log-${line.level}`);
+        const time = new Date(line.time).toTimeString().slice(0, 8);
+        div.textContent = `${time} ${line.msg}`;
+        this.logBox.appendChild(div);
     }
 
     private buildRendererControls(renderer: RendererControl): HTMLElement {

@@ -1,13 +1,8 @@
+import { cachedBankId as bankedId, heldId } from '../../engine/snapshotItems.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { EC_ID, EC_NAME, EC_TILE } from './areas.js';
 
-export function heldId(snap: QuestSnapshot, id: number): number {
-    return snap.invIds?.get(id) ?? 0;
-}
-
-export function bankedId(snap: QuestSnapshot, id: number): number {
-    return snap.bankIds?.get(id) ?? 0;
-}
+export { bankedId, heldId };
 
 // Why: `ownsInventory` opts the module out of the engine's food withdrawal, and nothing in the manor is aggressive, so the trip carries the spade and nothing else.
 

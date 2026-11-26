@@ -1,3 +1,4 @@
+import { customStep, talkTo, waitForJournal, waitStep } from '../engine/questSteps.js';
 import { Execution } from '../../../execution/Execution.js';
 import { Game } from '../../../game/Game.js';
 import { Inventory } from '../../../inventory/Inventory.js';
@@ -37,10 +38,10 @@ function gpShort(snap: QuestSnapshot, estGp: number): number {
 
 function startedOr(snap: QuestSnapshot, step: QuestStep): QuestStep {
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     if (snap.journal === 'notStarted') {
-        return { kind: 'talk', stop: HETTY };
+        return talkTo(HETTY);
     }
     return step;
 }
@@ -50,17 +51,17 @@ export const gatherOnion = (snap: QuestSnapshot): QuestStep =>
 
 export const gatherEyeOfNewt = (snap: QuestSnapshot): QuestStep =>
     startedOr(snap, gpShort(snap, 20) > 0
-        ? { kind: 'wait', reason: 'need ~20 gp for Eye of newt' }
+        ? waitStep('need ~20 gp for Eye of newt')
         : { kind: 'buy', item: 'Eye of newt', qty: 1, shop: BETTY_SHOP, estGp: 20 });
 
 export const gatherRatsTail = (snap: QuestSnapshot): QuestStep =>
-    startedOr(snap, { kind: 'custom', name: 'kill a rat for its tail', run: killRatGrabTail });
+    startedOr(snap, customStep('kill a rat for its tail', killRatGrabTail));
 
 export const gatherBurntMeat = (snap: QuestSnapshot): QuestStep =>
     startedOr(snap, (snap.inv.has('cooked meat') || snap.inv.has('raw beef'))
-        ? { kind: 'custom', name: 'burn the meat on the range', run: burnMeat }
+        ? customStep('burn the meat on the range', burnMeat)
         : gpShort(snap, 20) > 0
-            ? { kind: 'wait', reason: 'need ~20 gp for Raw beef' }
+            ? waitStep('need ~20 gp for Raw beef')
             : { kind: 'buy', item: 'Raw beef', qty: 2, shop: WYDIN_SHOP, estGp: 20 });
 
 async function killRatGrabTail(log: (m: string) => void): Promise<boolean> {
@@ -163,17 +164,17 @@ function gatherFor(name: string, snap: QuestSnapshot): QuestStep {
         case RATS_TAIL.toLowerCase(): return gatherRatsTail(snap);
         case 'eye of newt': return gatherEyeOfNewt(snap);
         case 'burnt meat': return gatherBurntMeat(snap);
-        default: return { kind: 'wait', reason: `no gatherer for ${name}` };
+        default: return waitStep(`no gatherer for ${name}`);
     }
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'complete') { return { kind: 'done' }; }
-    if (snap.journal === 'unknown') { return { kind: 'wait', reason: 'quest journal not loaded' }; }
-    if (snap.journal === 'notStarted') { return { kind: 'talk', stop: HETTY }; }
+    if (snap.journal === 'unknown') { return waitForJournal(); }
+    if (snap.journal === 'notStarted') { return talkTo(HETTY); }
     const need = INGREDIENTS.filter(i => !snap.inv.has(i));
     if (need.length === 0) {
-        return { kind: 'custom', name: 'hand in the ingredients and drink the potion', run: handInAndDrink };
+        return customStep('hand in the ingredients and drink the potion', handInAndDrink);
     }
     return gatherFor(need[0], snap);
 }

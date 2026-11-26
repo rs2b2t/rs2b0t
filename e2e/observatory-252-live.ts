@@ -6,9 +6,9 @@
 //   HEADED=1 bun e2e/observatory-252-live.ts --stage 0 --until 2 --minutes 45 --tick 200
 //   HEADED=1 bun e2e/observatory-252-live.ts --stage 4 --until 6 --minutes 30 --tick 200 --stocked
 //   HEADED=1 bun e2e/observatory-252-live.ts --stage 6 --until 7 --minutes 20 --tick 200
-import type { Page } from 'playwright-core';
-
-import { deployIsolatedClient, launchBrowser } from './lib/harness.js';
+import { parseQuestArgs, type QuestArgs } from './lib/questArgs.js';
+import { printQuestLogs, questSnapshot, setQuestStats, teleportToQuestStart } from './lib/questHarness.js';
+import { deployIsolatedClient, fail, launchBrowser, logBotConsole } from './lib/harness.js';
 import {
     cheatQuiet,
     clearChatDialogs,
@@ -17,61 +17,30 @@ import {
     relog,
     seedItemsToBank,
     startScript,
-    teleTo,
     type BankSeedItem
 } from './tutorial/harness.js';
 
-interface Args {
-    base: string;
-    user: string;
-    stage: number;
-    until: number;
-    minutes: number;
-    tickMs: number;
+interface Args extends QuestArgs {
     food: string;
     stats: number;
     /** Bank the planks, bar and glass an established account would already own. */
     stocked: boolean;
-    deploy: boolean;
 }
 
-function parse(argv: string[]): Args {
-    const out: Args = {
-        base: process.env.BASE ?? 'http://localhost:8890',
-        user: `ob${Date.now().toString(36).slice(-7)}`,
-        stage: 0,
-        until: 7,
-        minutes: 120,
-        tickMs: 300,
-        food: 'Lobster',
-        stats: 70,
-        stocked: false,
-        deploy: true
-    };
-    for (let i = 0; i < argv.length; i++) {
-        const flag = argv[i];
-        if (flag === '--no-deploy') { out.deploy = false; continue; }
-        if (flag === '--stocked') { out.stocked = true; continue; }
-        const value = argv[++i];
-        if (value === undefined) { break; }
-        if (flag === '--base') { out.base = value; }
-        else if (flag === '--user') { out.user = value; }
-        else if (flag === '--stage') { out.stage = Number(value); }
-        else if (flag === '--until') { out.until = Number(value); }
-        else if (flag === '--minutes') { out.minutes = Number(value); }
-        else if (flag === '--tick') { out.tickMs = Number(value); }
-        else if (flag === '--food') { out.food = value; }
-        else if (flag === '--stats') { out.stats = Number(value); }
-    }
-    return out;
-}
-
-const args = parse(process.argv.slice(2));
-
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
-}
+const args = parseQuestArgs<Args>(process.argv.slice(2), {
+    base: process.env.BASE ?? 'http://localhost:8890',
+    user: `ob${Date.now().toString(36).slice(-7)}`,
+    stage: 0,
+    until: 7,
+    minutes: 120,
+    tickMs: 300,
+    food: 'Lobster',
+    stats: 70,
+    stocked: false,
+    deploy: true
+}, {
+    switches: { '--stocked': { stocked: true } }
+});
 
 const QUEST = 'Observatory Quest';
 const ARDOUGNE_BANK = { x: 2655, z: 3283, level: 0 };
@@ -93,50 +62,7 @@ function bankSeed(): BankSeedItem[] {
     return seed;
 }
 
-const STATS = [
-    'attack', 'strength', 'defence', 'hitpoints', 'ranged', 'magic', 'prayer',
-    'cooking', 'woodcutting', 'fletching', 'fishing', 'firemaking', 'crafting',
-    'smithing', 'mining', 'herblore', 'agility', 'thieving', 'runecraft'
-];
-
 // Why: `setstat` is a built-in cheat branch with no level-up cascade, so it leaves the player undelayed where `~maxme` does not.
-async function setStats(page: Page, level: number): Promise<void> {
-    for (const skill of STATS) {
-        await cheatQuiet(page, `setstat ${skill} ${level}`);
-    }
-    await clearChatDialogs(page, 'level-up dialog(s)');
-    await page.waitForTimeout(1500);
-    await clearChatDialogs(page, 'straggler dialog(s)');
-}
-
-interface Snapshot {
-    pos: { x: number; z: number; level: number } | null;
-    status: string;
-    qp: number;
-    runner: string;
-    logs: { time: number; level: string; msg: string }[];
-}
-
-async function snapshot(page: Page): Promise<Snapshot> {
-    return page.evaluate(quest => {
-        const g = globalThis as never as {
-            __rs2b0t: {
-                reader: { worldTile(): { x: number; z: number; level: number } | null };
-                Quests: { status(n: string): string; points(): number };
-            };
-            rs2b0t: { runner: { state: string; ctx?: { log?: { time: number; level: string; msg: string }[] } } };
-        };
-        const ring = g.rs2b0t.runner.ctx?.log ?? [];
-        return {
-            pos: g.__rs2b0t.reader.worldTile(),
-            status: g.__rs2b0t.Quests.status(quest),
-            qp: g.__rs2b0t.Quests.points(),
-            runner: g.rs2b0t.runner.state,
-            logs: ring.slice(-80).map(l => ({ time: l.time, level: l.level, msg: l.msg }))
-        };
-    }, QUEST);
-}
-
 if (args.stage < 0 || args.stage > 6) {
     fail('--stage is the %itgronigen value and runs 0 to 6');
 }
@@ -151,13 +77,7 @@ const browser = await launchBrowser({ swiftshader: true });
 try {
     const page = await browser.newPage();
     const t0 = Date.now();
-    page.on('pageerror', e => console.log(`pageerror: ${e}`));
-    page.on('console', m => {
-        const txt = m.text();
-        if (txt.startsWith('[bot]')) {
-            console.log(`  [${Math.round((Date.now() - t0) / 1000)}s] ${txt}`);
-        }
-    });
+    logBotConsole(page, t0);
 
     await mainlandAccount(page, args.base, args.user, clientPage);
     console.log(`mainland-ready as '${args.user}'`);
@@ -179,7 +99,7 @@ try {
     console.log(`seeding ${seed.length} item type(s) into the Ardougne East bank`);
     await seedItemsToBank(page, seed, ARDOUGNE_BANK);
 
-    await setStats(page, args.stats);
+    await setQuestStats(page, args.stats);
     console.log(`stats: ${args.stats} across the board`);
 
     if (args.stage > 0) {
@@ -193,12 +113,7 @@ try {
         await clearChatDialogs(page, 'post-relog dialog(s)');
     }
 
-    if (!(await teleTo(page, ARDOUGNE_BANK, 10, 25_000))) {
-        await clearChatDialogs(page, 'pre-tele dialog(s)');
-        if (!(await teleTo(page, ARDOUGNE_BANK, 10, 25_000))) {
-            fail(`tele to ${ARDOUGNE_BANK.x},${ARDOUGNE_BANK.z} did not arrive`);
-        }
-    }
+    await teleportToQuestStart(page, ARDOUGNE_BANK);
     console.log(`start tile → ${ARDOUGNE_BANK.x},${ARDOUGNE_BANK.z},${ARDOUGNE_BANK.level}`);
 
     await page.evaluate(() => sessionStorage.setItem('rs2b0t:set:AIOQuester:quests', 'itgronigen'));
@@ -210,7 +125,7 @@ try {
     let lastLogTime = 0;
     let reached = args.stage;
     while (Date.now() < deadline) {
-        const last = await snapshot(page);
+        const last = await questSnapshot(page, QUEST);
         const stage = (await getServerVarQuiet(page, 'itgronigen')) ?? -1;
         reached = Math.max(reached, stage);
         const t = Math.round((Date.now() - t0) / 1000);
@@ -218,10 +133,7 @@ try {
             `  t=${t}s pos=${last.pos ? `${last.pos.x},${last.pos.z},${last.pos.level}` : '?'}`
             + ` itgronigen=${stage} journal=${last.status} qp=${last.qp} runner=${last.runner}`
         );
-        for (const l of last.logs) {
-            if (l.time > lastLogTime) { console.log(`      · [${l.level}] ${l.msg}`); }
-        }
-        if (last.logs.length > 0) { lastLogTime = Math.max(lastLogTime, ...last.logs.map(l => l.time)); }
+        lastLogTime = printQuestLogs(last.logs, lastLogTime);
 
         // Why: a full run waits for the list to go green rather than the varp, the recolour and the QP award land a tick behind %itgronigen.
         const done = args.until >= 7 ? last.status === 'complete' : stage >= args.until;

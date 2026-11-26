@@ -1,4 +1,5 @@
 // docs/QUESTS.md
+import { customStep, talkTo, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { Skills } from '../../../../skills/Skills.js';
 import { QUESTS } from '../../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
@@ -27,10 +28,10 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return { kind: 'done' };
     }
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     if (snap.journal === 'notStarted') {
-        return { kind: 'talk', stop: THORMAC };
+        return talkTo(THORMAC);
     }
 
     const held = firstCage(snap.invIds);
@@ -42,25 +43,25 @@ export function decide(snap: QuestSnapshot): QuestStep {
         if (banked !== undefined) {
             return { kind: 'withdraw', items: [{ name: CAGE_NAME, qty: 1, id: banked }] };
         }
-        return { kind: 'talk', stop: THORMAC };
+        return talkTo(THORMAC);
     }
     if (held === CAGE_ID.FULL) {
-        return { kind: 'talk', stop: THORMAC };
+        return talkTo(THORMAC);
     }
 
     const progress = snap.progress;
     if (progress === undefined) {
-        return { kind: 'wait', reason: 'Scorpion Catcher journal stage unavailable' };
+        return waitStep('Scorpion Catcher journal stage unavailable');
     }
     // Why: the seer's first hint is what makes the Taverley wall searchable, and the other 2 scorpions are already where they will be.
     if (progress.stage < SC_STAGE.FIRST_HINT) {
-        return { kind: 'custom', name: 'ask the Seer where the scorpions are', run: askTheSeer };
+        return customStep('ask the Seer where the scorpions are', askTheSeer);
     }
 
     const caught = caughtIn(held);
     const next = EVERY_SCORPION.find(key => !caught.has(key));
     if (next === undefined) {
-        return { kind: 'talk', stop: THORMAC };
+        return talkTo(THORMAC);
     }
     if (next === 'b' && (snap.inv.get(BARCRAWL_CARD.toLowerCase()) ?? 0) === 0) {
         if (!snap.bankKnown) return { kind: 'scanBank' };
@@ -68,7 +69,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
             return { kind: 'withdraw', items: [{ name: BARCRAWL_CARD, qty: 1 }] };
         }
     }
-    return { kind: 'custom', name: `catch the ${SCORPION_LABEL[next]} scorpion`, run: CATCH_LEG[next] };
+    return customStep(`catch the ${SCORPION_LABEL[next]} scorpion`, CATCH_LEG[next]);
 }
 
 // Why: 31 Prayer is the journal's own gate, but joining the order needs it unboosted and the Jailer, the dragon corridor and Protect from Magic are all live combat the record cannot express.

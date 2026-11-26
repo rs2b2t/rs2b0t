@@ -79,11 +79,7 @@ async function resolveJag(opts: ReturnType<typeof parseArgs>): Promise<{ bytes: 
     if (!res.ok) {
         throw new Error(`download failed HTTP ${res.status}`);
     }
-    const bytes = new Uint8Array(await res.arrayBuffer());
-    fs.mkdirSync(opts.outDir, { recursive: true });
-    fs.writeFileSync(cacheJag, bytes);
-    console.log(`  cached ${cacheJag} (${bytes.length} bytes)`);
-    return { bytes, source: `${opts.fetchUrl} → ${cacheJag}` };
+    return { bytes: new Uint8Array(await res.arrayBuffer()), source: opts.fetchUrl };
 }
 
 function fingerprint(jag: Uint8Array): string {

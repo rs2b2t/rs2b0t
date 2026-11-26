@@ -1,3 +1,4 @@
+import { customStep, talkTo, waitForJournal, waitStep } from '../engine/questSteps.js';
 import { normalizeJournal as normalize } from '../journalText.js';
 // docs/QUESTS.md
 import { DirectNavigator } from '../../../../event/webwalk/DirectNavigator.js';
@@ -420,46 +421,46 @@ function gatherSeasonedSardine(snap: QuestSnapshot): QuestStep | null {
     if ((snap.invIds?.get(FLUFFS_OBJ.rawSardine) ?? 0) === 0) {
         return { kind: 'buy', item: 'Raw sardine', qty: 1, shop: SARDINE_SHOP, estGp: SARDINE_GP };
     }
-    return { kind: 'custom', name: 'season the sardine with doogle leaves', run: seasonSardine };
+    return customStep('season the sardine with doogle leaves', seasonSardine);
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'complete') { return { kind: 'done' }; }
-    if (snap.journal === 'unknown') { return { kind: 'wait', reason: 'quest journal not loaded' }; }
-    if (snap.journal === 'notStarted') { return { kind: 'talk', stop: GERTRUDE }; }
+    if (snap.journal === 'unknown') { return waitForJournal(); }
+    if (snap.journal === 'notStarted') { return talkTo(GERTRUDE); }
 
     const progress = snap.progress;
-    if (progress === undefined) { return { kind: 'wait', reason: `${QUEST} journal stage unavailable` }; }
+    if (progress === undefined) { return waitStep(`${QUEST} journal stage unavailable`); }
 
     switch (progress.stage) {
         case FLUFFS_STAGE.STARTED: {
             if ((snap.inv.get('coins') ?? 0) < BOY_PAYMENT) {
                 return { kind: 'withdraw', items: [{ name: 'Coins', qty: COIN_TOPUP }], bank: BANK };
             }
-            return { kind: 'custom', name: 'buy the play area out of Shilop', run: payBrothers };
+            return customStep('buy the play area out of Shilop', payBrothers);
         }
         // Why: the sardine's shop and herb are both on the way out on the milk leg; coming back for them is a second lap of the map.
         case FLUFFS_STAGE.PAID_BOY: {
             const sardine = gatherSeasonedSardine(snap);
             if (sardine !== null) { return sardine; }
             if (!snap.inv.has('bucket of milk')) { return gatherMilk(snap); }
-            return { kind: 'custom', name: 'give Fluffs the milk', run: offerToCat(FLUFFS_OBJ.bucketOfMilk, 'bucket of milk') };
+            return customStep('give Fluffs the milk', offerToCat(FLUFFS_OBJ.bucketOfMilk, 'bucket of milk'));
         }
         case FLUFFS_STAGE.GAVE_MILK: {
             const sardine = gatherSeasonedSardine(snap);
             if (sardine !== null) { return sardine; }
-            return { kind: 'custom', name: 'give Fluffs the doogle sardine', run: offerToCat(FLUFFS_OBJ.seasonedSardine, 'seasoned sardine') };
+            return customStep('give Fluffs the doogle sardine', offerToCat(FLUFFS_OBJ.seasonedSardine, 'seasoned sardine'));
         }
         case FLUFFS_STAGE.GAVE_SARDINE: {
             if ((snap.invIds?.get(FLUFFS_OBJ.kitten) ?? 0) === 0) {
-                return { kind: 'custom', name: 'search the crates for the kitten', run: searchCratesForKitten };
+                return customStep('search the crates for the kitten', searchCratesForKitten);
             }
-            return { kind: 'custom', name: 'give Fluffs her kitten', run: offerToCat(FLUFFS_OBJ.kitten, 'kitten') };
+            return customStep('give Fluffs her kitten', offerToCat(FLUFFS_OBJ.kitten, 'kitten'));
         }
         case FLUFFS_STAGE.RESCUED:
-            return { kind: 'custom', name: 'take the news back to Gertrude', run: reportToGertrude };
+            return customStep('take the news back to Gertrude', reportToGertrude);
         default:
-            return { kind: 'wait', reason: `unexpected ${QUEST} stage ${progress.stage}` };
+            return waitStep(`unexpected ${QUEST} stage ${progress.stage}`);
     }
 }
 

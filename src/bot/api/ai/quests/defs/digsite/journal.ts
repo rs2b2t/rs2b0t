@@ -1,6 +1,5 @@
-import { Modals } from '../../../../ui/widgets/Modals.js';
+import { questProgressAt, readQuestJournal, type JournalCache } from '../../journalReader.js';
 import { normalizeJournal } from '../../journalText.js';
-import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 import { DIG_NAME } from './areas.js';
 
@@ -81,23 +80,13 @@ export function parseDigsiteJournal(lines: readonly string[] | string): QuestPro
 }
 
 /** A failed read doesn't mean the quest went backwards. */
-let lastGood: QuestProgress | undefined;
+const cache: JournalCache<QuestProgress> = {};
 
 /** Test seam: the last good page is memoised for the process. */
 export function resetDigsiteJournalCache(): void {
-    lastGood = undefined;
+    cache.lastGood = undefined;
 }
 
-export async function readDigsiteProgress(): Promise<QuestProgress | undefined> {
-    const status = Quests.status(DIG_NAME);
-    if (status === 'complete') return { stage: DIG_STAGE.COMPLETE, flags: new Set() };
-    if (status === 'notStarted') return { stage: DIG_STAGE.NOT_STARTED, flags: new Set() };
-    if (status !== 'inProgress') return undefined;
-
-    const progress = parseDigsiteJournal(await Quests.journal(DIG_NAME));
-    await Modals.closeIfOpen();
-    if (progress) {
-        lastGood = progress;
-    }
-    return progress ?? lastGood;
+export function readDigsiteProgress(): Promise<QuestProgress | undefined> {
+    return readQuestJournal(DIG_NAME, DIG_STAGE, parseDigsiteJournal, questProgressAt, cache);
 }

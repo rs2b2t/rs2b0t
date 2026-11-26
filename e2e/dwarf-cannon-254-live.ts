@@ -5,12 +5,14 @@
 //   HEADED=1 bun e2e/dwarf-cannon-254-live.ts --stage 0 --minutes 90
 //   HEADED=1 bun e2e/dwarf-cannon-254-live.ts --stage 1 --multi 0 --until 2 --minutes 25
 //   HEADED=1 bun e2e/dwarf-cannon-254-live.ts --stage 4 --multi 2016 --at 2620,9797,0 --until 11 --minutes 40
+import { parseQuestArgs, type QuestArgs } from './lib/questArgs.js';
+import { teleportToQuestStart } from './lib/questHarness.js';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 
 import type { Page } from 'playwright-core';
 
-import { launchBrowser } from './lib/harness.js';
+import { fail, launchBrowser, logBotConsole } from './lib/harness.js';
 import { applyNavPaintSettings } from './lib/navLiveHarness.js';
 import {
     cheatQuiet,
@@ -20,7 +22,6 @@ import {
     relog,
     seedItemsToBank,
     startScript,
-    teleTo,
     type BankSeedItem
 } from './tutorial/harness.js';
 
@@ -30,18 +31,11 @@ interface Tile {
     level: number;
 }
 
-interface Args {
-    base: string;
-    user: string;
-    stage: number;
-    until: number;
+interface Args extends QuestArgs {
     multi: number;
-    minutes: number;
-    tickMs: number;
     skills: number;
     at: Tile | null;
     paint: boolean;
-    deploy: boolean;
 }
 
 function parseTile(s: string): Tile {
@@ -52,45 +46,26 @@ function parseTile(s: string): Tile {
     return { x: x!, z: z!, level: level! };
 }
 
-function parse(argv: string[]): Args {
-    const out: Args = {
-        base: process.env.BASE ?? 'http://localhost:8890',
-        user: `mcan${Date.now().toString(36).slice(-6)}`,
-        stage: 0,
-        until: 11,
-        multi: -1,
-        minutes: 120,
-        tickMs: 300,
-        skills: 99,
-        at: null,
-        paint: false,
-        deploy: true
-    };
-    for (let i = 0; i < argv.length; i++) {
-        const flag = argv[i];
-        if (flag === '--no-deploy') { out.deploy = false; continue; }
-        if (flag === '--paint') { out.paint = true; continue; }
-        const value = argv[++i];
-        if (value === undefined) { break; }
-        if (flag === '--base') { out.base = value; }
-        else if (flag === '--user') { out.user = value; }
-        else if (flag === '--stage') { out.stage = Number(value); }
-        else if (flag === '--until') { out.until = Number(value); }
-        else if (flag === '--multi') { out.multi = Number(value); }
-        else if (flag === '--minutes') { out.minutes = Number(value); }
-        else if (flag === '--tick') { out.tickMs = Number(value); }
-        else if (flag === '--skills') { out.skills = Number(value); }
-        else if (flag === '--at') { out.at = parseTile(value); }
+const args = parseQuestArgs<Args>(process.argv.slice(2), {
+    base: process.env.BASE ?? 'http://localhost:8890',
+    user: `mcan${Date.now().toString(36).slice(-6)}`,
+    stage: 0,
+    until: 11,
+    multi: -1,
+    minutes: 120,
+    tickMs: 300,
+    skills: 99,
+    at: null,
+    paint: false,
+    deploy: true
+}, {
+    switches: { '--paint': { paint: true } },
+    values: {
+        '--multi': value => ({ multi: Number(value) }),
+        '--skills': value => ({ skills: Number(value) }),
+        '--at': value => ({ at: parseTile(value) })
     }
-    return out;
-}
-
-const args = parse(process.argv.slice(2));
-
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
-}
+});
 
 const QUEST = 'Dwarf Cannon';
 /** quest_mcannon.constant ^mcannon_complete. */
@@ -177,13 +152,7 @@ const browser = await launchBrowser({ swiftshader: true });
 try {
     const page = await browser.newPage();
     const t0 = Date.now();
-    page.on('pageerror', e => console.log(`pageerror: ${e}`));
-    page.on('console', m => {
-        const txt = m.text();
-        if (txt.startsWith('[bot]')) {
-            console.log(`  [${Math.round((Date.now() - t0) / 1000)}s] ${txt}`);
-        }
-    });
+    logBotConsole(page, t0);
 
     await mainlandAccount(page, args.base, args.user);
     console.log(`mainland-ready as '${args.user}'`);
@@ -219,12 +188,7 @@ try {
     console.log(`mcannon=${args.stage} mcannonmulti=${args.multi >= 0 ? args.multi : 'untouched'}`);
 
     const start = args.at ?? FALADOR_WEST_BANK;
-    if (!(await teleTo(page, start, 10, 25_000))) {
-        await clearChatDialogs(page, 'pre-tele dialog(s)');
-        if (!(await teleTo(page, start, 10, 25_000))) {
-            fail(`tele to ${start.x},${start.z} did not arrive`);
-        }
-    }
+    await teleportToQuestStart(page, start);
     console.log(`start tile → ${start.x},${start.z},${start.level}`);
 
     if (args.paint) {

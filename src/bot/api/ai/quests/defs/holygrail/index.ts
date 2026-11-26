@@ -1,6 +1,8 @@
+import { customStep as custom, talkTo, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { QUESTS } from '../../data/quests.js';
 import { FOOD_FLOAT, QuestFood } from '../../food.js';
 import { gpShort } from '../../engine/provisioning.js';
+import { bankedName as banked, heldName as held, wornName as worn } from '../../engine/snapshotItems.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { ARMOUR_KEEP, armourWanted } from './armour.js';
 import {
@@ -31,22 +33,6 @@ import {
 
 const EXCALIBUR_PRICE = 500;
 
-function held(snap: QuestSnapshot, name: string): number {
-    return snap.inv.get(name.toLowerCase()) ?? 0;
-}
-
-function banked(snap: QuestSnapshot, name: string): number {
-    return snap.bank?.get(name.toLowerCase()) ?? 0;
-}
-
-function worn(snap: QuestSnapshot, name: string): boolean {
-    return snap.worn.has(name.toLowerCase());
-}
-
-function custom(name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep {
-    return { kind: 'custom', name, run };
-}
-
 /** Merlin's Crystal doesn't consume Excalibur, so the bank almost always has it. */
 export function excaliburPlan(snap: QuestSnapshot): QuestStep {
     if (held(snap, ITEM.EXCALIBUR) > 0 || worn(snap, ITEM.EXCALIBUR)) {
@@ -57,10 +43,10 @@ export function excaliburPlan(snap: QuestSnapshot): QuestStep {
         return { kind: 'withdraw', items: [{ name: ITEM.EXCALIBUR, qty: 1 }] };
     }
     if (held(snap, ITEM.COINS) >= EXCALIBUR_PRICE) {
-        return { kind: 'talk', stop: LADY_OF_THE_LAKE };
+        return talkTo(LADY_OF_THE_LAKE);
     }
     if (gpShort(snap, EXCALIBUR_PRICE) > 0) {
-        return { kind: 'wait', reason: `need ${EXCALIBUR_PRICE} gp to buy Excalibur back from the Lady of the Lake` };
+        return waitStep(`need ${EXCALIBUR_PRICE} gp to buy Excalibur back from the Lady of the Lake`);
     }
     return { kind: 'withdraw', items: [{ name: ITEM.COINS, qty: EXCALIBUR_PRICE }] };
 }
@@ -86,7 +72,7 @@ function entranaLeg(snap: QuestSnapshot, food: string | null): QuestStep {
             exactKeep: true
         };
     }
-    return { kind: 'talk', stop: HIGH_PRIEST };
+    return talkTo(HIGH_PRIEST);
 }
 
 /** Re-arm after the Entrana strip: Excalibur first, then whatever armour the bank holds. */
@@ -115,7 +101,7 @@ function napkinStep(snap: QuestSnapshot): QuestStep | null {
     if (banked(snap, ITEM.NAPKIN) > 0) {
         return { kind: 'withdraw', items: [{ name: ITEM.NAPKIN, qty: 1 }] };
     }
-    return { kind: 'talk', stop: GALAHAD };
+    return talkTo(GALAHAD);
 }
 
 // Why: the whistles are the way in and the way home, and the door only drops them for a character carrying the napkin, so every leg that needs one has to check the cloth first.
@@ -130,7 +116,7 @@ function whistleStep(snap: QuestSnapshot, want: number): QuestStep | null {
         if (banked(snap, ITEM.NAPKIN) > 0) {
             return { kind: 'withdraw', items: [{ name: ITEM.NAPKIN, qty: 1 }] };
         }
-        return { kind: 'wait', reason: 'no Holy table napkin, and Galahad replaces one only before Sir Percival is the errand' };
+        return waitStep('no Holy table napkin, and Galahad replaces one only before Sir Percival is the errand');
     }
     return custom('collect Magic whistles from Draynor Manor', log => draynorWhistles(2, log));
 }
@@ -173,7 +159,7 @@ function grailLeg(snap: QuestSnapshot): QuestStep {
     if (held(snap, ITEM.GRAIL) > 0) {
         return inFisherRealm(snap.tile)
             ? custom('carry the Grail out of the realm', whistleOut)
-            : { kind: 'talk', stop: KING_ARTHUR_FINISH };
+            : talkTo(KING_ARTHUR_FINISH);
     }
     if (inRenewedRealm(snap.tile)) {
         return custom('take the Holy Grail from the round table', takeGrail);
@@ -191,14 +177,14 @@ function selectedFood(): string | null {
 
 export function decide(snap: QuestSnapshot, food: string | null = selectedFood()): QuestStep {
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     if (snap.journal === 'complete') {
         return { kind: 'done' };
     }
     const stage = snap.progress?.stage ?? snap.stage;
     if (stage === undefined) {
-        return { kind: 'wait', reason: 'quest stage not readable' };
+        return waitStep('quest stage not readable');
     }
     // Why: `ownsInventory` is off, but the armour planner reads the bank, and an unread bank looks empty.
     if (!snap.bankKnown && !inFisherRealm(snap.tile)) {
@@ -206,7 +192,7 @@ export function decide(snap: QuestSnapshot, food: string | null = selectedFood()
     }
     switch (stage) {
         case GRAIL_STAGE.NOT_STARTED:
-            return { kind: 'talk', stop: KING_ARTHUR_START };
+            return talkTo(KING_ARTHUR_START);
         case GRAIL_STAGE.STARTED:
             return custom("talk to Merlin in Camelot's workshop", merlinLeg);
         case GRAIL_STAGE.SPOKEN_MERLIN:
@@ -219,7 +205,7 @@ export function decide(snap: QuestSnapshot, food: string | null = selectedFood()
         case GRAIL_STAGE.GIVEN_WHISTLE:
             return grailLeg(snap);
         default:
-            return { kind: 'wait', reason: `unmapped Holy Grail stage ${stage}` };
+            return waitStep(`unmapped Holy Grail stage ${stage}`);
     }
 }
 

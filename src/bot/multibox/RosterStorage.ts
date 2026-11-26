@@ -1,6 +1,6 @@
 import { isRosterScript } from './RosterTypes.js';
-import { desktopStorage } from '../runtime/desktopStorage.js';
-import { boxStoragePrefix } from './ProfileTransfer.js';
+import { boxKey, boxKeyTail, clearBoxItem, profileStorageKeys, readBoxItem } from '../runtime/box.js';
+import { storeKeys } from '../runtime/desktopStorage.js';
 
 function canonicalScript(script: string): string {
     return script === 'NatureCrafter' ? 'JiveRC' : script;
@@ -11,72 +11,66 @@ function requireScript(script: string): string {
     return canonicalScript(script);
 }
 
-function settingPrefixes(username: string, script: string): string[] {
-    return (script === 'JiveRC' ? ['NatureCrafter', script] : [script]).map(name => `${boxStoragePrefix(username)}set:${name}:`);
-}
-
 function stores(): Storage[] {
     return [localStorage, sessionStorage];
 }
 
-function read(key: string): string | null {
-    return desktopStorage ? localStorage.getItem(key) : sessionStorage.getItem(key) ?? localStorage.getItem(key);
-}
-
-function keys(prefix: string): string[] {
-    const result = new Set<string>();
-    if (desktopStorage) {
-        for (const key of desktopStorage.keys()) if (key.startsWith(prefix)) result.add(key);
-    }
-    for (const store of desktopStorage ? [sessionStorage] : stores()) {
-        const length = store.length;
-        for (let i = 0; i < length; i++) {
-            const key = store.key(i);
-            if (key?.startsWith(prefix)) result.add(key);
-        }
-    }
-    return [...result];
+function keys(id: string): string[] {
+    const saved = stores().flatMap(store => profileStorageKeys(store, id));
+    return [...new Set(saved)];
 }
 
 export function readProfileScript(username: string): string {
-    return canonicalScript(read(`${boxStoragePrefix(username)}selectedScript`) ?? '');
+    return canonicalScript(readBoxItem('selectedScript', username) ?? '');
 }
 
 export function writeProfileScript(username: string, script: string): void {
     script = requireScript(script);
-    for (const store of stores()) store.setItem(`${boxStoragePrefix(username)}selectedScript`, script);
+    for (const store of stores()) store.setItem(boxKey('selectedScript', username), script);
+}
+
+function scriptEntries(username: string, script: string) {
+    const names = script === 'JiveRC' ? ['NatureCrafter', script] : [script];
+    const saved = keys(username);
+    const entries = [];
+    for (const name of names) {
+        const prefix = `set:${name}:`;
+        for (const key of saved) {
+            const setting = boxKeyTail(key, prefix, username);
+            if (setting !== null) entries.push({ suffix: `set:${name}:${setting}`, setting });
+        }
+    }
+    return entries;
 }
 
 export function readScriptSettings(username: string, script: string): Record<string, string> {
     script = requireScript(script);
-    return Object.fromEntries(settingPrefixes(username, script).flatMap(prefix => keys(prefix).flatMap(key => {
-        const value = read(key);
-        return value === null ? [] : [[key.slice(prefix.length), value]];
-    })));
+    return Object.fromEntries(scriptEntries(username, script).flatMap(({ suffix, setting }) => {
+        const value = readBoxItem(suffix, username);
+        return value === null ? [] : [[setting, value]];
+    }));
 }
 
 export function replaceScriptSettings(username: string, script: string, values: Record<string, string>): void {
     script = requireScript(script);
-    const prefix = `${boxStoragePrefix(username)}set:${script}:`;
-    const previous = settingPrefixes(username, script).flatMap(keys);
+    const previous = scriptEntries(username, script);
     for (const store of stores()) {
-        for (const key of previous) store.removeItem(key);
-        for (const [key, value] of Object.entries(values)) store.setItem(prefix + key, value);
+        for (const { suffix } of previous) clearBoxItem(store, suffix, username);
+        for (const [key, value] of Object.entries(values)) store.setItem(boxKey(`set:${script}:${key}`, username), value);
     }
 }
 
 export function storedScripts(usernames: string[]): string[] {
-    const scripts = new Set<string>();
-    const savedKeys = keys('rs2b0t:');
-    for (const username of usernames) {
-        const selected = readProfileScript(username);
-        if (selected) scripts.add(selected);
-        const prefix = `${boxStoragePrefix(username)}set:`;
-        for (const key of savedKeys) {
-            if (!key.startsWith(prefix)) continue;
-            const suffix = key.slice(prefix.length);
-            const end = suffix.indexOf(':');
-            if (end > 0) scripts.add(canonicalScript(suffix.slice(0, end)));
+    const scripts = new Set(usernames.map(readProfileScript));
+    for (const store of stores()) {
+        const saved = storeKeys(store);
+        for (const username of usernames) {
+            for (const key of profileStorageKeys(store, username, saved)) {
+                const suffix = boxKeyTail(key, 'set:', username);
+                if (suffix === null) continue;
+                const end = suffix.indexOf(':');
+                if (end > 0) scripts.add(canonicalScript(suffix.slice(0, end)));
+            }
         }
     }
     return [...scripts].filter(isRosterScript).sort();

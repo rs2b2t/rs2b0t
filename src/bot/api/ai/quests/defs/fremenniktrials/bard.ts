@@ -1,3 +1,4 @@
+import { customStep, talkTo } from '../../engine/questSteps.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Game } from '../../../../game/Game.js';
 import { GameMessages } from '../../../../chatbox/gameMessages.js';
@@ -35,20 +36,20 @@ export function bardStep(snap: QuestSnapshot): QuestStep | null {
         return null;
     }
     if (!hasFlag(snap.progress, 'bard-started')) {
-        return { kind: 'talk', stop: OLAF(['Yes']) };
+        return talkTo(OLAF(['Yes']));
     }
     if (heldId(snap, FT_ID.ENCHANTED_LYRE) > 0) {
-        return { kind: 'custom', name: 'play the lyre on the longhall stage', run: perform };
+        return customStep('play the lyre on the longhall stage', perform);
     }
     if (heldId(snap, FT_ID.LYRE) > 0) {
         return gatherShark(snap)
-            ?? { kind: 'custom', name: 'offer the shark to Fossegrimen', run: offerShark };
+            ?? customStep('offer the shark to Fossegrimen', offerShark);
     }
     if (heldId(snap, FT_ID.UNSTRUNG_LYRE) > 0 && heldId(snap, FT_ID.GOLDEN_WOOL) > 0) {
         return combine(FT_ID.GOLDEN_WOOL, FT_ID.UNSTRUNG_LYRE, FT_ID.LYRE, 'string the lyre with golden wool');
     }
     if (heldId(snap, FT_ID.GOLDEN_FLEECE) > 0) {
-        return { kind: 'custom', name: 'spin the fleece at the Seers spinning wheel', run: spinFleece };
+        return customStep('spin the fleece at the Seers spinning wheel', spinFleece);
     }
     if (heldId(snap, FT_ID.UNSTRUNG_LYRE) === 0) {
         if (heldId(snap, FT_ID.BRANCH) > 0) {
@@ -65,16 +66,16 @@ export function bardStep(snap: QuestSnapshot): QuestStep | null {
 function fleeceStep(snap: QuestSnapshot): QuestStep {
     if (heldId(snap, FT_ID.PET_ROCK) === 0) {
         if (!lalliAsked) {
-            return { kind: 'custom', name: 'ask Lalli who traded him the wool', run: askLalli };
+            return customStep('ask Lalli who traded him the wool', askLalli);
         }
-        return { kind: 'custom', name: 'take a pet rock from Askeladden', run: takePetRock };
+        return customStep('take a pet rock from Askeladden', takePetRock);
     }
     for (const crop of SOUP_CROPS) {
         if (!snap.inv.has(crop.name.toLowerCase())) {
             return { kind: 'pickLoc', loc: crop.name, op: 'Pick', item: crop.name, anchor: crop.patch };
         }
     }
-    return { kind: 'custom', name: 'cook stone soup and take the golden fleece', run: stoneSoup };
+    return customStep('cook stone soup and take the golden fleece', stoneSoup);
 }
 
 async function askLalli(log: (m: string) => void): Promise<boolean> {

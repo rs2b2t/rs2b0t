@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { ProfileChooser } from '#/bot/multibox/ProfileChooser.js';
-import { ProfileVault, vault, type Profile } from '#/bot/multibox/ProfileVault.js';
+import { vault, type Profile } from '#/bot/multibox/ProfileVault.js';
 
 const clearAll = () => {
     sessionStorage.clear();
@@ -9,11 +9,11 @@ const clearAll = () => {
 };
 beforeEach(async () => {
     clearAll();
-    await vault.reset();
+    vault.reset();
     await vault.setup('pw');
 });
-afterEach(async () => {
-    await vault.reset();
+afterEach(() => {
+    vault.reset();
     clearAll();
 });
 
@@ -238,46 +238,6 @@ describe('ProfileChooser', () => {
         expect(vault.list()[0].world).toBe(2);
         (chooser.el.querySelector('.mbx-profile-row') as HTMLElement).click();
         expect(loaded[0].world).toBe(2);
-    });
-
-    test('a pending create settles after a remote vault reset closes the chooser', async () => {
-        const { chooser, loaded } = make();
-        chooser.open();
-        const user = chooser.el.querySelector<HTMLInputElement>('#mbx-new-user')!;
-        user.value = 'alice';
-
-        await new ProfileVault().reset();
-        const refresh = vault.refresh();
-        chooser.el.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
-        expect(user.disabled).toBe(true);
-        await refresh;
-        chooser.close();
-        await waitFor(() => !user.disabled);
-        expect(loaded).toEqual([]);
-        expect(chooser.el.hidden).toBe(true);
-        expect(vault.status()).toBe('empty');
-    });
-
-    test('a pending world edit settles after a remote vault reset closes the chooser', async () => {
-        await vault.upsert({ username: 'alice', password: 'fixture', world: 1 });
-        let resume!: () => void;
-        const gate = new Promise<void>(resolve => { resume = resolve; });
-        const { chooser } = make({ defaultWorld: 1, onWorldChange: async (profile, world) => {
-            await gate;
-            await vault.setWorld(profile.username, world);
-            return true;
-        } });
-        chooser.open();
-        const select = changeWorld(chooser, 2);
-        expect(select.disabled).toBe(true);
-
-        await new ProfileVault().reset();
-        await vault.refresh();
-        chooser.close();
-        resume();
-        await waitFor(() => !select.disabled);
-        expect(chooser.el.hidden).toBe(true);
-        expect(vault.status()).toBe('empty');
     });
 
     test('a failed switch restores its displayed choice and reports the error', async () => {

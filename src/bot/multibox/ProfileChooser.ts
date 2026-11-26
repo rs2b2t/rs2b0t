@@ -21,7 +21,7 @@ export class ProfileChooser {
     private worldRouting: boolean;
     private pending = false;
 
-    constructor(private onLoad: (p: Profile, focus: boolean, savedTab?: string) => void, private options: ProfileChooserOptions = {}) {
+    constructor(private onLoad: (p: Profile, focus: boolean, resaved?: boolean) => void, private options: ProfileChooserOptions = {}) {
         this.worldRouting = options.worldRouting ?? supportsWorldRouting();
         this.defaultWorld = options.defaultWorld ?? (this.worldRouting ? resolveWorldNumber(location.host, new URLSearchParams(location.search)) : 1);
         if (this.defaultWorld !== 1 && this.defaultWorld !== 2 && this.defaultWorld !== 3) throw new Error('profile world must be 1, 2 or 3');
@@ -128,14 +128,15 @@ export class ProfileChooser {
         this.setPending(true);
         this.status.textContent = 'Saving profile...';
         try {
-            const saved = await vault.upsert({ username, password: this.pass.value, ...(this.worldRouting ? { world: this.selectedWorld(this.world) } : {}) });
+            const created = await vault.upsert({ username, password: this.pass.value, ...(this.worldRouting ? { world: this.selectedWorld(this.world) } : {}) });
+            const saved = vault.list().find(p => p.username === username);
             if (!saved) throw new Error('The saved profile is no longer available');
-            if (saved.created) delete saved.profile.tab;
+            if (created) delete saved.tab;
             this.user.value = '';
             this.pass.value = '';
             this.status.textContent = '';
             this.close();
-            this.onLoad(this.withWorld(saved.profile), true, saved.profile.tab);
+            this.onLoad(this.withWorld(saved), true, !created);
         } catch (error) {
             this.status.textContent = error instanceof Error ? error.message : 'Could not save the profile';
         } finally {

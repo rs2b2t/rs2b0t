@@ -1,6 +1,6 @@
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import Tile from '../../geometry/Tile.js';
 import { RUNES as ALTARS } from '../../data/runeCraftLocations.js';
 import { Bank } from '../../api/bank/Bank.js';
@@ -168,7 +168,7 @@ export default class RuneCrafter extends TaskBot {
     private xpAtStart = 0;
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
         this.choice = this.settings.str('rune', 'Air runes');
         this.cfg = RUNES[this.choice] ?? RUNES['Air runes'];
         this.mode = this.settings.str('mode', 'Solo');

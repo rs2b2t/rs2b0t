@@ -46,6 +46,10 @@ const meleeCombatStyles = new CombatStyleController({
     selectMode: selectCombatMode
 });
 
+export function waitForPlayerTile(timeoutMs = 0): Promise<boolean> {
+    return Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, timeoutMs);
+}
+
 /**
  * Local player and world state.
  * @see docs/reference/api-game.md

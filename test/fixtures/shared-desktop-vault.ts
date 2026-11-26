@@ -66,6 +66,10 @@ try {
     await second.saveTabState(['Fishing', 'Mining', 'Woodcutting'], new Map(), 'Woodcutting');
     await first.refresh();
     assert.deepEqual(first.tabState().tabs, ['Fishing', 'Woodcutting']);
+    await second.saveTabState(['Fishing', 'Woodcutting'], new Map(), 'Fishing');
+    await first.saveTabState(['Fishing', 'Woodcutting', 'Local'], new Map());
+    await second.refresh();
+    assert.deepEqual(second.tabState(), { tabs: ['Fishing', 'Woodcutting', 'Local'], activeTab: 'Fishing' });
     await Promise.all([first.upsert({ username: 'first', password: 'one', world: 1 }), second.upsert({ username: 'second', password: 'two', world: 2 })]);
     const reopened = new ProfileVault();
     assert.equal(await reopened.unlock('fixture-passphrase'), true);
@@ -93,15 +97,22 @@ try {
     await first.refresh();
     assert.equal(first.list().find(p => p.username === 'first')?.tab, 'Main');
     assert.equal(first.list().find(p => p.username === 'second')?.tab, 'Logs');
-    const replacement = { profiles: [], tabs: [], activeTab: 'Main' };
-    await assert.rejects(first.replaceAll(replacement, { usernames: ['storage-only'], apply() {
-        throw new Error('storage full');
-    } }), /storage full/);
-    await second.upsert({ username: 'later', password: '' });
-    await second.replaceAll(replacement, { usernames: [], apply(wipe) {
-        assert.deepEqual(wipe.sort(), ['first', 'later', 'second', 'storage-only']);
-    } });
-    await first.reset();
+    await second.assignGroup(['second'], 'Fleet');
+    await first.saveActiveTab('Logs');
+    assert.equal(await reopened.unlock('fixture-passphrase'), true);
+    assert.deepEqual(reopened.snapshot(), { ...second.snapshot(), activeTab: 'Logs' });
+    const profile = { username: 'fixture', password: 'fixture', tab: 'Old' };
+    const backup = { profiles: [{ ...profile, tab: 'Fleet' }], tabs: ['Fleet'], activeTab: 'Fleet' };
+    for (const importedTabs of [['Fleet'], ['Fleet', 'Old']]) {
+        await first.replaceAll({ profiles: [profile], tabs: ['Work', 'Old'], activeTab: 'Old' });
+        await second.refresh();
+        const { tabs } = second.adoptGroupState();
+        await first.replaceAll({ ...backup, tabs: importedTabs });
+        await second.saveTabState(['Work'], new Map([[profile.username, 'Work']]), 'Work', { from: 'Old' }, tabs);
+        assert.equal(await reopened.unlock('fixture-passphrase'), true);
+        assert.deepEqual(reopened.snapshot(), backup);
+    }
+    first.reset();
     await second.refresh();
     assert.equal(second.status(), 'empty');
     const results = await Promise.allSettled([first.setup('one'), second.setup('two')]);

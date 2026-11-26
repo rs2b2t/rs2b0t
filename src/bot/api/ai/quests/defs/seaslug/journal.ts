@@ -1,6 +1,5 @@
-import { Modals } from '../../../../ui/widgets/Modals.js';
+import { readQuestJournal } from '../../journalReader.js';
 import { normalizeJournal as normalize } from '../../journalText.js';
-import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 
 export const QUEST = 'Sea Slug Quest';
@@ -53,18 +52,6 @@ export function parseSeaSlugJournal(lines: readonly string[] | string): QuestPro
     return hit ? progressFor(hit.stage) : undefined;
 }
 
-export async function readSeaSlugProgress(): Promise<QuestProgress | undefined> {
-    const status = Quests.status(QUEST);
-    if (status === 'complete') {
-        return progressFor(SS_STAGE.COMPLETE);
-    }
-    if (status === 'notStarted') {
-        return progressFor(SS_STAGE.NOT_STARTED);
-    }
-    if (status !== 'inProgress') {
-        return undefined;
-    }
-    const progress = parseSeaSlugJournal(await Quests.journal(QUEST));
-    await Modals.closeIfOpen();
-    return progress;
+export function readSeaSlugProgress(): Promise<QuestProgress | undefined> {
+    return readQuestJournal(QUEST, SS_STAGE, parseSeaSlugJournal, progressFor);
 }

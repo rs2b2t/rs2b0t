@@ -1,4 +1,5 @@
 // docs/QUESTS.md
+import { customStep, waitStep } from '../../engine/questSteps.js';
 import { Equipment } from '../../../../equipment/Equipment.js';
 import { EventSignal } from '../../../../execution/EventSignal.js';
 import { Execution } from '../../../../execution/Execution.js';
@@ -329,9 +330,9 @@ function rootStep(snap: QuestSnapshot): QuestStep {
         return { kind: 'deposit', keep: [IKOV_NAME.LOBSTER, 'coins'], exactKeep: true };
     }
     if (foodless(snap)) {
-        return { kind: 'custom', name: 'leave the hobgoblin camp', run: leaveTheCamp };
+        return customStep('leave the hobgoblin camp', leaveTheCamp);
     }
-    return { kind: 'custom', name: `farm limpwurt roots (${banked + held}/${ROOTS_WANTED})`, run: farmRoots };
+    return customStep(`farm limpwurt roots (${banked + held}/${ROOTS_WANTED})`, farmRoots);
 }
 
 interface SupplyWants {
@@ -347,7 +348,7 @@ interface SupplyWants {
 export function suppliesStep(snap: QuestSnapshot, wants: SupplyWants, fletchingLevel?: number): QuestStep | null {
     const needBow = wants.bow && !IKOV_BOWS.some(bow => heldOrBanked(snap, bow.id) > 0);
     if (needBow && fletchingLevel !== undefined && fletchingLevel < 65) {
-        return { kind: 'wait', reason: 'need Fletching 65 to make a Yew shortbow, or a strung yew or magic bow' };
+        return waitStep('need Fletching 65 to make a Yew shortbow, or a strung yew or magic bow');
     }
     // Why: Aemad's is in East Ardougne and the rest of the kit is a Catherby-Seers loop, so the axe is bought on the way out.
     if (needBow && axeOutstanding(snap)) {
@@ -401,12 +402,12 @@ function bowChainStep(snap: QuestSnapshot): QuestStep | null {
             { name: IKOV_NAME.UNSTRUNG_YEW_SHORTBOW, id: IKOV_OBJ.UNSTRUNG_YEW_SHORTBOW },
             { name: IKOV_NAME.BOW_STRING, id: IKOV_OBJ.BOW_STRING }
         ]);
-        return carry ?? { kind: 'custom', name: 'string the yew shortbow', run: stringBow };
+        return carry ?? customStep('string the yew shortbow', stringBow);
     }
 
     if (stave === 0 && heldOrBanked(snap, IKOV_OBJ.YEW_LOGS) === 0) {
         const axe = withdrawMissing(snap, [{ name: IKOV_NAME.IRON_AXE, id: IKOV_OBJ.IRON_AXE }]);
-        return axe ?? { kind: 'custom', name: 'chop a yew log', run: chopYew };
+        return axe ?? customStep('chop a yew log', chopYew);
     }
 
     if (heldOrBanked(snap, IKOV_OBJ.KNIFE) === 0) {
@@ -415,7 +416,7 @@ function bowChainStep(snap: QuestSnapshot): QuestStep | null {
 
     if (string === 0) {
         if (heldOrBanked(snap, IKOV_OBJ.FLAX) === 0) {
-            return { kind: 'custom', name: 'pick flax', run: pickFlax };
+            return customStep('pick flax', pickFlax);
         }
         const flax = withdrawMissing(snap, [{ name: IKOV_NAME.FLAX, id: IKOV_OBJ.FLAX }]);
         if (flax) {
@@ -436,7 +437,7 @@ function bowChainStep(snap: QuestSnapshot): QuestStep | null {
             { name: IKOV_NAME.YEW_LOGS, id: IKOV_OBJ.YEW_LOGS },
             { name: IKOV_NAME.KNIFE, id: IKOV_OBJ.KNIFE }
         ]);
-        return kit ?? { kind: 'custom', name: 'fletch a yew shortbow', run: fletchBow };
+        return kit ?? customStep('fletch a yew shortbow', fletchBow);
     }
     return null;
 }

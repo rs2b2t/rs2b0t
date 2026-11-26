@@ -1,3 +1,4 @@
+import { customStep as custom, talkTo, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Reach } from '../../../../walking/Reach.js';
 import { Traversal } from '../../../../walking/Traversal.js';
@@ -56,10 +57,6 @@ import {
     wieldWeapon,
     type FcItem
 } from './supplies.js';
-
-function custom(name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep {
-    return { kind: 'custom', name, run };
-}
 
 const DIMINTHEIS_START: NpcStop = {
     npc: 'Dimintheis',
@@ -195,7 +192,7 @@ function source(
     if (shop) {
         return { kind: 'buy', item: item.name, qty: short, shop, estGp: estGp ?? 5000 };
     }
-    return { kind: 'wait', reason: `need ${short}x ${item.name} — none in the bank and nothing sells it` };
+    return waitStep(`need ${short}x ${item.name} — none in the bank and nothing sells it`);
 }
 
 // Why: the top-up is a third of the buy quantity; against `BLAST_MINIMUM` (one cast each) the teleport kit's 30 fire runes pass and the kill phase runs dry after 6 Fire Blasts.
@@ -279,11 +276,11 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return { kind: 'done' };
     }
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     const stage = snap.progress?.stage ?? snap.stage;
     if (stage === undefined) {
-        return { kind: 'wait', reason: 'Family Crest stage unavailable' };
+        return waitStep('Family Crest stage unavailable');
     }
     if (stage >= FC_STAGE.COMPLETE) {
         return { kind: 'done' };
@@ -291,7 +288,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
     // The endgame outranks the stage: Chronozon's drop is the only evidence stage 10 finished, and the restored crest the only evidence of the combine.
     if (held(snap, FC_ID.FAMILY_CREST) > 0) {
-        return { kind: 'talk', stop: DIMINTHEIS_FINISH };
+        return talkTo(DIMINTHEIS_FINISH);
     }
     if (crestParts(snap) === 3) {
         return custom('combine the three crest parts', combineCrest);
@@ -299,7 +296,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
     // Why: a missing fragment was lost to a death or banked; both brothers hand theirs over again and Chronozon drops his again.
     if (stage >= FC_STAGE.CALEB_WHERE && held(snap, FC_ID.CREST_FROM_CALEB) === 0) {
-        return { kind: 'talk', stop: CALEB_LOST };
+        return talkTo(CALEB_LOST);
     }
     // Why: at stage 8 `switch_int(%crestquest)` sends `crest_avan_piece` to `avan_where`, which has no "I have lost the fragment" branch; that lives in `avan_pieces` from stage 9 on.
     if (stage >= FC_STAGE.SPOKEN_JOHNATHON && held(snap, FC_ID.CREST_FROM_AVAN) === 0) {
@@ -308,7 +305,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
     }
 
     if (stage === FC_STAGE.NOT_STARTED) {
-        return { kind: 'talk', stop: DIMINTHEIS_START };
+        return talkTo(DIMINTHEIS_START);
     }
 
     // Why: one bank trip before the first long leg when nav teleports are on, since A* won't plan a hop the live inventory can't pay for and nothing else here carries law.
@@ -325,7 +322,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
     // Caleb: the 5 cooked fish
     if (stage <= FC_STAGE.CALEB_PIECE) {
         if (stage === FC_STAGE.SPOKEN_DIMINTHEIS) {
-            return { kind: 'talk', stop: CALEB_START };
+            return talkTo(CALEB_START);
         }
         if (stage === FC_STAGE.SPOKEN_CALEB) {
             const short = missingFish(snap);
@@ -345,19 +342,19 @@ export function decide(snap: QuestSnapshot): QuestStep {
                 return sourceCalebFish(snap, short);
             }
         }
-        return { kind: 'talk', stop: CALEB_FISH_STOP };
+        return talkTo(CALEB_FISH_STOP);
     }
 
     // The desert: an Al Kharid trader, then Avan, then Boot
     if (stage === FC_STAGE.CALEB_WHERE) {
-        return { kind: 'talk', stop: GEM_TRADER };
+        return talkTo(GEM_TRADER);
     }
     if (stage === FC_STAGE.SPOKEN_GEM_TRADER) {
         return custom('ask Avan about the crest', log =>
             talkToAvan(["I'm looking for a man named Avan Fitzharmon."], log));
     }
     if (stage === FC_STAGE.SPOKEN_AVAN) {
-        return { kind: 'talk', stop: BOOT };
+        return talkTo(BOOT);
     }
 
     // Perfect gold: mine, smelt, craft, hand over
@@ -447,10 +444,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
                 return { kind: 'useOn', item: 'Chisel', targetKind: 'item', target: uncut.name, anchor: LEG_BANK.gold, product: FC_ITEM.RUBY };
             }
             if (snap.noProgress >= 2) {
-                return {
-                    kind: 'wait',
-                    reason: `need ${rubyShort}x Ruby — none in the bank, and the Ardougne gem merchant stocks one`
-                };
+                return waitStep(`need ${rubyShort}x Ruby — none in the bank, and the Ardougne gem merchant stocks one`);
             }
             return { kind: 'buy', item: FC_ITEM.RUBY, qty: rubyShort, shop: SHOP.GEM_MERCHANT, estGp: RUBY_GP };
         }
@@ -466,7 +460,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         if (load) {
             return load;
         }
-        return { kind: 'talk', stop: JOHNATHON };
+        return talkTo(JOHNATHON);
     }
     if (stage === FC_STAGE.SPOKEN_JOHNATHON) {
         // Normally already carried from stage 8; this only fires after a death.
@@ -497,7 +491,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return custom('kill Chronozon with the four blasts', fightChronozon);
     }
 
-    return { kind: 'wait', reason: `no plan for Family Crest stage ${stage}` };
+    return waitStep(`no plan for Family Crest stage ${stage}`);
 }
 
 export const familycrest: QuestModule = {
