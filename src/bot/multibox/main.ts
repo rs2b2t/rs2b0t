@@ -7,6 +7,7 @@ import { BUILD_INFO, formatBuildInfo } from '../runtime/buildInfo.js';
 import { installNavWorkerPool, type NavPoolHost } from '../event/webwalk/NavWorkerClient.js';
 import { installWorkerClockHub } from '../runtime/WorkerClock.js';
 import { installDiagnostics } from './installDiagnostics.js';
+import { installWallTrafficChannel } from '../../client/io/TrafficChannel.js';
 import { TrafficCollector } from '../adapter/TrafficAdapter.js';
 import { DomSlotOps, orderedSlotElements } from './DomSlotOps.js';
 import { indexByUsername, MultiBoxController, normalizeUsername } from './MultiBoxController.js';
@@ -58,7 +59,7 @@ function boot(): void {
     stopAll.addEventListener('click', () => controller.stopAll());
     renderersOff.addEventListener('click', () => controller.setAllRenderers(false));
     renderersOn.addEventListener('click', () => controller.setAllRenderers(true));
-    const traffic = new TrafficCollector();
+    const traffic = new TrafficCollector({ channelName: installWallTrafficChannel(document) });
     const resources = new ResourcePanel(
         {
             botCount: document.getElementById('mbx-resource-bots')!,
@@ -504,11 +505,14 @@ function boot(): void {
         renderRail();
     }
 
+    const confirmLegacy = (suffix: string, user: string) =>
+        window.confirm(`Older versions shared "${suffix}" between standalone settings and profile "${user}". Does this setting belong to that profile?`);
     const settings = new SettingsPanel({
+        confirmLegacy,
         ensureUnlocked: () => ensureUnlocked(),
         snapshot: () => ({
             ...vault.snapshot(),
-            storage: collectBoxStorage(vault.list().map(p => p.username))
+            storage: collectBoxStorage(vault.list().map(p => p.username), confirmLegacy)
         }),
         replaceAll: data => updateSavedTabs(async () => {
             const previous = vault.list().map(p => p.username);

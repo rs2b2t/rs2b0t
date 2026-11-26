@@ -32,7 +32,6 @@ type RegeneratedBasemap = {
     image: CanvasImageSource;
 };
 
-let pendingJag: Uint8Array | null = null;
 /** Run one MapView bake at a time, preserving each caller's settings. */
 let regenTail: Promise<unknown> = Promise.resolve();
 
@@ -106,7 +105,7 @@ export function prefsFingerprint(prefs: BasemapBakePrefs): string {
     return bits;
 }
 
-async function fetchWorldmapJag(): Promise<Uint8Array> {
+async function fetchWorldmapJag(signal: AbortSignal): Promise<Uint8Array> {
     const candidates: string[] = [];
     try {
         candidates.push(new URL('./worldmap.jag', import.meta.url).href);
@@ -119,8 +118,9 @@ async function fetchWorldmapJag(): Promise<Uint8Array> {
     }
     let lastErr = 'worldmap.jag not found';
     for (const url of candidates) {
+        signal.throwIfAborted();
         try {
-            const res = await fetch(url);
+            const res = await fetch(url, { signal });
             if (!res.ok) {
                 lastErr = `${url} HTTP ${res.status}`;
                 continue;
@@ -161,8 +161,32 @@ export function regenerateBasemap(prefs: BasemapBakePrefs = resolveBasemapBakePr
 }
 
 async function regenerateBasemapOnce(prefs: BasemapBakePrefs): Promise<RegeneratedBasemap> {
-    const jag = await fetchWorldmapJag();
-    pendingJag = jag;
+    const controller = new AbortController();
+    let timer!: ReturnType<typeof setTimeout>;
+    const timeout = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+            const error = new Error('basemap rebuild timed out while loading worldmap.jag');
+            controller.abort(error);
+            reject(error);
+        }, 120_000);
+    });
+    try {
+        const jag = await Promise.race([fetchWorldmapJag(controller.signal), timeout]);
+        return await bakeBasemap(jag, prefs, timeout);
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+async function bakeBasemap(jag: Uint8Array, prefs: BasemapBakePrefs, timeout: Promise<never>): Promise<RegeneratedBasemap> {
+    const [{ MapView }, { default: JagFile }, { default: PixMap }] = await Promise.race([
+        Promise.all([
+            import('#/client/mapview/MapView.js'),
+            import('#/client/io/JagFile.js'),
+            import('#/client/graphics/PixMap.js')
+        ]),
+        timeout
+    ]);
 
     let saved: ImageData | null = null;
     let savedCursor: string | null = null;
@@ -176,10 +200,6 @@ async function regenerateBasemapOnce(prefs: BasemapBakePrefs): Promise<Regenerat
             }
         }
     }
-
-    const { MapView } = await import('#/client/mapview/MapView.js');
-    const JagFile = (await import('#/client/io/JagFile.js')).default;
-    const PixMap = (await import('#/client/graphics/PixMap.js')).default;
 
     const prev = {
         labels: MapView.shouldDrawLabels,
@@ -235,10 +255,7 @@ async function regenerateBasemapOnce(prefs: BasemapBakePrefs): Promise<Regenerat
         override async loadWorldmap() {
             checkAbort();
             if (!this.worldmap) {
-                if (!pendingJag) {
-                    throw new Error('no worldmap.jag bytes');
-                }
-                this.worldmap = new JagFile(pendingJag);
+                this.worldmap = new JagFile(jag);
             }
             return this.worldmap;
         }
@@ -247,27 +264,11 @@ async function regenerateBasemapOnce(prefs: BasemapBakePrefs): Promise<Regenerat
         }
     }
 
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
     try {
-        await sleep(0); // let status UI paint before the heavy work
-        checkAbort();
+        await Promise.race([sleep(0), timeout]); // let status UI paint before the heavy work
         // Construction starts run() and maininit; never race it without an abort path.
         const view = new LiveBakeMapView();
-        const timeout = new Promise<never>((_, reject) => {
-            timeoutId = setTimeout(() => {
-                aborted = true;
-                reject(new Error('basemap rebuild timed out while loading worldmap.jag'));
-            }, 120_000);
-        });
-        try {
-            await Promise.race([ready, timeout]);
-        } finally {
-            if (timeoutId !== null) {
-                clearTimeout(timeoutId);
-                timeoutId = null;
-            }
-        }
-        checkAbort();
+        await Promise.race([ready, timeout]);
 
         const width = view.mapWidth;
         const height = view.mapHeight;
@@ -318,9 +319,6 @@ async function regenerateBasemapOnce(prefs: BasemapBakePrefs): Promise<Regenerat
         return { manifest, image };
     } finally {
         aborted = true; // stop any straggler maininit that still yields
-        if (timeoutId !== null) {
-            clearTimeout(timeoutId);
-        }
         MapView.shouldDrawLabels = prev.labels;
         MapView.shouldDrawMapfunctions = prev.mapfunctions;
         MapView.shouldDrawBorders = prev.borders;
@@ -328,7 +326,6 @@ async function regenerateBasemapOnce(prefs: BasemapBakePrefs): Promise<Regenerat
         MapView.shouldDrawItems = prev.items;
         MapView.shouldDrawMultimap = prev.multimap;
         MapView.shouldDrawFreemap = prev.freemap;
-        pendingJag = null;
         if (canvas && savedCursor !== null) {
             canvas.style.cursor = savedCursor;
         }

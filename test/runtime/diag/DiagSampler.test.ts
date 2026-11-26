@@ -65,6 +65,34 @@ describe('DiagSampler', () => {
         expect(bot7.bots.bot3.hot.logicMs.at(-1)).toBe(5);
     });
 
+    test('compare() uses one-second samples across a coarse boundary', () => {
+        const boxes = Array.from({ length: 61 }, (_, i) => `bot${i}`);
+        let logicMs = 5;
+        const h = harness(() => boxes.map(box => frame(box, { logicMs: box === 'bot7' ? logicMs : 5 })));
+        h.tick(30);
+        const steady = h.sampler.compare(1000).bots;
+
+        logicMs = 250;
+        h.tick();
+        const spike = h.sampler.compare(1000).bots;
+        expect({ steady, spike }).toEqual({
+            steady: [],
+            spike: [{ box: 'bot7', field: 'logicMs', then: 5, now: 250, delta: 245 }]
+        });
+    });
+
+    test('compare() uses fine samples when the baseline predates the first coarse row', () => {
+        let logicMs = 5;
+        const h = harness(() => [frame('new', { logicMs })]);
+        h.tick(30);
+        logicMs = 10;
+        h.tick();
+
+        expect(h.sampler.compare(COLD_INTERVAL_MS).bots).toEqual([
+            { box: 'new', field: 'logicMs', then: 5, now: 10, delta: 5 }
+        ]);
+    });
+
     test('compare() ranks the bot whose cost grew most', () => {
         let heavy = 5;
         const h = harness(() => [frame('calm', { logicMs: 5 }), frame('creeping', { logicMs: heavy })]);
@@ -76,8 +104,7 @@ describe('DiagSampler', () => {
 
         const diff = h.sampler.compare(h.now() - then);
         const worst = diff.bots.find(r => r.field === 'logicMs');
-        expect(worst?.box).toBe('creeping');
-        expect(worst!.delta).toBeGreaterThan(0);
+        expect(worst).toEqual({ box: 'creeping', field: 'logicMs', then: 150, now: 9000, delta: 8850 });
     });
 
     test('the coarse tier aggregates rather than dropping samples', () => {

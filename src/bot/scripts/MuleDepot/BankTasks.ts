@@ -222,10 +222,16 @@ export function createSupplierBankTask(bot: MuleDepotContext): Task {
         validate: () => bot.role() === 'Supplier'
             && !Trade.active()
             && bot.currentBatch() !== null
-            && !bot.batchComplete(),
+            && (!bot.batchComplete() || bot.loadoutInPack().length === 0),
         run: async () => {
             const batch = bot.currentBatch();
             if (!batch) {
+                return;
+            }
+            if (bot.batchComplete()) {
+                if (bot.loadoutInPack().length === 0) {
+                    bot.skipBatch();
+                }
                 return;
             }
             bot.setStatus('withdrawing the batch');

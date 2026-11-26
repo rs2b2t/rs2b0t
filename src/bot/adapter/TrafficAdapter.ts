@@ -1,3 +1,4 @@
+import { openTrafficChannel, type TrafficChannelOptions } from '#/client/io/TrafficChannel.js';
 import type { TrafficTotals } from '#/client/io/TrafficMeter.js';
 
 export type { TrafficTotals } from '#/client/io/TrafficMeter.js';
@@ -7,20 +8,12 @@ export type TrafficSnapshot =
     | ({ status: 'available' } & TrafficTotals)
     | { status: 'unavailable'; reason: string };
 
-type ChannelFactory = () => BroadcastChannel | null;
-
-interface TrafficCollectorOptions {
-    channelFactory?: ChannelFactory;
+interface TrafficCollectorOptions extends TrafficChannelOptions {
     now?: () => number;
     publisherTimeoutMs?: number;
 }
 
-const CHANNEL_NAME = 'rs2b0t:traffic:v1';
 const DEFAULT_PUBLISHER_TIMEOUT_MS = 3000;
-
-function defaultChannelFactory(): BroadcastChannel | null {
-    return typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel(CHANNEL_NAME);
-}
 
 function isObject(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -50,12 +43,7 @@ export class TrafficCollector {
         }
         this.startedAt = this.readNow();
 
-        let channel: BroadcastChannel | null;
-        try {
-            channel = (options.channelFactory ?? defaultChannelFactory)();
-        } catch {
-            channel = null;
-        }
+        const channel = openTrafficChannel(options);
         this.channel = channel;
 
         if (!channel) {

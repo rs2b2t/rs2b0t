@@ -1,8 +1,9 @@
-import { PROFILE_FILE_NAME, parseProfileFile, serializeProfileFile, type ProfileSnapshot } from './ProfileTransfer.js';
+import { PROFILE_FILE_NAME, parseProfileFile, serializeProfileFile, type ConfirmLegacySetting, type ProfileSnapshot } from './ProfileTransfer.js';
 
 export interface SettingsPanelHooks {
     ensureUnlocked: () => Promise<boolean>;
     snapshot: () => ProfileSnapshot;
+    confirmLegacy?: ConfirmLegacySetting;
     replaceAll: (data: ProfileSnapshot) => Promise<void>;
     download?: (filename: string, text: string) => void;
     onImported?: (data: ProfileSnapshot) => void;
@@ -123,7 +124,7 @@ export class SettingsPanel {
             return;
         }
         const currentImport = this.importTail.then(async () => {
-            const data = parseProfileFile(text);
+            const data = parseProfileFile(text, this.hooks.confirmLegacy);
             await this.hooks.replaceAll(data);
             this.hooks.onImported?.(data);
             if (this.importTail === currentImport) this.close();
