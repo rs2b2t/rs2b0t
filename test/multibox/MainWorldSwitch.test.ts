@@ -17,6 +17,8 @@ interface Wall {
     controller: MultiBoxController;
     add(account: Account): SlotSnapshot;
     addTab(name: string): boolean | Promise<boolean>;
+    renameTab(from: string, to: string): boolean | Promise<boolean>;
+    removeTab(name: string): boolean | Promise<boolean>;
     setActiveTab(name: string): boolean | Promise<boolean>;
     setSlotTab(id: number, tab: string): boolean | Promise<boolean>;
     slots(): SlotSnapshot[];
@@ -286,6 +288,37 @@ test('a mixed import keeps an omitted slot in Work and saves a reused slot moved
     });
 });
 
+test('renaming and deleting an imported tab move only its members', async () => {
+    await withWall('local', async wall => {
+        const profiles = [
+            { username: 'fixture', password: 'fixture', tab: 'Work' },
+            { username: 'fixture', password: 'fixture', tab: 'Reserve' },
+            { username: 'unloaded', password: 'fixture', tab: 'Work' }
+        ];
+        await openSettings().importText(serializeProfileFile({
+            profiles, tabs: ['Fleet', 'Work', 'Reserve'], activeTab: 'Work', storage: {}
+        }));
+        wall.controller.remove(wall.slots().find(s => s.username === 'unloaded')!.id);
+        const saves = spyOn(vault, 'saveTabState');
+        try {
+            expect(await wall.renameTab('Work', 'Ops')).toBe(true);
+            await saves.mock.results[0].value;
+            const reopened = new ProfileVault();
+            expect(await reopened.unlock('test-passphrase')).toBe(true);
+            expect(reopened.list().map(p => p.tab)).toEqual(['Ops', 'Reserve', 'Ops']);
+            expect(reopened.tabState()).toEqual({ tabs: ['Fleet', 'Ops', 'Reserve'], activeTab: 'Ops' });
+
+            expect(await wall.removeTab('Ops')).toBe(true);
+            await saves.mock.results[1].value;
+            expect(await reopened.unlock('test-passphrase')).toBe(true);
+            expect(reopened.list().map(p => p.tab)).toEqual(['Fleet', 'Reserve', 'Main']);
+            expect(reopened.tabState()).toEqual({ tabs: ['Fleet', 'Reserve'], activeTab: 'Fleet' });
+        } finally {
+            saves.mockRestore();
+        }
+    });
+});
+
 test.each([
     { active: 'Work', tabs: ['Fleet'] },
     { active: 'Main', tabs: ['Fleet'] },
@@ -396,7 +429,7 @@ test.each([
             tabs: ['Old', 'Work'], activeTab: 'Old', storage: {}
         }));
         const [reused, omitted] = wall.slots();
-        const profiles = [{ ...profile, tab: 'Fleet' }, { username: 'new', password: 'fixture', tab: 'Fleet' }];
+        const profiles = [{ ...profile, tab: 'Fleet' }, { ...profile, tab: 'Reserve' }, { username: 'new', password: 'fixture', tab: 'Fleet' }];
         let added: ReturnType<Wall['addTab']> | undefined;
         const replaceAll = vault.replaceAll.bind(vault);
         const replace = spyOn(vault, 'replaceAll').mockImplementationOnce(data => {
@@ -408,7 +441,7 @@ test.each([
         const spawn = spyOn(DomSlotOps.prototype, 'spawn');
         const setItem = sessionStorage.setItem;
         const file = serializeProfileFile({
-            profiles, tabs: ['Fleet'], activeTab: 'Fleet', storage: { new: { selectedScript: 'Miner' } }
+            profiles, tabs: ['Fleet', 'Reserve'], activeTab: 'Fleet', storage: { new: { selectedScript: 'Miner' } }
         });
         try {
             if (result === 'fails to spawn') {
@@ -427,9 +460,9 @@ test.each([
             const reopened = new ProfileVault();
             expect(await reopened.unlock('test-passphrase')).toBe(true);
             expect(reopened.snapshot()).toEqual({
-                profiles, tabs: ['Fleet', 'Local'], activeTab: 'Fleet'
+                profiles, tabs: ['Fleet', 'Reserve', 'Local'], activeTab: 'Fleet'
             });
-            expect(wall.controller.tabs()).toEqual(['Main', 'Fleet', 'Work', 'Local']);
+            expect(wall.controller.tabs()).toEqual(['Main', 'Fleet', 'Reserve', 'Work', 'Local']);
             expect(wall.controller.activeTab()).toBe('Fleet');
             const expectedSlots = [['fixture', 'Fleet'], ['guest', 'Work']];
             if (result === 'succeeds') expectedSlots.push(['new', 'Fleet']);
@@ -540,6 +573,36 @@ test('loading Work from a stale chooser preserves a newer saved assignment', asy
         expect(reopened.snapshot()).toEqual({
             profiles: [{ ...bob, tab: 'Fleet' }], tabs: ['Work', 'Fleet', 'Local'], activeTab: 'Work'
         });
+        const beforeEdit = localStorage.getItem(key);
+        expect(await wall.addTab('Extra')).toBe(true);
+        await waitFor(() => localStorage.getItem(key) !== beforeEdit);
+        expect(await reopened.unlock('test-passphrase')).toBe(true);
+        expect(reopened.snapshot()).toEqual({
+            profiles: [{ ...bob, tab: 'Fleet' }], tabs: ['Work', 'Fleet', 'Local', 'Extra'], activeTab: 'Work'
+        });
+    });
+});
+
+test('creating a profile in the active tab preserves the imported rows', async () => {
+    await withWall('local', async () => {
+        const profiles = ['Work', 'Fleet'].map(tab => ({ username: 'fixture', password: 'fixture', tab }));
+        await openSettings().importText(serializeProfileFile({
+            profiles, tabs: ['Work', 'Fleet'], activeTab: 'Fleet', storage: {}
+        }));
+        document.getElementById('mbx-add')!.click();
+        await waitFor(() => !document.querySelector<HTMLElement>('.mbx-chooser-overlay')!.hidden);
+        document.querySelector<HTMLInputElement>('#mbx-new-user')!.value = 'new';
+        const saves = spyOn(vault, 'saveTabState');
+        try {
+            document.querySelector('.mbx-chooser-form')!.dispatchEvent(new Event('submit', { cancelable: true }));
+            await waitFor(() => saves.mock.results.length > 0);
+            await saves.mock.results[0].value;
+            const reopened = new ProfileVault();
+            expect(await reopened.unlock('test-passphrase')).toBe(true);
+            expect(reopened.list().map(p => [p.username, p.tab])).toEqual([['fixture', 'Work'], ['fixture', 'Fleet'], ['new', 'Fleet']]);
+        } finally {
+            saves.mockRestore();
+        }
     });
 });
 

@@ -10,6 +10,11 @@ export interface Profile {
     world?: WorldNumber;
 }
 
+export interface TabReplacement {
+    from: string;
+    to?: string;
+}
+
 interface TabState {
     tabs: string[];
     activeTab: string;
@@ -168,7 +173,7 @@ export class ProfileVault {
     private pendingReplacement: Promise<void> | null = null;
 
     private sharedTail = Promise.resolve();
-    private sharedTabs: { tabs: string[]; assignments: Map<string, string> } | null = null;
+    private sharedTabs: string[] = [];
 
     constructor(private storage: VaultStorage | undefined = hasLocal ? localStorage : undefined) {}
 
@@ -347,8 +352,8 @@ export class ProfileVault {
         for (const profile of this.assertUnlocked()) {
             if (!assignments.has(profile.username)) assignments.set(profile.username, profile.tab ?? MAIN_TAB);
         }
-        this.sharedTabs = { tabs: [...this.customTabs], assignments };
-        return this.sharedTabs;
+        this.sharedTabs = [...this.customTabs];
+        return { tabs: [...this.customTabs], assignments };
     }
 
     snapshot(): { profiles: Profile[]; tabs: string[]; activeTab: string } {
@@ -528,35 +533,33 @@ export class ProfileVault {
         return this.storage ? this.sharedChange(select) : select(this);
     }
 
-    async saveTabState(tabs: string[], tabByUser: ReadonlyMap<string, string>, activeTab?: string): Promise<void> {
-        if (this.pendingReplacement) return this.afterReplacement(() => this.saveTabState(tabs, tabByUser, activeTab));
+    async saveTabState(tabs: string[], tabByUser: ReadonlyMap<string, string>, activeTab?: string, replaced?: TabReplacement): Promise<void> {
+        if (this.pendingReplacement) return this.afterReplacement(() => this.saveTabState(tabs, tabByUser, activeTab, replaced));
         if (this.shared) {
             const requested = tabs.map(tab => tab.trim());
             assertTabStateValid(requested, activeTab ?? MAIN_TAB, []);
             return this.sharedChange(async draft => {
-                const previous = this.sharedTabs ?? { tabs: [], assignments: new Map<string, string>() };
-                const removed = new Set(previous.tabs.filter(tab => !requested.includes(tab)));
+                const previous = this.sharedTabs;
+                const removed = new Set(previous.filter(tab => !requested.includes(tab)));
                 const merged = draft.customTabs.filter(tab => !removed.has(tab));
-                const ordered = requested.filter(tab => previous.tabs.includes(tab) && merged.includes(tab));
-                const priorOrder = previous.tabs.filter(tab => ordered.includes(tab));
+                const ordered = requested.filter(tab => previous.includes(tab) && merged.includes(tab));
+                const priorOrder = previous.filter(tab => ordered.includes(tab));
                 if (ordered.some((tab, index) => tab !== priorOrder[index])) {
                     let index = 0;
                     for (let slot = 0; slot < merged.length; slot++) if (ordered.includes(merged[slot])) merged[slot] = ordered[index++];
                 }
                 for (const [index, tab] of requested.entries()) {
-                    if (previous.tabs.includes(tab) || merged.includes(tab)) continue;
+                    if (previous.includes(tab) || merged.includes(tab)) continue;
                     const next = requested.slice(index + 1).find(candidate => merged.includes(candidate));
                     merged.splice(next ? merged.indexOf(next) : merged.length, 0, tab);
                 }
-                const assignments = new Map<string, string>();
-                for (const [username, tab] of tabByUser) {
+                for (const tab of tabByUser.values()) {
                     if (tab !== MAIN_TAB && !requested.includes(tab)) throw new Error(`tab '${tab}' is not in the tab list`);
-                    if (previous.assignments.get(username) !== tab) assignments.set(username, tab);
                 }
                 const active = activeTab ?? draft.active;
-                await draft.saveTabState(merged, assignments, merged.includes(active) ? active : MAIN_TAB);
+                await draft.saveTabState(merged, tabByUser, merged.includes(active) ? active : MAIN_TAB, replaced);
             }).then(() => {
-                this.sharedTabs = { tabs: requested, assignments: new Map(tabByUser) };
+                this.sharedTabs = requested;
             });
         }
         const all = this.assertUnlocked();
@@ -571,7 +574,7 @@ export class ProfileVault {
         this.customTabs = trimmed;
         this.active = active;
         for (const p of all) {
-            const next = tabByUser.get(p.username) ?? p.tab;
+            const next = replaced && p.tab !== replaced.from ? p.tab : replaced?.to ?? tabByUser.get(p.username) ?? p.tab;
             // a profile not loaded in this wall keeps its stored tab, landing in Main when that tab has been deleted
             // Why: the deleting wall only knows prior-tab targets for the bots it has loaded
             if (next !== undefined && next !== MAIN_TAB && trimmed.includes(next)) {
