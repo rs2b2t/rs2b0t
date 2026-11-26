@@ -28,11 +28,12 @@ function hasSavedProfiles(key, raw) {
     }
 }
 
-function migrateProfiles(data, sources, firstMigration) {
+function migrateProfiles(data, sources, { firstMigration, recover }) {
     if (profileKeys.some(key => key in data && (firstMigration || !isEmptyRoster(data[key])))) return;
     let selected = [];
     for (const source of sources) {
-        const entries = profileKeys.map(key => [key, source[key]]);
+        const keys = !recover && isEmptyRoster(source[vaultKey]) ? [vaultKey] : profileKeys;
+        const entries = keys.map(key => [key, source[key]]);
         const populated = entries.filter(([key, value]) => hasSavedProfiles(key, value));
         if (populated.length) {
             selected = populated;
@@ -112,7 +113,7 @@ function sharedStorage(dir) {
         seed(values, { fallback = {}, recover = false } = {}) {
             return update(state => {
                 if (state.initialized && !recover) return false;
-                migrateProfiles(state.data, [values, fallback], !state.initialized);
+                migrateProfiles(state.data, [values, fallback], { firstMigration: !state.initialized, recover });
                 if (state.initialized) return false;
                 for (const source of [fallback, values]) {
                     for (const [key, value] of Object.entries(source)) {

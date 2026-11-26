@@ -247,6 +247,20 @@ test('first migration skips an empty configured roster across two launches', asy
     expect(store.snapshot()).toEqual({ [accounts]: JSON.stringify(profiles) });
 });
 
+test.each<[string, boolean]>([
+    ['automatic migration keeps the empty roster', false],
+    ['explicit recovery restores the older accounts', true]
+])('with both profile keys on one origin, %s after vault setup and reopen', async (_, recover) => {
+    const { launch, store } = fixture({ [custom]: { [vault]: '[]', [accounts]: JSON.stringify(profiles) } });
+    expect(await launch(custom)).toEqual([]);
+    if (recover) await launch(custom, true);
+    await new ProfileVault(store).setup('fixture');
+    await launch(custom);
+    const reopened = new ProfileVault(store);
+    expect(await reopened.unlock('fixture')).toBe(true);
+    expect(reopened.list()).toEqual(recover ? profiles.map(profile => ({ ...profile, tab: 'Main' })) : []);
+});
+
 test('a fresh installation keeps a deleted roster empty when legacy storage appears later', async () => {
     const { launch, saveLegacy, store } = fixture();
     await launch(custom);
