@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { resolvePrices, rowValid } from '#/bot/api/market/prices.js';
+import { resolvePrices, rowValid, tradeRow } from '#/bot/api/market/prices.js';
 import type { PriceBook, PriceRow } from '#/bot/api/market/priceBook.js';
 
 function book(over: Partial<PriceBook> = {}): PriceBook {
@@ -10,6 +10,16 @@ function book(over: Partial<PriceBook> = {}): PriceBook {
 function row(over: Partial<PriceRow> = {}): PriceRow {
     return { id: 440, mid: 100, cap: 5000, buying: true, selling: true, ...over };
 }
+
+describe('tradeRow', () => {
+    test.each([
+        ['selling is disabled', row({ selling: false })],
+        ['the spread is invalid', row({ buy: 12, sell: 12 })]
+    ] as const)('a later duplicate cannot enable a sale when %s on the first row', (_, first) => {
+        const prices = book({ rows: [first, row({ buy: 10, sell: 12 })] });
+        expect(tradeRow(prices, first.id, 'selling')).toBeNull();
+    });
+});
 
 describe('resolvePrices', () => {
     test('splits the spread either side of mid', () => {

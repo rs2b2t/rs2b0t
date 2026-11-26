@@ -1,5 +1,5 @@
 import { resolvePrices as resolveOrderbookPrices } from './orderbook-format.js';
-import type { PriceBook, PriceRow } from './priceBook.js';
+import { rowOf, type PriceBook, type PriceRow } from './priceBook.js';
 
 export interface ResolvedPrices {
     buy: number;
@@ -22,5 +22,6 @@ export function rowValid(book: PriceBook, row: PriceRow): boolean {
 }
 
 export function tradeRow(book: PriceBook, id: number, side: 'buying' | 'selling'): PriceRow | null {
-    return book.rows.find(row => row.id === id && row[side] && rowValid(book, row)) ?? null;
+    const row = rowOf(book, id);
+    return row && row[side] && rowValid(book, row) ? row : null;
 }
