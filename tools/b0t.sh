@@ -224,7 +224,14 @@ else
     echo "→ collision pack missing — baking it from the engine map cache…"
     bun tools/nav/build-collision.ts --engine "${ENGINE_DIR:-$HOME/code/rs2b2t-engine}" --out "$RUN_DIR/out/collision.lcnav"
 fi
-bun tools/map/build-basemap.ts --if-needed --engine "${ENGINE_DIR:-$HOME/code/rs2b2t-engine}" --publish-to "$RUN_DIR/out"
+MAP_OUT=out
+if [ -d out ] && [ ! -w out ]; then
+    MAP_OUT="$RUN_DIR/out"
+    for asset in out/worldmap.jag out/worldmap-*.png out/worldmap-*.json; do
+        [ ! -f "$asset" ] || cp "$asset" "$MAP_OUT/"
+    done
+fi
+bun tools/map/build-basemap.ts --if-needed --engine "${ENGINE_DIR:-$HOME/code/rs2b2t-engine}" --out "$MAP_OUT" --publish-to "$RUN_DIR/out"
 echo "  instance build: $RUN_DIR"
 
 reap_proxy() {

@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { createHash } from 'node:crypto';
 import { execFile, execFileSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -28,6 +28,11 @@ function bakeArgs(root: string, ...args: string[]) {
 
 function bakeMap(root: string, ...args: string[]) {
     return execFileSync(process.execPath, ['--no-install', ...bakeArgs(root, ...args)], { cwd: root, env: { HOME: root }, stdio: 'pipe' });
+}
+
+function bakeWithPreload(root: string, preload: string, ...args: string[]) {
+    return execFileSync(process.execPath, ['--no-install', '--preload', preload, ...bakeArgs(root, ...args)],
+        { cwd: root, env: { HOME: root }, stdio: 'pipe' });
 }
 
 function bakeIfNeeded(root: string, ...args: string[]) {
@@ -230,14 +235,74 @@ test('retrying a failed label repair publishes a complete PNG', () => {
                 return write(file, data, ...args);
             };
         `);
-        expect(() => execFileSync(process.execPath, ['--no-install', '--preload', preload, ...bakeArgs(root, ...args)],
-            { cwd: root, env: { HOME: root }, stdio: 'pipe' })).toThrow(/injected ENOSPC/);
+        expect(() => bakeWithPreload(root, preload, ...args)).toThrow(/injected ENOSPC/);
         expect(readFileSync(published).equals(original)).toBe(true);
 
         bakeMap(root, ...args);
         const repaired = readFileSync(published);
         expect(decodePng(repaired).width).toBe(1600);
         expect(repaired.equals(original)).toBe(true);
+    } finally {
+        rmSync(root, { recursive: true, force: true });
+    }
+});
+
+test('an unreadable staged manifest stops packaging before the engine map is selected', () => {
+    const root = mkdtempSync(join(tmpdir(), 'pack-manifest-read-'));
+    try {
+        const dest = join(root, 'published');
+        const selected = join(root, 'selected.jag');
+        const engineMap = join(root, 'engine/data/pack/mapview');
+        mkdirSync(engineMap, { recursive: true });
+        writeFileSync(join(engineMap, 'worldmap.jag'), emptyMap);
+        writeFileSync(selected, townMap);
+        bakeMap(root, '--jag', selected, '--revision', '275', '--publish-to', dest);
+        const name = 'worldmap-basemap.manifest.json';
+        const manifest = readFileSync(join(root, name));
+        const preload = join(root, 'deny-manifest.cjs');
+        writeFileSync(preload, `
+            const fs = require('node:fs');
+            const read = fs.readFileSync;
+            fs.readFileSync = (file, ...args) => {
+                if (file === ${JSON.stringify(join(root, name))}) throw Object.assign(new Error('manifest EACCES'), { code: 'EACCES' });
+                return read(file, ...args);
+            };
+        `);
+        expect(() => bakeWithPreload(root, preload, '--if-needed', '--publish-to', dest)).toThrow(/manifest EACCES/);
+        for (const dir of [root, dest]) {
+            expect(readFileSync(join(dir, name))).toEqual(manifest);
+            expect(readFileSync(join(dir, 'worldmap.jag'))).toEqual(townMap);
+        }
+    } finally {
+        rmSync(root, { recursive: true, force: true });
+    }
+});
+
+test('a failed staged manifest rename preserves the selected archive for the next package', () => {
+    const root = mkdtempSync(join(tmpdir(), 'stage-manifest-'));
+    try {
+        const selected = join(root, 'selected.jag');
+        const manifest = join(root, 'worldmap-basemap.manifest.json');
+        writeFileSync(selected, townMap);
+        bakeMap(root, '--jag', selected, '--revision', '275');
+        const first = readFileSync(manifest);
+        writeFileSync(selected, emptyMap);
+        const preload = join(root, 'deny-rename.cjs');
+        writeFileSync(preload, `
+            const fs = require('node:fs');
+            const rename = fs.renameSync;
+            fs.renameSync = (from, to) => {
+                if (to === ${JSON.stringify(manifest)}) throw new Error('manifest rename failed');
+                rename(from, to);
+            };
+        `);
+        expect(() => bakeWithPreload(root, preload, '--jag', selected)).toThrow(/manifest rename failed/);
+        expect(readFileSync(manifest)).toEqual(first);
+        expect(readFileSync(join(root, 'worldmap.jag'))).toEqual(townMap);
+        const dest = join(root, 'published');
+        bakeIfNeeded(root, '--publish-to', dest);
+        expect(readFileSync(join(dest, 'worldmap-basemap.manifest.json'))).toEqual(first);
+        expect(readFileSync(join(dest, 'worldmap.jag'))).toEqual(townMap);
     } finally {
         rmSync(root, { recursive: true, force: true });
     }
@@ -265,8 +330,7 @@ for (const operation of ['copyFileSync', 'renameSync']) {
                     return original(from, to, ...args);
                 };
             `);
-            expect(() => execFileSync(process.execPath, ['--no-install', '--preload', preload, ...bakeArgs(root, '--publish-to', dest)],
-                { cwd: root, env: { HOME: root }, stdio: 'pipe' })).toThrow(/injected ENOSPC/);
+            expect(() => bakeWithPreload(root, preload, '--publish-to', dest)).toThrow(/injected ENOSPC/);
             expect(readFileSync(manifest)).toEqual(first);
             expect(readFileSync(join(dest, 'worldmap.jag'))).toEqual(emptyMap);
             bakeIfNeeded(root, '--publish-to', dest);
@@ -304,6 +368,32 @@ test('two launcher runs reuse the upgraded shared bake', () => {
             rmSync(instance, { recursive: true });
         }
     } finally {
+        rmSync(root, { recursive: true, force: true });
+    }
+});
+
+test.skipIf(process.getuid?.() === 0)('launcher copies a complete bake from read-only staging', () => {
+    const root = mkdtempSync(join(tmpdir(), 'launcher-read-only-'));
+    const out = join(root, 'out');
+    try {
+        const launch = prepareDeployment(root, 'b0t.sh');
+        mkdirSync(join(root, 'node_modules'));
+        writeFileSync(join(root, 'tools/curl'), `#!/bin/sh\necho ${'1'.repeat(250)}\n`, { mode: 0o755 });
+        const selected = join(root, 'selected.jag');
+        writeFileSync(selected, townMap);
+        bakeMap(root, '--jag', selected, '--revision', '275');
+        const assets = readdirSync(root).filter(name => name.startsWith('worldmap'));
+        for (const name of assets) {
+            copyFileSync(join(root, name), join(out, name));
+            chmodSync(join(out, name), 0o444);
+        }
+        chmodSync(out, 0o555);
+        expect(launch).toThrow(/proxy exited during startup \(status 42\)/);
+        for (const name of assets) {
+            expect(readFileSync(join(root, 'instance', name))).toEqual(readFileSync(join(root, name)));
+        }
+    } finally {
+        chmodSync(out, 0o755);
         rmSync(root, { recursive: true, force: true });
     }
 });

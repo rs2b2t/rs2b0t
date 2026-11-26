@@ -73,8 +73,9 @@ function readManifest(file: string): BakeManifest | null {
     try {
         const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
         return isBasemapManifest(manifest) ? manifest : null;
-    } catch {
-        return null;
+    } catch (err) {
+        if (err instanceof SyntaxError || (err as NodeJS.ErrnoException).code === 'ENOENT') return null;
+        throw err;
     }
 }
 
@@ -142,15 +143,24 @@ function replaceFile(file: string, data: string | Uint8Array): void {
     }
 }
 
-function stageJag(outDir: string, source: string | null, bytes: Uint8Array): void {
-    const staged = path.join(outDir, 'worldmap.jag');
-    if (source !== null && path.resolve(source) === path.resolve(staged)) return;
-    if (fs.existsSync(staged) && fs.readFileSync(staged).equals(bytes)) return;
-    replaceFile(staged, bytes);
-}
+function stageBake(outDir: string, source: string | null, bytes: Uint8Array | undefined, manifest?: BakeManifest): void {
+    const jag = path.join(outDir, 'worldmap.jag');
+    const json = manifest && JSON.stringify(manifest, null, 2) + '\n';
+    const usingStagedJag = source !== null && path.resolve(source) === path.resolve(jag);
+    if (!bytes || usingStagedJag || (fs.existsSync(jag) && fs.readFileSync(jag).equals(bytes))) {
+        if (json) replaceFile(path.join(outDir, BASEMAP_MANIFEST_NAME), json);
+        return;
+    }
+    if (!json) return replaceFile(jag, bytes);
 
-function writeManifest(file: string, manifest: BakeManifest): void {
-    replaceFile(file, JSON.stringify(manifest, null, 2) + '\n');
+    const pending = fs.mkdtempSync(path.join(outDir, '.basemap-'));
+    try {
+        fs.writeFileSync(path.join(pending, 'worldmap.jag'), bytes);
+        fs.writeFileSync(path.join(pending, BASEMAP_MANIFEST_NAME), json);
+        installBakePair(pending, outDir);
+    } finally {
+        fs.rmSync(pending, { recursive: true, force: true });
+    }
 }
 
 async function downloadJag(url: string): Promise<Uint8Array> {
@@ -428,6 +438,21 @@ async function main(): Promise<void> {
     }
 }
 
+function installBakePair(pending: string, dest: string): void {
+    const jag = path.join(dest, 'worldmap.jag');
+    const backup = path.join(pending, 'previous.jag');
+    const hadJag = fs.existsSync(jag);
+    if (hadJag) fs.copyFileSync(jag, backup);
+    fs.renameSync(path.join(pending, 'worldmap.jag'), jag);
+    try {
+        fs.renameSync(path.join(pending, BASEMAP_MANIFEST_NAME), path.join(dest, BASEMAP_MANIFEST_NAME));
+    } catch (err) {
+        if (hadJag) fs.renameSync(backup, jag);
+        else fs.unlinkSync(jag);
+        throw err;
+    }
+}
+
 function publishBasemap(outDir: string, dest: string, manifest: BakeManifest): void {
     const pending = fs.mkdtempSync(path.join(dest, '.basemap-'));
     function stage(name: string): string {
@@ -439,20 +464,9 @@ function publishBasemap(outDir: string, dest: string, manifest: BakeManifest): v
         for (const name of assetUrls(manifest)) {
             fs.renameSync(stage(name), path.join(dest, name));
         }
-        const jag = path.join(dest, 'worldmap.jag');
-        const nextJag = stage('worldmap.jag');
-        const nextManifest = stage(BASEMAP_MANIFEST_NAME);
-        const backup = path.join(pending, 'previous.jag');
-        const hadJag = fs.existsSync(jag);
-        if (hadJag) fs.copyFileSync(jag, backup);
-        fs.renameSync(nextJag, jag);
-        try {
-            fs.renameSync(nextManifest, path.join(dest, BASEMAP_MANIFEST_NAME));
-        } catch (err) {
-            if (hadJag) fs.renameSync(backup, jag);
-            else fs.unlinkSync(jag);
-            throw err;
-        }
+        stage('worldmap.jag');
+        stage(BASEMAP_MANIFEST_NAME);
+        installBakePair(pending, dest);
     } finally {
         fs.rmSync(pending, { recursive: true, force: true });
     }
@@ -469,14 +483,11 @@ async function buildBasemap(opts: BakeArgs): Promise<BakeManifest> {
     const explicitJag = local?.explicit ?? previous?.explicitJag;
     if (previous?.explicitJag && !local) throw new Error('Selected worldmap.jag is missing. Supply --jag to rebuild.');
     if (opts.ifNeeded && previous && (local || !opts.publishTo) && isCurrentBake(opts.outDir, previous, localFingerprint)) {
-        if (local) stageJag(opts.outDir, local.path, local.bytes);
         const revision = opts.revision ?? previous.revision;
-        if (previous.revision !== revision || previous.explicitJag !== explicitJag) {
-            const manifest = { ...previous, revision, explicitJag };
-            writeManifest(manPath, manifest);
-            return manifest;
-        }
-        return previous;
+        const changed = previous.revision !== revision || previous.explicitJag !== explicitJag;
+        const manifest = changed ? { ...previous, revision, explicitJag } : undefined;
+        stageBake(opts.outDir, local?.path ?? null, local?.bytes, manifest);
+        return manifest ?? previous;
     }
 
     const source = local?.path ?? opts.fetchUrl;
@@ -562,8 +573,7 @@ async function buildBasemap(opts: BakeArgs): Promise<BakeManifest> {
         playerMarkerUrl,
         jagBytes: bytes.length
     };
-    stageJag(opts.outDir, local?.path ?? null, bytes);
-    writeManifest(manPath, manifest);
+    stageBake(opts.outDir, local?.path ?? null, bytes, manifest);
 
     console.log('report:');
     console.log(`  terrain: ${terrainName} (${(terrainPng.length / 1024).toFixed(0)} KB)`);
