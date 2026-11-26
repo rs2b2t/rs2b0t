@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { cpus } from 'node:os';
 import { isAbsolute, join, normalize, posix, relative, resolve } from 'node:path';
+import { SampleQueue } from './SampleQueue.js';
 
 export type CgroupMemorySource = 'cgroup' | 'unavailable';
 
@@ -202,7 +203,7 @@ export class CgroupResourceSampler {
     private readonly now: () => number;
     private readonly getLogicalCpuCount: () => number;
     private previous: CpuBaseline | null = null;
-    private samplingTail: Promise<void> = Promise.resolve();
+    private readonly sampleQueue = new SampleQueue();
 
     constructor(options: CgroupResourceSamplerOptions) {
         this.cgroupDir = normalize(options.cgroupDir);
@@ -216,12 +217,7 @@ export class CgroupResourceSampler {
     }
 
     sample(): Promise<CgroupResourceSample> {
-        const result = this.samplingTail.then(() => this.sampleOnce());
-        this.samplingTail = result.then(
-            () => undefined,
-            () => undefined
-        );
-        return result;
+        return this.sampleQueue.enqueue(() => this.sampleOnce());
     }
 
     private async readCgroupFile(name: string): Promise<FileRead> {
