@@ -274,18 +274,22 @@ export default class ObjType {
         this.stackable = true;
     }
 
-    getModelUnlit(count: number): Model | null {
+    private stackVariantId(count: number): number {
+        let id = -1;
         if (this.countobj && this.countco && count > 1) {
-            let id: number = -1;
             for (let i: number = 0; i < 10; i++) {
                 if (count >= this.countco[i] && this.countco[i] !== 0) {
                     id = this.countobj[i];
                 }
             }
+        }
+        return id;
+    }
 
-            if (id !== -1) {
-                return ObjType.list(id).getModelUnlit(1);
-            }
+    getModelUnlit(count: number): Model | null {
+        const id = this.stackVariantId(count);
+        if (id !== -1) {
+            return ObjType.list(id).getModelUnlit(1);
         }
 
         const model = Model.load(this.model);
@@ -303,17 +307,9 @@ export default class ObjType {
     }
 
     getModelLit(count: number): Model | null {
-        if (this.countobj && this.countco && count > 1) {
-            let id: number = -1;
-            for (let i: number = 0; i < 10; i++) {
-                if (count >= this.countco[i] && this.countco[i] !== 0) {
-                    id = this.countobj[i];
-                }
-            }
-
-            if (id !== -1) {
-                return ObjType.list(id).getModelLit(1);
-            }
+        const id = this.stackVariantId(count);
+        if (id !== -1) {
+            return ObjType.list(id).getModelLit(1);
         }
 
         let model = ObjType.modelCache.find(BigInt(this.id));
@@ -361,17 +357,9 @@ export default class ObjType {
             count = -1;
         }
 
-        if (obj.countobj && obj.countco && count > 1) {
-            let countobj: number = -1;
-            for (let i: number = 0; i < 10; i++) {
-                if (count >= obj.countco[i] && obj.countco[i] !== 0) {
-                    countobj = obj.countobj[i];
-                }
-            }
-
-            if (countobj !== -1) {
-                obj = ObjType.list(countobj);
-            }
+        const variantId = obj.stackVariantId(count);
+        if (variantId !== -1) {
+            obj = ObjType.list(variantId);
         }
 
         const model = obj.getModelLit(1);
