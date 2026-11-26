@@ -100,6 +100,13 @@ describe('ProfileTransfer', () => {
         expect(parseProfileFile(result.stdout.toString()).storage.source.selectedScript).toBe('Fisher');
     });
 
+    test('desktop export keeps the session login edited after restoring set', () => {
+        const result = Bun.spawnSync(['bun', 'test/fixtures/roster-desktop-storage.ts', '--export-edited-login']);
+        expect(result.exitCode, result.stderr.toString()).toBe(0);
+        const { storage } = parseProfileFile(result.stdout.toString());
+        expect(JSON.parse(storage.set.creds)).toEqual({ username: 'edited', password: '' });
+    });
+
     test('desktop export distinguishes mirrored standalone writes from legacy session settings', () => {
         const result = Bun.spawnSync(['bun', 'test/fixtures/roster-desktop-storage.ts', '--export-set']);
         expect(result.exitCode, result.stderr.toString()).toBe(0);

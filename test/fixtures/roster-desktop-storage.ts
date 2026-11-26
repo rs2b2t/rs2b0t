@@ -14,6 +14,17 @@ Reflect.set(globalThis, 'rs2b0tDesktopStorage', {
     subscribe: listener => { notify = listener; }
 } satisfies DesktopStorage);
 await import('../../src/bot/panel/desktopStorage.js');
+if (process.argv.includes('--export-edited-login')) {
+    const { applyBoxStorage, collectBoxStorage, serializeProfileFile } = await import('../../src/bot/multibox/ProfileTransfer.js');
+    const { Credentials } = await import('../../src/bot/runtime/Credentials.js');
+    const browser = Reflect.get(window, 'happyDOM') as { setURL(url: string): void };
+    browser.setURL('http://localhost/bot.html?box=set');
+    applyBoxStorage({ set: { creds: JSON.stringify({ username: 'original', password: '' }) } }, ['set']);
+    Credentials.save('edited', '');
+    const profiles = [{ username: 'set', password: '' }];
+    console.log(serializeProfileFile({ profiles, tabs: [], activeTab: 'Main', storage: collectBoxStorage(['set']) }));
+    process.exit(0);
+}
 if (process.argv.includes('--export-set')) {
     const { SettingsStore } = await import('../../src/bot/runtime/Settings.js');
     const { collectBoxStorage, applyBoxStorage } = await import('../../src/bot/multibox/ProfileTransfer.js');

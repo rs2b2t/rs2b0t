@@ -126,8 +126,9 @@ function readStore(store: Storage, usernames: string[], out: BoxStorageMap, lega
             if (suffix === null) {
                 continue;
             }
-            if (desktopSession && (suffix === 'selectedScript' || (user === 'set' && out.set && Object.hasOwn(out.set, suffix)))) {
-                continue;
+            if (desktopSession) {
+                if (suffix === 'selectedScript') continue;
+                if (user === 'set' && suffix.startsWith('set:') && out.set && Object.hasOwn(out.set, suffix)) continue;
             }
             const value = store.getItem(key);
             if (value === null) {
