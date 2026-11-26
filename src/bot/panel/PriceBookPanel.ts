@@ -106,7 +106,11 @@ export class PriceBookPanel {
 
     private editCurrent(edit: (book: PriceBook) => PriceBook): void {
         const current = this.current();
-        if (current) this.commit(edit(current));
+        if (current) {
+            this.commit(edit(current));
+        } else {
+            this.open();
+        }
     }
 
     // Why: every edit commits through the store and rebuilds the panel, which would drop the scroll position and caret and send an edit on row 80 back to row 1.
@@ -737,9 +741,18 @@ export class PriceBookPanel {
             input.dataset.pinned = 'true';
             input.title = 'pinned override, click the dot to clear';
             const clear = this.action(`clear-${role}`, '●', () => {
+                const selected = this.selected;
                 input.removeEventListener('change', savePrice);
-                input.focus({ preventScroll: true });
-                onChange(null);
+                try {
+                    input.focus({ preventScroll: true });
+                    if (this.selected === selected) {
+                        onChange(null);
+                    }
+                } finally {
+                    if (this.window.contains(input)) {
+                        input.addEventListener('change', savePrice);
+                    }
+                }
             });
             clear.type = 'button';
             clear.classList.add('rs2b0t-pricebook-unpin');

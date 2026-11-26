@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 
 import { PriceBooks } from '#/bot/api/market/bookStore.js';
 import { resetLiveCatalog } from '#/bot/api/market/catalog.js';
@@ -133,6 +133,60 @@ describe('filtering the book', () => {
 
 // Why: every edit commits through the store and rebuilds the panel, which used to drop the table back to the first row.
 describe('editing a row', () => {
+    const buyField = '[data-item="440"] [data-role=buy]';
+    const clearBuy = '[data-item="440"] [data-action=clear-buy]';
+
+    function openPinnedPanel(): PriceBookPanel {
+        const panel = openPanel();
+        const buy = panel.root.querySelector<HTMLInputElement>(buyField)!;
+        buy.value = '80';
+        buy.dispatchEvent(new Event('change'));
+        return panel;
+    }
+
+    test('saves the next price edit after a clear fails', () => {
+        const panel = openPinnedPanel();
+        const save = spyOn(PriceBooks, 'save').mockImplementationOnce(() => {
+            throw new DOMException('storage full', 'QuotaExceededError');
+        });
+        const report = spyOn(console, 'error').mockImplementationOnce(() => {});
+        try {
+            panel.root.querySelector<HTMLButtonElement>(clearBuy)!.click();
+        } finally {
+            save.mockRestore();
+            report.mockRestore();
+        }
+
+        const buy = panel.root.querySelector<HTMLInputElement>(buyField)!;
+        expect(buy.value).toBe('80');
+        buy.value = '81';
+        buy.dispatchEvent(new Event('change'));
+        sessionStorage.removeItem(boxKey('set:PriceBooks:books'));
+        expect(PriceBooks.byName('seers')!.rows.find(row => row.id === 440)?.buy).toBe(81);
+        panel.close();
+    });
+
+    test('refreshes the selection when clearing a pin in a deleted book', () => {
+        const panel = openPinnedPanel();
+        const book = PriceBooks.byName('seers')!;
+        PriceBooks.save([book, { ...book, name: 'other' }]);
+        const second = new PriceBookPanel();
+        document.body.appendChild(second.root);
+        second.open('seers');
+        second.root.querySelector<HTMLButtonElement>('[data-action=delete]')!.click();
+        second.close();
+
+        const mid = panel.root.querySelector<HTMLInputElement>('[data-item="440"] [data-role=mid]')!;
+        type(mid, '200');
+        mid.addEventListener('blur', () => mid.dispatchEvent(new Event('change')), { once: true });
+        const staleClear = panel.root.querySelector<HTMLButtonElement>(clearBuy)!;
+        staleClear.click();
+        expect(panel.root.querySelector<HTMLSelectElement>('select')!.value).toBe('other');
+        expect(staleClear.isConnected).toBe(false);
+        expect(PriceBooks.all()).toEqual([{ ...book, name: 'other' }]);
+        panel.close();
+    });
+
     test.each([
         { side: 'buy', edit: 'buy', pinned: '80', pending: '85', derived: '90' },
         { side: 'sell', edit: 'sell', pinned: '120', pending: '125', derived: '110' },
