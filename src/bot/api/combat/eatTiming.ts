@@ -42,9 +42,4 @@ export class AttackClock {
     attackedThisTick(tick: number): boolean {
         return this.startedTick === tick;
     }
-
-    reset(): void {
-        this.lastAnim = -1;
-        this.startedTick = -1;
-    }
 }
