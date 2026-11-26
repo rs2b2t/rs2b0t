@@ -413,7 +413,9 @@ export class ProfileVault {
         if (this.shared) {
             const generation = this.persistGeneration;
             try {
-                return await this.sharedChange(draft => draft.upsert(p));
+                const saved = await this.sharedChange(draft => draft.upsert(p));
+                if (saved?.created) this.sharedTabs.assignments.set(saved.profile.username, saved.profile.tab ?? MAIN_TAB);
+                return saved;
             } catch (error) {
                 if (desktopStorage || generation >= this.lastResetGeneration || this.status() !== 'empty') throw error;
             }

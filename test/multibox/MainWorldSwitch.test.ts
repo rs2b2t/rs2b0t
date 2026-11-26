@@ -1,6 +1,6 @@
 import { expect, spyOn, test } from 'bun:test';
 import { VaultPrompt } from '#/bot/multibox/VaultPrompt.js';
-import { ProfileVault, vault } from '#/bot/multibox/ProfileVault.js';
+import { type Profile, ProfileVault, vault } from '#/bot/multibox/ProfileVault.js';
 import { serializeProfileFile } from '#/bot/multibox/ProfileTransfer.js';
 import { SettingsPanel } from '#/bot/multibox/SettingsPanel.js';
 import { ResourcePanel } from '#/bot/multibox/ResourcePanel.js';
@@ -15,6 +15,7 @@ import '#/client/config/target.js';
 interface Wall {
     controller: MultiBoxController;
     add(account: Account): SlotSnapshot;
+    importProfiles(profiles: Profile[]): Promise<number>;
     slots(): SlotSnapshot[];
     setWorld(id: number, world: WorldNumber): Promise<boolean>;
 }
@@ -193,6 +194,23 @@ test('loading a stale chooser row preserves a group edit from another tab', asyn
         const reopened = new ProfileVault();
         expect(await reopened.unlock('test-passphrase')).toBe(true);
         expect(reopened.list().find(p => p.username === 'bob')?.tab).toBe('Fleet');
+    });
+});
+
+test('loading an imported profile from a stale chooser preserves its new group', async () => {
+    await withWall('local', async wall => {
+        expect(await wall.importProfiles([{ username: 'carol', password: 'fixture' }])).toBe(1);
+        document.getElementById('mbx-add')!.click();
+        await waitFor(() => !!chooserRow('carol'));
+
+        const other = new ProfileVault();
+        expect(await other.unlock('test-passphrase')).toBe(true);
+        await other.assignGroup(['carol'], 'Fleet');
+        await loadChooserRow('carol');
+
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('test-passphrase')).toBe(true);
+        expect(reopened.list().find(p => p.username === 'carol')?.tab).toBe('Fleet');
     });
 });
 
