@@ -5,12 +5,28 @@ interface NamedItem {
     name: string;
 }
 
+function itemId(item: number | NamedItem): number {
+    return typeof item === 'number' ? item : item.id;
+}
+
+function inventoryCount(snap: QuestSnapshot, item: number | NamedItem): number {
+    return snap.invIds?.get(itemId(item)) ?? 0;
+}
+
+function cachedBankCount(snap: QuestSnapshot, item: number | NamedItem): number {
+    return snap.bankIds?.get(itemId(item)) ?? 0;
+}
+
+function isWorn(snap: QuestSnapshot, item: number | NamedItem): boolean {
+    return snap.wornIds?.has(itemId(item)) ?? false;
+}
+
 export function heldId(snap: QuestSnapshot, id: number): number {
-    return snap.invIds?.get(id) ?? 0;
+    return inventoryCount(snap, id);
 }
 
 export function cachedBankId(snap: QuestSnapshot, id: number): number {
-    return snap.bankIds?.get(id) ?? 0;
+    return cachedBankCount(snap, id);
 }
 
 export function inventoryAndBankCount(snap: QuestSnapshot, id: number): number {
@@ -22,7 +38,7 @@ export function bankedId(snap: QuestSnapshot, id: number): number {
 }
 
 export function wornId(snap: QuestSnapshot, id: number): boolean {
-    return snap.wornIds?.has(id) ?? false;
+    return isWorn(snap, id);
 }
 
 export function heldName(snap: QuestSnapshot, name: string): number {
@@ -42,15 +58,15 @@ export function wornName(snap: QuestSnapshot, name: string): boolean {
 }
 
 export function heldItem(snap: QuestSnapshot, item: NamedItem): number {
-    return snap.invIds?.get(item.id) ?? 0;
+    return inventoryCount(snap, item);
 }
 
 export function bankedItem(snap: QuestSnapshot, item: NamedItem): number {
-    return snap.bankIds?.get(item.id) ?? 0;
+    return cachedBankCount(snap, item);
 }
 
 export function wornItem(snap: QuestSnapshot, item: NamedItem): boolean {
-    return snap.wornIds?.has(item.id) ?? false;
+    return isWorn(snap, item);
 }
 
 export function heldOrBankedItem(snap: QuestSnapshot, item: NamedItem): number {
