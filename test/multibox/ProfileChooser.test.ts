@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { ProfileChooser } from '#/bot/multibox/ProfileChooser.js';
-import { vault, type Profile } from '#/bot/multibox/ProfileVault.js';
+import { ProfileVault, vault, type Profile } from '#/bot/multibox/ProfileVault.js';
 
 const clearAll = () => {
     sessionStorage.clear();
@@ -227,6 +227,28 @@ describe('ProfileChooser', () => {
         expect(vault.list()[0].world).toBe(2);
         (chooser.el.querySelector('.mbx-profile-row') as HTMLElement).click();
         expect(loaded[0].world).toBe(2);
+    });
+
+    test('a pending world edit settles after a remote vault reset closes the chooser', async () => {
+        await vault.upsert({ username: 'alice', password: 'fixture', world: 1 });
+        let resume!: () => void;
+        const gate = new Promise<void>(resolve => { resume = resolve; });
+        const { chooser } = make({ defaultWorld: 1, onWorldChange: async (profile, world) => {
+            await gate;
+            await vault.setWorld(profile.username, world);
+            return true;
+        } });
+        chooser.open();
+        const select = changeWorld(chooser, 2);
+        expect(select.disabled).toBe(true);
+
+        await new ProfileVault().reset();
+        await vault.refresh();
+        chooser.close();
+        resume();
+        await waitFor(() => !select.disabled);
+        expect(chooser.el.hidden).toBe(true);
+        expect(vault.status()).toBe('empty');
     });
 
     test('a failed switch restores its displayed choice and reports the error', async () => {

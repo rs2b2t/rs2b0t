@@ -17,6 +17,7 @@ interface Wall {
     add(account: Account): SlotSnapshot;
     addTab(name: string): boolean;
     renameTab(from: string, to: string): boolean;
+    removeTab(name: string): boolean;
     setSlotTab(id: number, tab: string): boolean;
     importProfiles(profiles: Profile[]): Promise<number>;
     slots(): SlotSnapshot[];
@@ -290,6 +291,30 @@ test('a stale wall renames only the current members of a group', async () => {
             ['alice', 'Remote'], ['bob', 'Remote'], ['carol', 'Renamed']
         ]);
         expect(reopened.tabState().tabs.sort()).toEqual(['Remote', 'Renamed']);
+    });
+});
+
+test('deleting a stale group moves only its remaining loaded members to the prior group', async () => {
+    await withWall('local', async wall => {
+        await vault.saveTabState(['Prior', 'Old'], new Map([['alice', 'Old'], ['bob', 'Old']]), 'Old');
+        for (const username of ['alice', 'bob']) {
+            document.getElementById('mbx-add')!.click();
+            await waitFor(() => !!chooserRow(username));
+            await loadChooserRow(username);
+        }
+
+        const other = new ProfileVault();
+        expect(await other.unlock('test-passphrase')).toBe(true);
+        await other.assignGroup(['alice'], 'Remote');
+        const key = 'rs2b0t:multibox:profiles';
+        const before = localStorage.getItem(key);
+        expect(wall.removeTab('Old')).toBe(true);
+        await waitFor(() => localStorage.getItem(key) !== before);
+
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('test-passphrase')).toBe(true);
+        expect(reopened.tabState().tabs).toEqual(['Prior', 'Remote']);
+        expect(reopened.list().map(p => [p.username, p.tab])).toEqual([['alice', 'Remote'], ['bob', 'Prior']]);
     });
 });
 

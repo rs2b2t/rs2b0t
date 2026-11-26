@@ -10,7 +10,7 @@ import { TrafficCollector } from '../adapter/TrafficAdapter.js';
 import { DomSlotOps, orderedSlotElements } from './DomSlotOps.js';
 import { MultiBoxController, normalizeUsername } from './MultiBoxController.js';
 import { ProfileChooser } from './ProfileChooser.js';
-import { vault, type Profile, type TabRename } from './ProfileVault.js';
+import { vault, type Profile, type TabChange } from './ProfileVault.js';
 import { renderRailTile, slotIsRunning } from './RailTile.js';
 import { ResourcePanel } from './ResourcePanel.js';
 import { SettingsPanel } from './SettingsPanel.js';
@@ -90,13 +90,13 @@ function boot(): void {
         orderWrite = orderWrite.then(() => vault.reorder(usernames)).catch(err => console.error('[rs2b0t] failed to save bot order', err));
     }
 
-    function persistTabState(tabByUser: ReadonlyMap<string, string> = new Map(), rename?: TabRename): void {
+    function persistTabState(tabByUser: ReadonlyMap<string, string> = new Map(), change?: TabChange): void {
         if (!tabsHydrated || vault.status() !== 'unlocked') {
             return;
         }
         const customTabs = controller.tabs().slice(1);
         const activeTab = controller.activeTab();
-        orderWrite = orderWrite.then(() => vault.saveTabState(customTabs, tabByUser, activeTab, rename)).catch(err => console.error('[rs2b0t] failed to save tab state', err));
+        orderWrite = orderWrite.then(() => vault.saveTabState(customTabs, tabByUser, activeTab, change)).catch(err => console.error('[rs2b0t] failed to save tab state', err));
     }
 
     function renameTab(from: string, to: string): boolean {
@@ -106,7 +106,7 @@ function boot(): void {
         return true;
     }
 
-    function mutateTabs(action: () => boolean): boolean {
+    function mutateTabs(action: () => boolean, removedTab?: string): boolean {
         const before = new Map(controller.snapshot().map(slot => [slot.username, slot.tab]));
         const changed = action();
         if (changed) {
@@ -116,16 +116,21 @@ function boot(): void {
             for (const slot of slots) {
                 if (before.get(slot.username) !== slot.tab) assignments.set(slot.username, slot.tab);
             }
-            persistTabState(assignments);
+            if (removedTab !== undefined) persistTabState(undefined, { from: removedTab, fallbackByUser: assignments });
+            else persistTabState(assignments);
         }
         return changed;
+    }
+
+    function removeTab(name: string): boolean {
+        return mutateTabs(() => controller.removeTab(name), name);
     }
 
     const tabBar = new TabBar(document.getElementById('mbx-tabs')!, {
         onSelect: name => void mutateTabs(() => controller.setActiveTab(name)),
         onAdd: name => mutateTabs(() => controller.addTab(name)),
         onRename: renameTab,
-        onRemove: name => void mutateTabs(() => controller.removeTab(name)),
+        onRemove: removeTab,
         onMove: (name, toIndex) => void mutateTabs(() => controller.moveTab(name, toIndex)),
         onDropBot: (id, tab) => void mutateTabs(() => controller.setSlotTab(id, tab))
     });
@@ -588,7 +593,7 @@ function boot(): void {
         activeTab: () => controller.activeTab(),
         addTab: (name: string) => mutateTabs(() => controller.addTab(name)),
         renameTab,
-        removeTab: (name: string) => mutateTabs(() => controller.removeTab(name)),
+        removeTab,
         moveTab: (name: string, toIndex: number) => mutateTabs(() => controller.moveTab(name, toIndex)),
         setActiveTab: (name: string) => mutateTabs(() => controller.setActiveTab(name)),
         setSlotTab: (id: number, tab: string) => mutateTabs(() => controller.setSlotTab(id, tab)),

@@ -20,6 +20,8 @@ export interface TabRename {
     to: string;
 }
 
+export type TabChange = TabRename | { from: string; fallbackByUser: ReadonlyMap<string, string> };
+
 type VaultStatus = 'empty' | 'locked' | 'plaintext-legacy' | 'unlocked';
 
 const KEY = 'rs2b0t:multibox:profiles';
@@ -540,8 +542,8 @@ export class ProfileVault {
         await this.persist();
     }
 
-    async saveTabState(tabs: string[], tabByUser: ReadonlyMap<string, string>, activeTab: string, rename?: TabRename): Promise<void> {
-        if (this.pendingImport) return this.afterImport(() => this.saveTabState(tabs, tabByUser, activeTab, rename));
+    async saveTabState(tabs: string[], tabByUser: ReadonlyMap<string, string>, activeTab: string, change?: TabChange): Promise<void> {
+        if (this.pendingImport) return this.afterImport(() => this.saveTabState(tabs, tabByUser, activeTab, change));
         const requested = tabs.map(tab => tab.trim());
         assertTabStateValid(requested, activeTab, []);
         for (const [username, tab] of tabByUser) {
@@ -565,7 +567,7 @@ export class ProfileVault {
                     const next = requested.slice(index + 1).find(candidate => merged.includes(candidate));
                     merged.splice(next ? merged.indexOf(next) : merged.length, 0, tab);
                 }
-                await draft.saveTabState(merged, tabByUser, merged.includes(activeTab) ? activeTab : MAIN_TAB, rename);
+                await draft.saveTabState(merged, tabByUser, merged.includes(activeTab) ? activeTab : MAIN_TAB, change);
             });
             this.sharedTabs = requested;
             return;
@@ -574,7 +576,11 @@ export class ProfileVault {
         this.customTabs = requested;
         this.active = activeTab;
         for (const p of all) {
-            const next = tabByUser.get(p.username) ?? (rename && p.tab === rename.from ? rename.to : p.tab);
+            let next = p.tab;
+            if (change && p.tab === change.from) {
+                next = 'to' in change ? change.to : change.fallbackByUser.get(p.username);
+            }
+            next = tabByUser.get(p.username) ?? next;
             // a profile not loaded in this wall keeps its stored tab, landing in Main when that tab has been deleted
             // Why: the deleting wall only knows prior-tab targets for the bots it has loaded
             if (next !== undefined && next !== MAIN_TAB && requested.includes(next)) {
