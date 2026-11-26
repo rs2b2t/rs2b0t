@@ -1,4 +1,4 @@
-import { SettingsStore, type SettingsSchema } from '../runtime/Settings.js';
+import { SettingsStore, type DraftValues, type SettingsSchema } from '../runtime/Settings.js';
 import { groupSchema, isTruthy, isVisible, renderControl, refreshDeps } from './paramControls.js';
 import { el } from './dom.js';
 import { Loadouts } from '../api/loadout/loadoutStore.js';
@@ -28,7 +28,7 @@ export default class ParamsModal {
     constructor(
         private isActive: () => boolean,
         private onChanged: (key: string) => void,
-        private draft?: { keys: ReadonlySet<string>; values: Map<string, string> }
+        private draft?: { keys: ReadonlySet<string>; values: DraftValues & { set(key: string, value: string): void } }
     ) {
         this.backdrop = el('div', 'rs2b0t-modal-backdrop');
         this.backdrop.addEventListener('click', e => {

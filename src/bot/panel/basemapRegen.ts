@@ -10,6 +10,7 @@ import {
     type BasemapManifest
 } from './worldMapBasemap.js';
 import {
+    type DraftValues,
     MAP_PICKER_SETTINGS,
     MAP_PICKER_SETTINGS_NS,
     SettingsBag,
@@ -48,7 +49,7 @@ const DEFAULT_BASEMAP_BAKE_PREFS: BasemapBakePrefs = {
     freemap: false
 };
 
-export function resolveBasemapBakePrefs(draft?: ReadonlyMap<string, string>): BasemapBakePrefs {
+export function resolveBasemapBakePrefs(draft?: DraftValues): BasemapBakePrefs {
     const g = new SettingsBag(SettingsStore.resolve(MAP_PICKER_SETTINGS_NS, MAP_PICKER_SETTINGS, draft));
     return {
         labels: g.bool('bakeLabels', DEFAULT_BASEMAP_BAKE_PREFS.labels),

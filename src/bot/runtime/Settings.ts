@@ -565,6 +565,8 @@ function storageKey(name: string, key: string): string {
 
 type SettingChangeListener = (name: string, key: string, value: string) => void;
 
+export type DraftValues = Pick<ReadonlyMap<string, string>, 'get'>;
+
 class SettingsStoreImpl {
     private urlParams: URLSearchParams | null = typeof location !== 'undefined' ? new URLSearchParams(location.search) : null;
     /** Same-tab subscribers (open modals). `storage` events only fire across tabs. */
@@ -626,27 +628,31 @@ class SettingsStoreImpl {
         return hasLocal ? localStorage.getItem(storageKey(MAP_PICKER_SETTINGS_NS, key)) : null;
     }
 
-    saveBakePreference(key: string, value: string, expected: string | null): boolean {
+    async saveBakePreference(key: string, value: string, expected: string | null): Promise<boolean> {
         const id = storageKey(MAP_PICKER_SETTINGS_NS, key);
-        const previous = hasSession ? sessionStorage.getItem(id) : null;
-        if (hasSession) sessionStorage.setItem(id, value);
-        let saved = false;
-        try {
-            if (desktopStorage) {
-                if (!desktopStorage.compareAndSet(id, expected, value)) return false;
-            } else if (hasLocal) {
-                if (localStorage.getItem(id) !== expected) return false;
-                localStorage.setItem(id, value);
+        const commit = (): boolean => {
+            const previous = hasSession ? sessionStorage.getItem(id) : null;
+            if (hasSession) sessionStorage.setItem(id, value);
+            let saved = false;
+            try {
+                if (desktopStorage) {
+                    if (!desktopStorage.compareAndSet(id, expected, value)) return false;
+                } else if (hasLocal) {
+                    if (localStorage.getItem(id) !== expected) return false;
+                    localStorage.setItem(id, value);
+                }
+                saved = true;
+            } finally {
+                if (!saved && hasSession && previous !== value) {
+                    if (previous === null) sessionStorage.removeItem(id);
+                    else sessionStorage.setItem(id, previous);
+                }
             }
-            saved = true;
-        } finally {
-            if (!saved && hasSession && previous !== value) {
-                if (previous === null) sessionStorage.removeItem(id);
-                else sessionStorage.setItem(id, previous);
-            }
-        }
-        this.notify(MAP_PICKER_SETTINGS_NS, key, value);
-        return true;
+            this.notify(MAP_PICKER_SETTINGS_NS, key, value);
+            return true;
+        };
+        if (hasLocal && !desktopStorage) return navigator.locks.request(id, commit);
+        return commit();
     }
 
     /** Subscribe to SettingsStore.save (same tab); an open map picker uses it to track Global settings edits. Returns the unsubscribe. */
@@ -674,7 +680,7 @@ class SettingsStoreImpl {
         }
     }
 
-    private winningRaw(name: string, key: string, def: SettingDef, draft?: ReadonlyMap<string, string>): { raw: string | null; def: SettingDef } {
+    private winningRaw(name: string, key: string, def: SettingDef, draft?: DraftValues): { raw: string | null; def: SettingDef } {
         const url = this.urlOverride(name, key);
         if (url !== null) {
             return { raw: url, def };
@@ -698,12 +704,12 @@ class SettingsStoreImpl {
         return { raw: null, def };
     }
 
-    displayString(name: string, key: string, def: SettingDef, draft?: ReadonlyMap<string, string>): string {
+    displayString(name: string, key: string, def: SettingDef, draft?: DraftValues): string {
         const w = this.winningRaw(name, key, def, draft);
         return w.raw !== null ? w.raw : settingToString(w.def, w.def.default);
     }
 
-    resolve(name: string, schema: SettingsSchema, draft?: ReadonlyMap<string, string>): Record<string, unknown> {
+    resolve(name: string, schema: SettingsSchema, draft?: DraftValues): Record<string, unknown> {
         const out: Record<string, unknown> = {};
         for (const [key, def] of Object.entries(schema)) {
             const w = this.winningRaw(name, key, def, draft);

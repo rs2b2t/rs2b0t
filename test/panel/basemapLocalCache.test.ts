@@ -7,6 +7,7 @@ import {
     resolveBasemapBakePrefs,
     type BasemapBakePrefs
 } from '#/bot/panel/basemapRegen.js';
+import { desktopStorage } from '#/bot/runtime/desktopStorage.js';
 import { MAP_PICKER_SETTINGS_NS, SettingsStore } from '#/bot/runtime/Settings.js';
 
 const prefs = (over: Partial<BasemapBakePrefs> = {}): BasemapBakePrefs => ({
@@ -73,11 +74,28 @@ describe('client CRC key format (unit of /crc)', () => {
 });
 
 describe('map picker bake settings drafts', () => {
+    const originalLocks = Object.getOwnPropertyDescriptor(navigator, 'locks');
     beforeEach(() => {
+        const held = new Map<string, Promise<void>>();
+        Object.defineProperty(navigator, 'locks', { configurable: true, value: {
+            async request(name: string, commit: () => boolean) {
+                while (held.has(name)) await held.get(name);
+                const released = Promise.withResolvers<void>();
+                held.set(name, released.promise);
+                try {
+                    return commit();
+                } finally {
+                    held.delete(name);
+                    released.resolve();
+                }
+            }
+        } });
         sessionStorage.clear();
         localStorage.clear();
     });
     afterEach(() => {
+        if (originalLocks) Object.defineProperty(navigator, 'locks', originalLocks);
+        else Reflect.deleteProperty(navigator, 'locks');
         sessionStorage.clear();
         localStorage.clear();
     });
@@ -475,6 +493,115 @@ describe('map picker bake settings drafts', () => {
         } finally {
             cache.mockRestore();
             crc.mockRestore();
+            bake.mockRestore();
+        }
+    });
+
+    test.each([false, true])('Retry respects a peer save to the rejected field (edited again: %p)', async editedAgain => {
+        SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'skipRebuildConfirm', 'true');
+        const bake = spyOn(basemapRegen, 'regenerateBasemap').mockResolvedValue(rebuiltMap());
+        try {
+            await withPicker(async () => {
+                openSettings();
+                const borders = bakeCheckbox('Map-square borders');
+                borders.click();
+                const setItem = localStorage.setItem;
+                Object.defineProperty(localStorage, 'setItem', { configurable: true, value() {
+                    throw new DOMException('storage full', 'QuotaExceededError');
+                } });
+                try {
+                    clickRebuild(true);
+                    await new Promise<void>(resolve => setImmediate(resolve));
+                    expect(document.querySelector('[role="alert"]')?.textContent).toMatch(/Map-square borders.*retry/i);
+                } finally {
+                    Object.defineProperty(localStorage, 'setItem', { value: setItem });
+                }
+
+                localStorage.setItem('rs2b0t:set:MapPicker:bakeBorders', 'false');
+                if (editedAgain) {
+                    borders.click();
+                    borders.click();
+                }
+                clickRebuild(true);
+                await new Promise<void>(resolve => setImmediate(resolve));
+                expect(stored('bakeBorders')).toEqual(editedAgain ? { local: 'true', session: 'true' } : { local: 'false', session: null });
+                expect(borders.checked).toBe(editedAgain);
+                expect(bake).toHaveBeenLastCalledWith(prefs({ borders: true }));
+            });
+        } finally {
+            bake.mockRestore();
+        }
+    });
+
+    test('a conflicting bake keeps a later edit with the same checkbox value', async () => {
+        SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'skipRebuildConfirm', 'true');
+        const first = Promise.withResolvers<ReturnType<typeof rebuiltMap>>();
+        const bake = spyOn(basemapRegen, 'regenerateBasemap').mockReturnValueOnce(first.promise).mockResolvedValue(rebuiltMap());
+        try {
+            await withPicker(async () => {
+                openSettings();
+                bakeCheckbox('Map-square borders').click();
+                clickRebuild(true);
+                escapeSettings();
+                localStorage.setItem('rs2b0t:set:MapPicker:bakeBorders', 'false');
+                openSettings();
+                const borders = bakeCheckbox('Map-square borders');
+                borders.click();
+                first.resolve(rebuiltMap());
+                await new Promise<void>(resolve => setImmediate(resolve));
+                expect(stored('bakeBorders').local).toBe('false');
+                expect(borders.checked).toBe(true);
+
+                clickRebuild(true);
+                await new Promise<void>(resolve => setImmediate(resolve));
+                expect(stored('bakeBorders').local).toBe('true');
+            });
+        } finally {
+            bake.mockRestore();
+        }
+    });
+
+    test.skipIf(!!desktopStorage)('only one overlapping browser commit can replace the same expected value', async () => {
+        const id = 'rs2b0t:set:MapPicker:bakeBorders';
+        const getItem = localStorage.getItem;
+        let peer: Promise<boolean> | undefined;
+        Object.defineProperty(localStorage, 'getItem', { configurable: true, value(key: string) {
+            const before = getItem.call(localStorage, key);
+            if (key === id) {
+                Object.defineProperty(localStorage, 'getItem', { value: getItem });
+                peer = SettingsStore.saveBakePreference('bakeBorders', 'false', null);
+            }
+            return before;
+        } });
+        try {
+            const first = await SettingsStore.saveBakePreference('bakeBorders', 'true', null);
+            expect([first, await peer]).toEqual([true, false]);
+            expect(stored('bakeBorders')).toEqual({ local: 'true', session: 'true' });
+        } finally {
+            Object.defineProperty(localStorage, 'getItem', { value: getItem });
+        }
+    });
+
+    test.skipIf(!!desktopStorage)('an unavailable browser lock leaves the preference retryable', async () => {
+        const locks = navigator.locks;
+        SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'skipRebuildConfirm', 'true');
+        const bake = spyOn(basemapRegen, 'regenerateBasemap').mockResolvedValue(rebuiltMap());
+        try {
+            await withPicker(async () => {
+                openSettings();
+                bakeCheckbox('Map-square borders').click();
+                Object.defineProperty(navigator, 'locks', { value: undefined });
+                clickRebuild(true);
+                await new Promise<void>(resolve => setImmediate(resolve));
+                expect(stored('bakeBorders')).toEqual({ local: null, session: null });
+                expect(document.querySelector('[role="alert"]')?.textContent).toMatch(/Map-square borders.*retry/i);
+
+                Object.defineProperty(navigator, 'locks', { value: locks });
+                clickRebuild(true);
+                await new Promise<void>(resolve => setImmediate(resolve));
+                expect(stored('bakeBorders')).toEqual({ local: 'true', session: 'true' });
+            });
+        } finally {
             bake.mockRestore();
         }
     });

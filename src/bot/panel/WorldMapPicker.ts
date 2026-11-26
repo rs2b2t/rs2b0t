@@ -859,8 +859,15 @@ export class WorldMapPicker {
             };
 
             // In-picker Settings modal (not Global settings).
-            const bakeEdits = new Map<string, string>();
-            const settingsModal = new ParamsModal(() => false, requestPaint, { keys: MAP_PICKER_BAKE_KEYS, values: bakeEdits });
+            type BakeEdit = { value: string; expected: string | null };
+            const bakeEdits = new Map<string, BakeEdit>();
+            const draft = {
+                get: (key: string) => bakeEdits.get(key)?.value,
+                set(key: string, value: string) {
+                    bakeEdits.set(key, { value, expected: SettingsStore.durableBakePreference(key) });
+                }
+            };
+            const settingsModal = new ParamsModal(() => false, requestPaint, { keys: MAP_PICKER_BAKE_KEYS, values: draft });
 
             const unsubSettings = SettingsStore.onChange((name, key) => {
                 if (name === MAP_PICKER_SETTINGS_NS && isMapPickerThemeSettingKey(key)) {
@@ -994,24 +1001,26 @@ export class WorldMapPicker {
                     status.textContent = 'rebuilding basemap (tab may freeze)…';
                     status.style.color = '#fa0';
                     try {
-                        const submitted = Array.from(bakeEdits, ([key, value]) => ({
-                            key, value, expected: SettingsStore.durableBakePreference(key)
-                        }));
-                        const prefs = resolveBasemapBakePrefs(bakeEdits);
+                        const submitted = new Map(bakeEdits);
+                        const prefs = resolveBasemapBakePrefs(draft);
                         const next = await regenerateBasemap(prefs);
                         if (closed) {
                             return;
                         }
-                        const failed = new Map<string, string>();
+                        const failed = new Map<string, BakeEdit>();
                         const conflicts: string[] = [];
-                        for (const { key, value, expected } of submitted) {
+                        for (const [key, edit] of submitted) {
                             try {
-                                if (!SettingsStore.saveBakePreference(key, value, expected)) {
-                                    conflicts.push(MAP_PICKER_SETTINGS[key].label ?? key);
+                                const saved = await SettingsStore.saveBakePreference(key, edit.value, edit.expected);
+                                const current = bakeEdits.get(key);
+                                if (!saved) conflicts.push(MAP_PICKER_SETTINGS[key].label ?? key);
+                                if (current === edit) {
+                                    bakeEdits.delete(key);
+                                } else if (saved && current && current.expected === edit.expected) {
+                                    current.expected = edit.value;
                                 }
-                                if (bakeEdits.get(key) === value) bakeEdits.delete(key);
                             } catch {
-                                failed.set(key, value);
+                                failed.set(key, edit);
                             }
                         }
                         const crcKey = await fetchClientCrcKey();
@@ -1031,13 +1040,13 @@ export class WorldMapPicker {
                         const warnings: string[] = [];
                         if (conflicts.length) warnings.push(`Kept newer preferences: ${conflicts.join(', ')}.`);
                         if (failed.size) {
-                            for (const [key, value] of failed) {
-                                if (!bakeEdits.has(key)) bakeEdits.set(key, value);
+                            for (const [key, edit] of failed) {
+                                if (!bakeEdits.has(key)) bakeEdits.set(key, edit);
                             }
                             const labels = Array.from(failed.keys(), key => MAP_PICKER_SETTINGS[key].label ?? key);
                             warnings.push(`Could not save: ${labels.join(', ')}. Rebuild to retry.`);
                         }
-                        settingsModal.refreshCheckboxes(submitted.map(edit => edit.key));
+                        settingsModal.refreshCheckboxes(submitted.keys());
                         if (warnings.length) showRebuildError(`Basemap rebuilt. ${warnings.join(' ')}`);
                         requestPaint();
                     } catch (err) {
