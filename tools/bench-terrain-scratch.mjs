@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
+import process from 'node:process';
 import { createJiti } from 'jiti';
 
 const file = 'src/client/shell/ClientBuild.ts';
