@@ -290,6 +290,18 @@ async function fakeProcess(procRoot: string, pid: number, parentPid: number, use
     }
 }
 
+function readProcFileWithExit(processDir: string): (path: string) => Promise<string> {
+    const pssPath = join(processDir, 'smaps_rollup');
+    let exitPending = true;
+    return async path => {
+        if (path === pssPath && exitPending) {
+            exitPending = false;
+            await rm(processDir, { recursive: true, force: true });
+        }
+        return readFile(path, 'utf8');
+    };
+}
+
 describe('LinuxProcCollector', () => {
     test('reads only PSS and excludes processes outside the root tree', async () => {
         const procRoot = await mkdtemp(join(tmpdir(), 'rs2b0t-proc-'));
@@ -378,21 +390,12 @@ describe('LinuxProcCollector', () => {
         temporaryDirectories.push(procRoot);
         await fakeProcess(procRoot, 100, 1, 100, 50, 1_000, { pssKilobytes: 100 });
         await fakeProcess(procRoot, 101, 100, 25, 25, 1_100, { pssKilobytes: 200 });
-        const childPath = join(procRoot, '101');
-        const childPssPath = join(childPath, 'smaps_rollup');
-        let exitChild = true;
 
         const collector = new LinuxProcCollector({
             procRoot,
             clockTicksPerSecond: 100,
             logicalCpuCount: 4,
-            readProcFile: async path => {
-                if (path === childPssPath && exitChild) {
-                    exitChild = false;
-                    await rm(childPath, { recursive: true, force: true });
-                }
-                return readFile(path, 'utf8');
-            }
+            readProcFile: readProcFileWithExit(join(procRoot, '101'))
         });
         const collection = await collector.collect(100);
 
@@ -409,21 +412,12 @@ describe('LinuxProcCollector', () => {
         await fakeProcess(procRoot, 100, 1, 100, 50, 1_000, { pssKilobytes: 100 });
         await fakeProcess(procRoot, 101, 100, 25, 25, 1_100, { pssKilobytes: 200 });
         await fakeProcess(procRoot, 102, 101, 10, 10, 1_200, { pssKilobytes: 300 });
-        const middlePath = join(procRoot, '101');
-        const middlePssPath = join(middlePath, 'smaps_rollup');
-        let exitMiddle = true;
 
         const collector = new LinuxProcCollector({
             procRoot,
             clockTicksPerSecond: 100,
             logicalCpuCount: 4,
-            readProcFile: async path => {
-                if (path === middlePssPath && exitMiddle) {
-                    exitMiddle = false;
-                    await rm(middlePath, { recursive: true, force: true });
-                }
-                return readFile(path, 'utf8');
-            }
+            readProcFile: readProcFileWithExit(join(procRoot, '101'))
         });
         const collection = await collector.collect(100);
 
@@ -468,21 +462,12 @@ describe('LinuxProcCollector', () => {
         const procRoot = await mkdtemp(join(tmpdir(), 'rs2b0t-proc-root-exit-'));
         temporaryDirectories.push(procRoot);
         await fakeProcess(procRoot, 100, 1, 100, 50, 1_000, { pssKilobytes: 100 });
-        const rootPath = join(procRoot, '100');
-        const rootPssPath = join(rootPath, 'smaps_rollup');
-        let exitRoot = true;
 
         const collector = new LinuxProcCollector({
             procRoot,
             clockTicksPerSecond: 100,
             logicalCpuCount: 4,
-            readProcFile: async path => {
-                if (path === rootPssPath && exitRoot) {
-                    exitRoot = false;
-                    await rm(rootPath, { recursive: true, force: true });
-                }
-                return readFile(path, 'utf8');
-            }
+            readProcFile: readProcFileWithExit(join(procRoot, '100'))
         });
         const collection = await collector.collect(100);
 
