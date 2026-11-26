@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { walk } from './lib/walkTypeScriptFiles.js';
 
 const DECL = /^export\s+(?:declare\s+)?(?:async\s+)?(?:const|let|var|function|class|interface|type|enum)\s+([A-Za-z_$][\w$]*)/gm;
 
@@ -39,18 +40,6 @@ export function findDeadExports(sources: Map<string, string>, scanPrefix: string
         }
     }
     return dead.sort();
-}
-
-function walk(dir: string, out: string[] = []): string[] {
-    for (const entry of readdirSync(dir)) {
-        const p = join(dir, entry);
-        if (statSync(p).isDirectory()) {
-            walk(p, out);
-        } else if (p.endsWith('.ts')) {
-            out.push(p);
-        }
-    }
-    return out;
 }
 
 if (import.meta.main) {
