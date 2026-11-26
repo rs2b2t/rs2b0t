@@ -73,7 +73,7 @@ for (const mixed of [true, false]) {
         decode(before, square, i);
         decode(after, square, i);
         for (const field of ['groundh', 'mapl', 'floort1', 'floort2', 'floors', 'floorr']) {
-            assert.deepEqual(after[field], before[field], `${label}, origin ${i}, ${field}`);
+            assert.deepEqual([...after[field]], [...before[field]], `${label}, origin ${i}, ${field}`);
         }
     }
     console.log(label, square.length * 4, 'bytes/scene, all six arrays matched across 61 origins');
