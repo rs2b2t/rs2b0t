@@ -17,6 +17,7 @@ interface Wall {
     controller: MultiBoxController;
     add(account: Account): SlotSnapshot;
     addTab(name: string): boolean | Promise<boolean>;
+    setSlotTab(id: number, tab: string): boolean | Promise<boolean>;
     slots(): SlotSnapshot[];
     setWorld(id: number, world: WorldNumber): Promise<boolean>;
 }
@@ -107,6 +108,11 @@ function openSettings(): SettingsPanel {
     }
 }
 
+async function waitFor(done: () => boolean): Promise<void> {
+    for (let i = 0; i < 100 && !done(); i++) await Bun.sleep(5);
+    expect(done()).toBe(true);
+}
+
 test.each([0, 4])('settings import applies modes once with %i profiles already loaded', async loaded => {
     await withWall('local', async wall => {
         const profiles = Array.from({ length: 24 }, (_, i) => ({
@@ -188,26 +194,82 @@ test.each([30, 61])('settings import moves %i loaded profiles to the saved tab',
     });
 });
 
-test('a mixed settings import keeps an omitted slot in its live tab only', async () => {
+test('a mixed import keeps an omitted slot in Work and saves a reused slot moved there', async () => {
     await withWall('local', async wall => {
         const panel = openSettings();
-        const included = { username: 'included', password: 'fixture' };
+        const included = { username: 'Fixture', password: 'fixture' };
         const guest = { username: 'guest', password: 'fixture', tab: 'Work' };
         await panel.importText(serializeProfileFile({
             profiles: [{ ...included, tab: 'Old' }, guest], tabs: ['Old', 'Work'], activeTab: 'Work', storage: {}
         }));
         const ids = wall.slots().map(s => s.id);
-        const backup = { profiles: [{ ...included, tab: 'Fleet' }], tabs: ['Fleet'], activeTab: 'Fleet' };
+        const saved = { ...included, username: 'fixture', tab: 'Fleet' };
+        const backup = { profiles: [saved], tabs: ['Fleet'], activeTab: 'Fleet' };
         await panel.importText(serializeProfileFile({ ...backup, storage: {} }));
         expect(panel.el.querySelector('#mbx-settings-error')!.textContent).toBe('');
         const reopened = new ProfileVault();
         expect(await reopened.unlock('test-passphrase')).toBe(true);
         expect(reopened.snapshot()).toEqual(backup);
+        wall.controller.addTab('Stale');
         window.dispatchEvent(new StorageEvent('storage', { key: 'rs2b0t:multibox:profiles' }));
-        await new Promise(resolve => setTimeout(resolve, 0));
+        await waitFor(() => !wall.controller.tabs().includes('Stale'));
         expect(wall.slots().map(s => [s.id, s.tab])).toEqual([[ids[0], 'Fleet'], [ids[1], 'Work']]);
         expect(wall.controller.tabs()).toEqual(['Main', 'Fleet', 'Work']);
         expect(wall.controller.activeTab()).toBe('Fleet');
+        const saves = spyOn(vault, 'saveTabState');
+        try {
+            expect(await wall.setSlotTab(ids[0], 'Work')).toBe(true);
+            await Promise.all(saves.mock.results.map(result => result.value));
+            expect(wall.slots().map(s => [s.id, s.tab])).toEqual([[ids[0], 'Work'], [ids[1], 'Work']]);
+            const afterMove = new ProfileVault();
+            expect(await afterMove.unlock('test-passphrase')).toBe(true);
+            expect(afterMove.snapshot()).toEqual({
+                profiles: [{ ...saved, tab: 'Work' }], tabs: ['Fleet', 'Work'], activeTab: 'Fleet'
+            });
+        } finally {
+            saves.mockRestore();
+        }
+    });
+});
+
+test('a roster move queued during replacement uses the imported username', async () => {
+    await withWall('local', async wall => {
+        const panel = openSettings();
+        await panel.importText(serializeProfileFile({
+            profiles: [{ username: 'Fixture', password: 'fixture', tab: 'Old' }],
+            tabs: ['Old'], activeTab: 'Old', storage: {}
+        }));
+        const [original] = wall.slots();
+        document.getElementById('mbx-manage')!.click();
+        await waitFor(() => !document.getElementById('mbx-roster')!.hidden);
+        document.querySelector<HTMLInputElement>('[aria-label="Select Fixture"]')!.click();
+        const name = document.querySelector<HTMLInputElement>('[aria-label="Profile group name"]')!;
+        name.value = 'Work';
+        name.dispatchEvent(new Event('input'));
+        const move = document.querySelector<HTMLButtonElement>('#mbx-roster-move-group')!;
+        expect(move.disabled).toBe(false);
+        const message = document.getElementById('mbx-roster-message')!;
+        const replaceAll = vault.replaceAll.bind(vault);
+        const replace = spyOn(vault, 'replaceAll').mockImplementationOnce(data => {
+            const replacing = replaceAll(data);
+            move.click();
+            return replacing;
+        });
+        try {
+            const saved = { username: 'fixture', password: 'fixture', tab: 'Fleet' };
+            await panel.importText(serializeProfileFile({ profiles: [saved], tabs: ['Fleet'], activeTab: 'Fleet', storage: {} }));
+            expect(panel.el.querySelector('#mbx-settings-error')!.textContent).toBe('');
+            await waitFor(() => !!message.textContent);
+            expect(message.textContent).toBe('Moved 1 profile to Work.');
+            expect(wall.slots().map(s => [s.id, s.tab])).toEqual([[original.id, 'Work']]);
+            const reopened = new ProfileVault();
+            expect(await reopened.unlock('test-passphrase')).toBe(true);
+            expect(reopened.snapshot()).toEqual({
+                profiles: [{ ...saved, tab: 'Work' }], tabs: ['Fleet', 'Work'], activeTab: 'Fleet'
+            });
+        } finally {
+            replace.mockRestore();
+        }
     });
 });
 

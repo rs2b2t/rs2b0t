@@ -25,6 +25,17 @@ import type { Account } from './types.js';
 
 type DesktopWall = Window & { rs2b0tLoginCoordinator?: LoginCoordinationRegistry & { parallelism: number } };
 
+function resolveSavedUsernames(profiles: Profile[]): (username: string) => string {
+    const exact = new Set<string>();
+    const byIdentity = new Map<string, string>();
+    for (const { username } of profiles) {
+        exact.add(username);
+        const identity = normalizeUsername(username);
+        if (identity && !byIdentity.has(identity)) byIdentity.set(identity, username);
+    }
+    return username => exact.has(username) ? username : byIdentity.get(normalizeUsername(username)) ?? username;
+}
+
 if (typeof window !== 'undefined') {
     installVisibilityTableCache(window);
     installWorkerClockHub(window);
@@ -118,9 +129,11 @@ function boot(): void {
         }
         const tabs = controller.tabs().slice(1);
         const activeTab = controller.activeTab();
-        const live = new Map(controller.snapshot().map(slot => [slot.username, slot.tab]));
+        const profiles = vault.list();
+        const savedUsername = resolveSavedUsernames(profiles);
+        const live = new Map(controller.snapshot().map(slot => [savedUsername(slot.username), slot.tab]));
         const tabByUser = new Map<string, string>();
-        for (const profile of vault.list()) {
+        for (const profile of profiles) {
             const tab = live.get(profile.username) ?? (renamed && profile.tab === renamed.from ? renamed.to : undefined);
             if (tab !== undefined) {
                 tabByUser.set(profile.username, tab);
@@ -482,7 +495,8 @@ function boot(): void {
         activeTab: () => controller.activeTab(),
         worldRouting,
         assignGroup: (usernames, name) => updateSavedTabs(async () => {
-            await vault.assignGroup(usernames, name);
+            const savedUsername = resolveSavedUsernames(vault.list());
+            await vault.assignGroup(usernames.map(savedUsername), name);
             syncSavedGroups();
         }),
         edit: async profile => {
