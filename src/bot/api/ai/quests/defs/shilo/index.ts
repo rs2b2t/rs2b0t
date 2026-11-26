@@ -1,7 +1,7 @@
 import { customStep as step, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import type { WorldTile } from '../../../../../adapter/ClientAdapter.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
-import { QUESTS } from '../../data/quests.js';
+import { questRecord } from '../../data/quests.js';
 import { flagValue, hasFlag, type QuestModule, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import { FOOD_FLOAT } from '../../food.js';
 import { SV_ITEM, SV_TILE, shiloArea, type ShiloArea, type ShiloItem } from './areas.js';
@@ -393,7 +393,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const shilo: QuestModule = {
-    record: QUESTS.find(record => record.id === 'zombiequeen')!,
+    record: questRecord('zombiequeen'),
     onStart: resetCombatGear,
     exit: leaveBerviriusTomb,
     recover: tile => tile.level === 0 && Quests.status('Shilo Village') === 'complete' ? escapePocket(shiloArea(tile)) : null,

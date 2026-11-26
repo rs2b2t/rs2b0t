@@ -1,3 +1,4 @@
+import { itemCounts } from '../../../../lib/questSteps.js';
 import { describe, expect, test } from 'bun:test';
 
 import { BARCRAWL_CARD, BARCRAWL_GP } from '#/bot/api/ai/quests/barcrawl/BarcrawlLogic.js';
@@ -16,26 +17,18 @@ interface Options {
     bankKnown?: boolean;
 }
 
-function idCounts(ids: number[]): Map<number, number> {
-    const out = new Map<number, number>();
-    for (const id of ids) {
-        out.set(id, (out.get(id) ?? 0) + 1);
-    }
-    return out;
-}
-
 function snap(options: Options = {}): QuestSnapshot {
     return {
         journal: options.journal ?? 'inProgress',
         inv: new Map(),
-        invIds: idCounts(options.invIds ?? []),
+        invIds: itemCounts(options.invIds ?? []),
         worn: new Set(),
         wornIds: new Set(),
         noProgress: 0,
         bankCoins: 5000,
         progress: options.noProgress ? undefined : { stage: options.stage ?? SC_STAGE.FIRST_HINT, flags: new Set() },
         bank: new Map(),
-        bankIds: idCounts(options.bankIds ?? []),
+        bankIds: itemCounts(options.bankIds ?? []),
         bankKnown: options.bankKnown ?? true,
         freeSlots: 20
     };

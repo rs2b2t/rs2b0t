@@ -1,3 +1,4 @@
+import { ITEMS_BY_NAME } from '../data/itemIndex.js';
 import { ITEM_DB } from '../data/itemdb.js';
 import type { Loadout } from '../api/loadout/loadouts.js';
 import type { ItemRecord, Slot } from '../api/loadout/types.js';
@@ -26,16 +27,8 @@ export const SUPPLY_ROWS: readonly SupplyRow[] = [
     { label: 'Super defence', hint: 'super defence' }
 ];
 
-/** Built once to avoid scanning the catalog for every rendered row. */
-const byName = new Map<string, ItemRecord>();
-
 export function recordByName(name: string): ItemRecord | null {
-    if (byName.size === 0) {
-        for (const record of ITEM_DB) {
-            byName.set(record.name.toLowerCase(), record);
-        }
-    }
-    return byName.get(name.trim().toLowerCase()) ?? null;
+    return ITEMS_BY_NAME.get(name.trim().toLowerCase())?.at(-1) ?? null;
 }
 
 export function slotOptions(slot: Slot): ItemRecord[] {

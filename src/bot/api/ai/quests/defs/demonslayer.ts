@@ -1,4 +1,4 @@
-import { customStep, talkTo, waitForJournal, waitStep } from '../engine/questSteps.js';
+import { customStep, journalStep, talkTo, waitStep } from '../engine/questSteps.js';
 import { findSceneTarget } from '../exec/prompts.js';
 import { Execution } from '../../../execution/Execution.js';
 import { Game } from '../../../game/Game.js';
@@ -17,7 +17,7 @@ import { executeStep } from '../exec/steps.js';
 import { gpShort } from '../engine/provisioning.js';
 import { hasName as has, wornName as worn } from '../engine/snapshotItems.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
-import { QUESTS } from '../data/quests.js';
+import { questRecord } from '../data/quests.js';
 
 const TRAIBORN_KEY_ID = 2399;
 const ROVIN_KEY_ID = 2400;
@@ -331,8 +331,8 @@ async function driveIncantation(_log: (m: string) => void): Promise<boolean> {
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
-    if (snap.journal === 'complete') { return { kind: 'done' }; }
-    if (snap.journal === 'unknown') { return waitForJournal(); }
+    const journal = journalStep(snap.journal);
+    if (journal) return journal;
     if (snap.journal === 'notStarted') { return talkTo(GYPSY); }
 
     if (worn(snap, 'Silverlight')) { return customStep('fight Delrith', fightDelrith); }
@@ -353,7 +353,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const demonslayer: QuestModule = {
-    record: QUESTS.find(r => r.id === 'demon')!,
+    record: questRecord('demon'),
     bank: new Tile(3185, 3440, 0),
     grind: ['delrith', 'weakened delrith', 'dark wizard', 'goblin'],
     gather: {

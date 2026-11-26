@@ -1,3 +1,4 @@
+import { customName, nameCounts } from '../../../../lib/questSteps.js';
 import { describe, expect, test } from 'bun:test';
 import type { WorldTile } from '#/bot/adapter/ClientAdapter.js';
 import {
@@ -6,7 +7,7 @@ import {
     vampireSlayerArea,
     VAMPIRE_SLAYER_STAGE
 } from '#/bot/api/ai/quests/defs/vampireslayer.js';
-import type { QuestSnapshot, QuestStep } from '#/bot/api/ai/quests/engine/types.js';
+import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
 
 const MAINLAND: WorldTile = { x: 3093, z: 3243, level: 0 };
 const MORGAN_UPPER: WorldTile = { x: 3096, z: 3268, level: 1 };
@@ -24,20 +25,11 @@ interface SnapshotOptions {
     freeSlots?: number;
 }
 
-function counts(names: string[]): Map<string, number> {
-    const out = new Map<string, number>();
-    for (const name of names) {
-        const key = name.toLowerCase();
-        out.set(key, (out.get(key) ?? 0) + 1);
-    }
-    return out;
-}
-
 function snap(options: SnapshotOptions = {}): QuestSnapshot {
-    const bank = counts(options.bank ?? []);
+    const bank = nameCounts(options.bank ?? []);
     return {
         journal: options.journal ?? 'inProgress',
-        inv: counts(options.inv ?? []),
+        inv: nameCounts(options.inv ?? []),
         worn: new Set((options.worn ?? []).map(name => name.toLowerCase())),
         noProgress: 0,
         bankCoins: bank.get('coins') ?? 0,
@@ -47,10 +39,6 @@ function snap(options: SnapshotOptions = {}): QuestSnapshot {
         tile: options.tile === undefined ? MAINLAND : options.tile,
         freeSlots: options.freeSlots ?? 28
     };
-}
-
-function customName(step: QuestStep): string | null {
-    return step.kind === 'custom' ? step.name : null;
 }
 
 describe('Vampire Slayer journal phase parsing', () => {

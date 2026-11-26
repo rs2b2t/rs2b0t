@@ -1,6 +1,6 @@
 // docs/reference/quest-engine.md#quest-state
 import { customStep, talkTo, waitForJournal, waitStep } from '../../engine/questSteps.js';
-import { QUESTS } from '../../data/quests.js';
+import { questRecord } from '../../data/quests.js';
 import { gotoNpc, talkStrict } from '../../exec/primitives.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { HASSAN_REWARD, HASSAN_START, LEELA_STOP, OSMAN_BRIEF, PA_TILE } from './areas.js';
@@ -130,7 +130,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const princeali: QuestModule = {
-    record: QUESTS.find(record => record.id === 'prince')!,
+    record: questRecord('prince'),
     bank: PA_TILE.DRAYNOR_BANK,
     ownsInventory: true,
     readProgress: readPrinceProgress,

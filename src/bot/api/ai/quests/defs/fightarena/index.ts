@@ -1,10 +1,10 @@
-import { customStep as custom, talkTo, waitForJournal, waitStep } from '../../engine/questSteps.js';
+import { customStep as custom, journalStep, talkTo, waitStep } from '../../engine/questSteps.js';
 import { prepareStrikeStaff, prepareStrikes, STRIKE_RUNES, STRIKE_STAVES } from '../../strike.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import { talkStrict, type NpcStop } from '../../exec/primitives.js';
 import { wornId as worn } from '../../engine/snapshotItems.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
-import { QUESTS } from '../../data/quests.js';
+import { questRecord } from '../../data/quests.js';
 import { FA_NPC, FA_OBJ, FA_TILE, pocketOf, type FaPocket } from './areas.js';
 import { FA_FIGHT } from './fights.js';
 import { FA_STAGE, readFightArenaStage } from './journal.js';
@@ -199,12 +199,8 @@ function arenaStep(_snap: QuestSnapshot, stage: number): QuestStep {
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
-    if (snap.journal === 'complete') {
-        return { kind: 'done' };
-    }
-    if (snap.journal === 'unknown') {
-        return waitForJournal();
-    }
+    const journal = journalStep(snap.journal);
+    if (journal) return journal;
     const stage = snap.stage;
     if (stage === undefined) {
         return waitStep('Fight Arena stage unavailable');
@@ -233,7 +229,7 @@ const FOOD = 8;
 
 export const fightarena: QuestModule = {
     autoRetaliate: false,
-    record: QUESTS.find(r => r.id === 'arena')!,
+    record: questRecord('arena'),
     resumeAt: tile => ['arena', 'prisonCell'].includes(pocketOf(tile)),
     pray: { protect: 'melee', potions: 2 },
     bank: FA_TILE.YANILLE_BANK,

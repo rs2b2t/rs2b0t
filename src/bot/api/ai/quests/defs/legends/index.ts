@@ -2,7 +2,7 @@ import { customStep as step, waitForJournal, waitStep } from '../../engine/quest
 import { Execution } from '../../../../execution/Execution.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
 import { Npcs } from '../../../../npcs/Npcs.js';
-import { QUESTS } from '../../data/quests.js';
+import { questRecord } from '../../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { LQ_ID, LQ_ITEM, LQ_NPC, LQ_STAGE, legendsArea, type LegendsArea } from './areas.js';
 import {
@@ -767,7 +767,7 @@ async function crossAndRouse(log: (m: string) => void): Promise<boolean> {
 }
 
 export const legends: QuestModule = {
-    record: QUESTS.find(record => record.id === 'legends')!,
+    record: questRecord('legends'),
     bank: LEG_BANK.karamja,
     ownsInventory: true,
     coinFloat: 0,

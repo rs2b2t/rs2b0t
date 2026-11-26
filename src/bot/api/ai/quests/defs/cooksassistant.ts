@@ -1,4 +1,4 @@
-import { customStep, talkTo, waitForJournal } from '../engine/questSteps.js';
+import { customStep, journalStep, talkTo } from '../engine/questSteps.js';
 import { Execution } from '../../../execution/Execution.js';
 import { GameMessages } from '../../../chatbox/gameMessages.js';
 import { Inventory } from '../../../inventory/Inventory.js';
@@ -7,7 +7,7 @@ import { Traversal } from '../../../walking/Traversal.js';
 import Tile from '../../../../geometry/Tile.js';
 import type { NpcStop } from '../exec/primitives.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
-import { QUESTS } from '../data/quests.js';
+import { questRecord } from '../data/quests.js';
 
 const COOK: NpcStop = { npc: 'Cook', anchor: new Tile(3209, 3215, 0), leash: 6, prefer: ["What's wrong?", "Yes, I'll help you."] };
 const EGG_PEN = new Tile(3227, 3300, 0);
@@ -132,8 +132,8 @@ export function gatherMilk(snap: QuestSnapshot): QuestStep {
 const gatherEgg = (): QuestStep => ({ kind: 'grabGround', item: 'Egg', anchor: EGG_PEN, waitIfMissing: true });
 
 export function decide(snap: QuestSnapshot): QuestStep {
-    if (snap.journal === 'complete') { return { kind: 'done' }; }
-    if (snap.journal === 'unknown') { return waitForJournal(); }
+    const journal = journalStep(snap.journal);
+    if (journal) return journal;
     if (snap.journal === 'notStarted') { return talkTo(COOK); }
     if (!snap.inv.has('egg')) { return gatherEgg(); }
     if (!snap.inv.has('bucket of milk')) { return gatherMilk(snap); }
@@ -142,7 +142,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const cooksassistant: QuestModule = {
-    record: QUESTS.find(r => r.id === 'cook')!,
+    record: questRecord('cook'),
     bank: new Tile(3093, 3243, 0),
     coinFloat: 0,
     tools: ['pot', 'grain', 'bucket', 'egg'],

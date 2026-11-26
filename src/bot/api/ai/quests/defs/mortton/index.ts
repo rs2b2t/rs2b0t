@@ -1,5 +1,5 @@
-import { customStep as custom, waitForJournal, waitStep } from '../../engine/questSteps.js';
-import { QUESTS } from '../../data/quests.js';
+import { customStep as custom, decideJournalStage, waitStep } from '../../engine/questSteps.js';
+import { questRecord } from '../../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { flagValue } from '../../engine/types.js';
 import { KIT_KEEP, kitWanted } from '../fightarena/index.js';
@@ -186,16 +186,10 @@ async function altarLeg(log: (m: string) => void): Promise<boolean> {
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
-    if (snap.journal === 'unknown') {
-        return waitForJournal();
-    }
-    if (snap.journal === 'complete') {
-        return { kind: 'done' };
-    }
-    const stage = snap.progress?.stage ?? snap.stage;
-    if (stage === undefined) {
-        return waitStep('quest stage not readable');
-    }
+    return decideJournalStage(snap, decideStage);
+}
+
+function decideStage(snap: QuestSnapshot, stage: number): QuestStep {
     if (stage >= SM_STAGE.COMPLETE) {
         return { kind: 'done' };
     }
@@ -312,7 +306,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const mortton: QuestModule = {
-    record: QUESTS.find(r => r.id === 'mortton')!,
+    record: questRecord('mortton'),
     // Varrock for the approach, Canifis for anything Morytania forces a restock of.
     bank: 'nearest',
     tools: [...SM_TOOLS, ...KIT_KEEP],

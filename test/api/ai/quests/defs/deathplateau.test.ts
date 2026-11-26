@@ -1,3 +1,4 @@
+import { customName, itemCounts, nameCounts } from '../../../../lib/questSteps.js';
 import { describe, expect, test } from 'bun:test';
 import {
     ALL_BALL_IDS,
@@ -16,24 +17,7 @@ import { nextStake, purseAfter } from '#/bot/api/ai/quests/defs/deathplateau/har
 import { DEATH_DICE_MAIN } from '#/bot/api/ai/quests/defs/deathplateau/areas.js';
 import { actions, reader } from '#/bot/adapter/ClientAdapter.js';
 import { Execution } from '#/bot/api/execution/Execution.js';
-import type { QuestProgress, QuestSnapshot, QuestStep } from '#/bot/api/ai/quests/engine/types.js';
-
-function counts(names: string[]): Map<string, number> {
-    const out = new Map<string, number>();
-    for (const name of names) {
-        const key = name.toLowerCase();
-        out.set(key, (out.get(key) ?? 0) + 1);
-    }
-    return out;
-}
-
-function idCounts(ids: number[]): Map<number, number> {
-    const out = new Map<number, number>();
-    for (const id of ids) {
-        out.set(id, (out.get(id) ?? 0) + 1);
-    }
-    return out;
-}
+import type { QuestProgress, QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
 
 function progress(stage: number, flags: string[] = []): QuestProgress {
     return { stage, flags: new Set(flags) };
@@ -51,12 +35,12 @@ interface SnapOpts {
 }
 
 function snap(o: SnapOpts = {}): QuestSnapshot {
-    const bank = counts(o.bank ?? []);
+    const bank = nameCounts(o.bank ?? []);
     const prog = o.progress;
     return {
         journal: o.journal ?? 'inProgress',
-        inv: counts(o.inv ?? []),
-        invIds: idCounts(o.invIds ?? []),
+        inv: nameCounts(o.inv ?? []),
+        invIds: itemCounts(o.invIds ?? []),
         worn: new Set(),
         noProgress: 0,
         bankCoins: bank.get('coins') ?? 0,
@@ -67,10 +51,6 @@ function snap(o: SnapOpts = {}): QuestSnapshot {
         tile: o.tile === undefined ? { x: 2896, z: 3528, level: 0 } : o.tile,
         freeSlots: o.freeSlots ?? 28
     };
-}
-
-function customName(step: QuestStep): string | null {
-    return step.kind === 'custom' ? step.name : null;
 }
 
 describe('parseDeathPlateauJournal — equip room stages', () => {
@@ -286,7 +266,7 @@ describe('decide', () => {
             progress: progress(DP_STAGE.NOT_STARTED),
             inv: ['Coins', 'Coins', 'Coins']
         }));
-        // Why: counts(['Coins','Coins']) gives coins:2 rather than a stack value, so the balance may read under 200 and either a bank step or the start talk is correct.
+        // Why: nameCounts(['Coins','Coins']) gives coins:2 rather than a stack value, so the balance may read under 200 and either a bank step or the start talk is correct.
         expect(['custom', 'withdraw', 'scanBank', 'deposit', 'wait']).toContain(step.kind);
     });
 

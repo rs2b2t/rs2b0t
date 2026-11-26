@@ -1,6 +1,6 @@
 import { customStep, talkTo as talk, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { Skills } from '../../../../skills/Skills.js';
-import { QUESTS } from '../../data/quests.js';
+import { questRecord } from '../../data/quests.js';
 import { FOOD_FLOAT, QuestFood } from '../../food.js';
 import { isUnderground } from '../../exec/primitives.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
@@ -102,7 +102,7 @@ export const decide = (snap: QuestSnapshot): QuestStep => decideAt(snap, Skills.
 
 export const knightssword: QuestModule = {
     autoRetaliate: false,
-    record: QUESTS.find(r => r.id === 'squire')!,
+    record: questRecord('squire'),
     // Why: bank contents are global across the 4 towns, so pinning one booth costs a kingdom-crossing on every leg that touches it.
     bank: 'nearest',
     // Why: Keep coins through spillover deposits so purchases do not stop on "need gp".

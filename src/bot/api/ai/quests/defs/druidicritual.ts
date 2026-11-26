@@ -11,7 +11,7 @@ import { Locs } from '../../../locs/Locs.js';
 import { Npcs } from '../../../npcs/Npcs.js';
 import { Traversal } from '../../../walking/Traversal.js';
 import { DirectNavigator } from '../../../../event/webwalk/DirectNavigator.js';
-import { QUESTS } from '../data/quests.js';
+import { questRecord } from '../data/quests.js';
 import { bankedName as banked, hasName as held } from '../engine/snapshotItems.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { walkWithHops, type LadderHop, type NpcStop } from '../exec/primitives.js';
@@ -368,7 +368,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const druidicritual: QuestModule = {
-    record: QUESTS.find(record => record.id === 'druid')!,
+    record: questRecord('druid'),
     hops: DRUIDIC_RITUAL_HOPS,
     bank: FALADOR_WEST_BANK,
     grind: ['Bear', 'Giant rat', 'Chicken', 'Cow', 'Suit of armour'],

@@ -1,3 +1,4 @@
+import { customName } from '../../../../lib/questSteps.js';
 import { describe, expect, test } from 'bun:test';
 import type { WorldTile } from '#/bot/adapter/ClientAdapter.js';
 import { decide, parseRomeoJulietJournal, romeojuliet, ROMEO_JULIET_ITEM, ROMEO_JULIET_STAGE } from '#/bot/api/ai/quests/defs/romeojuliet.js';
@@ -60,10 +61,6 @@ function snap(options: SnapshotOptions = {}): QuestSnapshot {
         tile: options.tile === undefined ? VARROCK : options.tile,
         freeSlots: options.freeSlots ?? 28 - inv.length
     };
-}
-
-function customName(step: QuestStep): string | null {
-    return step.kind === 'custom' ? step.name : null;
 }
 
 function bankItem(step: QuestStep): { name: string; qty: number; id?: number } | null {

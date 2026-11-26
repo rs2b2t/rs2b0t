@@ -1,6 +1,6 @@
-import { customStep, waitForJournal, waitStep } from '../../engine/questSteps.js';
+import { customStep, decideJournalStage } from '../../engine/questSteps.js';
 import { Game } from '../../../../game/Game.js';
-import { QUESTS } from '../../data/quests.js';
+import { questRecord } from '../../data/quests.js';
 import { bankedId, heldId, type QuestModule, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import { SOA_HOPS, SOA_ID } from './areas.js';
 import { blackarmStep } from './blackarm.js';
@@ -32,17 +32,10 @@ export function resetGangCache(): void {
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
-    if (snap.journal === 'unknown') {
-        return waitForJournal();
-    }
-    if (snap.journal === 'complete') {
-        return { kind: 'done' };
-    }
-    const stage = snap.progress?.stage ?? snap.stage;
-    if (stage === undefined) {
-        return waitStep('quest stage not readable');
-    }
+    return decideJournalStage(snap, decideStage);
+}
 
+function decideStage(snap: QuestSnapshot, stage: number): QuestStep {
     const mine = gang();
     // Why: `ownsInventory` skips the engine's provisioning, so nothing else opens a booth and a banked certificate or traded store key stays invisible until one read.
     if (!snap.bankKnown) {
@@ -98,7 +91,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const shieldofarrav: QuestModule = {
-    record: QUESTS.find(r => r.id === 'blackarmgang')!,
+    record: questRecord('blackarmgang'),
     // Why: the quest never leaves Varrock, which has 2 booths.
     bank: 'nearest',
     // Why: the bribe and the certificate get acquired at the stage that needs them.

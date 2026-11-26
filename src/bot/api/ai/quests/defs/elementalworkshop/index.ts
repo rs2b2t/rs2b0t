@@ -1,5 +1,5 @@
-import { customStep as custom, waitForJournal, waitStep } from '../../engine/questSteps.js';
-import { QUESTS } from '../../data/quests.js';
+import { customStep as custom, decideJournalStage, waitStep } from '../../engine/questSteps.js';
+import { questRecord } from '../../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { hasFlag } from '../../engine/types.js';
 import {
@@ -68,17 +68,10 @@ function sourceKnife(snap: QuestSnapshot): QuestStep | null {
 
 /** Pure decide over journal stage, flags and held items; never reads varps. */
 export function decide(snap: QuestSnapshot): QuestStep {
-    if (snap.journal === 'complete') {
-        return { kind: 'done' };
-    }
-    if (snap.journal === 'unknown') {
-        return waitForJournal();
-    }
+    return decideJournalStage(snap, decideStage, 'Elemental Workshop stage unavailable');
+}
 
-    const stage = snap.progress?.stage ?? snap.stage;
-    if (stage === undefined) {
-        return waitStep('Elemental Workshop stage unavailable');
-    }
+function decideStage(snap: QuestSnapshot, stage: number): QuestStep {
     if (stage === EW_STAGE.COMPLETE) {
         return { kind: 'done' };
     }
@@ -205,7 +198,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const elementalworkshop: QuestModule = {
-    record: QUESTS.find(r => r.id === 'elemental_workshop')!,
+    record: questRecord('elemental_workshop'),
     bank: SEERS_BANK,
     ownsInventory: true,
     tools: ['knife', 'hammer', 'needle', 'thread', 'leather', 'coal', 'battered book', 'battered key'],

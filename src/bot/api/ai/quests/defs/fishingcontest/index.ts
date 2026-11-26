@@ -1,6 +1,6 @@
 // docs/QUESTS.md
-import { customStep, waitForJournal, waitStep } from '../../engine/questSteps.js';
-import { QUESTS } from '../../data/quests.js';
+import { customStep, journalStep, waitStep } from '../../engine/questSteps.js';
+import { questRecord } from '../../data/quests.js';
 import { bankedId, heldId, type QuestModule, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import { FC_ID, inCompound } from './areas.js';
 import {
@@ -27,12 +27,8 @@ function outside(snap: QuestSnapshot, step: QuestStep | null): QuestStep | null 
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
-    if (snap.journal === 'unknown') {
-        return waitForJournal();
-    }
-    if (snap.journal === 'complete') {
-        return { kind: 'done' };
-    }
+    const journal = journalStep(snap.journal);
+    if (journal) return journal;
     const stage = snap.stage;
     if (stage === undefined) {
         return waitStep('Fishing Contest journal stage unavailable');
@@ -86,7 +82,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const fishingcontest: QuestModule = {
-    record: QUESTS.find(r => r.id === 'fishingcompo')!,
+    record: questRecord('fishingcompo'),
     // Why: the quest runs from Draynor to Kandarin, so no one booth is near more than a leg of it.
     bank: 'nearest',
     food: 8,

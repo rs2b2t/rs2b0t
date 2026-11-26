@@ -1,5 +1,6 @@
+import { retainGearAndFood, unnotedCounts, type PackItem } from '../../engine/retainLoadout.js';
 import { waitStep } from '../../engine/questSteps.js';
-import { ITEM_DB } from '../../../../../data/itemdb.js';
+import { ITEMS_BY_ID } from '../../../../../data/itemIndex.js';
 import { foodForms } from '../../../../combat/food.js';
 import { flagValue, hasFlag, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import { QuestFood } from '../../food.js';
@@ -50,11 +51,10 @@ export function phaseItems(snap: QuestSnapshot): WatchtowerItem[] {
     return [];
 }
 
-export interface PackItem { id: number; name: string | null; count: number; noted?: boolean }
-const db = new Map(ITEM_DB.map(item => [item.id, item]));
+export type { PackItem } from '../../engine/retainLoadout.js';
+
 export function retainWatchtowerLoadout(snap: QuestSnapshot, inventory: PackItem[], configured = QuestFood.name, reserve = 2) {
-    const ids = new Map<number, number>();
-    for (const item of inventory) if (!item.noted) ids.set(item.id, (ids.get(item.id) ?? 0) + item.count);
+    const ids = unnotedCounts(inventory);
     const state = { ...snap, invIds: ids };
     const stage = snap.stage ?? snap.progress?.stage ?? 0;
     const caps = new Map(phaseItems(state).map(item => [item.id, 1]));
@@ -64,36 +64,11 @@ export function retainWatchtowerLoadout(snap: QuestSnapshot, inventory: PackItem
     if (stage <= 3) for (const item of [...RELIC_PARTS, I.OGRE_RELIC, I.OGRE_TOOTH, I.TOBAN_KEY, I.STOLEN_GOLD, I.FINGERNAILS]) caps.set(item.id, 1);
     if (stage <= 9 && !ids.has(I.OGRE_POTION.id) && !ids.has(I.MAGIC_OGRE_POTION.id)) caps.set(I.JANGERBERRIES.id, 2);
     if (stage === 9 || stage === 10) for (const item of [I.OGRE_POTION, I.MAGIC_OGRE_POTION, I.SHAMAN_ROBE]) caps.set(item.id, 1);
-    const foods = new Set(edibleNames(configured));
-    const names = new Map(inventory.map(item => [item.id, item.name?.toLowerCase()]));
-    const occupied = new Set(ITEM_DB.filter(item => item.slot && (snap.wornIds?.has(item.id) || snap.worn.has(item.name.toLowerCase()))).map(item => item.slot));
-    const retained = new Map<number, number>();
-    let slots = 0;
-    for (const [id, count] of ids) {
-        if (foods.has(names.get(id) ?? '')) continue;
-        const gear = db.get(id);
-        const limit = caps.get(id) ?? (gear?.slot && !occupied.has(gear.slot) ? gear.slot === 'quiver' ? Infinity : 1 : 0);
-        const qty = Math.min(count, limit);
-        if (qty <= 0) continue;
-        retained.set(id, qty);
-        slots += id === I.COINS.id || gear?.slot === 'quiver' ? 1 : qty;
-        if (gear?.slot) occupied.add(gear.slot);
-    }
-    let food = Math.min(8, Math.max(0, 28 - slots - reserve));
-    const keepIds: number[] = [];
-    const limits: { id: number; qty: number }[] = [];
-    for (const [id, count] of ids) {
-        const edible = foods.has(names.get(id) ?? '');
-        const qty = edible ? Math.min(count, food) : retained.get(id) ?? 0;
-        if (edible) food -= qty;
-        if (qty > 0) keepIds.push(id);
-        if (qty > 0 && qty < count) limits.push({ id, qty });
-    }
-    return { keepIds, caps: limits };
+    return retainGearAndFood(snap, inventory, ids, { caps, foods: new Set(edibleNames(configured)), foodLimit: 8, reserve });
 }
 
 export function clearSpace(snap: QuestSnapshot, reserve = 2): QuestStep {
-    const inventory = [...snap.invIds ?? []].map(([id, count]) => ({ id, count, name: db.get(id)?.name ?? Object.values(I).find(item => item.id === id)?.name ?? null }));
+    const inventory = [...snap.invIds ?? []].map(([id, count]) => ({ id, count, name: ITEMS_BY_ID.get(id)?.name ?? Object.values(I).find(item => item.id === id)?.name ?? null }));
     const plan = retainWatchtowerLoadout(snap, inventory, QuestFood.name, reserve);
     if (plan.keepIds.length < inventory.length || plan.caps.length > 0) return { kind: 'deposit', keep: [], exactKeep: true, ...plan, bank: WT_TILE.YANILLE_BANK };
     return waitStep(`Watch Tower needs ${reserve} free inventory slots; no surplus supplies to bank`);

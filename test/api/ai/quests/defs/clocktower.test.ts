@@ -1,7 +1,8 @@
+import { customName, itemCounts, nameCounts } from '../../../../lib/questSteps.js';
 import { describe, expect, test } from 'bun:test';
 
 import { COG_OBJ, COG_STAGE, clocktower, decide, parseClockTowerJournal } from '#/bot/api/ai/quests/defs/clocktower.js';
-import type { QuestProgress, QuestSnapshot, QuestStep } from '#/bot/api/ai/quests/engine/types.js';
+import type { QuestProgress, QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
 
 const NOT_STARTED =
     '@dbl@I can start this quest by talking to @dre@Brother Kojo@dbl@ at the|@dre@Clock Tower@dbl@ which is located @dre@South@dbl@ of @dre@Ardougne|';
@@ -50,23 +51,6 @@ interface SnapshotOptions {
     progress?: QuestProgress | undefined;
 }
 
-function counts(names: string[]): Map<string, number> {
-    const result = new Map<string, number>();
-    for (const name of names) {
-        const key = name.toLowerCase();
-        result.set(key, (result.get(key) ?? 0) + 1);
-    }
-    return result;
-}
-
-function idCounts(ids: number[]): Map<number, number> {
-    const result = new Map<number, number>();
-    for (const id of ids) {
-        result.set(id, (result.get(id) ?? 0) + 1);
-    }
-    return result;
-}
-
 function snap(options: SnapshotOptions = {}): QuestSnapshot {
     const placed = options.placed ?? [];
     const progress =
@@ -75,21 +59,17 @@ function snap(options: SnapshotOptions = {}): QuestSnapshot {
             : { stage: options.stage ?? COG_STAGE.STARTED, flags: new Set(placed.map(c => `placed-${c}`)) };
     return {
         journal: options.journal ?? 'inProgress',
-        inv: counts(options.inv ?? []),
-        invIds: idCounts(options.invIds ?? []),
+        inv: nameCounts(options.inv ?? []),
+        invIds: itemCounts(options.invIds ?? []),
         worn: new Set(),
         noProgress: 0,
         bankCoins: 2_000_000,
         stage: progress?.stage,
         progress,
-        bank: counts(options.bank ?? []),
+        bank: nameCounts(options.bank ?? []),
         bankKnown: options.bankKnown ?? true,
         freeSlots: 28
     };
-}
-
-function customName(step: QuestStep): string | null {
-    return step.kind === 'custom' ? step.name : null;
 }
 
 describe('Clock Tower journal parsing', () => {

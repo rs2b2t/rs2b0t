@@ -17,7 +17,7 @@ import { afterDialogueAction, gotoNpc, openDialogue, pickPreferred, talkThrough,
 import { gpShort } from '../engine/provisioning.js';
 import { hasName as has } from '../engine/snapshotItems.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
-import { QUESTS } from '../data/quests.js';
+import { questRecord } from '../data/quests.js';
 import { FOOD_FLOAT } from '../food.js';
 
 const EXCALIBUR = 'Excalibur';
@@ -731,7 +731,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const merlinscrystal: QuestModule = {
-    record: QUESTS.find(r => r.id === 'arthur')!,
+    record: questRecord('arthur'),
     bank: new Tile(2725, 3491, 0),
     readStage: readMerlinStage,
     recover: tile => insideCrate(tile) ? customStep('climb out of Merlin crate', recoverCrate) : null,

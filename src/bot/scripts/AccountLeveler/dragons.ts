@@ -2,7 +2,8 @@ import JString from '../../../client/datastruct/JString.js';
 import { TAVERLEY_BLUE } from '../../api/combat/hunting/sites.js';
 import { spotCrowded } from './crowding.js';
 import { DRAGON_STAGE } from '../../api/ai/quests/defs/dragonslayer/journal.js';
-import { QUESTS } from '../../api/ai/quests/data/quests.js';
+import { QUEST_POINT_PRIORITY, questPoints } from './questPoints.js';
+import { questRecord } from '../../api/ai/quests/data/quests.js';
 import { DROP_DB } from '../../data/dropdb.js';
 import type { QuestRecord } from '../../api/ai/quests/types.js';
 import Tile from '../../geometry/Tile.js';
@@ -14,7 +15,6 @@ import { dragonMeleeStyle } from '../../api/combat/dragonStyle.js';
 import { SECONDARY_LOOT } from './loot.js';
 import { stockOf, type ActivityPlan, type LevelerSnapshot, type SessionMemory } from './types.js';
 
-const QUEST_ORDER = ['runemysteries', 'cook', 'doric', 'sheep', 'priest', 'haunted', 'hetty', 'romeojuliet', 'prince', 'hunt', 'gobdip', 'blackknight', 'vampire', 'squire', 'arthur'];
 const GREEN = { id: 'prayer-green-dragons', target: 'Green dragon', hide: 1753 };
 const RED = { id: 'prayer-red-dragons', target: 'Red dragon', hide: 1749 };
 const BLUE = { id: 'prayer-blue-dragons', target: 'Blue dragon', hide: 1751 };
@@ -36,8 +36,8 @@ export function dragonPlanks(s: LevelerSnapshot): number {
 
 export function nextDragonQuest(s: LevelerSnapshot, memory: SessionMemory): QuestRecord | null {
     if (s.quests['Dragon Slayer'] || !dragonReady(s) || !s.wilderness && stockOf(s, 'Plank') < dragonPlanks(s)) return null;
-    const points = s.questPoints ?? QUESTS.reduce((sum, q) => sum + (s.quests[q.name] ? q.questPoints : 0), 0);
-    return (points >= 32 ? ['dragon'] : QUEST_ORDER).map(id => QUESTS.find(q => q.id === id)!)
+    const points = questPoints(s);
+    return (points >= 32 ? [questRecord('dragon')] : QUEST_POINT_PRIORITY)
         .find(q => !s.quests[q.name] && (q.requirements.minQuestPoints ?? 0) <= points
             && (q.requirements.quests ?? []).every(name => s.quests[name])
             && !Object.entries(memory.cooldowns).some(([id, until]) => id.startsWith(`quest-${q.id}-`) && until > s.now)

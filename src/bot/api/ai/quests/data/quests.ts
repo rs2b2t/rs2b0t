@@ -1,6 +1,6 @@
 import type { QuestRecord } from '../types.js';
 
-export const QUESTS: QuestRecord[] = [
+const records = [
     {
         id: 'cook',
         name: "Cook's Assistant",
@@ -653,4 +653,13 @@ export const QUESTS: QuestRecord[] = [
         // Karamja has no bank until this quest opens Shilo's, so the module sources its loadout from Jiminua's.
         items: []
     }
-];
+] as const satisfies QuestRecord[];
+
+type QuestId = (typeof records)[number]['id'];
+
+export const QUESTS: QuestRecord[] = records;
+const recordsById = new Map<QuestId, QuestRecord>(records.map(record => [record.id, record]));
+
+export function questRecord(id: QuestId): QuestRecord {
+    return recordsById.get(id)!;
+}

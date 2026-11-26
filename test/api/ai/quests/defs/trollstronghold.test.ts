@@ -1,3 +1,4 @@
+import { customName, nameCounts } from '../../../../lib/questSteps.js';
 import { beforeEach, describe, expect, test } from 'bun:test';
 import type { WorldTile } from '#/bot/adapter/ClientAdapter.js';
 import {
@@ -13,7 +14,7 @@ import {
 } from '#/bot/api/ai/quests/defs/trollstronghold/index.js';
 import { QuestFood } from '#/bot/api/ai/quests/food.js';
 import { QuestLoadout } from '#/bot/api/ai/quests/gear.js';
-import type { QuestSnapshot, QuestStep } from '#/bot/api/ai/quests/engine/types.js';
+import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
 
 const BURTHORPE: WorldTile = { x: 2896, z: 3528, level: 0 };
 const ARENA: WorldTile = { x: 2912, z: 3613, level: 0 };
@@ -38,21 +39,12 @@ interface SnapshotOptions {
     tile?: WorldTile | null;
 }
 
-function counts(names: string[]): Map<string, number> {
-    const out = new Map<string, number>();
-    for (const name of names) {
-        const key = name.toLowerCase();
-        out.set(key, (out.get(key) ?? 0) + 1);
-    }
-    return out;
-}
-
 function snap(options: SnapshotOptions = {}): QuestSnapshot {
     const stage = options.stage ?? TROLL_STAGE.NOT_STARTED;
-    const bank = counts(options.bank ?? []);
+    const bank = nameCounts(options.bank ?? []);
     return {
         journal: options.journal ?? (stage === TROLL_STAGE.NOT_STARTED ? 'notStarted' : 'inProgress'),
-        inv: counts(options.inv ?? []),
+        inv: nameCounts(options.inv ?? []),
         worn: new Set((options.worn ?? []).map(name => name.toLowerCase())),
         noProgress: 0,
         bankCoins: bank.get('coins') ?? 0,
@@ -73,10 +65,6 @@ function ready(options: SnapshotOptions = {}): QuestSnapshot {
         worn: [ITEM.CLIMBING_BOOTS, WEAPON],
         ...options
     });
-}
-
-function customName(step: QuestStep): string | null {
-    return step.kind === 'custom' ? step.name : null;
 }
 
 beforeEach(() => {

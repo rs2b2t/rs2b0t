@@ -1,3 +1,4 @@
+import { nameCounts } from '../../../../lib/questSteps.js';
 import { describe, expect, test } from 'bun:test';
 
 import { decide, fightarena } from '#/bot/api/ai/quests/defs/fightarena/index.js';
@@ -18,15 +19,6 @@ interface SnapOpts {
     tile?: { x: number; z: number; level: number } | null;
 }
 
-function counts(names: string[]): Map<string, number> {
-    const out = new Map<string, number>();
-    for (const name of names) {
-        const key = name.toLowerCase();
-        out.set(key, (out.get(key) ?? 0) + 1);
-    }
-    return out;
-}
-
 function snap(o: SnapOpts = {}): QuestSnapshot {
     const invIds = new Map<number, number>();
     for (const id of o.invIds ?? []) {
@@ -34,14 +26,14 @@ function snap(o: SnapOpts = {}): QuestSnapshot {
     }
     return {
         journal: o.journal ?? 'inProgress',
-        inv: new Map([...counts(o.inv ?? []), ['mind rune', 150], ['air rune', 150]]),
+        inv: new Map([...nameCounts(o.inv ?? []), ['mind rune', 150], ['air rune', 150]]),
         invIds,
         worn: new Set((o.worn ?? []).map(n => n.toLowerCase())),
         wornIds: new Set(o.wornIds ?? []),
         noProgress: 0,
         bankCoins: 0,
         stage: o.stage,
-        bank: counts(o.bank ?? []),
+        bank: nameCounts(o.bank ?? []),
         bankKnown: o.bankKnown ?? true,
         tile: (o.tile ?? null) as QuestSnapshot['tile'],
         freeSlots: 20

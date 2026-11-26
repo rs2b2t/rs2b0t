@@ -1,4 +1,4 @@
-import { customStep as custom, waitForJournal, waitStep } from '../../engine/questSteps.js';
+import { customStep as custom, journalStep, waitStep } from '../../engine/questSteps.js';
 import { MiniMenuAction } from '#/client/shell/MiniMenuAction.js';
 import { actions, reader } from '../../../../../adapter/ClientAdapter.js';
 import { Execution } from '../../../../execution/Execution.js';
@@ -9,7 +9,7 @@ import { Inventory } from '../../../../inventory/Inventory.js';
 import { GroundItems } from '../../../../grounditems/GroundItems.js';
 import { Locs } from '../../../../locs/Locs.js';
 import { GameMessages } from '../../../../chatbox/gameMessages.js';
-import { QUESTS } from '../../data/quests.js';
+import { questRecord } from '../../data/quests.js';
 import { bankedName, cachedBankId as bankedId, heldId, heldName } from '../../engine/snapshotItems.js';
 import type { QuestModule, QuestProgress, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { hasFlag } from '../../engine/types.js';
@@ -565,12 +565,8 @@ async function giveCertToDunstan(log: (m: string) => void): Promise<boolean> {
 
 /** Pure decide from journal stage, map flags and inventory. The equip-room track runs before the map track so pack space is free for balls. */
 export function decide(snap: QuestSnapshot): QuestStep {
-    if (snap.journal === 'complete') {
-        return { kind: 'done' };
-    }
-    if (snap.journal === 'unknown') {
-        return waitForJournal();
-    }
+    const journal = journalStep(snap.journal);
+    if (journal) return journal;
 
     const progress = snap.progress;
     if (progress === undefined && snap.journal === 'inProgress') {
@@ -761,7 +757,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const deathplateau: QuestModule = {
-    record: QUESTS.find(r => r.id === 'death')!,
+    record: questRecord('death'),
     bank: FALADOR_WEST_BANK,
     ownsInventory: true,
     coinFloat: COIN_FLOAT,

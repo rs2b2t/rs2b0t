@@ -1,6 +1,6 @@
-import { customStep, waitForJournal, waitStep } from '../../engine/questSteps.js';
+import { customStep, decideJournalStage, waitStep } from '../../engine/questSteps.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
-import { QUESTS } from '../../data/quests.js';
+import { questRecord } from '../../data/quests.js';
 import { talkAndClose, talkUntil } from '../../exec/legs.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import {
@@ -69,16 +69,10 @@ const LOW_COINS = 200;
 const COIN_TOP_UP = 10_000;
 
 export function decide(snap: QuestSnapshot): QuestStep {
-    if (snap.journal === 'unknown') {
-        return waitForJournal();
-    }
-    if (snap.journal === 'complete') {
-        return { kind: 'done' };
-    }
-    const stage = snap.progress?.stage ?? snap.stage;
-    if (stage === undefined) {
-        return waitStep('quest stage not readable');
-    }
+    return decideJournalStage(snap, decideStage);
+}
+
+function decideStage(snap: QuestSnapshot, stage: number): QuestStep {
     // Why: `ownsInventory` skips the engine's provisioning, so nothing else opens a booth and an armband or feather banked by an earlier run stays invisible until this read.
     if (!snap.bankKnown) {
         return egress(snap, { kind: 'scanBank' });
@@ -154,7 +148,7 @@ function egress(snap: QuestSnapshot, step: QuestStep): QuestStep {
 }
 
 export const heroquest: QuestModule = {
-    record: QUESTS.find(r => r.id === 'hero')!,
+    record: questRecord('hero'),
     pray: { protect: 'melee', potions: 2 },
     // Why: the quest works in 6 kingdoms, so no one booth is close to more than a leg of it.
     bank: 'nearest',

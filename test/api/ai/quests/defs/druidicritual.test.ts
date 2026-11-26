@@ -1,3 +1,4 @@
+import { customName, nameCounts } from '../../../../lib/questSteps.js';
 import { describe, expect, test } from 'bun:test';
 import {
     decide,
@@ -7,7 +8,7 @@ import {
     parseDruidicRitualJournal
 } from '#/bot/api/ai/quests/defs/druidicritual.js';
 import type { WorldTile } from '#/bot/adapter/ClientAdapter.js';
-import type { QuestSnapshot, QuestStep } from '#/bot/api/ai/quests/engine/types.js';
+import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
 
 const MAINLAND: WorldTile = { x: 3220, z: 3220, level: 0 };
 const DUNGEON: WorldTile = { x: 2888, z: 9831, level: 0 };
@@ -26,32 +27,19 @@ interface SnapshotOptions {
     freeSlots?: number;
 }
 
-function counts(names: string[]): Map<string, number> {
-    const result = new Map<string, number>();
-    for (const name of names) {
-        const key = name.toLowerCase();
-        result.set(key, (result.get(key) ?? 0) + 1);
-    }
-    return result;
-}
-
 function snap(options: SnapshotOptions = {}): QuestSnapshot {
     return {
         journal: options.journal ?? 'inProgress',
-        inv: counts(options.inv ?? []),
+        inv: nameCounts(options.inv ?? []),
         worn: new Set(),
         noProgress: 0,
         bankCoins: 2_000_000,
         stage: options.stage ?? DRUIDIC_RITUAL_STAGE.SPOKEN_TO_SANFEW,
-        bank: counts(options.bank ?? []),
+        bank: nameCounts(options.bank ?? []),
         bankKnown: options.bankKnown ?? true,
         tile: options.tile === undefined ? MAINLAND : options.tile,
         freeSlots: options.freeSlots ?? 28 - (options.inv?.length ?? 0)
     };
-}
-
-function customName(step: QuestStep): string | null {
-    return step.kind === 'custom' ? step.name : null;
 }
 
 describe('Druidic Ritual journal stage parsing', () => {

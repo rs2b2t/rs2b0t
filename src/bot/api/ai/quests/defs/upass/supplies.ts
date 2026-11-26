@@ -3,6 +3,7 @@ import { QuestLoadout, questWornGear } from '../../gear.js';
 import Tile from '../../../../../geometry/Tile.js';
 import { bankedName as bankedNamed, heldName as heldNamed } from '../../engine/snapshotItems.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
+import { ITEMS_BY_ID } from '../../../../../data/itemIndex.js';
 import { ITEM_DB } from '../../../../../data/itemdb.js';
 import { UP_ITEM, UP_TILE, banked, carried, held, type UpassItem } from './areas.js';
 import { FOOD_FLOAT } from '../../food.js';
@@ -19,7 +20,6 @@ export const BOW_IDS: ReadonlySet<number> = new Set(
     ITEM_DB.filter(i => /^(?:[a-z]+_)?(?:short|long)bow$|^ogre_bow$/.test(i.obj)).map(i => i.id)
 );
 
-const NAME_BY_ID: ReadonlyMap<number, string> = new Map(ITEM_DB.map(i => [i.id, i.name]));
 
 const firstBow = (ids: Iterable<[number, number]> | undefined): number | null => {
     for (const [id, n] of ids ?? []) {
@@ -140,7 +140,7 @@ function sourceBow(snap: QuestSnapshot): QuestStep | null {
     }
     const stocked = firstBow(snap.bankIds);
     if (stocked !== null) {
-        return withdraw([{ name: NAME_BY_ID.get(stocked) ?? BOW_TO_BUY.name, id: stocked, qty: 1 }]);
+        return withdraw([{ name: ITEMS_BY_ID.get(stocked)?.name ?? BOW_TO_BUY.name, id: stocked, qty: 1 }]);
     }
     return buyAt(snap, BOW_TO_BUY, 1, LOWE, BOW_GP);
 }

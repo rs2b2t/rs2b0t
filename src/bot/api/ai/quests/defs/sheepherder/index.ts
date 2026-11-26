@@ -1,6 +1,6 @@
 // docs/QUESTS.md
-import { customStep as custom, talkTo, waitForJournal, waitStep } from '../../engine/questSteps.js';
-import { QUESTS } from '../../data/quests.js';
+import { customStep as custom, journalStep, talkTo, waitStep } from '../../engine/questSteps.js';
+import { questRecord } from '../../data/quests.js';
 import { heldId as held, wornId as wearing } from '../../engine/snapshotItems.js';
 import { hasFlag, type QuestModule, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import {
@@ -49,8 +49,8 @@ function nextSheep(snap: QuestSnapshot): SheepIndex | null {
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
-    if (snap.journal === 'complete') { return { kind: 'done' }; }
-    if (snap.journal === 'unknown') { return waitForJournal(); }
+    const journal = journalStep(snap.journal);
+    if (journal) return journal;
     if (snap.journal === 'notStarted') { return talkTo(HALGRIVE); }
 
     const stage = snap.progress?.stage;
@@ -84,7 +84,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const sheepherder: QuestModule = {
-    record: QUESTS.find(record => record.id === 'sheepherder')!,
+    record: questRecord('sheepherder'),
     bank: BANK,
     food: 4,
     tools: ['coins', PROD.toLowerCase(), FEED.toLowerCase(), JACKET.toLowerCase(), TROUSERS.toLowerCase(), 'bones'],

@@ -13,7 +13,7 @@ import { Locs } from '../../../locs/Locs.js';
 import { Npcs } from '../../../npcs/Npcs.js';
 import { Sustain } from '../../../sustain/Sustain.js';
 import { Traversal } from '../../../walking/Traversal.js';
-import { QUESTS } from '../data/quests.js';
+import { questRecord } from '../data/quests.js';
 import { bankedName as banked, hasName as held, heldName as heldCount, wornName as worn } from '../engine/snapshotItems.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { talkThrough, type NpcStop } from '../exec/primitives.js';
@@ -657,7 +657,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
 export const lostcity: QuestModule = {
     autoRetaliate: snap => lostCityArea(snap.tile) !== 'dungeon' || !hasAxe(snap),
-    record: QUESTS.find(r => r.id === 'zanaris')!,
+    record: questRecord('zanaris'),
     bank: DRAYNOR_BANK,
     grind: ['Zombie', 'Tree spirit'],
     tools: ['knife', 'axe', 'dramen branch', 'dramen staff'],

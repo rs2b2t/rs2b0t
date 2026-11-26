@@ -1,7 +1,7 @@
 // docs/QUESTS.md
-import { customStep, talkTo, waitForJournal, waitStep } from '../../engine/questSteps.js';
+import { customStep, journalStep, talkTo, waitStep } from '../../engine/questSteps.js';
 import { Skills } from '../../../../skills/Skills.js';
-import { QUESTS } from '../../data/quests.js';
+import { questRecord } from '../../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { BARCRAWL_CARD, BARCRAWL_GP } from '../../barcrawl/BarcrawlLogic.js';
 import {
@@ -24,12 +24,8 @@ function firstCage(counts: ReadonlyMap<number, number> | undefined): number | un
 // Why: Thormac replaces a cage only when none exists in inventory or bank, so withdraw banked cages first.
 
 export function decide(snap: QuestSnapshot): QuestStep {
-    if (snap.journal === 'complete') {
-        return { kind: 'done' };
-    }
-    if (snap.journal === 'unknown') {
-        return waitForJournal();
-    }
+    const journal = journalStep(snap.journal);
+    if (journal) return journal;
     if (snap.journal === 'notStarted') {
         return talkTo(THORMAC);
     }
@@ -88,7 +84,7 @@ export function warnReadiness(): string | null {
 }
 
 export const scorpcatcher: QuestModule = {
-    record: QUESTS.find(r => r.id === 'scorpcatcher')!,
+    record: questRecord('scorpcatcher'),
     // Why: the quest is spread over the Sorcerer's Tower, the Barbarian Outpost, Taverley Dungeon and the monastery, so the nearest bank beats any one of them pinned.
     bank: SC_TILE.BANK,
     food: FOOD_FLOAT,

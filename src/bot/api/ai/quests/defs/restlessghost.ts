@@ -1,4 +1,4 @@
-import { customStep, talkTo, waitForJournal } from '../engine/questSteps.js';
+import { customStep, journalStep, talkTo } from '../engine/questSteps.js';
 import { Execution } from '../../../execution/Execution.js';
 import { Inventory } from '../../../inventory/Inventory.js';
 import { GroundItems } from '../../../grounditems/GroundItems.js';
@@ -7,7 +7,7 @@ import { Npcs } from '../../../npcs/Npcs.js';
 import Tile from '../../../../geometry/Tile.js';
 import { talkThrough, walkWithHops, type NpcStop } from '../exec/primitives.js';
 import { bankedId, type QuestModule, type QuestSnapshot, type QuestStep } from '../engine/types.js';
-import { QUESTS } from '../data/quests.js';
+import { questRecord } from '../data/quests.js';
 import { WIZARD_HOPS } from './runemysteries.js';
 
 const AMULET = 'Ghostspeak amulet';
@@ -85,8 +85,8 @@ async function returnSkull(log: (m: string) => void): Promise<boolean> {
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
-    if (snap.journal === 'complete') { return { kind: 'done' }; }
-    if (snap.journal === 'unknown') { return waitForJournal(); }
+    const journal = journalStep(snap.journal);
+    if (journal) return journal;
     if (snap.journal === 'notStarted') { return talkTo(AERECK); }
     if (snap.inv.has('skull')) { return customStep('return skull', returnSkull); }
     const amuletLower = AMULET.toLowerCase();
@@ -104,7 +104,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const restlessghost: QuestModule = {
-    record: QUESTS.find(r => r.id === 'priest')!,
+    record: questRecord('priest'),
     bank: DRAYNOR_BANK,
     tools: ['ghostspeak amulet', 'skull'],
     hops: WIZARD_HOPS,
