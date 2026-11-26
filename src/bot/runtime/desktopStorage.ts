@@ -1,5 +1,6 @@
 export interface DesktopStorage {
     getItem(key: string): string | null;
+    getItems?(keys: string[]): (string | null)[];
     setItem(key: string, value: string): void;
     removeItem(key: string): void;
     keys(): string[];
