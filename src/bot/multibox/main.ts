@@ -81,7 +81,10 @@ function boot(): void {
     const pendingTabEdits: (() => Promise<void>)[] = [];
     const tabSaveError = document.createElement('div');
     tabSaveError.setAttribute('role', 'alert');
-    tabSaveError.textContent = 'Tab edits could not be saved. Check the groups and retry your edit.';
+    const retryTabSave = document.createElement('button');
+    retryTabSave.type = 'button';
+    retryTabSave.textContent = 'Retry';
+    retryTabSave.addEventListener('click', () => queueTabEdit());
     let restoringTabs: Promise<void> | null = null;
     let wallOnlyTabs = new Set<string>();
 
@@ -129,11 +132,12 @@ function boot(): void {
         tabSaveError.remove();
     }
 
-    function queueTabEdit(save: () => Promise<void>): void {
+    function queueTabEdit(save?: () => Promise<void>): void {
         orderWrite = orderWrite.then(() => {
-            pendingTabEdits.push(save);
+            if (save) pendingTabEdits.push(save);
             return flushTabEdits();
         }).catch(err => {
+            tabSaveError.replaceChildren('Tab edits could not be saved. ', retryTabSave);
             tabStrip.after(tabSaveError);
             console.error('[rs2b0t] failed to save tab state', err);
         });
@@ -395,7 +399,10 @@ function boot(): void {
             const pendingWrites = orderWrite;
             void pendingWrites.then(() => vault.refresh()).then(() => {
                 if (pendingWrites !== orderWrite) return;
-                pendingTabEdits.length = 0;
+                if (pendingTabEdits.length) {
+                    pendingTabEdits.length = 0;
+                    tabSaveError.textContent = 'Tab edits could not be saved. Check the groups and retry your edit.';
+                }
                 if (vault.status() !== 'unlocked') {
                     chooser.close();
                     roster?.close();

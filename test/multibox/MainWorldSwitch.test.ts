@@ -197,6 +197,23 @@ test.each([30, 61])('settings import moves %i loaded profiles to the saved tab',
     });
 });
 
+test('adding a tab preserves an imported tab name with surrounding spaces', async () => {
+    await withWall('local', async wall => {
+        const tab = ' Fleet ';
+        const profiles = [{ username: 'fixture', password: 'fixture', tab }];
+        const backup = { profiles, tabs: [tab], activeTab: tab };
+        await openSettings().importText(serializeProfileFile({ ...backup, storage: {} }));
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('test-passphrase')).toBe(true);
+        expect(reopened.snapshot()).toEqual(backup);
+
+        expect(await wall.addTab('Local')).toBe(true);
+        await waitFor(() => vault.tabState().tabs.includes('Local'));
+        expect(await reopened.unlock('test-passphrase')).toBe(true);
+        expect(reopened.snapshot()).toEqual({ ...backup, tabs: [tab, 'Local'] });
+    });
+});
+
 test.each([
     ['Fixture', 'Fleet'],
     ['fixture', 'Work']
@@ -332,6 +349,28 @@ async function failTabWrite(edit: () => boolean | Promise<boolean>): Promise<voi
     }
 }
 
+test('the save alert retries a failed move without moving the slot again', async () => {
+    await withWall('local', async wall => {
+        const profile = { username: 'fixture', password: 'fixture', tab: 'Fleet' };
+        const backup = { profiles: [profile], tabs: ['Fleet', 'Work'], activeTab: 'Fleet' };
+        await openSettings().importText(serializeProfileFile({ ...backup, storage: {} }));
+        const [slot] = wall.slots();
+        await failTabWrite(() => wall.setSlotTab(slot.id, 'Work'));
+        expect(wall.slots()[0].tab).toBe('Work');
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('test-passphrase')).toBe(true);
+        expect(reopened.snapshot()).toEqual(backup);
+
+        const alert = document.querySelector('#mbx-rail [role="alert"]');
+        const retry = alert?.querySelector('button');
+        expect(retry?.textContent ?? '').toMatch(/retry/i);
+        retry!.click();
+        await waitFor(() => !alert!.isConnected);
+        expect(await reopened.unlock('test-passphrase')).toBe(true);
+        expect(reopened.snapshot()).toEqual({ ...backup, profiles: [{ ...profile, tab: 'Work' }] });
+    });
+});
+
 test('moving a slot retries a failed tab creation after the rail detaches', async () => {
     await withWall('local', async wall => {
         const profile = { username: 'fixture', password: 'fixture', tab: 'Fleet' };
@@ -387,7 +426,9 @@ test('a storage refresh rolls a failed move back to the imported group', async (
         expect(await reopened.unlock('test-passphrase')).toBe(true);
         expect(reopened.snapshot()).toEqual(backup);
         expect(wall.slots().map(s => [s.id, s.tab])).toEqual([[slot.id, 'Fleet']]);
-        expect(document.querySelector('#mbx-rail [role="alert"]')?.textContent).toContain('retry');
+        const alert = document.querySelector('#mbx-rail [role="alert"]');
+        expect(alert?.textContent).toContain('retry');
+        expect(alert?.querySelector('button')).toBeNull();
     });
 });
 

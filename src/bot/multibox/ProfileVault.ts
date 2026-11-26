@@ -536,8 +536,11 @@ export class ProfileVault {
 
     async saveTabState(tabs: string[], tabByUser: ReadonlyMap<string, string>, activeTab?: string, replaced?: TabReplacement, previousTabs?: string[]): Promise<void> {
         if (this.pendingReplacement) return this.afterReplacement(() => this.saveTabState(tabs, tabByUser, activeTab, replaced, previousTabs));
+        const requested = tabs.map(tab => {
+            if (previousTabs || this.customTabs.includes(tab) || this.sharedTabs.includes(tab)) return tab;
+            return tab.trim();
+        });
         if (this.shared || previousTabs) {
-            const requested = tabs.map(tab => tab.trim());
             assertTabStateValid(requested, activeTab ?? MAIN_TAB, []);
             const save = async (draft: ProfileVault) => {
                 if (replaced && !draft.customTabs.includes(replaced.from)) return;
@@ -567,7 +570,7 @@ export class ProfileVault {
             this.sharedTabs = requested;
             return;
         }
-        return this.applyTabState(tabs, new Map(tabByUser), replaced ? 'all' : 'first', activeTab, replaced);
+        return this.applyTabState(requested, new Map(tabByUser), replaced ? 'all' : 'first', activeTab, replaced);
     }
 
     private resolveSlotTabs(tabByUser: ReadonlyMap<string, string>): Map<string, string> {
@@ -583,22 +586,21 @@ export class ProfileVault {
 
     private async applyTabState(tabs: string[], assignments: Map<string, string>, matches: 'first' | 'all', activeTab?: string, replaced?: TabReplacement): Promise<void> {
         const all = this.assertUnlocked();
-        const trimmed = tabs.map(t => t.trim());
-        const active = activeTab ?? (trimmed.includes(this.active) ? this.active : MAIN_TAB);
-        assertTabStateValid(trimmed, active, []);
+        const active = activeTab ?? (tabs.includes(this.active) ? this.active : MAIN_TAB);
+        assertTabStateValid(tabs, active, []);
         for (const [username, tab] of assignments) {
-            if (tab !== MAIN_TAB && !trimmed.includes(tab)) {
+            if (tab !== MAIN_TAB && !tabs.includes(tab)) {
                 throw new Error(`tab '${tab}' for '${username}' is not in the tab list`);
             }
         }
-        this.customTabs = trimmed;
+        this.customTabs = tabs;
         this.active = active;
         for (const p of all) {
             const next = replaced && p.tab !== replaced.from ? p.tab : replaced?.to ?? assignments.get(p.username) ?? p.tab;
             if (matches === 'first') assignments.delete(p.username);
             // a profile not loaded in this wall keeps its stored tab, landing in Main when that tab has been deleted
             // Why: the deleting wall only knows prior-tab targets for the bots it has loaded
-            if (next !== undefined && next !== MAIN_TAB && trimmed.includes(next)) {
+            if (next !== undefined && next !== MAIN_TAB && tabs.includes(next)) {
                 p.tab = next;
             } else {
                 delete p.tab;
