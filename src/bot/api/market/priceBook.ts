@@ -1,3 +1,5 @@
+import { firstFreeName, upsertNamedEntry } from '../namedEntries.js';
+
 export interface PriceRow {
     /** Unnoted obj id. The book's only key. */
     id: number;
@@ -100,13 +102,7 @@ export function serializeBooks(books: readonly PriceBook[]): string {
 }
 
 export function upsertBook(books: readonly PriceBook[], book: PriceBook): PriceBook[] {
-    const i = books.findIndex(b => b.name.toLowerCase() === book.name.toLowerCase());
-    if (i === -1) {
-        return [...books, book];
-    }
-    const out = [...books];
-    out[i] = book;
-    return out;
+    return upsertNamedEntry(books, book);
 }
 
 export function removeBook(books: readonly PriceBook[], name: string): PriceBook[] {
@@ -115,16 +111,7 @@ export function removeBook(books: readonly PriceBook[], name: string): PriceBook
 }
 
 export function uniqueBookName(books: readonly PriceBook[], wanted: string): string {
-    const taken = new Set(books.map(b => b.name.toLowerCase()));
-    if (!taken.has(wanted.toLowerCase())) {
-        return wanted;
-    }
-    for (let n = 2; ; n++) {
-        const candidate = `${wanted} ${n}`;
-        if (!taken.has(candidate.toLowerCase())) {
-            return candidate;
-        }
-    }
+    return firstFreeName(books, wanted);
 }
 
 export function rowOf(book: PriceBook, id: number): PriceRow | null {
