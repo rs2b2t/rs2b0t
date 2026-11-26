@@ -49,7 +49,8 @@ function prepareDeployment(root: string, script: string, afterBake = '') {
 set -e
 case "$1" in
     run) exit 0 ;;
-    tools/live-proxy.ts) cp -R "$B0T_INSTANCE_DIR/out" instance; exit 42 ;;
+    tools/live-proxy.ts) cp -R "$B0T_INSTANCE_DIR/out/." instance; exit 42 ;;
+    tools/nav/build-collision.ts) touch "$5.gz" ;;
     tools/map/build-basemap.ts) "$REAL_BUN" --no-install "$@" --fetch-url data:, ;;
     *) exit 2 ;;
 esac
@@ -308,6 +309,49 @@ test('a failed staged manifest rename preserves the selected archive for the nex
     }
 });
 
+for (const interrupted of ['staging', 'publication', 'first publication']) {
+    test(`packaging recovers the selected JAG after interrupted ${interrupted}`, () => {
+        const root = mkdtempSync(join(tmpdir(), 'pack-interrupted-'));
+        try {
+            const dest = join(root, 'published');
+            const selected = join(root, 'selected.jag');
+            writeFileSync(selected, townMap);
+            bakeMap(root, '--jag', selected, '--revision', '275', '--publish-to', dest);
+            const manifestName = 'worldmap-basemap.manifest.json';
+            const manifest = readFileSync(join(root, manifestName));
+            const staging = interrupted === 'staging';
+            const dir = staging ? root : dest;
+            const jag = join(dir, 'worldmap.jag');
+            const firstPublish = interrupted === 'first publication';
+            if (firstPublish) rmSync(join(dest, manifestName));
+            const preload = join(root, 'interrupt.cjs');
+            writeFileSync(preload, `
+                const fs = require('node:fs');
+                const rename = fs.renameSync;
+                fs.renameSync = (from, to) => {
+                    rename(from, to);
+                    if (to === ${JSON.stringify(jag)}) process.exit(86);
+                };
+            `);
+            writeFileSync(selected, emptyMap);
+            const args = staging ? [] : ['--out', join(root, 'second'), '--publish-to', dest];
+            expect(() => bakeWithPreload(root, preload, '--jag', selected, ...args)).toThrow();
+            expect(readFileSync(jag)).toEqual(emptyMap);
+            if (firstPublish) expect(existsSync(join(dest, manifestName))).toBe(false);
+            else expect(readFileSync(join(dir, manifestName))).toEqual(manifest);
+            rmSync(join(staging ? dest : root, 'worldmap.jag'));
+
+            bakeIfNeeded(root, '--publish-to', dest);
+            for (const output of [root, dest]) {
+                expect(readFileSync(join(output, 'worldmap.jag'))).toEqual(townMap);
+                expect(readFileSync(join(output, manifestName))).toEqual(manifest);
+            }
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+}
+
 for (const operation of ['copyFileSync', 'renameSync']) {
     test(`a failed manifest ${operation} preserves the published JAG and manifest`, () => {
         const root = mkdtempSync(join(tmpdir(), 'publish-manifest-'));
@@ -398,6 +442,29 @@ test.skipIf(process.getuid?.() === 0)('launcher copies a complete bake from read
     }
 });
 
+test.skipIf(process.getuid?.() === 0)('launcher bakes in the instance when a read-only checkout has no out directory', () => {
+    const root = mkdtempSync(join(tmpdir(), 'launcher-no-out-'));
+    try {
+        const launch = prepareDeployment(root, 'b0t.sh');
+        mkdirSync(join(root, 'node_modules'));
+        mkdirSync(join(root, 'instance'));
+        writeFileSync(join(root, 'tools/curl'), `#!/bin/sh\necho ${'1'.repeat(250)}\n`, { mode: 0o755 });
+        writeFileSync(join(root, 'engine/data/pack/mapview/worldmap.jag'), townMap);
+        rmSync(join(root, 'out'), { recursive: true });
+        chmodSync(root, 0o555);
+
+        expect(launch).toThrow(/proxy exited during startup \(status 42\)/);
+        expect(existsSync(join(root, 'out'))).toBe(false);
+        const instance = join(root, 'instance');
+        expect(readFileSync(join(instance, 'worldmap.jag'))).toEqual(townMap);
+        const manifest = JSON.parse(readFileSync(join(instance, 'worldmap-basemap.manifest.json'), 'utf8'));
+        expect(existsSync(join(instance, manifest.labelsOverlayUrl))).toBe(true);
+    } finally {
+        chmodSync(root, 0o755);
+        rmSync(root, { recursive: true, force: true });
+    }
+});
+
 test('packager keeps an explicit JAG when the engine has a different map', () => {
     const root = mkdtempSync(join(tmpdir(), 'pack-explicit-map-'));
     try {
@@ -451,6 +518,40 @@ test('a schema 2 engine bake follows engine changes after the packager upgrades 
         expect(manifest().fingerprint).not.toBe(first.fingerprint);
         expect(manifest().revision).toBe('274');
         expect(readFileSync(join(dest, 'worldmap.jag'))).toEqual(emptyMap);
+    } finally {
+        rmSync(root, { recursive: true, force: true });
+    }
+});
+
+test('a schema 2 upgrade preserves the selected map when the engine JAG is unreadable', () => {
+    const root = mkdtempSync(join(tmpdir(), 'pack-unreadable-engine-'));
+    try {
+        const dest = join(root, 'published');
+        const engine = join(root, 'engine/data/pack/mapview');
+        mkdirSync(engine, { recursive: true });
+        const engineJag = join(engine, 'worldmap.jag');
+        writeFileSync(engineJag, emptyMap);
+        writeFileSync(join(root, 'worldmap.jag'), townMap);
+        const name = 'worldmap-basemap.manifest.json';
+        writeFileSync(join(root, name), JSON.stringify({
+            schema: 2, revision: '275', fingerprint: '5f1c291201a299b0', basemapUrl: './worldmap-old.png',
+            origin: { x: 2048, z: 2816 }, sizeTiles: { w: 1600, h: 1216 }, pixelsPerTile: 1
+        }));
+        const preload = join(root, 'deny-engine.cjs');
+        writeFileSync(preload, `
+            const fs = require('node:fs');
+            const read = fs.readFileSync;
+            fs.readFileSync = (file, ...args) => {
+                if (file === ${JSON.stringify(engineJag)}) throw Object.assign(new Error('engine EACCES'), { code: 'EACCES' });
+                return read(file, ...args);
+            };
+        `);
+        bakeWithPreload(root, preload, '--if-needed', '--publish-to', dest);
+        bakeIfNeeded(root, '--publish-to', dest);
+        expect(readFileSync(join(dest, 'worldmap.jag'))).toEqual(townMap);
+        expect(JSON.parse(readFileSync(join(dest, name), 'utf8'))).toMatchObject({
+            revision: '275', fingerprint: '322ab26cb258482b'
+        });
     } finally {
         rmSync(root, { recursive: true, force: true });
     }

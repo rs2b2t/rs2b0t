@@ -103,6 +103,14 @@ function isCurrentBake(outDir: string, manifest: BakeManifest, localFingerprint:
     }
 }
 
+function matchesEngineJag(bytes: Buffer, engineJag: string): boolean {
+    try {
+        return bytes.equals(fs.readFileSync(engineJag));
+    } catch {
+        return false;
+    }
+}
+
 function findLocalJag(opts: BakeArgs, previous: BakeManifest | null) {
     if (opts.jag !== null) {
         if (!fs.existsSync(opts.jag)) throw new Error(`--jag not found: ${opts.jag}`);
@@ -119,7 +127,7 @@ function findLocalJag(opts: BakeArgs, previous: BakeManifest | null) {
             if (!candidate || !fs.existsSync(candidate)) continue;
             const bytes = fs.readFileSync(candidate);
             if (fingerprint(bytes, previous.schema) === previous.fingerprint) {
-                const explicit = previous.explicitJag ?? (!hasEngine || !bytes.equals(fs.readFileSync(engineJag)));
+                const explicit = previous.explicitJag ?? !matchesEngineJag(bytes, engineJag);
                 return { path: candidate, bytes, explicit };
             }
         }
@@ -431,10 +439,26 @@ async function main(): Promise<void> {
             lock.run('PRAGMA busy_timeout = 60000');
             lock.run('BEGIN EXCLUSIVE');
         }
+        for (const dir of lockDirs) recoverBakePairs(dir);
         const manifest = await buildBasemap(opts);
         if (opts.publishTo && lockDirs.size > 1) publishBasemap(opts.outDir, opts.publishTo, manifest);
     } finally {
         for (const lock of locks.reverse()) lock.close();
+    }
+}
+
+function recoverBakePairs(dir: string): void {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (!entry.isDirectory() || !/^\.basemap-[a-zA-Z0-9]{6}$/.test(entry.name)) continue;
+        const pending = path.join(dir, entry.name);
+        const backup = path.join(pending, 'previous.jag');
+        if (!fs.existsSync(backup)) continue;
+        if (!fs.existsSync(path.join(pending, 'worldmap.jag')) && fs.existsSync(path.join(pending, BASEMAP_MANIFEST_NAME))) {
+            const manifest = readManifest(path.join(dir, BASEMAP_MANIFEST_NAME));
+            if (manifest && fingerprint(fs.readFileSync(backup), manifest.schema) !== manifest.fingerprint) continue;
+            fs.renameSync(backup, path.join(dir, 'worldmap.jag'));
+        }
+        fs.rmSync(pending, { recursive: true, force: true });
     }
 }
 

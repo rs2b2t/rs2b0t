@@ -225,7 +225,7 @@ else
     bun tools/nav/build-collision.ts --engine "${ENGINE_DIR:-$HOME/code/rs2b2t-engine}" --out "$RUN_DIR/out/collision.lcnav"
 fi
 MAP_OUT=out
-if [ -d out ] && [ ! -w out ]; then
+if ! mkdir -p out 2>/dev/null || [ ! -w out ]; then
     MAP_OUT="$RUN_DIR/out"
     for asset in out/worldmap.jag out/worldmap-*.png out/worldmap-*.json; do
         [ ! -f "$asset" ] || cp "$asset" "$MAP_OUT/"
