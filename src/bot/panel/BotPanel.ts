@@ -255,6 +255,7 @@ export default class BotPanel {
     assignScript(name: string): void {
         this.assertScriptIdle();
         this.selectScript(this.requireScript(name).name);
+        this.library.cancelPendingSelection();
     }
 
     copyScriptSettings(name: string, values: Record<string, string>): void {

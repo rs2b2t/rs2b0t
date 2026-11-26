@@ -140,49 +140,106 @@ test('render controls appear below the log and persist per bot', () => {
     expect(localStorage.getItem('rs2b0t:alice:rendererEnabled')).toBe('0');
 });
 
+function openLibrary() {
+    const root = document.createElement('div');
+    const panel = new BotPanel(root, { selfTestMissing: [], addDrawListener: () => {} } as unknown as BotHostImpl);
+    const browse = Array.from(root.querySelectorAll('button')).find(b => b.textContent === 'Browse…')!;
+    browse.click();
+    const picker = document.querySelector<HTMLInputElement>('.rs2b0t-library-load input[type=file]')!;
+    const backdrop = picker.closest<HTMLElement>('.rs2b0t-modal-backdrop')!;
+    const loadFile = loader.loadFromFile;
+    const fileLoad = spyOn(loader, 'loadFromFile');
+
+    function startImport(name: string) {
+        const ready = Promise.withResolvers<void>();
+        fileLoad.mockImplementationOnce(file => ready.promise.then(() => loadFile(file)));
+        const transfer = new DataTransfer();
+        const source = `export default { __rs2b0tManifest: 1, name: ${JSON.stringify(name)}, create() {} }`;
+        transfer.items.add(new File([source], 'fixture.js', { type: 'text/javascript' }));
+        picker.files = transfer.files;
+        picker.dispatchEvent(new Event('change'));
+        const result = fileLoad.mock.results.at(-1)!.value;
+        return async () => {
+            ready.resolve();
+            await result;
+        };
+    }
+
+    function expectSelected(name: string) {
+        expect(panel.selectedScriptName()).toBe(name);
+        expect(localStorage.getItem('rs2b0t:selectedScript')).toBe(name);
+        expect(sessionStorage.getItem('rs2b0t:selectedScript')).toBe(name);
+    }
+
+    return { panel, browse, backdrop, startImport, expectSelected, restore: () => fileLoad.mockRestore() };
+}
+
 test.each([
     ['select another card', 'Picked fixture'],
+    ['assign from roster', 'Picked fixture'],
     ['dismiss', 'Previous fixture'],
     ['wait', 'Imported fixture']
 ])('file load after %s leaves %s selected', async (action, selected) => {
     const key = 'rs2b0t:selectedScript';
-    const fileLoad = spyOn(loader, 'loadFromFile');
     for (const name of ['Previous fixture', 'Picked fixture']) {
         ScriptRegistry.register({ name, description: '', create: () => { throw new Error('unused'); } });
     }
+    localStorage.setItem(key, 'Previous fixture');
+    sessionStorage.setItem(key, 'Previous fixture');
+    const library = openLibrary();
+    const { backdrop, browse } = library;
     try {
-        localStorage.setItem(key, 'Previous fixture');
-        sessionStorage.setItem(key, 'Previous fixture');
-        const root = document.createElement('div');
-        const panel = new BotPanel(root, { selfTestMissing: [], addDrawListener: () => {} } as unknown as BotHostImpl);
-        const browse = Array.from(root.querySelectorAll('button')).find(b => b.textContent === 'Browse…')!;
-        browse.click();
-        const picker = document.querySelector<HTMLInputElement>('.rs2b0t-library-load input[type=file]')!;
-        const backdrop = picker.closest<HTMLElement>('.rs2b0t-modal-backdrop')!;
-        const transfer = new DataTransfer();
-        const source = "export default { __rs2b0tManifest: 1, name: 'Imported fixture', create() {} }";
-        transfer.items.add(new File([source], 'fixture.js', { type: 'text/javascript' }));
-        picker.files = transfer.files;
-        picker.dispatchEvent(new Event('change'));
-
+        const finish = library.startImport('Imported fixture');
         if (action === 'select another card') {
             const cardName = Array.from(backdrop.querySelectorAll('.rs2b0t-card-name')).find(el => el.textContent === 'Picked fixture')!;
             cardName.closest<HTMLElement>('.rs2b0t-library-card')!.click();
+            browse.click();
         } else if (action === 'dismiss') {
             backdrop.click();
+            browse.click();
+        } else if (action === 'assign from roster') {
+            await library.panel.configureScript('Picked fixture', null, false);
         }
-        if (action !== 'wait') browse.click();
-        await fileLoad.mock.results[0].value;
+        await finish();
 
-        expect(panel.selectedScriptName()).toBe(selected);
-        expect(localStorage.getItem(key)).toBe(selected);
-        expect(sessionStorage.getItem(key)).toBe(selected);
+        library.expectSelected(selected);
         expect(backdrop.style.display).toBe(action === 'wait' ? 'none' : 'flex');
         expect(Array.from(backdrop.querySelectorAll('.rs2b0t-card-name'), el => el.textContent)).toContain('Imported fixture ⇪');
     } finally {
-        document.querySelector('.rs2b0t-library-load')?.closest<HTMLElement>('.rs2b0t-modal-backdrop')?.click();
-        fileLoad.mockRestore();
+        backdrop.click();
+        library.restore();
         for (const name of ['Imported fixture', 'Picked fixture', 'Previous fixture']) ScriptRegistry.unregister(name);
+    }
+});
+
+test.each(['older', 'newer'])('latest import stays selected when the %s import finishes first', async first => {
+    ScriptRegistry.register({ name: 'Previous fixture', description: '', create: () => { throw new Error('unused'); } });
+    const library = openLibrary();
+    try {
+        await library.panel.configureScript('Previous fixture', null, false);
+        const finishOlder = library.startImport('Older fixture');
+        const finishNewer = library.startImport('Newer fixture');
+        if (first === 'older') {
+            await finishOlder();
+            library.expectSelected('Previous fixture');
+            expect(library.backdrop.style.display).toBe('flex');
+            await finishNewer();
+        } else {
+            await finishNewer();
+            expect(library.backdrop.style.display).toBe('none');
+            library.browse.click();
+            await finishOlder();
+        }
+        library.expectSelected('Newer fixture');
+        expect(library.backdrop.style.display).toBe(first === 'older' ? 'none' : 'flex');
+        library.browse.click();
+        const names = Array.from(library.backdrop.querySelectorAll('.rs2b0t-card-name'), el => el.textContent);
+        expect(names).toContain('Older fixture ⇪');
+        expect(names).toContain('Newer fixture ⇪');
+    } finally {
+        library.backdrop.click();
+        library.restore();
+        for (const name of ['Older fixture', 'Newer fixture', 'Previous fixture']) ScriptRegistry.unregister(name);
     }
 });
 
