@@ -191,6 +191,44 @@ for (const script of ['pack-rs2b0t.sh', 'deploy-local.sh']) {
     });
 }
 
+for (const phase of ['baking', 'publishing']) {
+    test(`replacing the staged JAG during ${phase} cannot publish a mismatched map`, () => {
+        const root = mkdtempSync(join(tmpdir(), 'pack-replaced-jag-'));
+        try {
+            const dest = join(root, 'published');
+            const jag = join(root, 'worldmap.jag');
+            writeFileSync(jag, townMap);
+            const replacement = join(root, 'replacement.jag');
+            writeFileSync(replacement, emptyMap);
+            const duringBake = phase === 'baking';
+            const labels = join(duringBake ? root : dest, 'worldmap-labels.322ab26cb258482b.png');
+            const preload = join(root, 'replace-jag.cjs');
+            writeFileSync(preload, `
+                const fs = require('node:fs');
+                const rename = fs.renameSync;
+                fs.renameSync = (from, to) => {
+                    rename(from, to);
+                    if (to === ${JSON.stringify(labels)}) rename(${JSON.stringify(replacement)}, ${JSON.stringify(jag)});
+                };
+            `);
+            const pack = () => bakeWithPreload(root, preload, '--if-needed', '--publish-to', dest);
+            const name = 'worldmap-basemap.manifest.json';
+            if (duringBake) {
+                expect(pack).toThrow(/worldmap\.jag changed/);
+                expect(existsSync(join(root, name))).toBe(false);
+                expect(existsSync(join(dest, name))).toBe(false);
+            } else {
+                pack();
+                expect(JSON.parse(readFileSync(join(dest, name), 'utf8')).fingerprint).toBe('322ab26cb258482b');
+                expect(readFileSync(join(dest, 'worldmap.jag'))).toEqual(townMap);
+            }
+            expect(readFileSync(jag)).toEqual(emptyMap);
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+}
+
 test('a failed overlay copy leaves the published JAG and manifest in place', () => {
     const root = mkdtempSync(join(tmpdir(), 'pack-overlay-copy-'));
     try {
@@ -352,7 +390,7 @@ for (const interrupted of ['staging', 'publication', 'first publication']) {
     });
 }
 
-for (const operation of ['copyFileSync', 'renameSync']) {
+for (const operation of ['writeFileSync', 'renameSync']) {
     test(`a failed manifest ${operation} preserves the published JAG and manifest`, () => {
         const root = mkdtempSync(join(tmpdir(), 'publish-manifest-'));
         try {
@@ -364,13 +402,14 @@ for (const operation of ['copyFileSync', 'renameSync']) {
             const first = readFileSync(manifest);
             writeFileSync(jag, townMap);
             const preload = join(root, 'fail.cjs');
-            const copying = operation === 'copyFileSync';
-            const target = copying ? join(root, 'worldmap-basemap.manifest.json') : manifest;
             writeFileSync(preload, `
                 const fs = require('node:fs');
                 const original = fs.${operation};
                 fs.${operation} = (from, to, ...args) => {
-                    if (${copying ? 'from' : 'to'} === ${JSON.stringify(target)}) throw new Error('injected ENOSPC');
+                    const file = ${operation === 'writeFileSync' ? 'from' : 'to'};
+                    if (file.startsWith(${JSON.stringify(dest + '/')}) && file.endsWith('/worldmap-basemap.manifest.json')) {
+                        throw new Error('injected ENOSPC');
+                    }
                     return original(from, to, ...args);
                 };
             `);
@@ -552,6 +591,35 @@ test('a schema 2 upgrade preserves the selected map when the engine JAG is unrea
         expect(JSON.parse(readFileSync(join(dest, name), 'utf8'))).toMatchObject({
             revision: '275', fingerprint: '322ab26cb258482b'
         });
+    } finally {
+        rmSync(root, { recursive: true, force: true });
+    }
+});
+
+test.skipIf(process.getuid?.() === 0)('packager reuses a verified bake when its engine JAG becomes unreadable', () => {
+    const root = mkdtempSync(join(tmpdir(), 'pack-engine-permissions-'));
+    try {
+        const pack = prepareDeployment(root, 'pack-rs2b0t.sh');
+        const engineJag = join(root, 'engine/data/pack/mapview/worldmap.jag');
+        const out = join(root, 'out');
+        const dest = join(root, 'engine/public/rs2b0t/bot');
+        writeFileSync(engineJag, townMap);
+        pack();
+        const name = 'worldmap-basemap.manifest.json';
+        const manifest = readFileSync(join(out, name));
+        const labels = join(out, JSON.parse(manifest.toString()).labelsOverlayUrl);
+        utimesSync(labels, 1, 1);
+        chmodSync(engineJag, 0);
+        rmSync(join(dest, 'worldmap.jag'));
+        pack();
+        expect(statSync(labels).mtimeMs).toBe(1000);
+        expect(readFileSync(join(dest, name))).toEqual(manifest);
+        expect(readFileSync(join(dest, 'worldmap.jag'))).toEqual(townMap);
+
+        rmSync(join(dest, 'worldmap.jag'));
+        writeFileSync(join(out, 'worldmap.jag'), emptyMap);
+        expect(pack).toThrow(/EACCES/);
+        expect(existsSync(join(dest, 'worldmap.jag'))).toBe(false);
     } finally {
         rmSync(root, { recursive: true, force: true });
     }
