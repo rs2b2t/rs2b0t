@@ -456,6 +456,60 @@ describe('map picker bake settings drafts', () => {
         }
     });
 
+    test('an incomplete quota rollback still restores the session copy', () => {
+        const labels = 'rs2b0t:set:MapPicker:bakeLabels';
+        const borders = 'rs2b0t:set:MapPicker:bakeBorders';
+        SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'bakeLabels', 'false');
+        const setItem = localStorage.setItem;
+        Object.defineProperty(localStorage, 'setItem', {
+            configurable: true,
+            value: (id: string, value: string) => {
+                if (id === borders) setItem.call(localStorage, 'other-tab', 'x');
+                const usedByOtherKeys = [labels, borders, 'other-tab']
+                    .filter(key => key !== id)
+                    .reduce((size, key) => size + (localStorage.getItem(key)?.length ?? 0), 0);
+                if (usedByOtherKeys + value.length > 5) throw new DOMException('storage full', 'QuotaExceededError');
+                setItem.call(localStorage, id, value);
+            }
+        });
+        try {
+            const edits = new Map([['bakeLabels', 'true'], ['bakeBorders', 'true']]);
+            expect(() => SettingsStore.saveBatch(MAP_PICKER_SETTINGS_NS, edits)).toThrow(/storage full.*rollback incomplete/i);
+            expect(stored('bakeLabels')).toEqual({ local: 'true', session: 'false' });
+            expect(stored('bakeBorders')).toEqual({ local: null, session: null });
+            expect(localStorage.getItem('other-tab')).toBe('x');
+        } finally {
+            Object.defineProperty(localStorage, 'setItem', { value: setItem });
+        }
+    });
+
+    test('Settings shows the rebuild failure and retries with the same draft', async () => {
+        SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'skipRebuildConfirm', 'true');
+        const bake = spyOn(basemapRegen, 'regenerateBasemap')
+            .mockRejectedValueOnce(new Error('fixture failure'))
+            .mockResolvedValue(rebuiltMap());
+        try {
+            await withPicker(async () => {
+                openSettings();
+                const borders = bakeCheckbox('Map-square borders');
+                borders.click();
+                clickRebuild(true);
+                await new Promise<void>(resolve => setImmediate(resolve));
+                const modal = borders.closest('.rs2b0t-modal')!;
+                expect(modal.textContent).toContain('rebuild failed: fixture failure');
+                expect(borders.checked).toBe(true);
+                expect(stored('bakeBorders')).toEqual({ local: null, session: null });
+                clickRebuild(true);
+                await new Promise<void>(resolve => setImmediate(resolve));
+                expect(bake).toHaveBeenLastCalledWith(prefs({ borders: true }));
+                expect(stored('bakeBorders')).toEqual({ local: 'true', session: 'true' });
+                expect(modal.textContent).not.toContain('fixture failure');
+            });
+        } finally {
+            bake.mockRestore();
+        }
+    });
+
     test('a failed rebuild leaves the original draft baseline in place', async () => {
         SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'skipRebuildConfirm', 'true');
         const bake = spyOn(basemapRegen, 'regenerateBasemap').mockRejectedValue(new Error('fixture failure'));

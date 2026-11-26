@@ -615,10 +615,19 @@ class SettingsStoreImpl {
                 }
             }
         } catch (err) {
+            const rollbackErrors: unknown[] = [];
             for (const { store, id, previous, value } of writes.reverse()) {
-                if (store.getItem(id) !== value) continue;
-                if (previous === null) store.removeItem(id);
-                else store.setItem(id, previous);
+                try {
+                    if (store.getItem(id) !== value) continue;
+                    if (previous === null) store.removeItem(id);
+                    else store.setItem(id, previous);
+                } catch (rollbackError) {
+                    rollbackErrors.push(rollbackError);
+                }
+            }
+            if (rollbackErrors.length) {
+                const message = err instanceof Error ? err.message : String(err);
+                throw new AggregateError([err, ...rollbackErrors], `${message} (settings rollback incomplete)`);
             }
             throw err;
         }

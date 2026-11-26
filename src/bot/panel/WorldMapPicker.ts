@@ -537,6 +537,9 @@ export class WorldMapPicker {
                 'Rare: re-run MapView from worldmap.jag (tab freezes). Everyday Key/multi/free layers are pre-baked — use Settings, not Rebuild.';
             Object.assign(rebuildBtn.style, toolbarBtnStyle);
             toolbar.appendChild(rebuildBtn);
+            const rebuildError = document.createElement('div');
+            rebuildError.setAttribute('role', 'alert');
+            rebuildError.style.color = '#f88';
 
             /** Reflect showBasemap on dataset without clobbering load state when toggled back on. */
             const syncBasemapChrome = (): void => {
@@ -940,6 +943,7 @@ export class WorldMapPicker {
                     zIndex: 1200,
                     footerButton: rebuildBtn,
                     onClose: () => {
+                        rebuildError.remove();
                         toolbar.appendChild(rebuildBtn);
                         bakeEdits.clear();
                     }
@@ -978,6 +982,7 @@ export class WorldMapPicker {
                         return;
                     }
                     rebuildBtn.disabled = true;
+                    rebuildError.remove();
                     status.textContent = 'rebuilding basemap (tab may freeze)…';
                     status.style.color = '#fa0';
                     try {
@@ -1014,6 +1019,10 @@ export class WorldMapPicker {
                         const msg = err instanceof Error ? err.message : String(err);
                         status.textContent = `rebuild failed: ${msg}`;
                         status.style.color = '#f88';
+                        if (settingsModal.isOpen()) {
+                            rebuildError.textContent = status.textContent;
+                            rebuildBtn.after(rebuildError);
+                        }
                     } finally {
                         if (!closed) {
                             rebuildBtn.disabled = false;
