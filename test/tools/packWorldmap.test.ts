@@ -5,6 +5,8 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync,
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { browserBundleArtifacts } from '../fixtures/browser-bundles.js';
+
 // A whole-archive-compressed JAG with empty map layers and fonts.
 const emptyMap = Buffer.from(
     'AAfLAAC9MUFZJlNZPBJubgAAMf//0oGMAABUBV6gAgJRYApkoAQSB5UFQwIUKBQgHgIQKg0gAHQhChpoADQNA0GQG1AbUHoT9FCvUkGmhgTEDCME0000yaGgYTTNmlrJt3G/lOMtNkNVoCaYAJVXBgAIgUhSFAAxLGL8zAPJhAQoB5OM754akXc8ExxtmGGT0hu6KRd6NwOqiT4XSTLPHLRBx9TqpmKQTqjJN7/LQxuIieImPCLYP4u5IpwoSB4JNzcA',
@@ -50,9 +52,8 @@ for (const sources of ['engine and cache', 'engine', 'cache']) {
             symlinkSync(join(tools, 'map'), join(root, 'tools/map'));
             const bun = '#!/bin/sh\n[ "$1" = run ] && exit 0\nexec "$REAL_BUN" --no-install "$@" --fetch-url data:,\n';
             writeFileSync(join(root, 'tools/bun'), bun, { mode: 0o755 });
-            for (const bundle of ['botclient', 'ondemandworker', 'navworker', 'multibox']) {
-                writeFileSync(join(root, `out/${bundle}.js`), '');
-                writeFileSync(join(root, `out/${bundle}.js.map`), '');
+            for (const file of browserBundleArtifacts) {
+                writeFileSync(join(root, 'out', file), '');
             }
             for (const file of ['out/collision.lcnav.gz', 'out/tinymidipcm.wasm', 'public-bot/bot.html', 'public-bot/multibox.html']) {
                 writeFileSync(join(root, file), '');
