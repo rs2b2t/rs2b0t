@@ -205,6 +205,23 @@ describe('LoadoutPanel', () => {
         expect(Loadouts.names().sort()).toEqual(['range', 'range 2']);
     });
 
+    test('renaming a duplicate to the original name keeps its supplies visible', () => {
+        Loadouts.save([{ name: 'melee', worn: {}, carry: [{ item: 'Shark', qty: 8 }] }]);
+        const panel = openPanel();
+        panel.root.querySelector<HTMLButtonElement>('[data-action=duplicate]')!.click();
+        panel.root.querySelector<HTMLButtonElement>('[data-action=rename]')!.click();
+        const field = panel.root.querySelector<HTMLInputElement>('[data-role=loadout-name]')!;
+        expect(field.value).toBe('melee 2');
+        field.value = 'melee';
+        field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+
+        expect(panel.root.querySelector('select')!.value).toBe('melee 2');
+        expect(Loadouts.byName('melee 2')!.carry).toEqual([{ item: 'Shark', qty: 8 }]);
+        const food = panel.root.querySelector('[data-supply=Food]')!;
+        expect(food.querySelector('input')!.value).toBe('8');
+        expect(food.querySelector('[data-role=supply-item]')!.textContent).toBe('Shark');
+    });
+
     test('duplicating gives the copy a free name', () => {
         Loadouts.save([{ name: 'melee', worn: { righthand: 'Rune scimitar' }, carry: [] }]);
         const panel = openPanel();

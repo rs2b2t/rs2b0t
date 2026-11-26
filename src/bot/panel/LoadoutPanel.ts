@@ -290,8 +290,10 @@ export class LoadoutPanel {
         const without = removeLoadout(Loadouts.all(), from.name);
         const name = uniqueName(without, typed);
         Loadouts.save(upsertLoadout(without, { ...from, name }));
-        this.supplyRowsByLoadout.set(name, this.supplyRowsFor(from.name));
-        this.supplyRowsByLoadout.delete(from.name);
+        if (name !== from.name) {
+            this.supplyRowsByLoadout.set(name, this.supplyRowsFor(from.name));
+            this.supplyRowsByLoadout.delete(from.name);
+        }
         this.selected = name;
         this.render();
     }
