@@ -1,3 +1,4 @@
+import { useBakeSettingsLocks } from '../fixtures/bakeSettingsLocks.js';
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import * as basemapRegen from '#/bot/panel/basemapRegen.js';
 import { prefsKeyFromBakePrefs } from '#/bot/panel/basemapLocalCache.js';
@@ -73,6 +74,8 @@ describe('client CRC key format (unit of /crc)', () => {
 });
 
 describe('map picker bake settings drafts', () => {
+    useBakeSettingsLocks();
+
     beforeEach(() => {
         sessionStorage.clear();
         localStorage.clear();
@@ -177,7 +180,7 @@ describe('map picker bake settings drafts', () => {
         const borders = 'rs2b0t:set:MapPicker:bakeBorders';
         const params = SettingsStore['urlParams'];
         try {
-            SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'bakeLabels', 'false');
+            await SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'bakeLabels', 'false');
             SettingsStore['urlParams'] = new URLSearchParams('MapPicker.bakeLabels=true');
             await withPicker(() => {
                 openSettings();
@@ -239,7 +242,7 @@ describe('map picker bake settings drafts', () => {
     });
 
     test.each([false, true])('Escape restores the settings used by a successful rebuild (Settings already open: %p)', async alreadyOpen => {
-        SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'bakeBorders', 'false');
+        await SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'bakeBorders', 'false');
         const pending = Promise.withResolvers<Awaited<ReturnType<typeof basemapRegen.regenerateBasemap>>>();
         const bake = spyOn(basemapRegen, 'regenerateBasemap').mockReturnValue(pending.promise);
         try {
@@ -354,8 +357,35 @@ describe('map picker bake settings drafts', () => {
         }
     });
 
+    test('a URL-controlled checkbox stays fixed during rebuild and leaves its saved key absent', async () => {
+        SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'skipRebuildConfirm', 'true');
+        const params = SettingsStore['urlParams'];
+        const bake = spyOn(basemapRegen, 'regenerateBasemap').mockResolvedValue(rebuiltMap());
+        try {
+            SettingsStore['urlParams'] = new URLSearchParams('mappicker.bakelabels=yes');
+            await withPicker(async () => {
+                openSettings();
+                const labels = bakeCheckbox('Stamp labels into rebuild');
+                expect(labels.checked).toBe(true);
+                labels.click();
+                bakeCheckbox('Map-square borders').click();
+                clickRebuild(true);
+                await new Promise<void>(resolve => setImmediate(resolve));
+
+                expect(bake).toHaveBeenCalledWith(prefs({ labels: true, borders: true }));
+                expect(stored('bakeLabels')).toEqual({ local: null, session: null });
+                expect(labels.disabled).toBe(true);
+                expect(labels.checked).toBe(true);
+                expect(stored('bakeBorders')).toEqual({ local: 'true', session: 'true' });
+            });
+        } finally {
+            SettingsStore['urlParams'] = params;
+            bake.mockRestore();
+        }
+    });
+
     test('untouched close leaves the saved preference and absent keys alone under a URL override', async () => {
-        SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'bakeLabels', 'false');
+        await SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'bakeLabels', 'false');
         const params = SettingsStore['urlParams'];
         try {
             SettingsStore['urlParams'] = new URLSearchParams('MapPicker.bakeLabels=true');
@@ -429,7 +459,7 @@ describe('map picker bake settings drafts', () => {
         }
     });
 
-    test("a quota error preserves another tab's label save during the batch", () => {
+    test("a quota error preserves another tab's label save during the batch", async () => {
         const labels = 'rs2b0t:set:MapPicker:bakeLabels';
         const borders = 'rs2b0t:set:MapPicker:bakeBorders';
         const setItem = localStorage.setItem;
@@ -446,7 +476,7 @@ describe('map picker bake settings drafts', () => {
         });
         try {
             const edits = new Map([['bakeLabels', 'false'], ['bakeBorders', 'true']]);
-            expect(() => SettingsStore.saveBatch(MAP_PICKER_SETTINGS_NS, edits)).toThrow('storage full');
+            await expect(async () => SettingsStore.saveBatch(MAP_PICKER_SETTINGS_NS, edits)).toThrow('storage full');
             expect(stored('bakeLabels')).toEqual({ local: 'true', session: null });
             expect(stored('bakeBorders')).toEqual({ local: null, session: null });
             sessionStorage.clear();
@@ -456,10 +486,43 @@ describe('map picker bake settings drafts', () => {
         }
     });
 
-    test('an incomplete quota rollback still restores the session copy', () => {
+    test.each([null, '0'])('a save arriving after the rollback comparison survives restoration of %p', async previous => {
         const labels = 'rs2b0t:set:MapPicker:bakeLabels';
         const borders = 'rs2b0t:set:MapPicker:bakeBorders';
-        SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'bakeLabels', 'false');
+        if (previous !== null) localStorage.setItem(labels, previous);
+        const { setItem, removeItem } = localStorage;
+        let competingSave: Promise<void> | undefined;
+        const saveLabels = () => {
+            competingSave = Promise.resolve(SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'bakeLabels', 'true'));
+        };
+        Object.defineProperties(localStorage, {
+            setItem: { configurable: true, value(id: string, value: string) {
+                if (id === borders) throw new DOMException('storage full', 'QuotaExceededError');
+                if (id === labels && value === previous) saveLabels();
+                setItem.call(localStorage, id, value);
+            } },
+            removeItem: { configurable: true, value(id: string) {
+                if (id === labels) saveLabels();
+                removeItem.call(localStorage, id);
+            } }
+        });
+        try {
+            const edits = new Map([['bakeLabels', 'false'], ['bakeBorders', 'true']]);
+            await expect(async () => SettingsStore.saveBatch(MAP_PICKER_SETTINGS_NS, edits)).toThrow('storage full');
+            expect(competingSave).toBeDefined();
+            await competingSave;
+            sessionStorage.clear();
+            expect(resolveBasemapBakePrefs().labels).toBe(true);
+            expect(stored('bakeBorders')).toEqual({ local: null, session: null });
+        } finally {
+            Object.defineProperties(localStorage, { setItem: { value: setItem }, removeItem: { value: removeItem } });
+        }
+    });
+
+    test('an incomplete quota rollback still restores the session copy', async () => {
+        const labels = 'rs2b0t:set:MapPicker:bakeLabels';
+        const borders = 'rs2b0t:set:MapPicker:bakeBorders';
+        await SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'bakeLabels', 'false');
         const setItem = localStorage.setItem;
         Object.defineProperty(localStorage, 'setItem', {
             configurable: true,
@@ -474,7 +537,7 @@ describe('map picker bake settings drafts', () => {
         });
         try {
             const edits = new Map([['bakeLabels', 'true'], ['bakeBorders', 'true']]);
-            expect(() => SettingsStore.saveBatch(MAP_PICKER_SETTINGS_NS, edits)).toThrow(/storage full.*rollback incomplete/i);
+            await expect(async () => SettingsStore.saveBatch(MAP_PICKER_SETTINGS_NS, edits)).toThrow(/storage full.*rollback incomplete/i);
             expect(stored('bakeLabels')).toEqual({ local: 'true', session: 'false' });
             expect(stored('bakeBorders')).toEqual({ local: null, session: null });
             expect(localStorage.getItem('other-tab')).toBe('x');

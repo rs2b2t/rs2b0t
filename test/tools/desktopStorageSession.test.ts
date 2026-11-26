@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from 'bun:test';
+import { afterEach, expect, spyOn, test } from 'bun:test';
 import { EventEmitter } from 'node:events';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import * as fs from 'node:fs';
@@ -66,6 +66,25 @@ test('storage changes reach registered bridges only, with the writer updated by 
     expect(f.main.received).toEqual([]);
     expect(f.plain.received).toEqual([]);
     expect(f.nested.received).toEqual([]);
+});
+
+test('a failed settings batch leaves a peer save intact and publishes no partial snapshot', async () => {
+    const f = await fixture();
+    f.request(f.main, 'snapshot');
+    f.request(f.child, 'setItem', key, 'peer');
+    const other = 'rs2b0t:set:MapPicker:bakeBorders';
+    const batch = [[key, 'first'], [other, 'true']];
+    const rename = spyOn(require('node:fs'), 'renameSync').mockImplementationOnce(() => { throw new Error('storage full'); });
+    try {
+        expect(f.request(f.main, 'setItems', batch).error).toBe('storage full');
+    } finally {
+        rename.mockRestore();
+    }
+    expect(f.store.getItem(key)).toBe('peer');
+    expect(f.store.getItem(other)).toBeNull();
+    expect(f.child.received).toHaveLength(0);
+    f.request(f.main, 'setItems', batch);
+    expect(f.child.received.map(snapshot => snapshot.data)).toEqual([{ [key]: 'first', [other]: 'true' }]);
 });
 
 test('subframe navigation unregisters its subtree until the new document requests a snapshot', async () => {

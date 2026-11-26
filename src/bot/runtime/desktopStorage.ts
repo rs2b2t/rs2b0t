@@ -1,6 +1,7 @@
 export interface DesktopStorage {
     getItem(key: string): string | null;
     setItem(key: string, value: string): void;
+    setItems?(entries: ReadonlyArray<readonly [string, string]>): void;
     removeItem(key: string): void;
     keys(): string[];
     compareAndSet(key: string, expected: string | null, value: string): boolean;

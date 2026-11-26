@@ -170,7 +170,6 @@ export default class ParamsModal {
         }
         // Why: mid-run schema changes desync the bot, so script params lock while a script runs; Global and Nav stay live since lamp skill, run, bank junk and path paint are meant to be tweaked mid-session.
         const lockScriptParams = this.scriptName !== 'Global' && this.isActive();
-        const disabled = lockScriptParams;
         if (lockScriptParams) {
             const note = el('div', 'rs2b0t-param-intro');
             Object.assign(note.style, {
@@ -222,7 +221,8 @@ export default class ParamsModal {
             }
 
             for (const key of visibleKeys) {
-                host.appendChild(this.renderRow(key, disabled, deps, valueOf));
+                const urlControlled = this.draft?.keys.has(key) === true && SettingsStore.isUrlOverride(this.scriptName, key);
+                host.appendChild(this.renderRow(key, lockScriptParams || urlControlled, deps, valueOf));
             }
         }
         if (this.refreshers.length > 0) {

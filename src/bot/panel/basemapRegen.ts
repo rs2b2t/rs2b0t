@@ -16,6 +16,8 @@ import {
     SettingsStore
 } from '../runtime/Settings.js';
 
+export { MAP_PICKER_BAKE_KEYS } from '../runtime/Settings.js';
+
 export type BasemapBakePrefs = {
     labels: boolean;
     borders: boolean;
@@ -45,17 +47,6 @@ const DEFAULT_BASEMAP_BAKE_PREFS: BasemapBakePrefs = {
     multimap: false,
     freemap: false
 };
-
-/** Schema keys that only take effect when the basemap is regenerated. */
-export const MAP_PICKER_BAKE_KEYS = new Set([
-    'bakeLabels',
-    'bakeBorders',
-    'bakeNpcs',
-    'bakeItems',
-    'bakeKeyIcons',
-    'bakeMultimap',
-    'bakeFreemap'
-]);
 
 export function resolveBasemapBakePrefs(draft?: ReadonlyMap<string, string>): BasemapBakePrefs {
     const g = new SettingsBag(SettingsStore.resolve(MAP_PICKER_SETTINGS_NS, MAP_PICKER_SETTINGS, draft));

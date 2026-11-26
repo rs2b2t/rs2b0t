@@ -1,3 +1,4 @@
+import { withBakeSettingsLock } from './bakeSettingsLock.js';
 import { desktopStorage } from './desktopStorage.js';
 import Tile from '../geometry/Tile.js';
 import { WORLDMAP_KEY_NAMES } from '../../client/mapview/worldmapKeyNames.js';
@@ -377,6 +378,17 @@ export const GLOBAL_SETTINGS: SettingsSchema = {
  */
 export const MAP_PICKER_SETTINGS_NS = 'MapPicker';
 
+/** Schema keys that only take effect when the basemap is regenerated. */
+export const MAP_PICKER_BAKE_KEYS = new Set([
+    'bakeLabels',
+    'bakeBorders',
+    'bakeNpcs',
+    'bakeItems',
+    'bakeKeyIcons',
+    'bakeMultimap',
+    'bakeFreemap'
+]);
+
 export const MAP_PICKER_SETTINGS: SettingsSchema = {
     showBasemap: {
         type: 'boolean',
@@ -591,28 +603,43 @@ class SettingsStoreImpl {
         return name === 'JiveRC' ? this.saved('NatureCrafter', key) : undefined;
     }
 
-    save(name: string, key: string, rawString: string): void {
+    save(name: string, key: string, rawString: string): void | Promise<void> {
+        if (name === MAP_PICKER_SETTINGS_NS && MAP_PICKER_BAKE_KEYS.has(key)) {
+            return this.saveBatch(name, new Map([[key, rawString]]));
+        }
         const id = storageKey(name, key);
         if (hasSession) sessionStorage.setItem(id, rawString);
         if (hasLocal) localStorage.setItem(id, rawString);
         this.notifyChange(name, key, rawString);
     }
 
-    saveBatch(name: string, values: ReadonlyMap<string, string>): void {
+    saveBatch(name: string, values: ReadonlyMap<string, string>, signal?: AbortSignal): void | Promise<void> {
         if (!values.size) return;
+        const prefix = storageKey(name, '');
+        const entries = Array.from(values);
+        return withBakeSettingsLock(() => this.writeBatch(name, prefix, entries), signal);
+    }
+
+    private writeBatch(name: string, prefix: string, values: [string, string][]): void {
         const stores: Storage[] = [];
         if (hasSession) stores.push(sessionStorage);
-        if (hasLocal) stores.push(localStorage);
+        if (hasLocal && !desktopStorage) stores.push(localStorage);
         const writes: { store: Storage; id: string; previous: string | null; value: string }[] = [];
         try {
             for (const [key, value] of values) {
-                const id = storageKey(name, key);
+                const id = prefix + key;
                 for (const store of stores) {
                     const previous = store.getItem(id);
                     if (previous === value) continue;
                     store.setItem(id, value);
                     writes.push({ store, id, previous, value });
                 }
+            }
+            if (desktopStorage) {
+                const entries = values.map(([key, value]) => [prefix + key, value] as const);
+                if (entries.length === 1) desktopStorage.setItem(...entries[0]);
+                else if (desktopStorage.setItems) desktopStorage.setItems(entries);
+                else throw new Error('Update the desktop app to save multiple bake settings together.');
             }
         } catch (err) {
             const rollbackErrors: unknown[] = [];
@@ -657,13 +684,14 @@ class SettingsStoreImpl {
         return this.urlOverride(name, key) !== null;
     }
 
-    clear(name: string, key: string): void {
-        if (hasSession) {
-            sessionStorage.removeItem(storageKey(name, key));
-        }
-        if (hasLocal) {
-            localStorage.removeItem(storageKey(name, key));
-        }
+    clear(name: string, key: string): void | Promise<void> {
+        const id = storageKey(name, key);
+        const remove = () => {
+            if (hasSession) sessionStorage.removeItem(id);
+            if (hasLocal) localStorage.removeItem(id);
+        };
+        if (name === MAP_PICKER_SETTINGS_NS && MAP_PICKER_BAKE_KEYS.has(key)) return withBakeSettingsLock(remove);
+        remove();
         if (name === 'JiveRC') {
             this.clear('NatureCrafter', key);
         }

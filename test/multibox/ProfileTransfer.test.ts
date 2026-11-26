@@ -1,3 +1,4 @@
+import { useBakeSettingsLocks } from '../fixtures/bakeSettingsLocks.js';
 import { afterEach, describe, expect, test } from 'bun:test';
 import type { Profile } from '#/bot/multibox/ProfileVault.js';
 
@@ -28,6 +29,8 @@ afterEach(() => {
 });
 
 describe('ProfileTransfer', () => {
+    useBakeSettingsLocks();
+
     test('round-trips a vault snapshot', () => {
         const parsed = parseProfileFile(serializeProfileFile(snap));
         expect(parsed).toEqual(snap);
@@ -92,7 +95,7 @@ describe('ProfileTransfer', () => {
         });
     }
 
-    test('collect/apply round-trips box keys and does not steal a prefixed neighbour', () => {
+    test('collect/apply round-trips box keys and does not steal a prefixed neighbour', async () => {
         localStorage.clear();
         sessionStorage.clear();
         localStorage.setItem('rs2b0t:alice:selectedScript', 'Miner');
@@ -105,7 +108,7 @@ describe('ProfileTransfer', () => {
             alice: { selectedScript: 'HillGiant', 'set:Miner:rock': 'iron' }
         });
 
-        applyBoxStorage({ alice: { selectedScript: 'BrimhavenAgility', 'set:Global:runAuto': 'false' } }, ['alice', 'old']);
+        await applyBoxStorage({ alice: { selectedScript: 'BrimhavenAgility', 'set:Global:runAuto': 'false' } }, ['alice', 'old']);
         expect(localStorage.getItem('rs2b0t:alice:selectedScript')).toBe('BrimhavenAgility');
         expect(localStorage.getItem('rs2b0t:alice:set:Global:runAuto')).toBe('false');
         expect(localStorage.getItem('rs2b0t:alice:set:Miner:rock')).toBeNull();

@@ -429,7 +429,7 @@ function boot(): void {
         replaceAll: async data => {
             const previous = vault.list().map(p => p.username);
             await vault.replaceAll(data);
-            applyBoxStorage(data.storage, [...previous, ...data.profiles.map(p => p.username)]);
+            await applyBoxStorage(data.storage, [...previous, ...data.profiles.map(p => p.username)]);
         },
         onImported: data => {
             applyImportedTabs(data);

@@ -702,6 +702,7 @@ export class WorldMapPicker {
             /** Coalesce paints to one frame, pan must not full-redraw on every mousemove. */
             let paintRaf = 0;
             let closed = false;
+            const lifetime = new AbortController();
 
             const paintNow = (): void => {
                 if (closed) {
@@ -889,6 +890,7 @@ export class WorldMapPicker {
 
             const cleanup = (): void => {
                 closed = true;
+                lifetime.abort();
                 if (paintRaf !== 0) {
                     cancelAnimationFrame(paintRaf);
                     paintRaf = 0;
@@ -992,7 +994,8 @@ export class WorldMapPicker {
                         if (closed) {
                             return;
                         }
-                        SettingsStore.saveBatch(MAP_PICKER_SETTINGS_NS, submitted);
+                        await SettingsStore.saveBatch(MAP_PICKER_SETTINGS_NS, submitted, lifetime.signal);
+                        if (closed) return;
                         for (const [key, value] of submitted) {
                             if (bakeEdits.get(key) === value) bakeEdits.delete(key);
                         }
