@@ -75,6 +75,18 @@ test('each cached request completes once and leaves the worker idle', async () =
     }
 });
 
+test('batched requests complete cached files in submission order', async () => {
+    await init();
+    const get = spyOn(store, 'get').mockImplementation(() => result(cached.slice()));
+    await message({ type: 'requestBatch', archive: 0, files: [1, 2, 0] });
+    await advance(50);
+    expect(get.mock.calls).toEqual([['1.1'], ['1.0']]);
+    expect(scope.postMessage.mock.calls.map(([message]) => message)).toEqual([1, 0].map(file => ({
+        type: 'completed', archive: 0, file, urgent: true, data: cached.buffer
+    })));
+    expect(clock.getTimerCount()).toBe(0);
+});
+
 test('a priority cache miss wakes the idle worker', async () => {
     await init();
     await advance(50);
