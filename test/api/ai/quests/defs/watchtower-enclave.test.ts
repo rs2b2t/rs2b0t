@@ -18,9 +18,10 @@ function fixture() {
     const state = { food: 8, hp: 70, free: 12, npc: true, confirm: true, dialog: false, continued: 0, outside: false, uses: 0 };
     spyOn(Game, 'tile').mockImplementation(() => state.outside ? { x: 2500, z: 3000, level: 0 } : { x: 2588, z: 9410, level: 0 });
     spyOn(Game, 'setAutoRetaliate').mockReturnValue(true);
-    spyOn(Inventory, 'items').mockImplementation(() => [
-        new InvItem({ id: WT_ITEM.MAGIC_OGRE_POTION.id, count: 1, slot: 0, name: 'Magic ogre potion', ops: [], comId: 3214 }),
-        ...Array.from({ length: state.food }, (_, slot) => new InvItem({ id: 379, count: 1, slot: slot + 1, name: 'Lobster', ops: ['Eat'], comId: 3214 }))
+    spyOn(reader, 'bankComId').mockReturnValue(-1);
+    spyOn(reader, 'inventory').mockImplementation(() => [
+        { id: WT_ITEM.MAGIC_OGRE_POTION.id, count: 1, slot: 0, name: 'Magic ogre potion', ops: [], comId: 3214 },
+        ...Array.from({ length: state.food }, (_, slot) => ({ id: 379, count: 1, slot: slot + 1, name: 'Lobster', ops: ['Eat'], comId: 3214 }))
     ]);
     spyOn(Inventory, 'free').mockImplementation(() => state.free);
     spyOn(reader, 'npcs').mockImplementation(() => state.npc ? [{ index: 1, id: 1, name: 'Ogre shaman', tile: { x: 2588, z: 9410, level: 0 }, distance: 1, ops: ['Talk-to'], anim: -1, level: 99, size: 1, inCombat: false, health: 70, totalHealth: 70, faceEntity: -1 }] : []);
