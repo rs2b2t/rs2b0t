@@ -24,7 +24,7 @@ import type { PriceBook } from '../../api/market/priceBook.js';
 import { resolvePrices, rowValid } from '../../api/market/prices.js';
 import { normaliseOffer, offerCovers, offersMatch } from '../../api/market/driveMarketTrade.js';
 import { appraise, describeAppraisal, type Appraisal, type DeskState } from '../../api/market/appraise.js';
-import { saleItems, saleName, salePrice, saleStock, type SellIntent } from '../../api/market/saleIntent.js';
+import { saleItems, saleName, salePrice, saleQuantity, saleStock, type SellIntent } from '../../api/market/saleIntent.js';
 import type { OfferItem } from '../../api/market/quote.js';
 import { sortBank } from '../../api/bank/bankSort.js';
 import Tile from '../../geometry/Tile.js';
@@ -633,8 +633,8 @@ export default class MarketMaker extends TaskBot {
     private wantToBuy(from: string, want: number | 'all', query: string, qtyImplied: boolean): void {
         const book = this.activeBook();
         const { held } = this.deskState();
-        const target = resolveQuote({ cat: this.cat, book, query, side: 'selling', qtyImplied, held,
-            requested: want === 'all' ? Infinity : want });
+        const requested = want === 'all' ? Infinity : want;
+        const target = resolveQuote({ cat: this.cat, book, query, side: 'selling', qtyImplied, held, requested });
         if (target.kind === 'miss') {
             if (target.answer) {
                 this.say(`I don't sell '${query}'.`);
@@ -646,12 +646,11 @@ export default class MarketMaker extends TaskBot {
             return;
         }
 
-        const order: SellIntent = target.kind === 'set' ? { set: target.set, maxQty: 0 } : { itemId: target.id, maxQty: 0 };
+        const order: SellIntent = target.kind === 'set' ? { set: target.set, maxQty: requested } : { itemId: target.id, maxQty: requested };
         const name = saleName(this.cat, order);
         const sell = salePrice(book, order)!;
-        const asked = want === 'all' ? Math.floor(book.maxTradeValue / sell) : want;
         // Why: the bank is the shop's stock and the pack is only what it happens to be carrying, so the quote is sized against both and the difference is a bank trip, not a refusal.
-        const maxQty = Math.min(asked, saleStock(order, held), Math.floor(book.maxTradeValue / sell));
+        const maxQty = saleQuantity(order.maxQty, saleStock(order, held), sell, book.maxTradeValue);
         if (maxQty <= 0) {
             this.say(`I have no ${name} right now.`);
             return;
