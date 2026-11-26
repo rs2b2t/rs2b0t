@@ -1,10 +1,11 @@
-import { customName, itemCounts, nameCounts } from '../../../../lib/questSteps.js';
+import { customName } from '../../../../lib/questSteps.js';
 import { describe, expect, test } from 'bun:test';
 
 import { SS_OBJ, SS_TILE } from '#/bot/api/ai/quests/defs/seaslug/areas.js';
 import { decide, seaslug, sourcePaste, torchStep } from '#/bot/api/ai/quests/defs/seaslug/index.js';
 import { SS_STAGE, parseSeaSlugJournal } from '#/bot/api/ai/quests/defs/seaslug/journal.js';
 import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
+import { progressSnapshot, type ProgressSnapshotOptions } from './progress-snapshot.fixture.js';
 
 const CAROLINE_LINE = '@str@I have spoken to Caroline and agreed to help.||';
 const PASTE_LINE = '@str@I gave Holgart the Swamp Paste and his boat is now|@str@ready to take me to the Fishing Platform.||';
@@ -47,14 +48,8 @@ const PAGE: Record<number, string> = {
 const PASTE_HELD = '@str@I have spoken to Caroline and agreed to help.||'
     + "@dbl@I need to take the @dre@Swamp Paste@dbl@ to @dre@Holgart@dbl@ He's near @dre@Caroline@dbl@, they're @dre@East of Ardougne@dbl@.||";
 
-interface Options {
-    journal?: QuestSnapshot['journal'];
-    stage?: number;
-    invIds?: number[];
-    bank?: string[];
-    bankKnown?: boolean;
+interface Options extends ProgressSnapshotOptions {
     tile?: { x: number; z: number; level: number };
-    progress?: QuestSnapshot['progress'];
 }
 
 const ON_SHORE = { x: 2716, z: 3302, level: 0 };
@@ -63,21 +58,9 @@ const UPPER_DECK = { x: 2784, z: 3286, level: 1 };
 const ON_ISLAND = { x: 2797, z: 3320, level: 0 };
 
 function snap(options: Options = {}): QuestSnapshot {
-    const stage = options.stage ?? SS_STAGE.STARTED;
-    const progress = 'progress' in options ? options.progress : { stage, flags: new Set<string>() };
     return {
-        journal: options.journal ?? 'inProgress',
-        inv: new Map(),
-        invIds: itemCounts(options.invIds ?? []),
-        worn: new Set(),
-        noProgress: 0,
-        bankCoins: 2_000_000,
-        stage: progress?.stage,
-        progress,
-        bank: nameCounts(options.bank ?? []),
-        bankKnown: options.bankKnown ?? true,
-        tile: (options.tile ?? ON_SHORE) as QuestSnapshot['tile'],
-        freeSlots: 28
+        ...progressSnapshot(options, () => ({ stage: options.stage ?? SS_STAGE.STARTED, flags: new Set() })),
+        tile: options.tile ?? ON_SHORE
     };
 }
 
