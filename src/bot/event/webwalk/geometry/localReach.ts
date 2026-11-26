@@ -80,6 +80,33 @@ function canReachAdjacentTile(flags: FlagsAt, nx: number, nz: number, dx: number
     return (f & wallMask) === 0;
 }
 
+export function localReachProbe(flags: FlagsAt, from: LocalPoint, maxSteps: number): (to: LocalPoint) => boolean {
+    if (flags(from.lx, from.lz) === null) return () => false;
+
+    const queue = [from];
+    const ranks = new Map([[from.lx * 256 + from.lz, 0]]);
+    let head = 0;
+    return to => {
+        const target = to.lx * 256 + to.lz;
+        let rank = ranks.get(target);
+        while (rank === undefined && head < queue.length && head + 1 <= maxSteps) {
+            const cur = queue[head++];
+            for (const [dx, dz] of DIRS) {
+                const lx = cur.lx + dx;
+                const lz = cur.lz + dz;
+                const key = lx * 256 + lz;
+                if (!ranks.has(key) && canStepLocal(flags, cur.lx, cur.lz, dx, dz)) {
+                    ranks.set(key, queue.length);
+                    queue.push({ lx, lz });
+                }
+            }
+            rank = ranks.get(target);
+        }
+        // Why: the one-shot search tests the tile at rank maxSteps before stopping.
+        return rank !== undefined && (rank === 0 || rank <= maxSteps) && queue[rank].lx === to.lx && queue[rank].lz === to.lz;
+    };
+}
+
 export function canReachLocal(flags: FlagsAt, from: LocalPoint, to: LocalPoint, opts?: ReachOptions): boolean {
     const maxSteps = opts?.maxSteps ?? DEFAULT_MAX_STEPS;
     const adjacentOk = opts?.adjacentOk ?? false;
