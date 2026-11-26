@@ -30,6 +30,8 @@ export interface RosterHooks {
     setWorld(profile: RosterProfile, world: WorldNumber): Promise<boolean>;
 }
 
+type FindProfile = (username: string) => RosterProfile | undefined;
+
 function active(state: string): boolean {
     return state === 'running' || state === 'paused' || state === 'stopping';
 }
@@ -41,6 +43,8 @@ export function rosterError(error: unknown): string {
 
 export class RosterActions {
     private running = false;
+    private pending = new Set<(find: FindProfile) => void>();
+    private watcher?: ReturnType<typeof setInterval>;
 
     constructor(private hooks: RosterHooks) {}
 
@@ -111,13 +115,31 @@ export class RosterActions {
         }
     }
 
+    private poll(): void {
+        let profiles: Map<string, RosterProfile> | undefined;
+        const find: FindProfile = username => {
+            if (!profiles) {
+                profiles = new Map();
+                for (const target of this.profiles()) {
+                    if (!profiles.has(target.username)) profiles.set(target.username, target);
+                }
+            }
+            return profiles.get(username);
+        };
+        for (const check of this.pending) check(find);
+    }
+
     private withClient(profile: RosterProfile, client: RosterClient, operation: () => Promise<void>): Promise<void> {
         return new Promise((resolve, reject) => {
             let settled = false;
             const finish = (success: boolean, error?: unknown): void => {
                 if (settled) return;
                 settled = true;
-                clearInterval(watcher);
+                this.pending.delete(poll);
+                if (!this.pending.size) {
+                    clearInterval(this.watcher);
+                    this.watcher = undefined;
+                }
                 if (success) resolve();
                 else reject(error);
             };
@@ -127,23 +149,26 @@ export class RosterActions {
                 try { client.stopScript(); } catch { finish(false, error); return; }
                 finish(false, error);
             };
-            const current = (): boolean => {
-                const target = this.profiles().find(target => target.username === profile.username);
-                return !!target?.slot && target.slot.id === profile.slot?.id && this.hooks.client(target) === client;
-            };
-            const check = (): boolean => {
+            const check = (find: FindProfile): boolean => {
                 let valid = false;
-                try { valid = current(); } catch { valid = false; }
+                try {
+                    const target = find(profile.username);
+                    valid = !!target?.slot && target.slot.id === profile.slot?.id && this.hooks.client(target) === client;
+                } catch { valid = false; }
                 if (!valid) cancel('Client was removed or replaced during the action.');
                 return valid;
             };
             const deadline = Date.now() + 11_000;
-            const watcher = setInterval(() => {
+            const poll = (find: FindProfile): void => {
                 if (Date.now() >= deadline) cancel('Timed out waiting for the script action.');
-                else check();
-            }, 100);
+                else check(find);
+            };
+            this.pending.add(poll);
+            this.watcher ??= setInterval(() => this.poll(), 100);
             try {
-                operation().then(() => { if (!settled && check()) finish(true); }, error => finish(false, error));
+                operation().then(() => {
+                    if (!settled && check(name => this.profiles().find(p => p.username === name))) finish(true);
+                }, error => finish(false, error));
             } catch (error) {
                 finish(false, error);
             }

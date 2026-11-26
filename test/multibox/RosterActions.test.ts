@@ -147,46 +147,89 @@ test('removed travel targets settle while the batch waits for surviving targets'
     remaining.travelTo = () => new Promise(resolve => { finishRemaining = resolve; });
     const clients = new Map([['removed', removed], ['remaining', remaining]]);
     const progress: RosterResult[] = [];
-    const actions = new RosterActions({ profiles: () => profiles, client: p => clients.get(p.username) ?? null, setWorld: async () => true });
+    let rebuilds = 0;
+    const actions = new RosterActions({ profiles: () => { rebuilds++; return profiles; }, client: p => clients.get(p.username) ?? null, setWorld: async () => true });
     try {
         const running = actions.run(['removed', 'remaining'], { kind: 'travel', destination: 'Varrock' }, result => progress.push(result));
+        expect(testClock.getTimerCount()).toBe(timers + 1);
+        rebuilds = 0;
+        testClock.advanceTimersByTime(100);
+        expect(rebuilds).toBe(1);
         profiles = [profiles[1]];
         clients.delete('removed');
+        rebuilds = 0;
         testClock.advanceTimersByTime(100);
         await flushPromises();
+        expect(rebuilds).toBe(1);
         expect(progress.filter(result => result.username === 'removed').map(result => result.state)).toEqual(['pending', 'failed']);
         expect(actions.busy).toBe(true);
+        expect(testClock.getTimerCount()).toBe(timers + 1);
         finishRemaining();
         expect((await running).map(result => result.state)).toEqual(['failed', 'done']);
         expect(actions.busy).toBe(false);
+        rebuilds = 0;
         testClock.advanceTimersByTime(100);
+        expect(rebuilds).toBe(0);
         expect(testClock.getTimerCount()).toBe(timers);
     } finally {
         jest.useRealTimers();
     }
 });
 
-test('parent travel timeout cancels the original command and releases its timers', async () => {
+test('travel completion sees a slot replaced since the last poll', async () => {
+    jest.useFakeTimers();
+    let profiles = [profile('alice', 'running')];
+    let finish!: () => void;
+    const original = client('alice');
+    original.travelTo = () => new Promise(resolve => { finish = resolve; });
+    const stop = spyOn(original, 'stopScript');
+    const actions = new RosterActions({ profiles: () => profiles, client: () => original, setWorld: async () => true });
+    try {
+        const running = actions.run(['alice'], { kind: 'travel', destination: 'Varrock' });
+        testClock.advanceTimersByTime(100);
+        profiles = [profile('alice', 'running')];
+        profiles[0].slot!.id++;
+        finish();
+        expect((await running)[0]).toMatchObject({ state: 'failed', message: expect.stringMatching(/replaced/) });
+        expect(stop).toHaveBeenCalledTimes(1);
+    } finally {
+        jest.useRealTimers();
+    }
+});
+
+test('parent travel timeout cancels each command at its own deadline and releases the timer', async () => {
     jest.useFakeTimers();
     await flushPromises();
     const timers = testClock.getTimerCount();
-    const profiles = [profile('alice', 'running')];
+    const profiles = [profile('alice', 'running'), profile('bob', 'running')];
     let cancelled = false;
     let finish!: () => void;
     let lateStarts = 0;
     const original = client('alice');
-    original.travelTo = () => new Promise<void>(resolve => { finish = resolve; }).then(() => { if (!cancelled) lateStarts++; });
+    original.travelTo = () => {
+        testClock.advanceTimersByTime(100);
+        return new Promise<void>(resolve => { finish = resolve; }).then(() => { if (!cancelled) lateStarts++; });
+    };
     original.stopScript = () => { cancelled = true; };
-    const actions = new RosterActions({ profiles: () => profiles, client: () => original, setWorld: async () => true });
+    const later = client('bob');
+    later.travelTo = () => new Promise(() => {});
+    const stopLater = spyOn(later, 'stopScript');
+    const actions = new RosterActions({ profiles: () => profiles, client: p => p.username === 'alice' ? original : later, setWorld: async () => true });
     try {
-        const running = actions.run(['alice'], { kind: 'travel', destination: 'Varrock' });
-        testClock.advanceTimersByTime(10_999);
+        const running = actions.run(['alice', 'bob'], { kind: 'travel', destination: 'Varrock' });
+        testClock.advanceTimersByTime(10_899);
+        expect(cancelled).toBe(false);
         expect(actions.busy).toBe(true);
         testClock.advanceTimersByTime(1);
         await flushPromises();
         expect(cancelled).toBe(true);
+        expect(stopLater).not.toHaveBeenCalled();
+        expect(actions.busy).toBe(true);
+        testClock.advanceTimersByTime(100);
+        await flushPromises();
+        expect(stopLater).toHaveBeenCalledTimes(1);
         expect(actions.busy).toBe(false);
-        expect((await running)[0]).toMatchObject({ state: 'failed', message: expect.stringMatching(/timed out/i) });
+        for (const result of await running) expect(result).toMatchObject({ state: 'failed', message: expect.stringMatching(/timed out/i) });
         testClock.advanceTimersByTime(100);
         expect(testClock.getTimerCount()).toBe(timers);
         finish();
