@@ -1,5 +1,5 @@
 // docs/reference/multibox.md#resource-telemetry
-import type { CpuPayload, MemoryPayload, ResourcePayload, TrafficPayload, TrafficTotals } from './ResourcePayload.js';
+import type { CpuPayload, MemoryPayload, ResourcePayload, TrafficPayload, TrafficTotals, UnavailableMetricPayload } from './ResourcePayload.js';
 import type { TrafficSnapshot } from '../adapter/TrafficAdapter.js';
 
 export type { TrafficPayload, TrafficTotals } from './ResourcePayload.js';
@@ -71,6 +71,13 @@ function formatByteRate(bytesPerSecond: number): string {
     return `${formatBytes(bytesPerSecond)}/s`;
 }
 
+function parseUnavailableMetric(value: Record<string, unknown>): UnavailableMetricPayload | null {
+    if (typeof value.reason !== 'string' || value.reason.trim().length === 0) {
+        return null;
+    }
+    return { status: 'unavailable', reason: value.reason };
+}
+
 function parseCpu(value: unknown): CpuPayload | null {
     if (!isObject(value)) {
         return null;
@@ -79,10 +86,7 @@ function parseCpu(value: unknown): CpuPayload | null {
         return { status: 'warming-up' };
     }
     if (value.status === 'unavailable') {
-        if (typeof value.reason !== 'string' || value.reason.trim().length === 0) {
-            return null;
-        }
-        return { status: 'unavailable', reason: value.reason };
+        return parseUnavailableMetric(value);
     }
     if (value.status !== 'available' || !isFiniteNonNegative(value.cpuCores) || !isFiniteNonNegative(value.cpuPercent) || !isFiniteNonNegative(value.logicalCpuCount) || value.logicalCpuCount < 1) {
         return null;
@@ -118,10 +122,7 @@ function parseMemory(value: unknown): MemoryPayload | null {
         return null;
     }
     if (value.status === 'unavailable') {
-        if (typeof value.reason !== 'string' || value.reason.trim().length === 0) {
-            return null;
-        }
-        return { status: 'unavailable', reason: value.reason };
+        return parseUnavailableMetric(value);
     }
     if (value.status !== 'available' || !isFiniteNonNegative(value.memoryBytes) || (value.memorySource !== 'cgroup' && value.memorySource !== 'pss' && value.memorySource !== 'rss')) {
         return null;
@@ -178,10 +179,7 @@ function parseTraffic(value: unknown): TrafficPayload | null {
         return null;
     }
     if (value.status === 'unavailable') {
-        if (typeof value.reason !== 'string' || value.reason.trim().length === 0) {
-            return null;
-        }
-        return { status: 'unavailable', reason: value.reason };
+        return parseUnavailableMetric(value);
     }
     if (value.status !== 'available' || !validTrafficTotals(value)) {
         return null;
