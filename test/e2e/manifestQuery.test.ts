@@ -77,6 +77,23 @@ describe('selectByChanges', () => {
         expect(got.cases.map(c => c.id)).toEqual(['nav']);
     });
 
+    test('a changed harness selects its runnable cases and merges source matches in manifest order', () => {
+        const harness = 'nested/shared-test.ts';
+        const manifest = [
+            mk({ id: 'harness-only', harness, covers: { scripts: ['MossGiant'] } }),
+            mk({ id: 'source-only', harness: 'shared-test.ts' }),
+            mk({ id: 'both', harness }),
+            mk({ id: 'manual', harness, manual: true }),
+            mk({ id: 'broken', harness, status: 'broken', provenAt: undefined })
+        ];
+        const changedHarness = 'e2e/nested/shared-test.ts';
+        const harnessOnly = selectByChanges(manifest, [changedHarness]);
+        expect(harnessOnly.cases.map(c => c.id)).toEqual(['harness-only', 'both']);
+
+        const mixed = selectByChanges(manifest, [changedHarness, 'src/bot/scripts/HillGiant/HillGiant.ts']);
+        expect(mixed.cases.map(c => c.id)).toEqual(['harness-only', 'source-only', 'both']);
+    });
+
     test('shared runtime code selects everything', () => {
         const got = selectByChanges(cases, ['src/bot/runtime/BotHost.ts']);
         expect(got.cases).toHaveLength(3);
