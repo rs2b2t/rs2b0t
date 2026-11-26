@@ -407,9 +407,9 @@ export class ProfileVault {
         }
     }
 
-    async upsert(p: Profile): Promise<void> {
-        if (this.shared) return this.sharedChange(draft => draft.upsert(p));
-        if (this.pendingReplacement) return this.afterReplacement(() => this.upsert(p));
+    async upsert(p: Profile, initialTab = MAIN_TAB): Promise<void> {
+        if (this.shared) return this.sharedChange(draft => draft.upsert(p, initialTab));
+        if (this.pendingReplacement) return this.afterReplacement(() => this.upsert(p, initialTab));
         if (p.world !== undefined) {
             assertWorld(p.world);
         }
@@ -420,11 +420,16 @@ export class ProfileVault {
         const i = all.findIndex(x => x.username === p.username);
         const previous = all[i];
         const generation = this.persistGeneration;
-        // tab membership changes flow only through saveTabState, a password
-        // re-save (the in-game save prompt) must not move the account
         const entry: Profile = i >= 0 ? { ...all[i], password: p.password } : { username: p.username, password: p.password, ...(p.world === undefined ? {} : { world: p.world }) };
         if (i >= 0) {
             all[i] = entry;
+        } else if (initialTab !== MAIN_TAB) {
+            if (!initialTab.trim()) throw new Error('Choose a group name.');
+            return this.persistReplacement(() => ({
+                profiles: [...all, { ...entry, tab: initialTab }],
+                tabs: this.customTabs.includes(initialTab) ? this.customTabs : [...this.customTabs, initialTab],
+                activeTab: this.active
+            }));
         } else {
             all.push(entry);
         }

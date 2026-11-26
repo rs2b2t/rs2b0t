@@ -560,7 +560,10 @@ function boot(): void {
             const current = rosterProfiles().find(p => p.username === profile.username);
             const client = current?.slot ? controller.rosterClient(current.slot.id) : null;
             if (!current?.slot || !client) throw new Error('Load this profile and wait for its client before editing.');
+            const previousActive = controller.activeTab();
             controller.focus(current.slot.id);
+            const selected = controller.activeTab();
+            if (selected !== previousActive) afterTabRestore(() => persistActiveTab(selected));
             renderRail();
             await rosterActions.edit(current);
         }
@@ -583,11 +586,16 @@ function boot(): void {
         if (ev.origin !== location.origin) return;
         const d = ev.data as { type?: string; username?: string; password?: string };
         if (d?.type !== 'rs2b0t:profile-save' || typeof d.username !== 'string' || d.username.length === 0 || typeof d.password !== 'string') return;
+        const { username, password } = d;
         void ensureUnlocked().then(ok => {
-            if (ok) {
-                void vault.upsert({ username: d.username!, password: d.password! });
-            }
-        });
+            if (!ok) return;
+            return updateSavedTabs(async () => {
+                const identity = normalizeUsername(username);
+                const slot = controller.snapshot().find(s => normalizeUsername(s.username) === identity);
+                await vault.upsert({ username, password }, slot?.tab);
+                if (slot && vault.tabState().tabs.includes(slot.tab)) wallOnlyTabs.delete(slot.tab);
+            });
+        }).catch(error => console.error('[rs2b0t] failed to save profile', error));
     });
 
     const app = document.getElementById('mbx-app')!;

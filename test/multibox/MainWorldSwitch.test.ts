@@ -305,6 +305,66 @@ test('a mixed import keeps an omitted slot in Work and saves a reused slot moved
     });
 });
 
+async function reopenAfterAddingTab(wall: Wall): Promise<ProfileVault> {
+    const saves = spyOn(vault, 'saveTabState');
+    try {
+        expect(await wall.addTab('Local')).toBe(true);
+        const localWrite = () => saves.mock.calls.findIndex(([tabs]) => tabs.includes('Local'));
+        await waitFor(() => localWrite() >= 0);
+        await saves.mock.results[localWrite()].value;
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('test-passphrase')).toBe(true);
+        return reopened;
+    } finally {
+        saves.mockRestore();
+    }
+}
+
+test('saving an omitted profile from its panel restores its live group', async () => {
+    await withWall('local', async wall => {
+        const panel = openSettings();
+        const guest = { username: 'guest', password: 'fixture', tab: 'Work' };
+        const saved = { username: 'saved', password: 'fixture', tab: 'Fleet' };
+        await panel.importText(serializeProfileFile({ profiles: [guest], tabs: ['Fleet', 'Work'], activeTab: 'Fleet', storage: {} }));
+        const [slot] = wall.slots();
+        await panel.importText(serializeProfileFile({ profiles: [saved], tabs: ['Fleet'], activeTab: 'Fleet', storage: {} }));
+        expect(vault.list()).toEqual([saved]);
+
+        window.dispatchEvent(new MessageEvent('message', {
+            origin: location.origin, data: { type: 'rs2b0t:profile-save', username: 'guest', password: 'updated' }
+        }));
+        await waitFor(() => vault.list().some(p => p.username === 'guest' && p.password === 'updated'));
+        const reopened = await reopenAfterAddingTab(wall);
+        expect(wall.slots()[0]).toMatchObject({ id: slot.id, tab: 'Work' });
+        expect(reopened.snapshot()).toEqual({
+            profiles: [saved, { ...guest, password: 'updated' }], tabs: ['Fleet', 'Work', 'Local'], activeTab: 'Fleet'
+        });
+    });
+});
+
+test('editing a loaded profile from Manage bots saves its selected tab', async () => {
+    await withWall('local', async wall => {
+        const worker = { username: 'worker', password: 'fixture', tab: 'Work' };
+        await openSettings().importText(serializeProfileFile({ profiles: [worker], tabs: ['Fleet', 'Work'], activeTab: 'Fleet', storage: {} }));
+        const frame = document.querySelector('iframe')!;
+        Reflect.set(frame.contentWindow!, 'rs2b0t', {
+            reader: { ingame: () => false, localPlayerName: () => null },
+            client: { constructor: { loopCycle: 0 } }, renderGate: { drawn: 0 }, runner: { state: 'idle' },
+            setRenderMode() {}, setLoginCoordination() {}, setCredentials() {}, setAutoLogin() {},
+            roster: { scripts: () => [], selectedScript: () => '', editSettings: async () => {} }
+        });
+        await waitFor(() => wall.slots()[0].ready);
+        document.getElementById('mbx-manage')!.click();
+        await waitFor(() => !document.getElementById('mbx-roster')!.hidden);
+        document.querySelector<HTMLButtonElement>('[data-scope="Work"]')!.click();
+        expect(wall.controller.activeTab()).toBe('Fleet');
+        document.querySelector<HTMLButtonElement>('[aria-label="Edit worker"]')!.click();
+        expect(wall.controller.activeTab()).toBe('Work');
+        const reopened = await reopenAfterAddingTab(wall);
+        expect(reopened.snapshot()).toEqual({ profiles: [worker], tabs: ['Fleet', 'Work', 'Local'], activeTab: 'Work' });
+    });
+});
+
 test.each([
     { match: 'only the normalized username matches', rows: ['fixture'], expected: ['Work'], tabs: ['Fleet', 'Work'] },
     { match: 'both spellings exist', rows: ['fixture', 'Fixture'], expected: ['Fleet', 'Work'], tabs: ['Fleet', 'Work'] },
