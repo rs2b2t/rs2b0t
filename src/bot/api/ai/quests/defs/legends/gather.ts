@@ -67,7 +67,7 @@ export async function smeltGoldBar(log: (m: string) => void): Promise<boolean> {
 
 export type { JungleHerb } from '../../data/jungleHerbs.js';
 
-export const BRAVERY_HERBS: readonly JungleHerb[] = [SNAKE_WEED, ARDRIGAL];
+export const BRAVERY_HERBS: readonly JungleHerb[] = [{ ...SNAKE_WEED }, { ...ARDRIGAL }];
 
 /** Search a herb's own loc until the unid is in the pack. */
 export function pickHerb(herb: JungleHerb): (log: (m: string) => void) => Promise<boolean> {
