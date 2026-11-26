@@ -12,6 +12,8 @@ import OnDemandRequest from '#/client/io/OnDemandRequest.js';
 import Packet from '#/client/io/Packet.js';
 import { publisherTrafficChannel } from '#/client/io/TrafficChannel.js';
 
+declare const ONDEMAND_WORKER_URL: string;
+
 export default class OnDemand extends OnDemandProvider {
     versions: number[][] = [];
     crcs: number[][] = [];
@@ -308,7 +310,8 @@ export default class OnDemand extends OnDemandProvider {
             return;
         }
 
-        const worker = new Worker(new URL('./ondemandworker.js', import.meta.url), { type: 'module', name: publisherTrafficChannel() });
+        const url = new URL(typeof ONDEMAND_WORKER_URL === 'undefined' ? './ondemandworker.js' : ONDEMAND_WORKER_URL, import.meta.url);
+        const worker = new Worker(url, { type: 'module', name: publisherTrafficChannel() });
         this.worker = worker;
         this.lastIngame = this.app.ingame;
 

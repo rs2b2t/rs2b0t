@@ -8,6 +8,8 @@ import { join, resolve } from 'node:path';
 import { _electron, type ElectronApplication, type Page } from 'playwright-core';
 import type { SettingsStore } from '../src/bot/runtime/Settings.js';
 
+import { ownedService } from './lib/ownedService.mjs';
+
 if (process.versions.bun) {
     const child = Bun.spawn(['node', import.meta.path], { stdin: 'inherit', stdout: 'inherit', stderr: 'inherit' });
     process.exit(await child.exited);
@@ -101,7 +103,7 @@ try {
     const env: Record<string, string> = Object.fromEntries(Object.entries({ ...process.env, B0T_PROFILE_DIR: profile, B0T_RUNTIME_DIR: profile })
         .filter((entry): entry is [string, string] => entry[1] !== undefined));
     delete env.ELECTRON_RUN_AS_NODE;
-    app = await _electron.launch({ executablePath: require('../desktop/node_modules/electron'), args: [join(root, 'desktop'), `--server=${url}`], env });
+    app = await _electron.launch({ ...ownedService(require('../desktop/node_modules/electron'), env), args: [join(root, 'desktop'), `--server=${url}`] });
     app.process().stderr?.on('data', chunk => { stderr += chunk.toString(); });
     let page: Page | undefined;
     for (let tries = 0; tries < 100; tries++) {
