@@ -20,3 +20,7 @@ export function rowValid(book: PriceBook, row: PriceRow): boolean {
     const { buy, sell } = resolvePrices(book, row);
     return buy >= 1 && sell > buy;
 }
+
+export function tradeRow(book: PriceBook, id: number, side: 'buying' | 'selling'): PriceRow | null {
+    return book.rows.find(row => row.id === id && row[side] && rowValid(book, row)) ?? null;
+}
