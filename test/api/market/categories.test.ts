@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { categoryOf, CATEGORIES, isPopular, shelves } from '#/bot/api/market/categories.js';
 import { buildCatalog } from '#/bot/api/market/catalog.js';
+import { GEMS } from '#/bot/data/gems.js';
 import { rec } from '../../fixtures/obj-record.js';
 
 const shelf = (name: string, slot?: string, consumable?: string): string =>
@@ -51,9 +52,17 @@ describe('categoryOf', () => {
         expect(shelf('Vial of water')).toBe('Herblore');
     });
 
-    test('gems shelve cut or uncut', () => {
-        expect(shelf('Uncut ruby')).toBe('Gems');
-        expect(shelf('Diamond')).toBe('Gems');
+    test('catalog gems shelve cut or uncut regardless of case', () => {
+        for (const gem of GEMS) {
+            expect(shelf(gem.name)).toBe('Gems');
+            expect(shelf(`UNCUT ${gem.name.toUpperCase()}`)).toBe('Gems');
+        }
+    });
+
+    test('gem names match exactly, including spaces', () => {
+        expect(shelf('red_topaz')).toBe('Other');
+        expect(shelf(' Red topaz')).toBe('Other');
+        expect(shelf('Uncut red topaz ')).toBe('Other');
     });
 
     // Why: the stone names the jewellery cut from it, and those belong with the other jewellery.
