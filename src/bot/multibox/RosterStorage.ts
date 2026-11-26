@@ -34,9 +34,9 @@ function scriptEntries(username: string, script: string) {
     const saved = keys(username);
     const entries = [];
     for (const name of names) {
-        const prefix = boxKey(`set:${name}:`, username);
+        const prefix = `set:${name}:`;
         for (const key of saved) {
-            const setting = boxKeyTail(key, prefix);
+            const setting = boxKeyTail(key, prefix, username);
             if (setting !== null) entries.push({ suffix: `set:${name}:${setting}`, setting });
         }
     }
@@ -65,9 +65,8 @@ export function storedScripts(usernames: string[]): string[] {
     for (const store of stores()) {
         const saved = storeKeys(store);
         for (const username of usernames) {
-            const prefix = boxKey('set:', username);
             for (const key of profileStorageKeys(store, username, saved)) {
-                const suffix = boxKeyTail(key, prefix);
+                const suffix = boxKeyTail(key, 'set:', username);
                 if (suffix === null) continue;
                 const end = suffix.indexOf(':');
                 if (end > 0) scripts.add(canonicalScript(suffix.slice(0, end)));

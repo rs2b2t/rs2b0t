@@ -74,6 +74,10 @@ export function boxStoragePrefix(username: string): string {
     return `rs2b0t:${username}:`;
 }
 
+function prefersSession(suffix: string): boolean {
+    return !desktopStorage || suffix === 'creds';
+}
+
 export function collectBoxStorage(usernames: string[], includeLegacy?: ConfirmLegacySetting): BoxStorageMap {
     const out: BoxStorageMap = {};
     const legacy: LegacySettings | undefined = includeLegacy ? new Map() : undefined;
@@ -86,7 +90,7 @@ export function collectBoxStorage(usernames: string[], includeLegacy?: ConfirmLe
     if (legacy && includeLegacy) {
         for (const [key, { user, suffix, store }] of legacy) {
             if (out[user] && Object.hasOwn(out[user], suffix)) {
-                const preferred = desktopStorage && suffix !== 'creds' ? globalThis.localStorage : globalThis.sessionStorage;
+                const preferred = prefersSession(suffix) ? globalThis.sessionStorage : globalThis.localStorage;
                 if (store !== preferred || store.getItem(key) !== null) continue;
             }
             const value = store.getItem(boxStoragePrefix(user) + suffix);
@@ -131,7 +135,7 @@ function readStore(store: Storage, usernames: string[], out: BoxStorageMap, lega
                 const candidate = legacyBoxSuffix(store, key, user);
                 if (candidate === null) continue;
                 const ownedKey = boxKey(candidate, user);
-                if (!desktopSession || !legacy.has(ownedKey)) legacy.set(ownedKey, { user, suffix: candidate, store });
+                if (prefersSession(candidate) || !legacy.has(ownedKey)) legacy.set(ownedKey, { user, suffix: candidate, store });
                 continue;
             }
             if (desktopSession && suffix === 'selectedScript') continue;

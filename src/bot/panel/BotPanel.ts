@@ -277,11 +277,11 @@ export default class BotPanel {
         }
         const keys = new Set(Object.keys(schema));
         const box = boxId();
-        const prefixes = (name === 'JiveRC' ? ['NatureCrafter', name] : [name]).map(script => boxKey(`set:${script}:`, box));
+        const prefixes = (name === 'JiveRC' ? ['NatureCrafter', name] : [name]).map(script => `set:${script}:`);
         const savedKeys = [localStorage, sessionStorage].flatMap(store => profileStorageKeys(store, box));
         for (const key of savedKeys) {
             for (const prefix of prefixes) {
-                const setting = boxKeyTail(key, prefix);
+                const setting = boxKeyTail(key, prefix, box);
                 if (setting !== null) keys.add(setting);
             }
         }

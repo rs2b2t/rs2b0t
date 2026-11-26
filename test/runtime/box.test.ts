@@ -20,8 +20,8 @@ test('encoded profile and standalone settings use distinct top-level keys and de
         const key = boxKey(prefix + '3A:out', id);
         expect(key).toStartWith('rs2b0t:');
         expect(key.slice('rs2b0t:'.length)).not.toContain(':');
-        expect(boxKeyTail(key, boxKey(prefix, id))).toBe('3A:out');
-        expect(boxKeyTail(key + ':selectedScript', boxKey(prefix, id))).toBeNull();
+        expect(boxKeyTail(key, prefix, id)).toBe('3A:out');
+        expect(boxKeyTail(key + ':selectedScript', prefix, id)).toBeNull();
         expect(key).not.toBe(boxKey('cluetrace', ''));
     }
     expect(boxKey('set:set:route%3A:out', 'set')).not.toBe(boxKey('set:set:route%3A:out', ''));
@@ -31,8 +31,17 @@ test('standalone prefix scans span encoded and ordinary fields of the same scrip
     const prefix = 'set:Travel:';
     for (const field of ['selectedScript', 'selectedScriptExtra', 'set:Miner:route%3A:out']) {
         const suffix = prefix + field;
-        for (let end = prefix.length; end <= suffix.length; end++) {
-            expect(boxKeyTail(boxKey(suffix, ''), boxKey(suffix.slice(0, end), ''))).toBe(suffix.slice(end));
+        for (let end = 0; end <= suffix.length; end++) {
+            expect(boxKeyTail(boxKey(suffix, ''), suffix.slice(0, end), '')).toBe(suffix.slice(end));
         }
     }
+});
+
+test('a partial set prefix matches the logical profile setting', () => {
+    expect(boxKeyTail(boxKey('set:Global:runEnergyMin', 'set'), 'set', 'set')).toBe(':Global:runEnergyMin');
+});
+
+test('an exact set profile scan skips a standalone threshold with a matching prefix', () => {
+    expect(boxKeyTail(boxKey('set:Global:runEnergyMin', ''), 'Glob', 'set')).toBeNull();
+    expect(boxKeyTail(boxKey('Global', 'set'), 'set:Glob', '')).toBeNull();
 });

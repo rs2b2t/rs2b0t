@@ -79,16 +79,22 @@ if (process.argv.includes('--export-edited-login')) {
     process.exit(0);
 }
 if (process.argv.includes('--export-legacy-fields')) {
-    const { collectBoxStorage } = await import('../../src/bot/multibox/ProfileTransfer.js');
+    const { collectBoxStorage, applyBoxStorage } = await import('../../src/bot/multibox/ProfileTransfer.js');
     const { boxKey } = await import('../../src/bot/runtime/box.js');
     const user = 'set:Travel';
     localStorage.setItem(`rs2b0t:${user}:selectedScript`, 'Miner');
     sessionStorage.setItem(`rs2b0t:${user}:selectedScript`, 'Fisher');
     sessionStorage.setItem(`rs2b0t:${user}:rendererEnabled`, '1');
     localStorage.setItem(`rs2b0t:${user}:creds`, 'old');
+    const login = JSON.stringify({ username: 'edited', password: '' });
+    sessionStorage.setItem(`rs2b0t:${user}:creds`, login);
+    const backup = collectBoxStorage([user], () => true);
     sessionStorage.setItem(boxKey('creds', user), 'edited');
     const offered: string[] = [];
     const storage = collectBoxStorage([user], field => { offered.push(field); return true; });
+    sessionStorage.clear();
+    applyBoxStorage(backup, [user]);
+    assert.equal(sessionStorage.getItem(boxKey('creds', user)), login);
     console.log(JSON.stringify({ storage, offered: offered.sort() }));
     process.exit(0);
 }

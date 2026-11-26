@@ -43,25 +43,27 @@ function decodeSuffix(suffix: string): string {
     return suffix.replaceAll('%3A', ':').replaceAll('%25', '%');
 }
 
-function decodeStandaloneKey(key: string): string {
-    if (!key.startsWith(standalonePrefix) || !isEncodedSettingKey(key)) return key;
-    return 'rs2b0t:' + decodeSuffix(key.slice(standalonePrefix.length));
-}
-
-export function boxKeyTail(key: string, prefix: string): string | null {
-    key = decodeStandaloneKey(key);
-    prefix = decodeStandaloneKey(prefix);
-    if (!key.startsWith(prefix)) return null;
-    const tail = key.slice(prefix.length);
-    if (!isEncodedSettingKey(prefix)) return tail;
-    return isEncodedSettingKey(key) ? decodeSuffix(tail) : null;
+function decodedSuffix(key: string, ownerPrefix: string): string | null {
+    return key.startsWith(ownerPrefix) ? decodeSuffix(key.slice(ownerPrefix.length)) : null;
 }
 
 export function boxSuffix(key: string, prefix: string, id: string): string | null {
-    if (id === 'set' && key.startsWith(setProfilePrefix)) return boxKeyTail(key, setProfilePrefix);
-    if (id.startsWith('set:')) return isEncodedSettingKey(key) ? boxKeyTail(key, nestedProfilePrefix(id)) : null;
+    if (id.startsWith('set:')) return isEncodedSettingKey(key) ? decodedSuffix(key, nestedProfilePrefix(id)) : null;
+    if (id === 'set' && isEncodedSettingKey(key)) return decodedSuffix(key, setProfilePrefix);
     if (!key.startsWith(prefix) || (id === 'set' && key.includes(':', prefix.length))) return null;
     return key.slice(prefix.length);
+}
+
+function standaloneSuffix(key: string): string | null {
+    if (isEncodedSettingKey(key)) return decodedSuffix(key, standalonePrefix);
+    if (!key.startsWith('rs2b0t:') || key === setProfileMigrationKey) return null;
+    const suffix = key.slice('rs2b0t:'.length);
+    return !suffix.includes(':') || /^set:[^:]*:/.test(suffix) ? suffix : null;
+}
+
+export function boxKeyTail(key: string, prefix: string, id: string): string | null {
+    const suffix = id ? boxSuffix(key, `rs2b0t:${id}:`, id) : standaloneSuffix(key);
+    return suffix !== null && suffix.startsWith(prefix) ? suffix.slice(prefix.length) : null;
 }
 
 export function isLegacySetProfileSetting(suffix: string): boolean {
