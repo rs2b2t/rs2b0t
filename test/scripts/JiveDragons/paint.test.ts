@@ -4,6 +4,7 @@ import { ClueExecutor } from '#/bot/api/ai/clues/ClueExecutor.js';
 import { JIVE_BYLINE } from '#/bot/paint/jive.js';
 import { paintState, resolveDock } from '#/bot/paint/paintLogic.js';
 import JiveDragons from '#/bot/scripts/JiveDragons/JiveDragons.js';
+import { installMidClue } from './paint.fixture.js';
 import { restoreScenario, resetScenario, scenario } from './scheduler.fixture.js';
 import { SettingsStore } from '#/bot/runtime/Settings.js';
 import { type Box, type Drawn, recorder, spills } from '../../fixtures/script-paint.js';
@@ -91,17 +92,7 @@ describe('JiveDragons paint, mid-clue', () => {
 
     beforeEach(() => {
         paintState.reset();
-        reader.worldTile = () => ({ x: 3200, z: 3200, level: 0 });
-        ClueExecutor.current = {
-            clueId: 1,
-            name: 'hard clue',
-            step: 'dig at the crate behind the bank',
-            leg: 2,
-            attempt: 2,
-            startedAt: Date.now(),
-            target: { x: 3180, z: 3210, level: 0 },
-            startDist: 40
-        };
+        installMidClue();
     });
     afterEach(() => {
         reader.worldTile = worldTile;
