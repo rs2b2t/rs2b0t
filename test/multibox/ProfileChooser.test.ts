@@ -229,6 +229,24 @@ describe('ProfileChooser', () => {
         expect(loaded[0].world).toBe(2);
     });
 
+    test('a pending create settles after a remote vault reset closes the chooser', async () => {
+        const { chooser, loaded } = make();
+        chooser.open();
+        const user = chooser.el.querySelector<HTMLInputElement>('#mbx-new-user')!;
+        user.value = 'alice';
+
+        await new ProfileVault().reset();
+        const refresh = vault.refresh();
+        chooser.el.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
+        expect(user.disabled).toBe(true);
+        await refresh;
+        chooser.close();
+        await waitFor(() => !user.disabled);
+        expect(loaded).toEqual([]);
+        expect(chooser.el.hidden).toBe(true);
+        expect(vault.status()).toBe('empty');
+    });
+
     test('a pending world edit settles after a remote vault reset closes the chooser', async () => {
         await vault.upsert({ username: 'alice', password: 'fixture', world: 1 });
         let resume!: () => void;

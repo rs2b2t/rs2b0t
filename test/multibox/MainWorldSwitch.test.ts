@@ -340,6 +340,29 @@ test('a stale wall renames only the current members of a group', async () => {
     });
 });
 
+test('a stale wall restores saved groups when the rename destination already exists', async () => {
+    await withWall('local', async wall => {
+        await vault.saveTabState(['Old'], new Map([['alice', 'Old']]), 'Old');
+        document.getElementById('mbx-add')!.click();
+        await waitFor(() => !!chooserRow('alice'));
+        await loadChooserRow('alice');
+
+        const other = new ProfileVault();
+        expect(await other.unlock('test-passphrase')).toBe(true);
+        await other.assignGroup(['bob'], 'Fleet');
+        wall.renameTab('Old', 'Fleet');
+        await waitFor(() => wall.controller.tabs().includes('Old') && wall.controller.tabs().includes('Fleet'));
+
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('test-passphrase')).toBe(true);
+        expect(reopened.tabState()).toEqual({ tabs: ['Old', 'Fleet'], activeTab: 'Old' });
+        expect(reopened.list().map(p => [p.username, p.tab])).toEqual([['alice', 'Old'], ['bob', 'Fleet']]);
+        expect(wall.controller.tabs()).toEqual(['Main', 'Old', 'Fleet']);
+        expect(wall.controller.activeTab()).toBe('Old');
+        expect(wall.slots()[0].tab).toBe('Old');
+    });
+});
+
 test('deleting a stale group moves only its remaining loaded members to the prior group', async () => {
     await withWall('local', async wall => {
         await vault.upsert({ username: 'carol', password: 'fixture' });

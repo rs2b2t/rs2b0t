@@ -140,7 +140,7 @@ export class ProfileChooser {
             this.status.textContent = error instanceof Error ? error.message : 'Could not save the profile';
         } finally {
             this.setPending(false);
-            this.render();
+            if (vault.status() === 'unlocked') this.render();
         }
     }
 

@@ -79,6 +79,29 @@ describe('ProfileVault', () => {
         expect(reopened.list()).toEqual([{ username: 'alice', password: 'new', world: 2, tab: 'Main' }]);
     });
 
+    test('overlapping group renames to the same destination commit only one rename', async () => {
+        const first = new ProfileVault();
+        await first.setup('pw');
+        await first.replaceAll({
+            profiles: [{ username: 'alice', password: 'a', tab: 'A' }, { username: 'bob', password: 'b', tab: 'B' }],
+            tabs: ['A', 'B'], activeTab: 'Main'
+        });
+        const second = new ProfileVault();
+        expect(await second.unlock('pw')).toBe(true);
+        const results = await Promise.allSettled([
+            first.saveTabState(['Fleet', 'B'], new Map(), 'Main', { from: 'A', to: 'Fleet' }),
+            second.saveTabState(['A', 'Fleet'], new Map(), 'Main', { from: 'B', to: 'Fleet' })
+        ]);
+        expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+        expect(results).toContainEqual({ status: 'rejected', reason: new Error("Group 'Fleet' already exists.") });
+
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('pw')).toBe(true);
+        const tabs = results[0].status === 'fulfilled' ? ['Fleet', 'B'] : ['A', 'Fleet'];
+        expect(reopened.tabState().tabs).toEqual(tabs);
+        expect(reopened.list().map(p => p.tab)).toEqual(tabs);
+    });
+
     test('a browser edit leaves the saved vault intact when the write lock is denied', async () => {
         const v = new ProfileVault();
         await v.setup('pw');

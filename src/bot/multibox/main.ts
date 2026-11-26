@@ -96,7 +96,10 @@ function boot(): void {
         }
         const customTabs = controller.tabs().slice(1);
         const activeTab = controller.activeTab();
-        orderWrite = orderWrite.then(() => vault.saveTabState(customTabs, tabByUser, activeTab, change, previousTabs ?? customTabs)).catch(err => console.error('[rs2b0t] failed to save tab state', err));
+        orderWrite = orderWrite.then(() => vault.saveTabState(customTabs, tabByUser, activeTab, change, previousTabs ?? customTabs)).catch(err => {
+            console.error('[rs2b0t] failed to save tab state', err);
+            if (change && 'to' in change) refreshSavedAccounts(true);
+        });
     }
 
     function renameTab(from: string, to: string): boolean {
@@ -316,22 +319,26 @@ function boot(): void {
 
     const prompt = new VaultPrompt(vault);
     document.body.appendChild(prompt.el);
+    function refreshSavedAccounts(restoreActiveTab = false): void {
+        const pendingWrites = orderWrite;
+        void pendingWrites.then(() => vault.refresh()).then(() => {
+            if (vault.status() !== 'unlocked') {
+                tabsHydrated = false;
+                chooser.close();
+                roster?.close();
+                return;
+            }
+            if (pendingWrites !== orderWrite) {
+                if (restoreActiveTab) refreshSavedAccounts(true);
+                return;
+            }
+            syncSavedGroups(restoreActiveTab ? vault.tabState().activeTab : undefined);
+            if (!chooser.el.hidden) chooser.open();
+            roster?.refresh();
+        }).catch(error => console.error('[rs2b0t] failed to refresh saved accounts', error));
+    }
     window.addEventListener('storage', event => {
-        if (event.key === 'rs2b0t:multibox:profiles') {
-            const pendingWrites = orderWrite;
-            void pendingWrites.then(() => vault.refresh()).then(() => {
-                if (vault.status() !== 'unlocked') {
-                    tabsHydrated = false;
-                    chooser.close();
-                    roster?.close();
-                    return;
-                }
-                if (pendingWrites !== orderWrite) return;
-                syncSavedGroups();
-                if (!chooser.el.hidden) chooser.open();
-                roster?.refresh();
-            }).catch(error => console.error('[rs2b0t] failed to refresh saved accounts', error));
-        }
+        if (event.key === 'rs2b0t:multibox:profiles') refreshSavedAccounts();
     });
 
     let tabsHydrated = false;
