@@ -231,6 +231,17 @@ describe('PaintFrame.grid', () => {
 
         expect(body(drawn).filter(d => d.text.startsWith('row')).map(d => d.text)).toContain('row31');
     });
+
+    test('returns a row offset and counts only real entries in the last grid row', () => {
+        const { ctx, drawn } = recorder();
+        const p = Paint.begin(ctx, { dock: 'chatbox' });
+        p.title('T');
+        const offset = p.grid('q', lines.slice(0, 39), 2, { reserve: 26, focus: 38, footer: 'queue' });
+        p.end();
+
+        expect(offset).toBe(15);
+        expect(body(drawn).at(-1)?.text).toBe('31 to 39 of 39 · queue');
+    });
 });
 
 describe('list footer', () => {
