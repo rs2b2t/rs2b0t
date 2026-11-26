@@ -240,8 +240,8 @@ export class Client extends GameShell {
     private zoneUpdateZ: number = 0;
 
     private tryMoveNearest: number = 0;
-    private dirMap: Int32Array = new Int32Array(BuildArea.SIZE * BuildArea.SIZE);
-    private distMap: Int32Array = new Int32Array(BuildArea.SIZE * BuildArea.SIZE);
+    private dirMap: Uint8Array = new Uint8Array(BuildArea.SIZE * BuildArea.SIZE);
+    private distMap: Uint16Array = new Uint16Array(BuildArea.SIZE * BuildArea.SIZE);
     private routeX: Int32Array = new Int32Array(4000);
     private routeZ: Int32Array = new Int32Array(4000);
     /**
@@ -5813,13 +5813,7 @@ export class Client extends GameShell {
         const sceneWidth: number = BuildArea.SIZE;
         const sceneLength: number = BuildArea.SIZE;
 
-        for (let x: number = 0; x < sceneWidth; x++) {
-            for (let z: number = 0; z < sceneLength; z++) {
-                const index: number = CollisionMap.index(x, z);
-                this.dirMap[index] = 0;
-                this.distMap[index] = 99999999;
-            }
-        }
+        this.dirMap.fill(0);
 
         let x: number = srcX;
         let z: number = srcZ;
@@ -5976,7 +5970,7 @@ export class Client extends GameShell {
                     for (let px: number = dx - padding; px <= dx + padding; px++) {
                         for (let pz: number = dz - padding; pz <= dz + padding; pz++) {
                             const index: number = CollisionMap.index(px, pz);
-                            if (px >= 0 && pz >= 0 && px < BuildArea.SIZE && pz < BuildArea.SIZE && this.distMap[index] < min) {
+                            if (px >= 0 && pz >= 0 && px < BuildArea.SIZE && pz < BuildArea.SIZE && this.dirMap[index] !== 0 && this.distMap[index] < min) {
                                 min = this.distMap[index];
                                 x = px;
                                 z = pz;
