@@ -14,24 +14,13 @@ import {
 } from '#/bot/api/ai/quests/defs/princeali/key.js';
 import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
 
+import { snap as princeAliSnapshot } from './princeali-snapshot.fixture.js';
+
 const snap = (
     invIds: [number, number][] = [],
     bankIds: [number, number][] = [],
     extra: Partial<QuestSnapshot> = {}
-): QuestSnapshot => ({
-    journal: 'inProgress',
-    inv: new Map(),
-    invIds: new Map(invIds),
-    worn: new Set(),
-    wornIds: new Set(),
-    noProgress: 0,
-    bankCoins: 0,
-    bank: new Map(),
-    bankIds: new Map(bankIds),
-    bankKnown: true,
-    stage: PRINCE_STAGE.SPOKEN_OSMAN,
-    ...extra
-});
+): QuestSnapshot => princeAliSnapshot(invIds, bankIds, { stage: PRINCE_STAGE.SPOKEN_OSMAN, ...extra });
 const at = (stage: number, invIds: [number, number][] = [], bankIds: [number, number][] = []): QuestSnapshot =>
     snap(invIds, bankIds, { stage });
 const I = PA_ITEM;
