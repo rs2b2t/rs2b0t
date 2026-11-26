@@ -2,8 +2,7 @@ const fs = require('node:fs');
 const { join, resolve } = require('node:path');
 const { tmpdir } = require('node:os');
 const { createHash } = require('node:crypto');
-const { InvalidLegacyProfiles, profileKeys, savedProfileKey, sharedStorage } = require('./shared-storage.cjs');
-const legacyOrigin = 'http://localhost:8081';
+const { legacyOrigin, profileKeys, savedProfileKey, sharedStorage } = require('./shared-storage.cjs');
 
 function isCustomOrigin(origin) {
     return origin !== legacyOrigin && /^https?:\/\//.test(origin);
@@ -95,7 +94,7 @@ function prepareStorage(app, serverUrl) {
                     return null;
                 }
                 let fallback;
-                if (!initialized || retrySettings) fallback = await readLegacy(legacyOrigin).catch(failed);
+                if (!initialized || retrySettings || retryProfileOrigins.includes(legacyOrigin)) fallback = await readLegacy(legacyOrigin).catch(failed);
                 const retries = [];
                 let values = {};
                 if (automaticRetry) {
@@ -112,7 +111,7 @@ function prepareStorage(app, serverUrl) {
                     try {
                         firstMigration = store.seed(values, { fallback, recover, expectedProfiles, readError, profileOrigin: automaticRetry ? undefined : origin, retries });
                     } catch (error) {
-                        if (!automaticRetry || error instanceof InvalidLegacyProfiles) throw error;
+                        if (!automaticRetry) throw error;
                     }
                 }
                 if (!firstMigration) {

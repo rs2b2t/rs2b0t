@@ -849,19 +849,42 @@ test.each([
     expect(await launch(custom)).toEqual(profiles);
 });
 
-test('an invalid source on first launch leaves migration pending', async () => {
-    const { launch, saveLegacy, store } = fixture({ [custom]: { [vault]: '{' } });
-    await expect(launch(custom)).rejects.toMatchObject({ cause: { message: expect.stringContaining('Invalid legacy profile') } });
-    expect(store.initialized()).toBe(false);
-    saveLegacy({ [custom]: { [accounts]: JSON.stringify(profiles) } });
+async function expectMalformedRoster(open: () => Promise<unknown>, key: string) {
+    const warning = spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+        expect(await open()).toEqual([]);
+        expect(warning).toHaveBeenCalledWith(expect.stringContaining(key));
+    } finally {
+        warning.mockRestore();
+    }
+}
+
+test('a malformed 8081 roster opens the chooser with usable settings and retries only profiles', async () => {
+    const script = 'rs2b0t:fixture:selectedScript';
+    const { launch, saveLegacy, store } = fixture({ [original]: { [accounts]: '{', [script]: 'Fisher' } });
+    await expectMalformedRoster(() => launch(custom), accounts);
+    expect(store.snapshot()).toEqual({ [script]: 'Fisher' });
+    store.removeItem(script);
+    await expectMalformedRoster(() => launch(custom), accounts);
+    saveLegacy({ [original]: { [accounts]: JSON.stringify(profiles), [script]: 'Fisher' } });
     expect(await launch(custom)).toEqual(profiles);
+    expect(await launch(custom)).toEqual(profiles);
+    expect(store.getItem(script)).toBeNull();
+});
+
+test('resetting profiles cancels a malformed roster retry', async () => {
+    const { launch, saveLegacy, store } = fixture({ [custom]: { [vault]: '{' } });
+    await expectMalformedRoster(() => launch(custom), vault);
+    store.removeItem(vault);
+    saveLegacy({ [custom]: { [vault]: JSON.stringify(profiles) } });
+    expect(await launch(custom)).toEqual([]);
+    expect(await launch(custom, true)).toEqual(profiles);
 });
 
 test.each([original, custom])('a mixed roster with an unsupported world on %s leaves migration retryable', async origin => {
     const malformed = [...profiles, { username: 'invalid-world', password: 'fixture', world: 4 }];
-    const { launch, saveLegacy, store } = fixture({ [origin]: { [accounts]: JSON.stringify(malformed) } });
-    await expect(launch(origin)).rejects.toMatchObject({ cause: { message: expect.stringContaining('Invalid legacy profile') } });
-    expect(store.initialized()).toBe(false);
+    const { launch, saveLegacy } = fixture({ [origin]: { [accounts]: JSON.stringify(malformed) } });
+    await expectMalformedRoster(() => launch(origin), accounts);
     saveLegacy({ [origin]: { [accounts]: JSON.stringify(profiles) } });
     expect(await launch(origin)).toEqual(profiles);
     expect(await launch(origin)).toEqual(profiles);
@@ -874,7 +897,7 @@ test('a deferred profile import reports a malformed roster and retries after rep
     });
     expect(await launch(custom)).toEqual([]);
     readable = true;
-    await expect(launch(custom)).rejects.toMatchObject({ cause: { message: expect.stringContaining('Invalid legacy profile') } });
+    await expectMalformedRoster(() => launch(custom), accounts);
     saveLegacy({ [custom]: { [accounts]: JSON.stringify(profiles) } });
     expect(await launch(custom)).toEqual(profiles);
     expect(await launch(custom)).toEqual(profiles);

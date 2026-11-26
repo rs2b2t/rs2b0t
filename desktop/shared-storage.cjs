@@ -7,8 +7,7 @@ const vaultKey = 'rs2b0t:multibox:profiles';
 const accountsKey = 'rs2b0t:multibox:accounts';
 const profileKeys = [vaultKey, accountsKey];
 const gcmTagBytes = 16;
-
-class InvalidLegacyProfiles extends Error {}
+const legacyOrigin = 'http://localhost:8081';
 
 function isEmptyRoster(value) {
     return typeof value === 'string' && /^[ \t\r\n]*\[[ \t\r\n]*\][ \t\r\n]*$/.test(value);
@@ -36,7 +35,9 @@ function savedProfileKey(source, keys = profileKeys) {
     return keys.find(key => hasSavedProfiles(key, source[key]));
 }
 
-function migrateProfiles(data, sources, { firstMigration, recover }) {
+function migrateProfiles(state, sources, recover) {
+    const { data } = state;
+    const firstMigration = !state.initialized;
     if (recover && !firstMigration && isEmptyRoster(data[vaultKey]) && hasSavedProfiles(accountsKey, data[accountsKey])) {
         data[vaultKey] = data[accountsKey];
         delete data[accountsKey];
@@ -44,19 +45,29 @@ function migrateProfiles(data, sources, { firstMigration, recover }) {
     }
     if (profileKeys.some(key => key in data && (firstMigration || !isEmptyRoster(data[key])))) return;
     let selected = [];
-    let invalidKey;
-    for (const source of sources) {
+    const invalid = new Map();
+    for (const [origin, source] of sources) {
         const keys = !recover && isEmptyRoster(source[vaultKey]) ? [vaultKey] : profileKeys;
         const key = savedProfileKey(source, keys);
         if (key) {
             selected = [[key, source[key]]];
-            invalidKey = undefined;
+            invalid.clear();
             break;
         }
-        invalidKey ??= keys.find(key => typeof source[key] === 'string' && !isEmptyRoster(source[key]));
+        const invalidKey = keys.find(key => typeof source[key] === 'string' && !isEmptyRoster(source[key]));
+        if (invalidKey) invalid.set(origin, invalidKey);
         if (firstMigration && !selected.length) selected = keys.filter(key => isEmptyRoster(source[key])).map(key => [key, source[key]]);
     }
-    if (invalidKey) throw new InvalidLegacyProfiles(`Invalid legacy profile data in ${invalidKey}. Expected a saved vault or a roster with usernames, passwords and optional worlds 1, 2 or 3.`);
+    if (invalid.size) {
+        for (const [origin, key] of invalid) {
+            console.warn(`Invalid legacy profile data in ${key} on ${origin}. Expected a saved vault or a roster with usernames, passwords and optional worlds 1, 2 or 3.`);
+            if (state.seededWithoutProfiles) {
+                state.profileRetries ??= {};
+                state.profileRetries[origin] = null;
+            }
+        }
+        return;
+    }
     if (!selected.length) return;
     for (const key of profileKeys) delete data[key];
     for (const [key, value] of selected) {
@@ -265,15 +276,16 @@ function sharedStorage(dir) {
                         importSettings(state.pendingPanelSettings ?? state.data, values, migration.removed);
                     }
                 }
-                const sources = [values ?? {}];
-                finishProfileRetry(state, profileOrigin, values);
+                const sources = [[profileOrigin ?? legacyOrigin, values ?? {}]];
+                if (profileOrigin !== legacyOrigin) finishProfileRetry(state, profileOrigin, values);
                 for (const [origin, source] of retries) {
-                    if (finishProfileRetry(state, origin, source)) sources.push(source);
+                    if (finishProfileRetry(state, origin, source)) sources.push([origin, source]);
                 }
+                finishProfileRetry(state, legacyOrigin, fallback);
                 const profilesChanged = expectedProfiles && profileState(state).some((value, i) => value !== expectedProfiles[i]);
                 if (!profilesChanged && (!state.initialized || recover || state.seededWithoutProfiles)) {
                     if (!state.initialized && !profileKeys.some(key => key in state.data)) state.seededWithoutProfiles = true;
-                    migrateProfiles(state.data, [...sources, fallback ?? {}], { firstMigration: !state.initialized, recover });
+                    migrateProfiles(state, [...sources, [legacyOrigin, fallback ?? {}]], recover);
                 }
                 if (profileKeys.some(key => key in state.data && !isEmptyRoster(state.data[key]))) {
                     delete state.seededWithoutProfiles;
@@ -301,4 +313,4 @@ function sharedStorage(dir) {
     };
 }
 
-module.exports = { InvalidLegacyProfiles, profileKeys, savedProfileKey, sharedStorage };
+module.exports = { legacyOrigin, profileKeys, savedProfileKey, sharedStorage };
