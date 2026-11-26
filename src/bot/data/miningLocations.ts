@@ -1,5 +1,6 @@
 import type { WorldTile } from '../adapter/ClientAdapter.js';
 import Tile from '../geometry/Tile.js';
+import { BANK_STAND_COORDINATES } from './bankStandCoordinates.js';
 import {
     locationOptions,
     resolveGatheringLocation,
@@ -13,20 +14,20 @@ export type MiningLocation = GatheringLocation & {
 };
 
 const BANK = {
-    varrockEast: new Tile(3253, 3420, 0),
-    varrockWest: new Tile(3185, 3440, 0),
-    alKharid: new Tile(3269, 3167, 0),
-    draynor: new Tile(3093, 3243, 0),
-    faladorEast: new Tile(3013, 3355, 0),
-    faladorWest: new Tile(2946, 3369, 0),
-    edgeville: new Tile(3094, 3493, 0),
-    seers: new Tile(2725, 3491, 0),
-    ardougneEast: new Tile(2655, 3283, 0),
-    ardougneWest: new Tile(2616, 3332, 0),
-    yanille: new Tile(2612, 3092, 0),
-    shilo: new Tile(2852, 2954, 0),
-    shantay: new Tile(3308, 3120, 0),
-    grandTree: new Tile(2449, 3482, 1)
+    varrockEast: new Tile(...BANK_STAND_COORDINATES.varrockEast),
+    varrockWest: new Tile(...BANK_STAND_COORDINATES.varrockWest),
+    alKharid: new Tile(...BANK_STAND_COORDINATES.alKharid),
+    draynor: new Tile(...BANK_STAND_COORDINATES.draynor),
+    faladorEast: new Tile(...BANK_STAND_COORDINATES.faladorEast),
+    faladorWest: new Tile(...BANK_STAND_COORDINATES.faladorWest),
+    edgeville: new Tile(...BANK_STAND_COORDINATES.edgeville),
+    seers: new Tile(...BANK_STAND_COORDINATES.seers),
+    ardougneEast: new Tile(...BANK_STAND_COORDINATES.ardougneEast),
+    ardougneWest: new Tile(...BANK_STAND_COORDINATES.ardougneWest),
+    yanille: new Tile(...BANK_STAND_COORDINATES.yanille),
+    shilo: new Tile(...BANK_STAND_COORDINATES.shiloVillage),
+    shantay: new Tile(...BANK_STAND_COORDINATES.shantayPass),
+    grandTree: new Tile(...BANK_STAND_COORDINATES.grandTree)
 } as const;
 
 function mine(
