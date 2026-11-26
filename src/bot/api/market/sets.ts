@@ -1,3 +1,5 @@
+import { DRAGONHIDE_SLOTS, DRAGONHIDE_TIERS } from '../../data/dragonhide.js';
+
 export interface MarketSet {
     name: string;
     itemIds: readonly number[];
@@ -9,10 +11,10 @@ const SETS: Readonly<Record<string, MarketSet>> = {
     mithril: { name: 'Mithril set', itemIds: [1159, 1121, 1071] },
     black: { name: 'Black set', itemIds: [1165, 1125, 1077] },
     steel: { name: 'Steel set', itemIds: [1157, 1119, 1069] },
-    'black dragonhide': { name: 'Black dragonhide set', itemIds: [2503, 2497, 2491] },
-    'red dragonhide': { name: 'Red dragonhide set', itemIds: [2501, 2495, 2489] },
-    'blue dragonhide': { name: 'Blue dragonhide set', itemIds: [2499, 2493, 2487] },
-    'green dragonhide': { name: 'Green dragonhide set', itemIds: [1135, 1099, 1065] },
+    ...Object.fromEntries<MarketSet>(DRAGONHIDE_TIERS.map(tier => [
+        `${tier.colour.toLowerCase()} dragonhide`,
+        { name: `${tier.colour} dragonhide set`, itemIds: DRAGONHIDE_SLOTS.map(slot => tier[slot]) }
+    ])),
     leather: { name: 'Leather set', itemIds: [1129, 1095, 1063] },
     super: { name: 'Super set', itemIds: [157, 145, 163] }
 };

@@ -1,5 +1,6 @@
 // Why: kept free of client imports so scripts and tests pull it in without loading the adapter graph.
 
+import { DRAGONHIDE_SLOTS, DRAGONHIDE_TIERS } from '../../data/dragonhide.js';
 import { HERBS, POTION_HERBS } from '../../data/herbs.js';
 import type { BankCategory, SortableItem } from './bankSortRules.js';
 
@@ -71,18 +72,12 @@ for (const [index, herb] of HERBS_BY_LEVEL.entries()) {
 }
 
 // Why: green, blue, red and black hide armour all read back as one name, so the colour is only in the id.
-const DHIDE_IDS: readonly (readonly number[])[] = [
-    [2503, 2501, 2499, 1135],
-    [2497, 2495, 2493, 1099],
-    [2491, 2489, 2487, 1065]
-];
-
-const DHIDE_RANK = new Map<number, number>(
-    DHIDE_IDS.flatMap((piece, slot) => piece.flatMap((id, colour) =>
-        [[id, slot * piece.length + colour], [id + 1, slot * piece.length + colour]] as const))
-);
-
-const DHIDE_RANKS = DHIDE_IDS.length * DHIDE_IDS[0].length;
+const DHIDE_IDS = DRAGONHIDE_SLOTS.flatMap(slot => DRAGONHIDE_TIERS.map(tier => tier[slot]));
+const DHIDE_RANK = new Map<number, number>();
+for (const [rank, id] of DHIDE_IDS.entries()) {
+    DHIDE_RANK.set(id, rank);
+    DHIDE_RANK.set(id + 1, rank);
+}
 
 const RANGED_ARMOUR = [
     'dragonhide body', 'dragonhide chaps', 'dragon vambraces',
@@ -172,5 +167,5 @@ export function rankWithin(category: BankCategory, item: SortableItem): number {
 
     const rank = tableRank(order, name);
     // Why: hide armour ranks by id above, so the name table has to start past that block.
-    return category === 'rangedArmour' && rank !== UNRANKED ? rank + DHIDE_RANKS : rank;
+    return category === 'rangedArmour' && rank !== UNRANKED ? rank + DHIDE_IDS.length : rank;
 }
