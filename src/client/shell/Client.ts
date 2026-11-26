@@ -83,6 +83,7 @@ import { buildExperienceThresholds } from '#/shared/experience.js';
 const MAX_PLAYER_COUNT = 2048;
 const LOCAL_PLAYER_INDEX = 2047;
 const MINIMAP_DOT_RADIUS = 80;
+const ANIMATED_TEXTURE_IDS = [17, 24];
 
 const MAX_CHATS = 50;
 const CHAT_COLOURS = [Colour.YELLOW, Colour.RED, Colour.GREEN, Colour.CYAN, Colour.MAGENTA, Colour.WHITE];
@@ -4975,44 +4976,36 @@ export class Client extends GameShell {
     }
 
     private textureRunAnims(cycle: number): void {
-        if (!Client.lowMem) {
-            if (Pix3D.texCycle[17] >= cycle) {
-                const texture: Pix8 | null = Pix3D.textures[17];
+        if (Client.lowMem) {
+            return;
+        }
+
+        for (const id of ANIMATED_TEXTURE_IDS) {
+            if (Pix3D.texCycle[id] >= cycle) {
+                const texture = Pix3D.textures[id];
                 if (!texture) {
                     return;
                 }
 
-                const bottom: number = texture.wi * texture.hi - 1;
-                const adjustment: number = texture.wi * this.worldUpdateNum * 2;
-
-                const src: Int8Array = texture.data;
-                const dst: Int8Array = this.textureBuffer;
-                for (let i: number = 0; i <= bottom; i++) {
-                    dst[i] = src[(i - adjustment) & bottom];
+                const size = texture.wi * texture.hi;
+                const mask = size - 1;
+                const adjustment = texture.wi * this.worldUpdateNum * 2;
+                const src = texture.data;
+                const dst = this.textureBuffer;
+                if (size > 0 && (size & mask) === 0 && src.length >= size && dst.length >= size && src.buffer !== dst.buffer) {
+                    const shift = adjustment & mask;
+                    const split = size - shift;
+                    dst.set(src.subarray(split, size));
+                    dst.set(src.subarray(0, split), shift);
+                } else {
+                    for (let i = 0; i <= mask; i++) {
+                        dst[i] = src[(i - adjustment) & mask];
+                    }
                 }
 
                 texture.data = dst;
                 this.textureBuffer = src;
-                Pix3D.pushTexture(17);
-            }
-
-            if (Pix3D.texCycle[24] >= cycle) {
-                const texture: Pix8 | null = Pix3D.textures[24];
-                if (!texture) {
-                    return;
-                }
-                const bottom: number = texture.wi * texture.hi - 1;
-                const adjustment: number = texture.wi * this.worldUpdateNum * 2;
-
-                const src: Int8Array = texture.data;
-                const dst: Int8Array = this.textureBuffer;
-                for (let i: number = 0; i <= bottom; i++) {
-                    dst[i] = src[(i - adjustment) & bottom];
-                }
-
-                texture.data = dst;
-                this.textureBuffer = src;
-                Pix3D.pushTexture(24);
+                Pix3D.pushTexture(id);
             }
         }
     }
