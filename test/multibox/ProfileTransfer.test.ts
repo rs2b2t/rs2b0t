@@ -142,6 +142,37 @@ describe('ProfileTransfer', () => {
         });
     });
 
+    test('a fresh set profile reads and exports its pre-upgrade settings and loadouts', () => {
+        const loadout = { name: 'profile', worn: {}, carry: [] };
+        localStorage.setItem('rs2b0t:set:set:Global:runEnergyMin', '42');
+        localStorage.setItem('rs2b0t:set:set:Loadouts:sets', JSON.stringify([loadout]));
+        localStorage.setItem('rs2b0t:set:Global:runEnergyMin', '73');
+
+        inBox('set', () => {
+            expect(SettingsStore.globalBag().num('runEnergyMin')).toBe(42);
+            expect(Loadouts.all()).toEqual([loadout]);
+        });
+        expect(collectBoxStorage(['set'])).toEqual({ set: {
+            'set:Global:runEnergyMin': '42', 'set:Loadouts:sets': JSON.stringify([loadout])
+        } });
+        expect(SettingsStore.globalBag().num('runEnergyMin')).toBe(73);
+    });
+
+    test('export upgrades both storage layers before the profile is opened', () => {
+        localStorage.setItem('rs2b0t:set:set:Miner:rock', 'iron');
+        sessionStorage.setItem('rs2b0t:set:set:Miner:rock', 'coal');
+        localStorage.setItem('rs2b0t:set:set%3AMiner%3Atool', 'pickaxe');
+        localStorage.setItem('rs2b0t:set:set:Miner:tool', 'old');
+
+        expect(collectBoxStorage(['set'])).toEqual({ set: { 'set:Miner:rock': 'coal', 'set:Miner:tool': 'pickaxe' } });
+        sessionStorage.clear();
+        expect(readScriptSettings('set', 'Miner')).toEqual({ rock: 'iron', tool: 'pickaxe' });
+        replaceScriptSettings('set', 'Miner', {});
+        sessionStorage.clear();
+        expect(inBox('set', () => SettingsStore.saved('Miner', 'rock'))).toBeUndefined();
+        expect(SettingsStore.saved('set', 'Miner:rock')).toBe('iron');
+    });
+
     test('the roster and the running profile share settings independently of legacy standalone values', () => {
         for (const store of [sessionStorage, localStorage]) {
             store.setItem('rs2b0t:set:set:travel:mode', 'walk');
@@ -167,13 +198,15 @@ describe('ProfileTransfer', () => {
             const loadout = { name: 'travel', worn: {}, carry: [{ item: 'Lobster', qty: 2 }] };
             Loadouts.save([loadout]);
             SettingsStore.save('Global', 'runEnergyMin', '73');
-            SettingsStore.save('set', 'travel:mode', 'walk');
             const user = incoming === 'fixture' ? 'fixture' : 'set';
             const threshold = 'set:Global:runEnergyMin';
             for (const store of [localStorage, sessionStorage]) {
+                store.setItem('rs2b0t:set:set:travel:mode', 'walk');
                 store.setItem('rs2b0t:set:selectedScript', 'Miner');
+                store.setItem('rs2b0t:set:set:Global:runEnergyMin', '31');
+                store.setItem('rs2b0t:set:set%3AGlobal%3ArunEnergyMin', '32');
+                store.setItem('rs2b0t:set:set:Loadouts:sets', JSON.stringify([{ ...loadout, name: 'profile' }]));
             }
-            inBox('set', () => SettingsStore.save('Global', 'runEnergyMin', '31'));
             const entries: Record<string, string> = { [threshold]: '42' };
             if (incoming === 'legacy set') {
                 entries['Loadouts:sets'] = '[]';
@@ -193,6 +226,7 @@ describe('ProfileTransfer', () => {
             sessionStorage.clear();
             expect(SettingsStore.saved('Global', 'runEnergyMin')).toBe('73');
             expect(Loadouts.all()).toEqual([loadout]);
+            expect(inBox('set', () => Loadouts.all())).toEqual([]);
             expect(SettingsStore.saved('set', 'travel:mode')).toBe('walk');
             expect(inBox(user, () => SettingsStore.saved('Global', 'runEnergyMin'))).toBe('42');
             expect(inBox('set', () => SettingsStore.saved('Global', 'runEnergyMin'))).toBe(user === 'set' ? '42' : undefined);

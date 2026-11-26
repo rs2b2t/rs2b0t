@@ -1,7 +1,7 @@
 import { desktopStorage } from './desktopStorage.js';
 import Tile from '../geometry/Tile.js';
 import { WORLDMAP_KEY_NAMES } from '../../client/mapview/worldmapKeyNames.js';
-import { boxKey } from './box.js';
+import { boxId, boxKey, migrateSetProfileStorage } from './box.js';
 import { signedOptions } from './optionSelection.js';
 
 type SettingType = 'boolean' | 'number' | 'string' | 'string[]' | 'tile';
@@ -549,7 +549,10 @@ const hasLocal = typeof localStorage !== 'undefined';
 
 // Two box-scoped layers (see box.ts): sessionStorage is the live-tab authority and localStorage the durable copy a fresh instance of the same box reloads.
 function storageKey(name: string, key: string): string {
-    return boxKey(`set:${name}:${key}`);
+    const id = boxId();
+    const suffix = `set:${name}:${key}`;
+    if (id === 'set' || (!id && suffix.startsWith('set:set:'))) migrateSetProfileStorage();
+    return boxKey(suffix, id);
 }
 
 type SettingChangeListener = (name: string, key: string, value: string) => void;

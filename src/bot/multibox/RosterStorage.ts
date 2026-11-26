@@ -1,6 +1,6 @@
 import { isRosterScript } from './RosterTypes.js';
 import { desktopStorage } from '../runtime/desktopStorage.js';
-import { boxKey, boxSuffix } from '../runtime/box.js';
+import { boxKey, boxSuffix, migrateSetProfileStorage } from '../runtime/box.js';
 
 function canonicalScript(script: string): string {
     return script === 'NatureCrafter' ? 'JiveRC' : script;
@@ -44,6 +44,7 @@ export function writeProfileScript(username: string, script: string): void {
 }
 
 function scriptEntries(username: string, script: string) {
+    if (username === 'set') migrateSetProfileStorage();
     const names = script === 'JiveRC' ? ['NatureCrafter', script] : [script];
     return names.flatMap(name => {
         const prefix = boxKey(`set:${name}:`, username);
@@ -72,6 +73,7 @@ export function replaceScriptSettings(username: string, script: string, values: 
 }
 
 export function storedScripts(usernames: string[]): string[] {
+    if (usernames.includes('set')) migrateSetProfileStorage();
     const scripts = new Set<string>();
     const savedKeys = keys('rs2b0t:');
     for (const username of usernames) {

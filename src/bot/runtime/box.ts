@@ -1,4 +1,5 @@
 import { botFrameUrl } from '../../client/config/worlds.js';
+import { storeKeys } from './desktopStorage.js';
 
 // docs/decisions/architecture.md#per-instance-storage
 // Why: same-origin multibox frames share sessionStorage, so `?box=<account>` namespaces each bot.
@@ -20,6 +21,36 @@ export function boxSuffix(key: string, prefix: string, id: string): string | nul
     if (!key.startsWith(prefix) || (id === 'set' && key.includes(':', prefix.length))) return null;
     const suffix = key.slice(prefix.length);
     return id === 'set' ? suffix.replaceAll('%3A', ':').replaceAll('%25', '%') : suffix;
+}
+
+export function isLegacySetProfileSetting(suffix: string): boolean {
+    return /^set:[^:]+:/.test(suffix);
+}
+
+const setProfileMigrationKey = 'rs2b0t:set-profile-settings-v1';
+
+export function finishSetProfileMigration(store: Storage): void {
+    store.setItem(setProfileMigrationKey, '1');
+}
+
+function copyLegacySetSettings(store: Storage): void {
+    const prefix = 'rs2b0t:set:';
+    for (const key of storeKeys(store)) {
+        if (!key.startsWith(prefix)) continue;
+        const suffix = key.slice(prefix.length);
+        if (!isLegacySetProfileSetting(suffix)) continue;
+        const target = boxKey(suffix, 'set');
+        const value = store.getItem(key);
+        // Why: the original key can also belong to a standalone setting.
+        if (value !== null && store.getItem(target) === null) store.setItem(target, value);
+    }
+    finishSetProfileMigration(store);
+}
+
+export function migrateSetProfileStorage(): void {
+    if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(setProfileMigrationKey) !== null) return;
+    if (typeof localStorage !== 'undefined' && localStorage.getItem(setProfileMigrationKey) === null) copyLegacySetSettings(localStorage);
+    if (typeof sessionStorage !== 'undefined') copyLegacySetSettings(sessionStorage);
 }
 
 // Why: one build serves /rs2b0t/index.html and local dev's /bot.html, and a relative path resolves to a file beside either.

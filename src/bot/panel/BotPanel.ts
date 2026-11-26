@@ -5,7 +5,7 @@ import { reader } from '../adapter/ClientAdapter.js';
 import type { BotHostImpl } from '../runtime/BotHost.js';
 import type { LogLine, ScriptContext } from '../runtime/ScriptContext.js';
 import { AutoRelogin } from '../runtime/AutoRelogin.js';
-import { boxId, boxKey, boxSuffix, wallLinkHref } from '../runtime/box.js';
+import { boxId, boxKey, boxSuffix, migrateSetProfileStorage, wallLinkHref } from '../runtime/box.js';
 import { Credentials } from '../runtime/Credentials.js';
 import { ScriptRegistry, type ScriptMeta } from '../runtime/ScriptRegistry.js';
 import { resolveDestination } from '../api/map/WalkDestinations.js';
@@ -277,6 +277,7 @@ export default class BotPanel {
         const keys = new Set(Object.keys(schema));
         const box = boxId();
         const prefixes = (name === 'JiveRC' ? ['NatureCrafter', name] : [name]).map(script => boxKey(`set:${script}:`, box));
+        if (box === 'set') migrateSetProfileStorage();
         const savedKeys = desktopStorage ? desktopStorage.keys() : [];
         for (const storage of desktopStorage ? [sessionStorage] : [sessionStorage, localStorage]) {
             const length = storage.length;

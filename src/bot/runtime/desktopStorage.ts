@@ -36,3 +36,14 @@ function resolveDesktopStorage(): DesktopStorage | undefined {
 }
 
 export const desktopStorage = resolveDesktopStorage();
+
+export function storeKeys(store: Storage): string[] {
+    if (desktopStorage && store === globalThis.localStorage) return desktopStorage.keys();
+    const keys: string[] = [];
+    const length = store.length;
+    for (let i = 0; i < length; i++) {
+        const key = store.key(i);
+        if (key) keys.push(key);
+    }
+    return keys;
+}

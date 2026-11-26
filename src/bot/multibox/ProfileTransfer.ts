@@ -1,6 +1,6 @@
-import { boxKey, boxSuffix } from '../runtime/box.js';
+import { boxKey, boxSuffix, finishSetProfileMigration, isLegacySetProfileSetting, migrateSetProfileStorage } from '../runtime/box.js';
 import type { Profile } from './ProfileVault.js';
-import { desktopStorage } from '../runtime/desktopStorage.js';
+import { desktopStorage, storeKeys } from '../runtime/desktopStorage.js';
 
 export const PROFILE_FILE_KIND = 'rs2b0t-multibox-profiles';
 export const PROFILE_FILE_VERSION = 1;
@@ -70,18 +70,8 @@ export function boxStoragePrefix(username: string): string {
     return `rs2b0t:${username}:`;
 }
 
-function storeKeys(store: Storage): string[] {
-    if (desktopStorage && store === globalThis.localStorage) return desktopStorage.keys();
-    const keys: string[] = [];
-    const length = store.length;
-    for (let i = 0; i < length; i++) {
-        const key = store.key(i);
-        if (key) keys.push(key);
-    }
-    return keys;
-}
-
 export function collectBoxStorage(usernames: string[]): BoxStorageMap {
+    if (usernames.includes('set')) migrateSetProfileStorage();
     const out: BoxStorageMap = {};
     if (typeof localStorage !== 'undefined') {
         readStore(localStorage, usernames, out);
@@ -94,6 +84,7 @@ export function collectBoxStorage(usernames: string[]): BoxStorageMap {
 
 export function applyBoxStorage(storage: BoxStorageMap, wipe: string[]): void {
     const boxes = [...new Set([...wipe, ...Object.keys(storage)])].map(user => ({ user, prefix: boxStoragePrefix(user) }));
+    const replacesSet = boxes.some(({ user }) => user === 'set');
     const stores: Storage[] = [];
     if (typeof localStorage !== 'undefined') {
         stores.push(localStorage);
@@ -107,9 +98,10 @@ export function applyBoxStorage(storage: BoxStorageMap, wipe: string[]): void {
                 store.removeItem(key);
             }
         }
+        if (replacesSet) finishSetProfileMigration(store);
         for (const [user, entries] of Object.entries(storage)) {
             for (const [suffix, value] of Object.entries(entries)) {
-                if (user === 'set' && suffix.includes(':') && !/^set:[^:]+:/.test(suffix)) continue;
+                if (user === 'set' && suffix.includes(':') && !isLegacySetProfileSetting(suffix)) continue;
                 store.setItem(boxKey(suffix, user), value);
             }
         }
