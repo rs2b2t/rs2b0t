@@ -1,7 +1,7 @@
 import { expect, mock, spyOn, test } from 'bun:test';
 import { VaultPrompt } from '#/bot/multibox/VaultPrompt.js';
 import { ProfileVault, vault } from '#/bot/multibox/ProfileVault.js';
-import { serializeProfileFile } from '#/bot/multibox/ProfileTransfer.js';
+import { parseProfileFile, serializeProfileFile } from '#/bot/multibox/ProfileTransfer.js';
 import { SettingsPanel } from '#/bot/multibox/SettingsPanel.js';
 import { ResourcePanel } from '#/bot/multibox/ResourcePanel.js';
 import { DomSlotOps } from '#/bot/multibox/DomSlotOps.js';
@@ -342,10 +342,15 @@ test('saving an omitted profile from its panel restores its live group', async (
     });
 });
 
-test('editing a loaded profile from Manage bots saves its selected tab', async () => {
+test.each(['saved', 'omitted'])('Manage bots saves the selected tab when the edited profile is %s', async state => {
     await withWall('local', async wall => {
         const worker = { username: 'worker', password: 'fixture', tab: 'Work' };
-        await openSettings().importText(serializeProfileFile({ profiles: [worker], tabs: ['Fleet', 'Work'], activeTab: 'Fleet', storage: {} }));
+        const panel = openSettings();
+        await panel.importText(serializeProfileFile({ profiles: [worker], tabs: ['Fleet', 'Work'], activeTab: 'Fleet', storage: {} }));
+        const profiles = state === 'saved' ? [worker] : [{ username: 'other', password: 'fixture', tab: 'Fleet' }];
+        if (state === 'omitted') {
+            await panel.importText(serializeProfileFile({ profiles, tabs: ['Fleet'], activeTab: 'Fleet', storage: {} }));
+        }
         const frame = document.querySelector('iframe')!;
         Reflect.set(frame.contentWindow!, 'rs2b0t', {
             reader: { ingame: () => false, localPlayerName: () => null },
@@ -361,7 +366,7 @@ test('editing a loaded profile from Manage bots saves its selected tab', async (
         document.querySelector<HTMLButtonElement>('[aria-label="Edit worker"]')!.click();
         expect(wall.controller.activeTab()).toBe('Work');
         const reopened = await reopenAfterAddingTab(wall);
-        expect(reopened.snapshot()).toEqual({ profiles: [worker], tabs: ['Fleet', 'Work', 'Local'], activeTab: 'Work' });
+        expect(reopened.snapshot()).toEqual({ profiles, tabs: ['Fleet', 'Work', 'Local'], activeTab: 'Work' });
     });
 });
 
@@ -408,6 +413,38 @@ async function failTabWrite(edit: () => boolean | Promise<boolean>): Promise<voi
         saves.mockRestore();
     }
 }
+
+test.each(['saved', 'failed'])('immediate settings export after a %s group move', async result => {
+    await withWall('local', async wall => {
+        const profile = { username: 'worker', password: 'fixture', tab: 'Work' };
+        const tabs = ['Work', 'Fleet'];
+        await vault.replaceAll({ profiles: [profile], tabs, activeTab: 'Work' });
+        wall.controller.setTabState(tabs, 'Work');
+        const slot = wall.add(profile);
+        const panel = openSettings();
+        const file = spyOn(URL, 'createObjectURL').mockReturnValue('blob:fixture');
+        const download = spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+        try {
+            const move = () => wall.setSlotTab(slot.id, 'Fleet');
+            if (result === 'failed') await failTabWrite(move);
+            else expect(await move()).toBe(true);
+            await panel.exportProfile();
+            if (result === 'failed') {
+                expect(download).not.toHaveBeenCalled();
+                expect(panel.el.querySelector('#mbx-settings-error')!.textContent).toMatch(/save/i);
+            } else {
+                await waitFor(() => vault.list()[0].tab === 'Fleet');
+                expect(download).toHaveBeenCalledTimes(1);
+                const [blob] = file.mock.calls[0];
+                if (!(blob instanceof Blob)) throw new Error('Expected a profile file');
+                expect(parseProfileFile(await blob.text()).profiles).toEqual([{ ...profile, tab: 'Fleet' }]);
+            }
+        } finally {
+            download.mockRestore();
+            file.mockRestore();
+        }
+    });
+});
 
 test('the save alert retries a failed move without moving the slot again', async () => {
     await withWall('local', async wall => {

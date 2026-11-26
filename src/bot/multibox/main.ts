@@ -518,7 +518,11 @@ function boot(): void {
                     renderRail();
                 }
             }
-        })
+        }),
+        beforeExport: async () => {
+            await afterTabRestore(() => orderWrite);
+            if (pendingTabEdits.length) throw new Error('Tab edits could not be saved. Retry the save before exporting.');
+        }
     });
     document.body.appendChild(settings.el);
     document.getElementById('mbx-settings')!.addEventListener('click', () => settings.open());
@@ -560,11 +564,13 @@ function boot(): void {
             const current = rosterProfiles().find(p => p.username === profile.username);
             const client = current?.slot ? controller.rosterClient(current.slot.id) : null;
             if (!current?.slot || !client) throw new Error('Load this profile and wait for its client before editing.');
-            const previousActive = controller.activeTab();
-            controller.focus(current.slot.id);
-            const selected = controller.activeTab();
-            if (selected !== previousActive) afterTabRestore(() => persistActiveTab(selected));
-            renderRail();
+            const id = current.slot.id;
+            const changedTab = await mutateTabs(() => {
+                const previousActive = controller.activeTab();
+                controller.focus(id);
+                return controller.activeTab() !== previousActive;
+            });
+            if (!changedTab) renderRail();
             await rosterActions.edit(current);
         }
     });
