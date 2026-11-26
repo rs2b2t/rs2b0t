@@ -1,3 +1,4 @@
+import { customStep, talkTo, waitForJournal, waitStep } from '../engine/questSteps.js';
 import { Modals } from '../../../ui/widgets/Modals.js';
 import { normalizeJournal as normalize } from '../journalText.js';
 // docs/QUESTS.md
@@ -242,7 +243,7 @@ function heldAxe(snap: QuestSnapshot): boolean {
 /** Bank first, then Port Khazard's general store, then the guardhouse sink. */
 export function gatherWater(snap: QuestSnapshot): QuestStep {
     if ((snap.inv.get(JUG.toLowerCase()) ?? 0) > 0) {
-        return { kind: 'custom', name: 'fill the jug at the guardhouse sink', run: fillJug };
+        return customStep('fill the jug at the guardhouse sink', fillJug);
     }
     if (snap.bankKnown !== true) {
         return { kind: 'scanBank' };
@@ -258,7 +259,7 @@ export function gatherWater(snap: QuestSnapshot): QuestStep {
 /** Bank first, then Aemad's Adventuring Supplies, then a tree in Cedric's own forest. */
 export function gatherLogs(snap: QuestSnapshot): QuestStep {
     if (heldAxe(snap)) {
-        return { kind: 'custom', name: 'chop logs for the cart', run: chopLogs };
+        return customStep('chop logs for the cart', chopLogs);
     }
     if (snap.bankKnown !== true) {
         return { kind: 'scanBank' };
@@ -275,37 +276,37 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return { kind: 'done' };
     }
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     const stage = snap.stage;
     if (stage === undefined) {
-        return { kind: 'wait', reason: "Monk's Friend journal stage unavailable" };
+        return waitStep("Monk's Friend journal stage unavailable");
     }
     // Why: at stage 10 the journal reads "find the secret cave" with or without the blanket, so the carried obj is the only evidence the cave was robbed.
     if (stage <= MF_STAGE.SPOKEN_TO_OMAD && (snap.invIds?.get(BLANKET_OBJ) ?? 0) > 0) {
-        return { kind: 'talk', stop: HAND_IN_BLANKET };
+        return talkTo(HAND_IN_BLANKET);
     }
     switch (stage) {
         case MF_STAGE.NOT_STARTED:
-            return { kind: 'talk', stop: START };
+            return talkTo(START);
         case MF_STAGE.SPOKEN_TO_OMAD:
-            return { kind: 'custom', name: "fetch the child's blanket", run: fetchBlanket };
+            return customStep("fetch the child's blanket", fetchBlanket);
         case MF_STAGE.RETRIEVED_BLANKET:
-            return { kind: 'talk', stop: ASK_FOR_CEDRIC };
+            return talkTo(ASK_FOR_CEDRIC);
         case MF_STAGE.LOOKING_CEDRIC:
-            return { kind: 'talk', stop: CEDRIC };
+            return talkTo(CEDRIC);
         case MF_STAGE.FINDING_WATER:
             return (snap.inv.get(JUG_WATER.toLowerCase()) ?? 0) > 0
-                ? { kind: 'talk', stop: CEDRIC }
+                ? talkTo(CEDRIC)
                 : gatherWater(snap);
         case MF_STAGE.MENDING_CART:
             return (snap.inv.get(LOGS.toLowerCase()) ?? 0) > 0
-                ? { kind: 'talk', stop: CEDRIC }
+                ? talkTo(CEDRIC)
                 : gatherLogs(snap);
         case MF_STAGE.FIXED_CART:
-            return { kind: 'custom', name: 'tell Omad that Cedric is on his way', run: throwParty };
+            return customStep('tell Omad that Cedric is on his way', throwParty);
         default:
-            return { kind: 'wait', reason: `Monk's Friend stage ${stage} is not implemented` };
+            return waitStep(`Monk's Friend stage ${stage} is not implemented`);
     }
 }
 

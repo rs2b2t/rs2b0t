@@ -16,8 +16,9 @@
 //     'bank:knife:1,bank:hammer:1,bank:bronze_pickaxe:1,bank:thread:2,bank:leather:1,bank:needle:1,bank:coal:8,bank:lobster:20,bank:steel_scimitar:1,bank:coins:50000' \
 //     'mining:20,smithing:20,crafting:20,attack:50,strength:50,defence:40,hitpoints:50' \
 //     Lobster 'speed 300' '2725,3491'
+import { printQuestLogs } from './lib/questHarness.js';
 import type { Page } from 'playwright-core';
-import { launchBrowser, positionalArgs } from './lib/harness.js';
+import { launchBrowser, logBotConsole, positionalArgs } from './lib/harness.js';
 import {
     cheatQuiet,
     clearChatDialogs,
@@ -185,13 +186,7 @@ const browser = await launchBrowser({ swiftshader: true });
 try {
     const page = await browser.newPage();
     const t0 = Date.now();
-    page.on('pageerror', e => console.log(`pageerror: ${e}`));
-    page.on('console', m => {
-        const txt = m.text();
-        if (txt.startsWith('[bot]')) {
-            console.log(`  [${Math.round((Date.now() - t0) / 1000)}s] ${txt}`);
-        }
-    });
+    logBotConsole(page, t0);
 
     await mainlandAccount(page, base, username);
     console.log(`mainland-ready as '${username}'`);
@@ -287,10 +282,7 @@ try {
         const t = Math.round((BUDGET_MS - (deadline - Date.now())) / 1000);
         const jrn = queue.map(q => `${q.id}=${last!.statuses[q.id]}`).join(' ');
         console.log(`  t=${t}s pos=${last.pos ? `${last.pos.x},${last.pos.z},${last.pos.level}` : '?'} ${jrn} qp=${last.qp} runner=${last.runner}`);
-        for (const l of last.logs) {
-            if (l.time > lastLogTime) { console.log(`      · [${l.level}] ${l.msg}`); }
-        }
-        if (last.logs.length > 0) { lastLogTime = Math.max(lastLogTime, ...last.logs.map(l => l.time)); }
+        lastLogTime = printQuestLogs(last.logs, lastLogTime);
         const allDone = queue.every(q => last!.statuses[q.id] === 'complete');
         if (allDone && last.runner !== 'running') { break; }
         // Early fail if blocked forever with runner stopped

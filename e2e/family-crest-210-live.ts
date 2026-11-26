@@ -4,8 +4,9 @@
 //   HEADED=1 bun e2e/family-crest-210-live.ts --stage 7 --minutes 25
 //   HEADED=1 bun e2e/family-crest-210-live.ts --stage 0 --minutes 90     # full run
 //   HEADED=1 bun e2e/family-crest-210-live.ts --stage 0 --teleports       # + tele kit
+import { printQuestLogs, teleportToQuestStart } from './lib/questHarness.js';
 import type { Page } from 'playwright-core';
-import { launchBrowser } from './lib/harness.js';
+import { fail, launchBrowser, logBotConsole } from './lib/harness.js';
 import {
     cheatQuiet,
     clearChatDialogs,
@@ -15,7 +16,6 @@ import {
     relog,
     seedItemsToBank,
     startScript,
-    teleTo,
     type BankSeedItem
 } from './tutorial/harness.js';
 
@@ -56,11 +56,6 @@ function parse(argv: string[]): Args {
 }
 
 const args = parse(process.argv.slice(2));
-
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
-}
 
 const VARROCK_EAST_BANK = { x: 3253, z: 3420, level: 0 };
 
@@ -135,13 +130,7 @@ const browser = await launchBrowser({ swiftshader: true });
 try {
     const page = await browser.newPage();
     const t0 = Date.now();
-    page.on('pageerror', e => console.log(`pageerror: ${e}`));
-    page.on('console', m => {
-        const txt = m.text();
-        if (txt.startsWith('[bot]')) {
-            console.log(`  [${Math.round((Date.now() - t0) / 1000)}s] ${txt}`);
-        }
-    });
+    logBotConsole(page, t0);
 
     await mainlandAccount(page, args.base, args.user);
     console.log(`mainland-ready as '${args.user}'`);
@@ -176,12 +165,7 @@ try {
     }
 
     const start = STAGE_START[args.stage] ?? VARROCK_EAST_BANK;
-    if (!(await teleTo(page, start, 10, 25_000))) {
-        await clearChatDialogs(page, 'pre-tele dialog(s)');
-        if (!(await teleTo(page, start, 10, 25_000))) {
-            fail(`tele to ${start.x},${start.z} did not arrive`);
-        }
-    }
+    await teleportToQuestStart(page, start);
     console.log(`start tile → ${start.x},${start.z},${start.level}`);
 
     await page.evaluate(() => sessionStorage.setItem('rs2b0t:set:AIOQuester:quests', 'crest'));
@@ -202,10 +186,7 @@ try {
             `  t=${t}s pos=${last.pos ? `${last.pos.x},${last.pos.z},${last.pos.level}` : '?'}`
             + ` crestquest=${stage} journal=${last.status} qp=${last.qp} runner=${last.runner}`
         );
-        for (const l of last.logs) {
-            if (l.time > lastLogTime) { console.log(`      · [${l.level}] ${l.msg}`); }
-        }
-        if (last.logs.length > 0) { lastLogTime = Math.max(lastLogTime, ...last.logs.map(l => l.time)); }
+        lastLogTime = printQuestLogs(last.logs, lastLogTime);
 
         // Why: the quest-complete recolour and the QP award land a tick behind `%crestquest`, so a full run waits on the journal; a stage-scoped run has no journal transition and passes on the stage.
         const done = args.until >= 11 ? last.status === 'complete' : stage >= args.until;

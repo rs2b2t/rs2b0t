@@ -1,6 +1,6 @@
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import Tile from '../../geometry/Tile.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { Inventory, InvItem } from '../../api/inventory/Inventory.js';
@@ -177,7 +177,7 @@ export default class BankFletcher extends TaskBot {
     private boothName = 'Bank booth';
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
 
         this.material = this.settings.str('material', 'Logs');
         this.product = this.settings.str('product', 'Arrow shafts');

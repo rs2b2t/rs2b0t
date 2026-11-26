@@ -1,4 +1,5 @@
 // docs/QUESTS.md
+import { customStep, talkTo, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { Skills } from '../../../../skills/Skills.js';
 import { QUESTS } from '../../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
@@ -13,9 +14,9 @@ import {
 
 export { parseObservatoryJournal, readObservatoryStage } from './journal.js';
 
-const talkProfessor: QuestStep = { kind: 'talk', stop: PROFESSOR };
+const talkProfessor: QuestStep = talkTo(PROFESSOR);
 
-const fetchMould: QuestStep = { kind: 'custom', name: 'fetch the lens mould', run: fetchLensMould };
+const fetchMould: QuestStep = customStep('fetch the lens mould', fetchLensMould);
 
 /** `professor_mould` hands the molten glass back and refuses outright on a full pack. */
 const HANDBACK_SLOT = 1;
@@ -79,15 +80,15 @@ function supply(snap: QuestSnapshot, want: Wanted): QuestStep | null {
 
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'complete') { return { kind: 'done' }; }
-    if (snap.journal === 'unknown') { return { kind: 'wait', reason: 'quest journal not loaded' }; }
+    if (snap.journal === 'unknown') { return waitForJournal(); }
     if (snap.journal === 'notStarted') { return talkProfessor; }
 
     const stage = snap.stage;
-    if (stage === undefined) { return { kind: 'wait', reason: 'Observatory Quest journal stage unavailable' }; }
+    if (stage === undefined) { return waitStep('Observatory Quest journal stage unavailable'); }
     if (stage >= OBS_STAGE.COMPLETE) { return { kind: 'done' }; }
 
     if (stage === OBS_STAGE.SENT_TELESCOPE) {
-        return { kind: 'custom', name: 'look through the telescope', run: useTelescope };
+        return customStep('look through the telescope', useTelescope);
     }
 
     if (stage === OBS_STAGE.GIVEN_MOULD) {

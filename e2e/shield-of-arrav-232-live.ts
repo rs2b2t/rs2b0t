@@ -5,9 +5,10 @@
 //   HEADED=1 bun e2e/shield-of-arrav-232-live.ts --gang phoenix --phoenix 0 --until 9 --tick 300 --minutes 45
 //   HEADED=1 bun e2e/shield-of-arrav-232-live.ts --gang blackarm --blackarm 2 --until 3 --tick 300 --minutes 30
 //   HEADED=1 bun e2e/shield-of-arrav-232-live.ts --gang phoenix --phoenix 9 --keep-half --tick 300 --minutes 12
+import { setQuestStats, teleportToQuestStart } from './lib/questHarness.js';
 import type { Page } from 'playwright-core';
 
-import { deployIsolatedClient, launchBrowser } from './lib/harness.js';
+import { deployIsolatedClient, fail, launchBrowser, logBotConsole } from './lib/harness.js';
 import {
     cheatQuiet,
     clearChatDialogs,
@@ -16,7 +17,6 @@ import {
     relog,
     seedItemsToBank,
     startScript,
-    teleTo,
     type BankSeedItem
 } from './tutorial/harness.js';
 
@@ -74,11 +74,6 @@ function parse(argv: string[]): Args {
 
 const args = parse(process.argv.slice(2));
 
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
-}
-
 const QUEST = 'Shield of Arrav';
 const VARROCK_WEST_BANK = { x: 3185, z: 3440, level: 0 };
 
@@ -91,21 +86,6 @@ const BANK_SEED: BankSeedItem[] = [
     { debugName: 'coins', displayName: 'Coins', qty: 2_000_000 },
     { debugName: 'lobster', displayName: 'Lobster', qty: 40 }
 ];
-
-const STATS = [
-    'attack', 'strength', 'defence', 'hitpoints', 'ranged', 'magic', 'prayer',
-    'cooking', 'woodcutting', 'fletching', 'fishing', 'firemaking', 'crafting',
-    'smithing', 'mining', 'herblore', 'agility', 'thieving', 'runecraft'
-];
-
-async function setStats(page: Page, level: number): Promise<void> {
-    for (const skill of STATS) {
-        await cheatQuiet(page, `setstat ${skill} ${level}`);
-    }
-    await clearChatDialogs(page, 'level-up dialog(s)');
-    await page.waitForTimeout(1500);
-    await clearChatDialogs(page, 'straggler dialog(s)');
-}
 
 /** Object ids: Broken shield names both halves, so the pack is read by id. */
 const SHIELD_PHOENIX = 763;
@@ -192,13 +172,7 @@ const browser = await launchBrowser({ swiftshader: true });
 try {
     const page = await browser.newPage();
     const t0 = Date.now();
-    page.on('pageerror', e => console.log(`pageerror: ${e}`));
-    page.on('console', m => {
-        const txt = m.text();
-        if (txt.startsWith('[bot]')) {
-            console.log(`  [${Math.round((Date.now() - t0) / 1000)}s] ${txt}`);
-        }
-    });
+    logBotConsole(page, t0);
 
     await mainlandAccount(page, args.base, args.user, clientPage);
     console.log(`mainland-ready as '${args.user}' on ${clientPage}`);
@@ -206,7 +180,7 @@ try {
     await cheatQuiet(page, `speed ${args.tickMs}`);
     console.log(`tick rate: ${args.tickMs}ms`);
 
-    await setStats(page, args.stats);
+    await setQuestStats(page, args.stats);
     console.log(`stats: ${args.stats} across the board`);
 
     // Why: a Black Arm account needs a weapon-store key it has no way to obtain alone, only Straven issues one, and joining Phoenix makes Katrine refuse you.
@@ -228,12 +202,7 @@ try {
         await clearChatDialogs(page, 'post-relog dialog(s)');
     }
 
-    if (!(await teleTo(page, VARROCK_WEST_BANK, 10, 25_000))) {
-        await clearChatDialogs(page, 'pre-tele dialog(s)');
-        if (!(await teleTo(page, VARROCK_WEST_BANK, 10, 25_000))) {
-            fail(`tele to ${VARROCK_WEST_BANK.x},${VARROCK_WEST_BANK.z} did not arrive`);
-        }
-    }
+    await teleportToQuestStart(page, VARROCK_WEST_BANK);
     console.log(`start tile -> ${VARROCK_WEST_BANK.x},${VARROCK_WEST_BANK.z},${VARROCK_WEST_BANK.level}`);
 
     // Why: the reported wedge is a resumed session, so the pack has to hold the half and the key before the script starts.

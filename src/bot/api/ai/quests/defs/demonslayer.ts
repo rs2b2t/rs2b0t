@@ -1,3 +1,4 @@
+import { customStep, talkTo, waitForJournal, waitStep } from '../engine/questSteps.js';
 import { findSceneTarget } from '../exec/prompts.js';
 import { Execution } from '../../../execution/Execution.js';
 import { Game } from '../../../game/Game.js';
@@ -14,6 +15,7 @@ import Tile from '../../../../geometry/Tile.js';
 import { afterDialogueAction, gotoNpc, isUnderground, talkThrough, type NpcStop } from '../exec/primitives.js';
 import { executeStep } from '../exec/steps.js';
 import { gpShort } from '../engine/provisioning.js';
+import { hasName as has, wornName as worn } from '../engine/snapshotItems.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { QUESTS } from '../data/quests.js';
 
@@ -59,13 +61,11 @@ const BONES_ID = 526;
 const GOBLIN_ID = 100;
 const GOBLIN_RADIUS = 20;
 
-const has = (snap: QuestSnapshot, name: string): boolean => (snap.inv.get(name.toLowerCase()) ?? 0) > 0;
-const worn = (snap: QuestSnapshot, name: string): boolean => snap.worn.has(name.toLowerCase());
 const heldId = (id: number): boolean => Inventory.items().some(i => i.id === id);
 
 function buyOrWait(snap: QuestSnapshot, step: Extract<QuestStep, { kind: 'buy' }>): QuestStep {
     if (gpShort(snap, step.estGp) > 0) {
-        return { kind: 'wait', reason: `need ~${step.estGp} gp for ${step.item}` };
+        return waitStep(`need ~${step.estGp} gp for ${step.item}`);
     }
     return step;
 }
@@ -332,10 +332,10 @@ async function driveIncantation(_log: (m: string) => void): Promise<boolean> {
 
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'complete') { return { kind: 'done' }; }
-    if (snap.journal === 'unknown') { return { kind: 'wait', reason: 'quest journal not loaded' }; }
-    if (snap.journal === 'notStarted') { return { kind: 'talk', stop: GYPSY }; }
+    if (snap.journal === 'unknown') { return waitForJournal(); }
+    if (snap.journal === 'notStarted') { return talkTo(GYPSY); }
 
-    if (worn(snap, 'Silverlight')) { return { kind: 'custom', name: 'fight Delrith', run: fightDelrith }; }
+    if (worn(snap, 'Silverlight')) { return customStep('fight Delrith', fightDelrith); }
     if (has(snap, 'Silverlight')) { return { kind: 'equip', item: 'Silverlight' }; }
 
     if ((snap.invIds?.get(ROVIN_KEY_ID) ?? 0) > 0 && (snap.invIds?.get(TRAIBORN_KEY_ID) ?? 0) === 0) {
@@ -349,7 +349,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         }
     }
 
-    return { kind: 'custom', name: 'key hunt', run: keyHunt };
+    return customStep('key hunt', keyHunt);
 }
 
 export const demonslayer: QuestModule = {
@@ -358,7 +358,7 @@ export const demonslayer: QuestModule = {
     grind: ['delrith', 'weakened delrith', 'dark wizard', 'goblin'],
     gather: {
         'bucket of water': fillBucket,
-        'bones': () => ({ kind: 'custom', name: 'grind bones', run: grindGoblins })
+        'bones': () => customStep('grind bones', grindGoblins)
     },
     tools: ['key', 'silverlight', 'bucket', 'bones', 'coins'],
     decide

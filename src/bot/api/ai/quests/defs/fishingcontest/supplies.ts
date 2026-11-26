@@ -1,3 +1,4 @@
+import { customStep, waitStep } from '../../engine/questSteps.js';
 import { CANT_REACH, GameMessages } from '../../../../chatbox/gameMessages.js';
 import { EventSignal } from '../../../../execution/EventSignal.js';
 import { Execution } from '../../../../execution/Execution.js';
@@ -42,7 +43,7 @@ export function sourcePass(snap: QuestSnapshot): QuestStep | null {
         return null;
     }
     return fromBank(snap, FC_ID.PASS, ITEM.PASS, 1)
-        ?? { kind: 'custom', name: 'ask the dwarf for another competition pass', run: claimPass };
+        ?? customStep('ask the dwarf for another competition pass', claimPass);
 }
 
 export function sourceGarlic(snap: QuestSnapshot): QuestStep | null {
@@ -50,7 +51,7 @@ export function sourceGarlic(snap: QuestSnapshot): QuestStep | null {
         return null;
     }
     return fromBank(snap, FC_ID.GARLIC, GARLIC, 1)
-        ?? { kind: 'custom', name: "take garlic from Morgan's cupboard", run: takeGarlic };
+        ?? customStep("take garlic from Morgan's cupboard", takeGarlic);
 }
 
 export function sourceRod(snap: QuestSnapshot): QuestStep | null {
@@ -75,7 +76,7 @@ export function sourceFee(snap: QuestSnapshot): QuestStep | null {
         return null;
     }
     return fromBank(snap, FC_ID.COINS, ITEM.COINS, COIN_TRIP)
-        ?? { kind: 'wait', reason: `no coins for the ${ENTRY_FEE}gp contest entry fee` };
+        ?? waitStep(`no coins for the ${ENTRY_FEE}gp contest entry fee`);
 }
 
 // Why: `need` is 1 once the contest is under way; topping a half-spent pack back to 5 would walk out of Hemenster mid-round and lose the entry at the gate.

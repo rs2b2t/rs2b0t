@@ -3,7 +3,7 @@ import { nearestBank, type BankLocation } from '../../api/bank/BankLocations.js'
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { Equipment } from '../../api/equipment/Equipment.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Skills } from '../../api/skills/Skills.js';
 import { ContinueDialog } from '../../api/tasks/ContinueDialog.js';
@@ -48,7 +48,7 @@ export default class JiveEnchanter extends TaskBot {
     staffChecked = false;
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
 
         const pick = this.settings.str('jewel', 'Sapphire ring');
         const jewel = jewelByName(pick);

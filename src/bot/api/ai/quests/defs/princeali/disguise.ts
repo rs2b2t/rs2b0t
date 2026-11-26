@@ -1,3 +1,4 @@
+import { customStep, talkTo, waitStep } from '../../engine/questSteps.js';
 import { Execution } from '../../../../execution/Execution.js';
 import type Tile from '../../../../../geometry/Tile.js';
 import { Traversal } from '../../../../walking/Traversal.js';
@@ -101,7 +102,7 @@ export function makeAshes(snap: QuestSnapshot): QuestStep | null {
         return null;
     }
     return grabItem(snap, PA_ITEM.LOGS, PA_TILE.LOGS_SPAWN)
-        ?? { kind: 'custom', name: 'burn the logs for ashes', run: burnLogs };
+        ?? customStep('burn the logs for ashes', burnLogs);
 }
 
 export function makeBlondWig(snap: QuestSnapshot): QuestStep | null {
@@ -112,15 +113,15 @@ export function makeBlondWig(snap: QuestSnapshot): QuestStep | null {
         if (held(snap, PA_ITEM.ONION.id) < ONIONS_FOR_DYE) {
             return null;
         }
-        return { kind: 'custom', name: 'have Aggie make yellow dye', run: makeYellowDye };
+        return customStep('have Aggie make yellow dye', makeYellowDye);
     }
     if (held(snap, PA_ITEM.PLAIN_WIG.id) === 0) {
         if (held(snap, PA_ITEM.BALL_OF_WOOL.id) < BALLS_FOR_WIG) {
             return null;
         }
-        return { kind: 'talk', stop: NED_WIG };
+        return talkTo(NED_WIG);
     }
-    return { kind: 'custom', name: 'dye the wig blond', run: dyeWig };
+    return customStep('dye the wig blond', dyeWig);
 }
 
 export function makePaste(snap: QuestSnapshot): QuestStep | null {
@@ -135,9 +136,9 @@ export function makePaste(snap: QuestSnapshot): QuestStep | null {
     ];
     const absent = missing.filter((name): name is string => name !== null);
     if (absent.length > 0) {
-        return { kind: 'wait', reason: `paste needs ${absent.join(', ')}` };
+        return waitStep(`paste needs ${absent.join(', ')}`);
     }
-    return { kind: 'talk', stop: AGGIE_PASTE };
+    return talkTo(AGGIE_PASTE);
 }
 
 /** Item-on-NPC is an opnpcu, so this walks then uses; `Reach.npcDialog` would open a conversation first. */

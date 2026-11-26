@@ -1,17 +1,15 @@
-import { TaskBot, type Task } from '../../api/bot/Bot.js';
+import type { Task } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import { Inventory, type InvItem } from '../../api/inventory/Inventory.js';
-import { Equipment } from '../../api/equipment/Equipment.js';
+import { NATURE_RUNE } from '../../api/magic/fireStaves.js';
 import { Bank } from '../../api/bank/Bank.js';
-import { openBankAccess } from '../../api/bank/Banking.js';
+import { BankMagicBot } from '../../api/magic/BankMagicBot.js';
 import { Skills } from '../../api/skills/Skills.js';
 import { Paint } from '../../paint/Paint.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
-import { nearestBankReachable, type BankLocation } from '../../api/bank/BankLocations.js';
-import { Navigator } from '../../event/webwalk/Navigator.js';
 import { liveCatalog } from '../../api/market/catalog.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
 import { etaHours, levelProgress } from '../../paint/levelProgress.js';
@@ -22,12 +20,10 @@ import {
     DEFAULT_ALCH_ITEMS,
     customAlchItem,
     fmtGp,
-    FIRE_STAVES,
     HIGH_ALCH_FIRES,
     LOW_ALCH_FIRES,
     nextAlchTarget,
     resolveAlchSpell,
-    pickFireStaff,
     selectedAlchItems,
     SPELL_HIGH,
     SPELL_OPTION_LABELS,
@@ -37,9 +33,7 @@ import {
 } from './AlcherLogic.js';
 import type Tile from '../../geometry/Tile.js';
 
-const BOOTH = { name: 'Bank booth', op: 'Use-quickly' };
 const MAGIC_TAB = 6;
-const NATURE_RUNE = 'Nature rune';
 // Why: the cast's p_delay(3) leaves the player delayed through tick+4's packet decode and the engine bins an op it decodes while delayed, so the server takes one cast per 5 ticks and no faster.
 const ALCH_TICKS = 5;
 /** Ticks to give the note before a cast counts as binned. */
@@ -96,8 +90,9 @@ export const ALCHER_SETTINGS: SettingsSchema = {
     }
 };
 
-export default class Alcher extends TaskBot {
+export default class Alcher extends BankMagicBot {
     override loopDelay = 400;
+    protected override readonly warningColor = WARN;
 
     private selected: AlchItem[] = [];
     private spell: AlchSpell = resolveAlchSpell(SPELL_HIGH);
@@ -105,12 +100,6 @@ export default class Alcher extends TaskBot {
     private empty = new Set<string>();
     private alchs = 27;
     firesPerCast = 0;
-
-    // Why: the bank access is resolved once; every trip only opens the booth.
-    private bank: BankLocation | null = null;
-    private bankAccess: { name: string; op: string } = BOOTH;
-    private bankTile: Tile | null = null;
-    private bankName = 'the bank';
 
     private trips = 0;
     private alched = 0;
@@ -129,7 +118,7 @@ export default class Alcher extends TaskBot {
     private castTick = -ALCH_TICKS;
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
 
         this.spell = resolveAlchSpell(this.settings.str('spell', SPELL_HIGH));
         const keys = this.settings.list('items', DEFAULT_ALCH_ITEMS);
@@ -160,7 +149,7 @@ export default class Alcher extends TaskBot {
         if (!(await this.resolveBank())) {
             return;
         }
-        this.add(new EnsureGear(this), new Restock(this), new Alch(this));
+        this.add(this.fireStaffTask(() => Boolean(this.firesPerCast)), new Restock(this), new Alch(this));
     }
 
     override async loop(): Promise<number | void> {
@@ -173,64 +162,29 @@ export default class Alcher extends TaskBot {
         return super.loop();
     }
 
-    // Why: resolve the nearest bank once and walk to it; later trips reuse bankAccess.
-    async resolveBank(): Promise<boolean> {
-        const here = Game.tile();
-        if (!here) {
-            return false;
-        }
-        // Why: inside a dungeon the air-nearest bank can be the x-closest one far from the exit, so buy the real route to every candidate before walking.
-        const bank = await nearestBankReachable(here, Navigator);
-        if (!bank) {
-            this.log('no reachable bank — stopping');
-            this.requestFinish('no reachable bank');
-            return false;
-        }
-        this.bank = bank;
-        this.bankAccess = bank.npcAccess ?? bank.access ?? BOOTH;
-        this.bankTile = bank.tile;
-        this.bankName = bank.name;
-        this.log(`banking at ${bank.name} (${this.bankAccess.name} / ${this.bankAccess.op})`);
-
-        const near = bank.tile.level === here.level && bank.tile.distanceTo(here) <= 4;
-        if (near) {
-            return true;
-        }
-        this.setStatus(`walking to ${bank.name}`, WARN);
-        if (!(await Traversal.walkResilient(bank.tile, { radius: 3, attempts: 4, timeoutMs: 180_000, log: m => this.log(`  ${m}`) }))) {
-            this.log('walk to the bank failed — stopping');
-            this.requestFinish('walk to the bank failed');
-            return false;
-        }
-        return true;
-    }
-
     override recoveryAnchor(): Tile | null {
-        return this.bankTile;
+        return this.bank?.tile ?? null;
     }
 
     // Why: once at the bank the scene lookup picks the closest booth/chest, so no stored stand is needed.
     // Why: an event evade can carry us past booth range, so a failed open walks back to the resolved tile.
-    async openBank(): Promise<boolean> {
+    override async openBank(): Promise<boolean> {
         if (Bank.isOpen()) {
             return true;
         }
         await this.settleCast();
         this.setStatus('opening bank', COOL);
-        if (await openBankAccess(this.bank, BOOTH, m => this.log(`  ${m}`))) {
+        if (await this.openResolvedBank()) {
             return true;
         }
         const here = Game.tile();
-        const strayed = this.bankTile !== null
-            && here !== null
-            && (here.level !== this.bankTile.level || this.bankTile.distanceTo(here) > BANK_LEASH);
-        if (!strayed) {
+        if (!this.bank || !here || (here.level === this.bank.tile.level && this.bank.tile.distanceTo(here) <= BANK_LEASH)) {
             this.log('could not open the bank — retrying');
             return false;
         }
-        this.setStatus(`walking back to ${this.bankName}`, WARN);
-        this.log(`drifted off the bank stand — walking back to ${this.bankName}`);
-        await Traversal.walkResilient(this.bankTile!, { radius: 3, attempts: 3, timeoutMs: 120_000, log: m => this.log(`  ${m}`) });
+        this.setStatus(`walking back to ${this.bank.name}`, WARN);
+        this.log(`drifted off the bank stand — walking back to ${this.bank.name}`);
+        await Traversal.walkResilient(this.bank.tile, { radius: 3, attempts: 3, timeoutMs: 120_000, log: m => this.log(`  ${m}`) });
         return false;
     }
 
@@ -245,18 +199,9 @@ export default class Alcher extends TaskBot {
         }
     }
 
-    setStatus(s: string, color = DIM): void {
+    override setStatus(s: string, color = DIM): void {
         this.status = s;
         this.statusColor = color;
-    }
-
-    // Why: a count of zero can be a list that has not loaded rather than an empty bank. Before halting on "out of X", confirm the list is ready and every named item reads zero.
-    async bankTrulyOutOf(...names: string[]): Promise<boolean> {
-        const settled = await Bank.waitReady(3500);
-        if (!settled) {
-            return false;
-        }
-        return names.every(name => Bank.count(name) === 0);
     }
 
     items(): AlchItem[] {
@@ -422,64 +367,6 @@ export default class Alcher extends TaskBot {
         p.gap();
         ScriptRunner.paintControls(p);
         p.end();
-    }
-}
-
-// Why: set a fire-rune staff once. Deposit everything, withdraw one, close so Wield is a backpack op, wield, reopen.
-class EnsureGear implements Task {
-    constructor(private bot: Alcher) {}
-
-    validate(): boolean {
-        return !this.bot.firesPerCast && pickFireStaff(name => Equipment.contains(name)) === undefined;
-    }
-
-    async execute(): Promise<void> {
-        if (!(await this.bot.openBank())) {
-            return;
-        }
-        if (Inventory.used() > 0) {
-            await Bank.depositAllMatching(() => true);
-        }
-        let staff = pickFireStaff(name => Inventory.count(name) > 0);
-        if (!staff) {
-            staff = pickFireStaff(name => Bank.count(name) > 0);
-            if (!staff) {
-                if (!(await this.bot.bankTrulyOutOf(...FIRE_STAVES))) {
-                    this.bot.log('withdraw of a fire staff stalled but the bank list is still settling — retrying');
-                    return;
-                }
-                this.bot.log('no fire staff in the bank — stopping');
-                this.bot.requestFinish('no fire staff in the bank');
-                return;
-            }
-            this.bot.log(`withdrawing ${staff}`);
-            if (!(await Bank.withdrawX(staff, 1))) {
-                if (!(await this.bot.bankTrulyOutOf(...FIRE_STAVES))) {
-                    this.bot.log(`withdraw of ${staff} stalled but the bank list is still settling — retrying`);
-                    return;
-                }
-                this.bot.log('no fire staff in the bank — stopping');
-                this.bot.requestFinish('no fire staff in the bank');
-                return;
-            }
-        }
-        if (!(await Bank.close())) {
-            this.bot.log('bank would not close — retrying');
-            return;
-        }
-        // Why: close leaves Deposit-* ops on the side pack for a beat, so wait for Wield before equip.
-        await Execution.delayUntil(
-            () => !Bank.isOpen() && (Inventory.first(staff)?.actions().some(o => /wield|wear|equip/i.test(o)) ?? false),
-            3000
-        );
-        this.bot.setStatus(`wielding ${staff}`, WARN);
-        if (!(await Equipment.equip(staff))) {
-            this.bot.log(`could not wield ${staff} — stopping`);
-            this.bot.requestFinish(`could not wield ${staff}`);
-            return;
-        }
-        this.bot.log(`wore ${staff} — casts need only ${NATURE_RUNE}s now`);
-        await this.bot.openBank();
     }
 }
 

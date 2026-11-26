@@ -1,3 +1,4 @@
+import { customStep, talkTo, waitForJournal, waitStep } from '../engine/questSteps.js';
 import { Modals } from '../../../ui/widgets/Modals.js';
 import { normalizeJournal as normalize } from '../journalText.js';
 // docs/QUESTS.md
@@ -457,27 +458,27 @@ export function gatherWater(snap: QuestSnapshot): QuestStep {
 
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'complete') { return { kind: 'done' }; }
-    if (snap.journal === 'unknown') { return { kind: 'wait', reason: 'quest journal not loaded' }; }
-    if (snap.journal === 'notStarted') { return { kind: 'talk', stop: KOJO }; }
+    if (snap.journal === 'unknown') { return waitForJournal(); }
+    if (snap.journal === 'notStarted') { return talkTo(KOJO); }
 
     const progress = snap.progress;
-    if (progress === undefined) { return { kind: 'wait', reason: 'Clock Tower journal stage unavailable' }; }
+    if (progress === undefined) { return waitStep('Clock Tower journal stage unavailable'); }
 
     const held = heldCog(snap);
     if (held !== null) {
         if (hasFlag(progress, `placed-${held}`)) {
-            return { kind: 'wait', reason: `carrying a ${held} cog whose spindle is already filled` };
+            return waitStep(`carrying a ${held} cog whose spindle is already filled`);
         }
-        return { kind: 'custom', name: `place the ${held} cog`, run: placeLeg(held) };
+        return customStep(`place the ${held} cog`, placeLeg(held));
     }
 
     const next = FETCH_ORDER.find(colour => !hasFlag(progress, `placed-${colour}`));
-    if (next === undefined) { return { kind: 'talk', stop: KOJO }; }
+    if (next === undefined) { return talkTo(KOJO); }
 
     if (next === 'black' && !snap.inv.has(WATER.toLowerCase())) {
         return gatherWater(snap);
     }
-    return { kind: 'custom', name: `fetch the ${next} cog`, run: fetchLeg(next) };
+    return customStep(`fetch the ${next} cog`, fetchLeg(next));
 }
 
 export const clocktower: QuestModule = {

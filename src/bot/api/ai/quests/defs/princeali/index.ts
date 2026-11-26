@@ -1,4 +1,5 @@
 // docs/reference/quest-engine.md#quest-state
+import { customStep, talkTo, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { QUESTS } from '../../data/quests.js';
 import { gotoNpc, talkStrict } from '../../exec/primitives.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
@@ -73,14 +74,14 @@ async function leelaHandover(log: (m: string) => void): Promise<boolean> {
 
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     if (snap.journal === 'complete' || (snap.stage ?? -1) >= PRINCE_STAGE.COMPLETE) {
         return { kind: 'done' };
     }
     const stage = snap.stage;
     if (stage === undefined) {
-        return { kind: 'wait', reason: 'Prince Ali Rescue journal stage unavailable' };
+        return waitStep('Prince Ali Rescue journal stage unavailable');
     }
 
     if (!snap.bankKnown) {
@@ -98,10 +99,10 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
     switch (stage) {
         case PRINCE_STAGE.NOT_STARTED:
-            return { kind: 'talk', stop: HASSAN_START };
+            return talkTo(HASSAN_START);
 
         case PRINCE_STAGE.STARTED:
-            return { kind: 'talk', stop: OSMAN_BRIEF };
+            return talkTo(OSMAN_BRIEF);
 
         case PRINCE_STAGE.SPOKEN_OSMAN: {
             const prep = prepLeg(snap);
@@ -109,9 +110,9 @@ export function decide(snap: QuestSnapshot): QuestStep {
                 return prep;
             }
             if (!haveKey(snap) || !disguiseComplete(snap)) {
-                return { kind: 'wait', reason: 'every prep leg is satisfied but the disguise or key is not in the pack' };
+                return waitStep('every prep leg is satisfied but the disguise or key is not in the pack');
             }
-            return { kind: 'custom', name: 'show Leela the disguise and collect the key', run: leelaHandover };
+            return customStep('show Leela the disguise and collect the key', leelaHandover);
         }
 
         // Dying here drops the untradeable quest items, so the prep legs run at these stages too and rebuild the disguise.
@@ -121,10 +122,10 @@ export function decide(snap: QuestSnapshot): QuestStep {
             return prepLeg(snap) ?? decideJailbreak(snap);
 
         case PRINCE_STAGE.SAVED:
-            return { kind: 'talk', stop: HASSAN_REWARD };
+            return talkTo(HASSAN_REWARD);
 
         default:
-            return { kind: 'wait', reason: `Prince Ali Rescue stage ${stage} is not implemented` };
+            return waitStep(`Prince Ali Rescue stage ${stage} is not implemented`);
     }
 }
 

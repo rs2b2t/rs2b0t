@@ -1,3 +1,4 @@
+import { customStep, waitStep } from '../../engine/questSteps.js';
 import { GameMessages } from '../../../../chatbox/gameMessages.js';
 import { EventSignal } from '../../../../execution/EventSignal.js';
 import { Execution } from '../../../../execution/Execution.js';
@@ -187,13 +188,13 @@ export function blackarmStep(snap: QuestSnapshot): QuestStep {
         case SOA_STAGE.KATRINE_TASK:
             // Why: the store door is out of the nav graph, so a bot left inside after the raid has no route to Katrine and every path reads unreachable; leave first.
             if (inStoreGround(snap.tile) || inWeaponStore(snap.tile)) {
-                return { kind: 'custom', name: 'leave the weapon store', run: leaveWeaponStore };
+                return customStep('leave the weapon store', leaveWeaponStore);
             }
             if (heldId(snap, SOA_ID.CROSSBOW) >= 2) {
                 return say(KATRINE_HANDIN, 'hand the crossbows to Katrine');
             }
             if (heldId(snap, SOA_ID.STORE_KEY) > 0) {
-                return { kind: 'custom', name: 'steal two crossbows from the weapon store', run: raidWeaponStore };
+                return customStep('steal two crossbows from the weapon store', raidWeaponStore);
             }
             // Why: a key traded over on an earlier run gets banked with everything else, and an unread bank can still hold it.
             if (bankedId(snap, SOA_ID.STORE_KEY) > 0) {
@@ -210,9 +211,9 @@ export function blackarmStep(snap: QuestSnapshot): QuestStep {
             if (bankedId(snap, SOA_ID.SHIELD_BLACKARM) > 0) {
                 return { kind: 'withdraw', items: [{ name: 'Broken shield', qty: 1, id: SOA_ID.SHIELD_BLACKARM }] };
             }
-            return { kind: 'custom', name: 'search the Black Arm cupboard', run: takeBlackArmHalf };
+            return customStep('search the Black Arm cupboard', takeBlackArmHalf);
 
         default:
-            return { kind: 'wait', reason: `black arm leg has nothing for stage ${stage}` };
+            return waitStep(`black arm leg has nothing for stage ${stage}`);
     }
 }

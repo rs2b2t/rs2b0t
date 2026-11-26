@@ -1,7 +1,7 @@
 import type { WorldTile } from '../../adapter/ClientAdapter.js';
 import type { AbstractBot, Task } from '../bot/Bot.js';
 import { Execution } from '../execution/Execution.js';
-import { Game } from '../game/Game.js';
+import { Game, waitForPlayerTile } from '../game/Game.js';
 import { AcquireTask, hasAll, type ItemNeed } from '../acquisition/ItemAcquisition.js';
 import { Traversal } from '../walking/Traversal.js';
 
@@ -48,7 +48,7 @@ export class DeathRecovery implements Task {
     }
 
     async execute(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 20000);
+        await waitForPlayerTile(20000);
         await Execution.delayTicks(3);
 
         if (this.reacquire && this.reacquire.validate()) {

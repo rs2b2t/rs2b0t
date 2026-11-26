@@ -1,3 +1,4 @@
+import { customStep } from '../../engine/questSteps.js';
 import type Tile from '../../../../../geometry/Tile.js';
 import { GameMessages } from '../../../../chatbox/gameMessages.js';
 import { Execution } from '../../../../execution/Execution.js';
@@ -370,5 +371,5 @@ export function tabletLeg(): QuestStep {
 }
 
 export function leaveCaveStep(): QuestStep {
-    return { kind: 'custom', name: 'climb out of the dig shaft', run: climbOutOfCave };
+    return customStep('climb out of the dig shaft', climbOutOfCave);
 }

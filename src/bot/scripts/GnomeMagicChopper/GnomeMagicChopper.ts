@@ -5,7 +5,7 @@ import { Banking } from '../../api/bank/Banking.js';
 import { LoopingBot } from '../../api/bot/Bot.js';
 import { Equipment } from '../../api/equipment/Equipment.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import { GroundItems } from '../../api/grounditems/GroundItems.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Locs } from '../../api/locs/Locs.js';
@@ -656,7 +656,7 @@ export default class GnomeMagicChopper extends LoopingBot {
     }
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
         Traversal.preload();
 
         this.startedAt = Date.now();
@@ -1608,7 +1608,7 @@ export default class GnomeMagicChopper extends LoopingBot {
 
     async waitForRespawn() {
         this.status = 'waiting for respawn';
-        const ready = await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 20_000);
+        const ready = await waitForPlayerTile(20_000);
         if (!ready) {
             this.log('still waiting for respawn...');
             return;

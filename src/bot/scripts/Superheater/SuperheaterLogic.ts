@@ -1,6 +1,6 @@
 // Pure data and decisions for Superheater, which smelts bars with Superheat Item. The pack holds 28 slots and the nature-rune stack always takes one, leaving 27 for ore.
 
-import { STAFF_RUNES } from '#/bot/data/spelldb.js';
+export { FIRE_STAFF, FIRE_STAVES, NATURE_RUNE, pickFireStaff } from '../../api/magic/fireStaves.js';
 
 export interface Recipe {
     readonly bar: string;
@@ -24,30 +24,7 @@ export const RECIPES: readonly Recipe[] = [
     { bar: 'Rune', level: 85, ingredients: [{ ore: 'Runite ore', perBar: 1 }, { ore: 'Coal', perBar: 8 }] }
 ];
 
-/** Nature rune, one per cast, kept in the pack across the deposit-all-except. */
-export const NATURE_RUNE = 'Nature rune';
 export const SUPERHEAT_FIRES = 4;
-
-/** Preferred fire-rune staff when several are in the bank. */
-export const FIRE_STAFF = 'Staff of fire';
-
-const FIRE_RUNE = 'fire rune';
-
-// Why: Staff of fire stays first so a bank that still has one withdraws it ahead of a battlestaff.
-export const FIRE_STAVES: readonly string[] = [
-    FIRE_STAFF,
-    ...Object.entries(STAFF_RUNES)
-        .filter(([staff, runes]) =>
-            staff.toLowerCase() !== FIRE_STAFF.toLowerCase()
-            && runes.some(r => r.toLowerCase() === FIRE_RUNE)
-        )
-        .map(([staff]) => staff)
-];
-
-/** First fire-rune staff the predicate reports as present. */
-export function pickFireStaff(has: (name: string) => boolean): string | undefined {
-    return FIRE_STAVES.find(name => has(name));
-}
 
 /** Gold is the only bar whose Smithing XP the Goldsmith gauntlet multiplies. */
 export function wantsGoldsmithGauntlets(bar: string, enabled: boolean): boolean {

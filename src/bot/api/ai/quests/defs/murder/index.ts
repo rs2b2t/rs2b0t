@@ -1,4 +1,5 @@
 // docs/QUESTS.md
+import { customStep as custom, talkTo, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { QUESTS } from '../../data/quests.js';
 import { hasFlag, type QuestModule, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import {
@@ -18,10 +19,6 @@ import { accused, banked, held, heldThread } from './state.js';
 // Why: Arhein's pot is 1gp and every dusting spends 1 load of flour, so the pack carries enough for the dagger and both thread-matched suspects in one barrel visit.
 const POT_TARGET = 3;
 const POT_GP = 100;
-
-function custom(name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep {
-    return { kind: 'custom', name, run };
-}
 
 // Why: a barrel, the window and the study floor all refuse while a copy sits in the bank, so anything banked has to come back out first.
 function reclaim(snap: QuestSnapshot): QuestStep | null {
@@ -47,14 +44,14 @@ export function sourcePot(snap: QuestSnapshot): QuestStep | null {
 
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     if (snap.journal === 'complete') {
         return { kind: 'done' };
     }
     const progress = snap.progress;
     if (snap.journal !== 'notStarted' && progress === undefined) {
-        return { kind: 'wait', reason: 'Murder Mystery journal stage unavailable' };
+        return waitStep('Murder Mystery journal stage unavailable');
     }
 
     const reclaimed = reclaim(snap);
@@ -70,7 +67,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         }
     }
     if (snap.journal === 'notStarted') {
-        return { kind: 'talk', stop: GUARD_START };
+        return talkTo(GUARD_START);
     }
 
     const thread = heldThread(snap);
@@ -86,7 +83,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         const order = named ? [named] : suspectOrder(thread);
         return custom('prove the family lied about the poison', log => provePoison(order, log));
     }
-    return { kind: 'talk', stop: GUARD_HANDIN };
+    return talkTo(GUARD_HANDIN);
 }
 
 export const murder: QuestModule = {

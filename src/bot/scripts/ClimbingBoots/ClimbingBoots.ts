@@ -4,7 +4,7 @@ import { Bank } from '../../api/bank/Bank.js';
 import { Banking } from '../../api/bank/Banking.js';
 import { Equipment } from '../../api/equipment/Equipment.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Locs, type Loc } from '../../api/locs/Locs.js';
 import { Npcs, talkOp as npcTalkOp } from '../../api/npcs/Npcs.js';
@@ -91,7 +91,7 @@ export default class ClimbingBoots extends LoopingBot {
     paintCollapsed = false;
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
         this.useTeleport = this.settings.bool('useTeleport', true);
         this.runeStock = this.settings.num('runeStock', 50);
         this.startedAt = Date.now();

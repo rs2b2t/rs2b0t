@@ -1,3 +1,4 @@
+import { customStep as custom, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { QUESTS } from '../../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { flagValue } from '../../engine/types.js';
@@ -10,7 +11,7 @@ import { huntShade, REMAINS_WANTED } from './shades.js';
 import {
     ashesShort,
     fillVial,
-    heldId,
+    heldId as held,
     kit,
     logsShort,
     makeAshes,
@@ -55,11 +56,6 @@ import {
 
 /** Remains kept past Ulsquire's study: one for the pyre, one against a failed cremation. */
 const SPARE_REMAINS = 2;
-
-const custom = (name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep =>
-    ({ kind: 'custom', name, run });
-
-const held = (snap: QuestSnapshot, id: number): number => heldId(snap, id);
 
 const razmire = (script: readonly string[]): QuestStep =>
     custom('talk to Razmire', visit(SM_NPC.RAZMIRE, SM_NPC.RAZMIRE_AFFLICTED, SM_TILE.RAZMIRE, script));
@@ -109,7 +105,7 @@ function serumLeg(snap: QuestSnapshot, stage: number): QuestStep | null {
     if (held(snap, SM_ID.TARROMIN_UNF) > 0) {
         return held(snap, SM_ID.ASHES) > 0
             ? custom('mix serum 207', mixSerum)
-            : { kind: 'wait', reason: 'no ashes for the serum' };
+            : waitStep('no ashes for the serum');
     }
     if (held(snap, SM_ID.TARROMIN) > 0) {
         if (held(snap, SM_ID.VIAL_WATER) > 0) {
@@ -157,7 +153,7 @@ function shopLeg(snap: QuestSnapshot, want: { building: boolean; oil: boolean; m
     if (want.building && !buildReady(snap)) {
         const sets = setsThatFit(snap.freeSlots ?? 0);
         if (sets === 0) {
-            return { kind: 'wait', reason: 'no pack room for building material' };
+            return waitStep('no pack room for building material');
         }
         return custom('buy temple materials from Razmire', shopAtRazmire(buildersOrder(sets)));
     }
@@ -191,14 +187,14 @@ async function altarLeg(log: (m: string) => void): Promise<boolean> {
 
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     if (snap.journal === 'complete') {
         return { kind: 'done' };
     }
     const stage = snap.progress?.stage ?? snap.stage;
     if (stage === undefined) {
-        return { kind: 'wait', reason: 'quest stage not readable' };
+        return waitStep('quest stage not readable');
     }
     if (stage >= SM_STAGE.COMPLETE) {
         return { kind: 'done' };
@@ -311,7 +307,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         case SM_STAGE.LIT_PYRE:
             return ulsquire([]);
         default:
-            return { kind: 'wait', reason: `unmapped stage ${stage}` };
+            return waitStep(`unmapped stage ${stage}`);
     }
 }
 

@@ -10,7 +10,7 @@
 // Redeploy first when GatheringBot / CookingRanges / walkOpening change:
 //   ~/redeploy.sh
 import type { Page } from 'playwright-core';
-import { launchBrowser, parseArgs } from './lib/harness.js';
+import { fail, launchBrowser, parseArgs } from './lib/harness.js';
 import {
     cheatQuiet,
     clearChatDialogs,
@@ -147,11 +147,6 @@ type Abi = {
         registry: { get(n: string): unknown };
     };
 };
-
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
-}
 
 function teleCmd(t: Tile): string {
     return `tele ${t.level},${t.x >> 6},${t.z >> 6},${t.x & 63},${t.z & 63}`;

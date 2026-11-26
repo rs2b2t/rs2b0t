@@ -5,9 +5,11 @@
 //   HEADED=1 bun e2e/eadgar-ruse-241-live.ts --stage 30 --until 50 --minutes 45   # the Ardougne parrot leg
 //   HEADED=1 bun e2e/eadgar-ruse-241-live.ts --stage 90 --until 110 --at 2844,10057,1 --pack --minutes 30
 //   HEADED=1 bun e2e/eadgar-ruse-241-live.ts --stage 10 --until 15 --unfreed --minutes 40  # the free-Eadgar recovery
+import { parseQuestArgs, type QuestArgs } from './lib/questArgs.js';
+import { printQuestLogs, teleportToQuestStart } from './lib/questHarness.js';
 import type { Page } from 'playwright-core';
 
-import { deployIsolatedClient, launchBrowser } from './lib/harness.js';
+import { deployIsolatedClient, fail, launchBrowser, logBotConsole } from './lib/harness.js';
 import { applyNavPaintSettings } from './lib/navLiveHarness.js';
 import {
     cheatQuiet,
@@ -17,7 +19,6 @@ import {
     relog,
     seedItemsToBank,
     startScript,
-    teleTo,
     type BankSeedItem
 } from './tutorial/harness.js';
 
@@ -27,19 +28,12 @@ interface Tile {
     level: number;
 }
 
-interface Args {
-    base: string;
-    user: string;
-    stage: number;
-    until: number;
-    minutes: number;
-    tickMs: number;
+interface Args extends QuestArgs {
     skills: number;
     at: Tile | null;
     pack: boolean;
     paint: boolean;
     unfreed: boolean;
-    deploy: boolean;
 }
 
 function parseTile(s: string): Tile {
@@ -50,47 +44,30 @@ function parseTile(s: string): Tile {
     return { x: x!, z: z!, level: level! };
 }
 
-function parse(argv: string[]): Args {
-    const out: Args = {
-        base: process.env.BASE ?? 'http://localhost:8890',
-        user: `eadgar${Date.now().toString(36).slice(-6)}`,
-        stage: 0,
-        until: 110,
-        minutes: 180,
-        tickMs: 300,
-        skills: 70,
-        at: null,
-        pack: false,
-        paint: false,
-        unfreed: false,
-        deploy: true
-    };
-    for (let i = 0; i < argv.length; i++) {
-        const flag = argv[i];
-        if (flag === '--no-deploy') { out.deploy = false; continue; }
-        if (flag === '--pack') { out.pack = true; continue; }
-        if (flag === '--paint') { out.paint = true; continue; }
-        if (flag === '--unfreed') { out.unfreed = true; continue; }
-        const value = argv[++i];
-        if (value === undefined) { break; }
-        if (flag === '--base') { out.base = value; }
-        else if (flag === '--user') { out.user = value; }
-        else if (flag === '--stage') { out.stage = Number(value); }
-        else if (flag === '--until') { out.until = Number(value); }
-        else if (flag === '--minutes') { out.minutes = Number(value); }
-        else if (flag === '--tick') { out.tickMs = Number(value); }
-        else if (flag === '--skills') { out.skills = Number(value); }
-        else if (flag === '--at') { out.at = parseTile(value); }
+const args = parseQuestArgs<Args>(process.argv.slice(2), {
+    base: process.env.BASE ?? 'http://localhost:8890',
+    user: `eadgar${Date.now().toString(36).slice(-6)}`,
+    stage: 0,
+    until: 110,
+    minutes: 180,
+    tickMs: 300,
+    skills: 70,
+    at: null,
+    pack: false,
+    paint: false,
+    unfreed: false,
+    deploy: true
+}, {
+    switches: {
+        '--pack': { pack: true },
+        '--paint': { paint: true },
+        '--unfreed': { unfreed: true }
+    },
+    values: {
+        '--skills': value => ({ skills: Number(value) }),
+        '--at': value => ({ at: parseTile(value) })
     }
-    return out;
-}
-
-const args = parse(process.argv.slice(2));
-
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
-}
+});
 
 const QUEST = "Eadgar's Ruse";
 const FALADOR_BANK: Tile = { x: 2946, z: 3369, level: 0 };
@@ -176,13 +153,7 @@ const browser = await launchBrowser({ swiftshader: true });
 try {
     const page = await browser.newPage();
     const t0 = Date.now();
-    page.on('pageerror', e => console.log(`pageerror: ${e}`));
-    page.on('console', m => {
-        const txt = m.text();
-        if (txt.startsWith('[bot]')) {
-            console.log(`  [${Math.round((Date.now() - t0) / 1000)}s] ${txt}`);
-        }
-    });
+    logBotConsole(page, t0);
 
     await mainlandAccount(page, args.base, args.user, clientPage);
     console.log(`mainland-ready as '${args.user}'`);
@@ -235,12 +206,7 @@ try {
     }
 
     const start = args.at ?? FALADOR_BANK;
-    if (!(await teleTo(page, start, 10, 25_000))) {
-        await clearChatDialogs(page, 'pre-tele dialog(s)');
-        if (!(await teleTo(page, start, 10, 25_000))) {
-            fail(`tele to ${start.x},${start.z} did not arrive`);
-        }
-    }
+    await teleportToQuestStart(page, start);
     console.log(`start tile → ${start.x},${start.z},${start.level}`);
 
     if (args.paint) {
@@ -302,13 +268,7 @@ try {
             `  t=${t}s pos=${last.pos ? `${last.pos.x},${last.pos.z},${last.pos.level}` : '?'}`
             + ` eadgar=${stage} journal=${last.status} qp=${last.qp} runner=${last.runner}`
         );
-        for (const l of last.logs) {
-            if (l.time > lastLogTime) {
-                const at = ((l.time - t0) / 1000).toFixed(1).padStart(6);
-                console.log(`      ·${at}s [${l.level}] ${l.msg}`);
-            }
-        }
-        if (last.logs.length > 0) { lastLogTime = Math.max(lastLogTime, ...last.logs.map(l => l.time)); }
+        lastLogTime = printQuestLogs(last.logs, lastLogTime, t0);
 
         // A full run waits for the journal to go green, not the varp: the quest-complete
         // recolour and the QP award land a tick behind it.

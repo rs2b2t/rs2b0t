@@ -1,3 +1,4 @@
+import { customStep, talkTo } from '../../engine/questSteps.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Game } from '../../../../game/Game.js';
 import { GameMessages } from '../../../../chatbox/gameMessages.js';
@@ -23,25 +24,25 @@ export function revellerStep(snap: QuestSnapshot): QuestStep | null {
         return null;
     }
     if (!hasFlag(snap.progress, 'reveller-started')) {
-        return { kind: 'talk', stop: MANNI(['Yes']) };
+        return talkTo(MANNI(['Yes']));
     }
 
     const lowAlcohol = heldId(snap, FT_ID.LOW_ALCOHOL_KEG) > 0;
     const keg = heldId(snap, FT_ID.BEER_KEG) > 0;
 
     if (!lowAlcohol && keg) {
-        return { kind: 'custom', name: 'drink Manni under the table', run: drinkingContest };
+        return customStep('drink Manni under the table', drinkingContest);
     }
     if (!lowAlcohol) {
         return gatherCoins(snap, KEG_PRICE)
-            ?? { kind: 'custom', name: 'buy a low alcohol keg (250gp)', run: buyLowAlcoholKeg };
+            ?? customStep('buy a low alcohol keg (250gp)', buyLowAlcoholKeg);
     }
 
     // Why: this order follows the road: the keg and beer in the Forester's Arms, then Catherby, then the workman on the bridge north of it, then Rellekka.
     const cracker = heldId(snap, FT_ID.FIRECRACKER) > 0 || heldId(snap, FT_ID.FIRECRACKER_LIT) > 0;
     if (!cracker && !snap.inv.has('beer')) {
         return gatherCoins(snap, BEER_PRICE)
-            ?? { kind: 'custom', name: "buy a beer at the Forester's Arms", run: buyBeer };
+            ?? customStep("buy a beer at the Forester's Arms", buyBeer);
     }
     const tinderbox = gatherTinderbox(snap);
     if (tinderbox) {
@@ -53,7 +54,7 @@ export function revellerStep(snap: QuestSnapshot): QuestStep | null {
     if (!keg) {
         return { kind: 'grabGround', item: 'Keg of beer', anchor: FT_TILE.KEG_TABLE };
     }
-    return { kind: 'custom', name: 'swap the keg for low alcohol beer', run: swapKeg };
+    return customStep('swap the keg for low alcohol beer', swapKeg);
 }
 
 // Why: the salesman runs his pitch before he sells and only offers the keg once Manni's trial is live, so this drives to a goal.

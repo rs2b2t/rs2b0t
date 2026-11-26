@@ -1,6 +1,5 @@
-import { Modals } from '../../../../ui/widgets/Modals.js';
+import { readQuestJournal, type JournalCache } from '../../journalReader.js';
 import { normalizeJournal as normalize } from '../../journalText.js';
-import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 import { NS_QUEST, NS_STAGE } from './areas.js';
 
@@ -60,25 +59,11 @@ export function parseDruidJournal(lines: readonly string[] | string): QuestProgr
 }
 
 /** A failed read doesn't mean the quest went backwards. */
-let lastGood: QuestProgress | undefined;
+const cache: JournalCache<QuestProgress> = {};
 
-export async function readDruidProgress(): Promise<QuestProgress | undefined> {
-    const status = Quests.status(NS_QUEST);
-    if (status === 'complete') {
-        return { stage: NS_STAGE.COMPLETE, flags: new Set([NS_FLAG.NATURE, NS_FLAG.SPIRIT]) };
-    }
-    if (status === 'notStarted') {
-        return { stage: NS_STAGE.NOT_STARTED, flags: new Set() };
-    }
-    if (status !== 'inProgress') {
-        return undefined;
-    }
-    const lines = await Quests.journal(NS_QUEST);
-    const progress = parseDruidJournal(lines);
-    // Why: the swamp gate's refusal is a mesbox on main, and while one is up every journal read comes back empty.
-    await Modals.closeIfOpen();
-    if (progress) {
-        lastGood = progress;
-    }
-    return progress ?? lastGood;
+export function readDruidProgress(): Promise<QuestProgress | undefined> {
+    return readQuestJournal(NS_QUEST, NS_STAGE, parseDruidJournal, stage => ({
+        stage,
+        flags: stage === NS_STAGE.COMPLETE ? new Set([NS_FLAG.NATURE, NS_FLAG.SPIRIT]) : new Set<string>()
+    }), cache);
 }

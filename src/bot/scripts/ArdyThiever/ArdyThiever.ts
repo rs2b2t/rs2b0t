@@ -1,6 +1,6 @@
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
 import Tile from '../../geometry/Tile.js';
 import { ContinueDialog } from '../../api/tasks/ContinueDialog.js';
@@ -112,7 +112,7 @@ export default class ArdyThiever extends TaskBot {
     died = false;
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
 
         TARGET = this.settings.str('thieveTarget', 'Guard');
         RESPONSE = this.settings.str('guardResponse', 'Flee');

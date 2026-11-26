@@ -1,4 +1,4 @@
-import { fail, launchBrowser } from './lib/harness.js';
+import { fail, launchBrowser, logBotConsole } from './lib/harness.js';
 import { cheat, cheatQuiet, mainlandAccount, relog, startScript } from './tutorial/harness.js';
 
 const QUESTS: Record<string, { name: string; varp: string; bits?: string }> = {
@@ -55,13 +55,7 @@ const browser = await launchBrowser();
 try {
     const page = await browser.newPage();
     const t0 = Date.now();
-    page.on('pageerror', e => console.log(`pageerror: ${e}`));
-    page.on('console', m => {
-        const txt = m.text();
-        if (txt.startsWith('[bot]')) {
-            console.log(`  [${Math.round((Date.now() - t0) / 1000)}s] ${txt}`);
-        }
-    });
+    logBotConsole(page, t0);
 
     await mainlandAccount(page, base, user);
     console.log(`mainland-ready as '${user}'`);

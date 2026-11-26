@@ -6,9 +6,11 @@
 //   HEADED=1 bun e2e/regicide-257-live.ts --stage 0 --until 2 --minutes 25 --tick 150
 //   HEADED=1 bun e2e/regicide-257-live.ts --stage 3 --until 8 --minutes 30 --tick 150
 //   HEADED=1 bun e2e/regicide-257-live.ts --stage 11 --until 12 --minutes 60 --tick 150
+import { parseQuestArgs, type QuestArgs } from './lib/questArgs.js';
+import { setQuestStats } from './lib/questHarness.js';
 import type { Page } from 'playwright-core';
 
-import { deployIsolatedClient, launchBrowser } from './lib/harness.js';
+import { deployIsolatedClient, fail, launchBrowser, logBotConsole } from './lib/harness.js';
 import {
     cheatQuiet,
     clearChatDialogs,
@@ -21,17 +23,10 @@ import {
     type BankSeedItem
 } from './tutorial/harness.js';
 
-interface Args {
-    base: string;
-    user: string;
-    stage: number;
-    until: number;
-    minutes: number;
-    tickMs: number;
+interface Args extends QuestArgs {
     food: string;
     stats: number;
     tele: boolean;
-    deploy: boolean;
     /** Extra pack items for a mid-chain start. */
     give: { debugName: string; qty: number }[];
     /** Optional start tile override. */
@@ -54,54 +49,35 @@ function parseGive(value: string): { debugName: string; qty: number }[] {
         });
 }
 
-function parse(argv: string[]): Args {
-    const out: Args = {
-        base: process.env.BASE ?? 'http://localhost:8890',
-        user: `rg${Date.now().toString(36).slice(-7)}`,
-        stage: 0,
-        until: 15,
-        minutes: 60,
-        tickMs: 300,
-        food: 'Shark',
-        stats: 70,
-        tele: true,
-        deploy: true,
-        give: [],
-        start: null,
-        untilObj: null,
-        pack: true
-    };
-    for (let i = 0; i < argv.length; i++) {
-        const flag = argv[i];
-        if (flag === '--no-deploy') { out.deploy = false; continue; }
-        if (flag === '--no-tele') { out.tele = false; continue; }
-        if (flag === '--no-pack') { out.pack = false; continue; }
-        const value = argv[++i];
-        if (value === undefined) { break; }
-        if (flag === '--base') { out.base = value; }
-        else if (flag === '--user') { out.user = value; }
-        else if (flag === '--stage') { out.stage = Number(value); }
-        else if (flag === '--until') { out.until = Number(value); }
-        else if (flag === '--minutes') { out.minutes = Number(value); }
-        else if (flag === '--tick') { out.tickMs = Number(value); }
-        else if (flag === '--food') { out.food = value; }
-        else if (flag === '--stats') { out.stats = Number(value); }
-        else if (flag === '--give') { out.give = parseGive(value); }
-        else if (flag === '--until-obj') { out.untilObj = Number(value); }
-        else if (flag === '--start') {
+const args = parseQuestArgs<Args>(process.argv.slice(2), {
+    base: process.env.BASE ?? 'http://localhost:8890',
+    user: `rg${Date.now().toString(36).slice(-7)}`,
+    stage: 0,
+    until: 15,
+    minutes: 60,
+    tickMs: 300,
+    food: 'Shark',
+    stats: 70,
+    tele: true,
+    deploy: true,
+    give: [],
+    start: null,
+    untilObj: null,
+    pack: true
+}, {
+    switches: {
+        '--no-tele': { tele: false },
+        '--no-pack': { pack: false }
+    },
+    values: {
+        '--give': value => ({ give: parseGive(value) }),
+        '--until-obj': value => ({ untilObj: Number(value) }),
+        '--start': value => {
             const [x, z, level] = value.split(',').map(Number);
-            out.start = { x: x!, z: z!, level: level ?? 0 };
+            return { start: { x: x!, z: z!, level: level ?? 0 } };
         }
     }
-    return out;
-}
-
-const args = parse(process.argv.slice(2));
-
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
-}
+});
 
 const QUEST = 'Regicide';
 const ARDOUGNE_BANK = { x: 2655, z: 3283, level: 0 };
@@ -126,12 +102,6 @@ const BANK_SEED: BankSeedItem[] = [
     { debugName: 'rune_platelegs', displayName: 'Rune platelegs', qty: 1 },
     { debugName: 'rune_med_helm', displayName: 'Rune med helm', qty: 1 },
     { debugName: 'rune_kiteshield', displayName: 'Rune kiteshield', qty: 1 }
-];
-
-const STATS = [
-    'attack', 'strength', 'defence', 'hitpoints', 'ranged', 'magic', 'prayer',
-    'cooking', 'woodcutting', 'fletching', 'fishing', 'firemaking', 'crafting',
-    'smithing', 'mining', 'herblore', 'agility', 'thieving', 'runecraft'
 ];
 
 /** Where each seeded stage drops the account, so a leg starts at its own obstacle.
@@ -227,15 +197,6 @@ async function seedPack(page: Page, stage: number): Promise<void> {
     console.log(`pack seeded with ${seed.length} item type(s) in ${slots} slots for a start inside Tirannwn`);
 }
 
-async function setStats(page: Page, level: number): Promise<void> {
-    for (const skill of STATS) {
-        await cheatQuiet(page, `setstat ${skill} ${level}`);
-    }
-    await clearChatDialogs(page, 'level-up dialog(s)');
-    await page.waitForTimeout(1500);
-    await clearChatDialogs(page, 'straggler dialog(s)');
-}
-
 interface Snapshot {
     pos: { x: number; z: number; level: number } | null;
     status: string;
@@ -282,13 +243,7 @@ const browser = await launchBrowser({ swiftshader: true });
 try {
     const page = await browser.newPage();
     const t0 = Date.now();
-    page.on('pageerror', e => console.log(`pageerror: ${e}`));
-    page.on('console', m => {
-        const txt = m.text();
-        if (txt.startsWith('[bot]')) {
-            console.log(`  [${Math.round((Date.now() - t0) / 1000)}s] ${txt}`);
-        }
-    });
+    logBotConsole(page, t0);
 
     await mainlandAccount(page, args.base, args.user, clientPage);
     console.log(`mainland-ready as '${args.user}'`);
@@ -296,7 +251,7 @@ try {
     await cheatQuiet(page, `speed ${args.tickMs}`);
     console.log(`tick rate: ${args.tickMs}ms`);
 
-    await setStats(page, args.stats);
+    await setQuestStats(page, args.stats);
     console.log(`stats: ${args.stats} across the board`);
 
     console.log(`seeding ${BANK_SEED.length} item type(s) into the Ardougne East bank`);

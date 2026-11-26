@@ -1,6 +1,8 @@
 import Tile from '../../../../../geometry/Tile.js';
 import type { QuestSnapshot } from '../../engine/types.js';
 
+export { bankedItem as banked, heldItem as held, heldOrBankedItem as owned, wornItem as worn } from '../../engine/snapshotItems.js';
+
 export interface PlagueItem {
     id: number;
     name: string;
@@ -122,20 +124,4 @@ export function plagueArea(tile: QuestSnapshot['tile']): PlagueArea {
         return 'west';
     }
     return level === 0 ? 'east' : 'unknown';
-}
-
-export function held(snap: QuestSnapshot, item: PlagueItem): number {
-    return snap.invIds?.get(item.id) ?? 0;
-}
-
-export function banked(snap: QuestSnapshot, item: PlagueItem): number {
-    return snap.bankIds?.get(item.id) ?? 0;
-}
-
-export function owned(snap: QuestSnapshot, item: PlagueItem): number {
-    return held(snap, item) + banked(snap, item);
-}
-
-export function worn(snap: QuestSnapshot, item: PlagueItem): boolean {
-    return snap.wornIds?.has(item.id) ?? false;
 }

@@ -1,7 +1,7 @@
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { Bank } from '../../api/bank/Bank.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Locs } from '../../api/locs/Locs.js';
@@ -89,7 +89,7 @@ export default class MuleCrafter extends TaskBot implements MuleCrafterContext {
     private xpAtStart = 0;
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
         this.modeValue = this.settings.str('mode', 'Crafter');
         this.runeValue = this.settings.str('rune', DEFAULT_RUNE);
         this.conf = RUNES[this.runeValue] ?? RUNES[DEFAULT_RUNE];
