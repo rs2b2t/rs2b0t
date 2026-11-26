@@ -15,7 +15,21 @@ function sharedStorage(dir) {
         }
     };
     const valid = key => typeof key === 'string' && key.startsWith('rs2b0t:');
-    function update(change) {
+    function write(state) {
+        const temporary = join(dir, `${randomUUID()}.tmp`);
+        try {
+            fs.writeFileSync(temporary, JSON.stringify(state), { mode: 0o600 });
+            fs.renameSync(temporary, file);
+        } finally {
+            fs.rmSync(temporary, { force: true });
+        }
+    }
+    function setValue(state, key, value) {
+        if (state.data[key] === value) return;
+        state.data[key] = value;
+        write(state);
+    }
+    function withLockedState(change) {
         const deadline = Date.now() + 15000;
         let release;
         while (!release) {
@@ -26,15 +40,9 @@ function sharedStorage(dir) {
                 Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
             }
         }
-        const temporary = join(dir, `${randomUUID()}.tmp`);
         try {
-            const state = read();
-            const result = change(state);
-            fs.writeFileSync(temporary, JSON.stringify(state), { mode: 0o600 });
-            fs.renameSync(temporary, file);
-            return result;
+            return change(read());
         } finally {
-            fs.rmSync(temporary, { force: true });
             release();
         }
     }
@@ -45,31 +53,32 @@ function sharedStorage(dir) {
         keys: () => Object.keys(read().data),
         setItem(key, value) {
             if (!valid(key) || typeof value !== 'string') throw new Error('Invalid saved setting');
-            update(state => {
-                state.data[key] = value;
-            });
+            withLockedState(state => setValue(state, key, value));
         },
         compareAndSet(key, expected, value) {
             if (!valid(key) || typeof value !== 'string') throw new Error('Invalid saved setting');
-            return update(state => {
+            return withLockedState(state => {
                 if ((state.data[key] ?? null) !== expected) return false;
-                state.data[key] = value;
+                setValue(state, key, value);
                 return true;
             });
         },
         removeItem(key) {
             if (valid(key))
-                update(state => {
+                withLockedState(state => {
+                    if (!(key in state.data)) return;
                     delete state.data[key];
+                    write(state);
                 });
         },
         seed(values) {
-            update(state => {
+            withLockedState(state => {
                 if (state.initialized) return;
                 for (const [key, value] of Object.entries(values)) {
                     if (valid(key) && typeof value === 'string' && !(key in state.data)) state.data[key] = value;
                 }
                 state.initialized = true;
+                write(state);
             });
         }
     };
