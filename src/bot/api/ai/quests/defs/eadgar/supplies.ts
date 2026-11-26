@@ -11,7 +11,7 @@ import { Traversal } from '../../../../walking/Traversal.js';
 import { bankedName, hasName, heldName } from '../../engine/snapshotItems.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { talkChoosingBy } from '../../exec/primitives.js';
-import { FOOD_FLOAT, QuestFood } from '../../food.js';
+import { FOOD_FLOAT, questFoodNames } from '../../food.js';
 import { COMBAT_FOODS, TENZING_BOOTS, TENZING_DONE_RULES } from '../trollstronghold/areas.js';
 import { plannedGear, wearAll } from '../trollstronghold/index.js';
 import {
@@ -62,9 +62,7 @@ export const JATIX = { npc: 'Jatix', anchor: ER_TILE.JATIX };
 export const WISTAN = { npc: 'Wistan', anchor: ER_TILE.WISTAN };
 
 export function foodNames(): string[] {
-    const configured = QuestFood.name?.trim();
-    const names = [configured, ...COMBAT_FOODS].filter((n): n is string => Boolean(n));
-    return [...new Map(names.map(n => [n.toLowerCase(), n])).values()];
+    return questFoodNames(COMBAT_FOODS);
 }
 
 export function foodHeld(snap: QuestSnapshot): number {

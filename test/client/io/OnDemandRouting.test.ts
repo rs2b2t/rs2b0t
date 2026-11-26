@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, jest, mock, spyOn, test } from 'bun:test';
+import { throws } from 'node:assert/strict';
 import { once } from 'node:events';
 import { MessageChannel as ThreadChannel, Worker as Thread } from 'node:worker_threads';
 import { gzipSync } from 'fflate';
@@ -38,7 +39,7 @@ const versionlist = {
 
 class WorkerFixture {
     constructor(_url: URL, readonly options: WorkerOptions) {}
-    postMessage(_message: { type: string; id?: number; archive?: number; file?: number; trafficPort?: MessagePort }, _transfer?: Transferable[]) {}
+    postMessage(_message: { type: string; id?: number; archive?: number; file?: number; files?: number[]; trafficPort?: MessagePort }, _transfer?: Transferable[]) {}
     terminate() {}
 }
 
@@ -193,12 +194,34 @@ test('cache worker receives the selected frame target instead of the wall origin
     try {
         Object.assign(TARGET, resolveTarget('proxy', 'localhost:8081', false, new URLSearchParams('world=2')));
         new OnDemand(versionlist, { ingame: false, db: null } as Client);
-        expect(post).toHaveBeenCalledWith({ type: 'init', versions: [[], [1], [1], []], crcs: [[], [0], [0], []], host: 'localhost:8081/__rs2b0t/world/2', secured: false, ingame: false, dbEnabled: false });
+        expect(post).toHaveBeenCalledWith({
+            type: 'init',
+            versions: [Uint16Array.of(), Uint16Array.of(1), Uint16Array.of(1), Uint16Array.of()],
+            crcs: [Int32Array.of(), Int32Array.of(0), Int32Array.of(0), Int32Array.of()],
+            host: 'localhost:8081/__rs2b0t/world/2', secured: false, ingame: false, dbEnabled: false
+        });
     } finally {
         delete TARGET.world;
         delete TARGET.httpPrefix;
         Object.assign(TARGET, previousTarget);
     }
+});
+
+test.each([
+    { row: 'model_version', bytes: 3, entrySize: 2 },
+    { row: 'model_crc', bytes: 7, entrySize: 4 }
+])('a partial $row fails with the native array diagnostic before creating the worker', ({ row, bytes, entrySize }) => {
+    const files = { read: (name: string) => name === row ? new Uint8Array(bytes) : versionlist.read(name) } as JagFile;
+    const worker = spyOn(globalThis, 'Worker');
+    let message: string | undefined;
+    try {
+        Array(bytes / entrySize);
+    } catch (error) {
+        if (!(error instanceof RangeError)) throw error;
+        message = error.message;
+    }
+    throws(() => new OnDemand(files, { ingame: false } as Client), { name: 'RangeError', message });
+    expect(worker).not.toHaveBeenCalled();
 });
 
 test('worker load failure reaches the startup error screen while requesting animations', async () => {
@@ -238,9 +261,11 @@ test('worker load failure reaches the startup error screen while requesting anim
 async function checkStartupAssets(optional: boolean, responseDelay?: number) {
     const files = {
         read(name: string) {
+            if (name === 'model_version') return Uint8Array.of(0, 1, 0, 1, 0, 0);
+            if (name === 'model_crc') return new Uint8Array(12);
             if (name.endsWith('_version')) return Uint8Array.of(0, 1);
             if (name.endsWith('_crc')) return new Uint8Array(4);
-            if (name === 'model_index') return Uint8Array.of(1);
+            if (name === 'model_index') return Uint8Array.of(1, 2, 1);
             if (name === 'map_index') return Uint8Array.of(48, 47, 0, 0, 0, 0, 0);
             return new Uint8Array();
         }
@@ -277,13 +302,16 @@ async function checkStartupAssets(optional: boolean, responseDelay?: number) {
     });
     spyOn(console, 'error').mockImplementation(() => {});
     const requests: number[][] = [];
-    spyOn(WorkerFixture.prototype, 'postMessage').mockImplementation((message) => {
+    const posts = spyOn(WorkerFixture.prototype, 'postMessage').mockImplementation((message) => {
         if (message.type === 'prefetchPriority') {
             client['onDemand']!.worker!.onmessage!(new MessageEvent('message', { data: { type: 'ack', id: message.id } }));
-        } else if (message.type === 'request' && message.archive !== undefined && message.file !== undefined) {
-            const { archive, file } = message;
-            requests.push([archive, file]);
-            const reply = () => completeFile(client['onDemand']!, archive, file, Uint8Array.of(archive, file));
+        } else if ((message.type === 'request' || message.type === 'requestBatch') && message.archive !== undefined) {
+            const { archive } = message;
+            const files = message.files ?? [message.file!];
+            for (const file of files) requests.push([archive, file]);
+            const reply = () => {
+                for (const file of files) completeFile(client['onDemand']!, archive, file, Uint8Array.of(archive, file));
+            };
             if (responseDelay === undefined) deliver = reply;
             else setTimeout(reply, responseDelay);
         }
@@ -301,6 +329,10 @@ async function checkStartupAssets(optional: boolean, responseDelay?: number) {
     if (optional) stages.push(['Requesting maps', 75]);
     expect(progress).toEqual([...stages, ['Unpacking media', 80]]);
     expect(requests).toEqual(optional ? [[2, 0], [1, 0], [0, 0], [3, 0]] : [[1, 0], [0, 0]]);
+    expect(posts.mock.calls.map(([message]) => message).filter(message => message.type === 'requestBatch')).toEqual([
+        { type: 'requestBatch', archive: 1, files: [0] },
+        { type: 'requestBatch', archive: 0, files: [0] }
+    ]);
     expect(animation.mock.calls).toEqual([[Uint8Array.of(1, 0)]]);
     expect(model.mock.calls).toEqual([[0, Uint8Array.of(0, 0)]]);
     expect(saveMidi.mock.calls).toEqual(optional ? [[Uint8Array.of(2, 0), true]] : []);
@@ -377,6 +409,18 @@ test('a healthy worker delivers the requested animation exactly once', async () 
     expect(loader.loop()).toBeNull();
 });
 
+test.each([0, 32, 35])('startup batches %i animations and suppresses pending duplicates', count => {
+    const loader = loaderFixture();
+    loader.versions[1] = new Uint16Array(count).fill(1);
+    const post = spyOn(WorkerFixture.prototype, 'postMessage');
+    loader.requestStartupFiles(1);
+    loader.requestStartupFiles(1);
+    const files = Array.from({ length: count }, (_, file) => file);
+    const batches = [files.slice(0, 32), files.slice(32)].filter(ids => ids.length);
+    expect(post.mock.calls.map(([message]) => message)).toEqual(batches.map(files => ({ type: 'requestBatch', archive: 1, files })));
+    expect(loader.remaining()).toBe(count);
+});
+
 test('requests stay distinct by archive and suppress duplicates until drained', () => {
     const loader = loaderFixture();
     const post = spyOn(WorkerFixture.prototype, 'postMessage');
@@ -424,7 +468,7 @@ test.each([
     { missing: 'location', file: 1, pendingStatus: -1 }
 ])('a missing $missing file waits only for the other map file and player info', async ({ file, pendingStatus }) => {
     const loader = loaderFixture();
-    loader.versions[3] = [1, 1];
+    loader.versions[3] = Uint16Array.of(1, 1);
     const mapBuild = mock(() => {});
     const client: Client = Object.assign(Object.create(Client.prototype), {
         onDemand: loader, sceneState: 1, awaitingPlayerInfo: true, minusedlevel: ClientBuild.minusedlevel,

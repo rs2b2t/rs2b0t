@@ -5,6 +5,7 @@ import { decide, ernest } from '#/bot/api/ai/quests/defs/ernest/index.js';
 import { QUEST_DEFS } from '#/bot/api/ai/quests/defs/index.js';
 import { QuestFood } from '#/bot/api/ai/quests/food.js';
 import type { QuestSnapshot, QuestStep } from '#/bot/api/ai/quests/engine/types.js';
+import { ernestSnapshot } from './ernest-snapshot.fixture.js';
 
 const originalFood = QuestFood.name;
 beforeAll(() => { QuestFood.name = 'Lobster'; });
@@ -18,22 +19,13 @@ function snap(options: {
     tile?: QuestSnapshot['tile'];
 } = {}): QuestSnapshot {
     const stage = options.stage ?? EC_STAGE.NOT_STARTED;
-    return {
+    const snapshot = ernestSnapshot({
         journal: options.journal ?? (stage === EC_STAGE.NOT_STARTED ? 'notStarted' : 'inProgress'),
-        inv: new Map([['lobster', 8]]),
-        invIds: new Map([[EC_ID.SPADE, 1], ...(options.invIds ?? [])]),
-        worn: new Set(),
-        wornIds: new Set(),
-        noProgress: 0,
-        bankCoins: 2_000_000,
-        stage,
-        progress: { stage, flags: new Set() },
-        bank: new Map(),
-        bankIds: new Map(),
-        bankKnown: true,
-        tile: options.tile ?? { x: 3093, z: 3243, level: 0 },
-        freeSlots: 20
-    };
+        food: 8,
+        tile: options.tile
+    });
+    for (const [id, count] of options.invIds ?? []) snapshot.invIds.set(id, count);
+    return { ...snapshot, stage, progress: { stage, flags: new Set() } };
 }
 
 const step = (options: Parameters<typeof snap>[0] = {}): QuestStep => decide(snap(options));

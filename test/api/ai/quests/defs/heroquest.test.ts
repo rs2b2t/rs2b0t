@@ -8,30 +8,18 @@ import { decide, heroquest, inSealedPocket } from '#/bot/api/ai/quests/defs/hero
 import { HERO_STAGE } from '#/bot/api/ai/quests/defs/heroquest/journal.js';
 import { ArravConfig } from '#/bot/api/ai/quests/defs/shieldofarrav/config.js';
 import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
-
-const VARROCK = { x: 3210, z: 3490, level: 0 };
+import { heroSnapshot } from './heroquest-snapshot.fixture.js';
 
 // Why: the quest keeps a coin float for the 30gp ferry, so every snapshot carries one, a test that
 // leaves the pack empty gets the withdrawal rather than the branch it is asking about.
 function snap(over: Partial<QuestSnapshot> = {}): QuestSnapshot {
     const stage = over.stage ?? HERO_STAGE.STARTED;
-    return {
-        journal: 'inProgress',
-        inv: new Map(),
-        worn: new Set(),
-        wornIds: new Set(),
-        noProgress: 0,
-        bankCoins: 2_000_000,
-        bank: new Map(),
-        bankIds: new Map(),
-        bankKnown: true,
-        tile: VARROCK as QuestSnapshot['tile'],
-        freeSlots: 20,
+    return heroSnapshot({
         stage,
         progress: { stage, flags: new Set() },
         ...over,
         invIds: new Map([[HERO_ID.COINS, 5_000], ...(over.invIds ?? [])])
-    };
+    });
 }
 
 function withGang(gang: 'phoenix' | 'blackarm'): void {

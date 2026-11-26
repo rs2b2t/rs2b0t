@@ -1,5 +1,5 @@
 import { reader, type WorldTile } from '../../../adapter/ClientAdapter.js';
-import { canReachLocal, canStepLocal, type ReachOptions } from './localReach.js';
+import { canReachLocal, canStepLocal, localReachProbe, type ReachOptions } from './localReach.js';
 import { hasLineOfSightLocal } from './lineOfSight.js';
 import type { ArrivalProbe } from './arrival.js';
 import { chebyshev } from './followMath.js';
@@ -23,6 +23,17 @@ export const Reachability = {
             return false;
         }
         return canReachLocal((lx, lz) => reader.collisionFlags(lx, lz), from, to, opts);
+    },
+
+    routeProbe(me: WorldTile, maxSteps: number): (dest: WorldTile) => boolean {
+        const from = reader.toLocal(me.x, me.z);
+        if (!from) return () => false;
+        const reachable = localReachProbe((lx, lz) => reader.collisionFlags(lx, lz), from, maxSteps);
+        return dest => {
+            if (dest.level !== me.level) return false;
+            const to = reader.toLocal(dest.x, dest.z);
+            return to !== null && reachable(to);
+        };
     },
 
     canStep(from: WorldTile, to: WorldTile): boolean {

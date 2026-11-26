@@ -16,6 +16,7 @@ import { hasFlag } from '../../engine/types.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { questRecord } from '../../data/quests.js';
 import { QuestFood } from '../../food.js';
+import { steelBarsForNails } from '../../nails.js';
 import { afterDialogueAction, gotoNpc, openDialogue, talkThrough, type NpcStop } from '../../exec/primitives.js';
 import { DS_ID, DS_ITEM, DS_LOC, DS_NPC, SHIP_PRICE, SHIP_REPAIR, WORMBRAIN_PRICE } from './areas.js';
 import { DRAGON_STAGE, describeJournal, readDragonProgress } from './journal.js';
@@ -706,7 +707,7 @@ function hullErrand(snap: QuestSnapshot): QuestStep | null {
                 return waitStep('Smithing 34 is required to make nails; train Smithing or obtain and bank Nails');
             }
             if ((s.inv.get('steel bar') ?? 0) === 0) {
-                const bars = Math.ceil(need / 2);
+                const bars = steelBarsForNails(need);
                 if ((s.inv.get('iron ore') ?? 0) < bars && Skills.effective('mining') < 15) {
                     return waitStep('Mining 15 is required for iron ore; train Mining or obtain iron ore, steel bars or Nails');
                 }

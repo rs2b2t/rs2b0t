@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { twoLevelCollisionPack } from '../fixtures/two-level-collision-pack.js';
 
 const generator = join(import.meta.dir, '../../tools/nav/derive-stairs.ts');
 const previous = Buffer.from('[ { "from": {"x":1,"z":2,"level":0}, "to": {"x":1,"z":2,"level":1}, "locName":"Old stairs", "action":"Climb-up", "kind":"stair" } ]\r\n');
@@ -17,12 +18,7 @@ beforeEach(() => {
     writeFileSync(join(pack, 'server/loc.dat'), Buffer.concat([Buffer.from([0, 1, 250]), Buffer.from('stairs\n'), Buffer.from([30]), Buffer.from('Climb-up\n\0')]));
     writeFileSync(join(pack, 'client/config'), Buffer.from('AAAPAAAxMUFZJlNZ8nQWawAAAlEKaAAAQAAIAgAAAiAAMQwBGj1HqWlEg8+LuSKcKEh5Ogs1gA==', 'base64'));
 
-    const squares = [[50, 50], [50, 53], [43, 53]];
-    const levels = Buffer.alloc(2 * (4096 + 512), 0xff);
-    writeFileSync(join(root, 'collision.lcnav'), Buffer.concat([
-        Buffer.from('LCNV'), Buffer.from([1, 0, 0, 0, squares.length, 0]),
-        ...squares.flatMap(([mx, mz]) => [Buffer.from([mx, mz, 3]), levels])
-    ]));
+    writeFileSync(join(root, 'collision.lcnav'), twoLevelCollisionPack([[50, 50], [50, 53], [43, 53]]));
 
     const scripts = join(root, 'content/scripts/ladders+stairs/scripts');
     mkdirSync(scripts, { recursive: true });

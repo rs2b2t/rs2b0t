@@ -36,6 +36,7 @@ const CROP_TRANSFORM = `translate(${CROP_TX}px, ${CROP_TY}px) scale(${CROP_K})`;
 // Rail (background) slots paint at ~1fps while the focused slot draws every frame.
 // Why: many bots stay cheap on a laptop, and setting it per-iframe leaves the standalone client its own RenderGate default.
 const RAIL_BACKGROUND_INTERVAL_MS = 1000;
+const MIRROR_INTERVAL_MS = 1000;
 
 function railWidth(): number {
     return document.getElementById('mbx-rail')?.offsetWidth ?? RAIL_W;
@@ -98,7 +99,8 @@ class DomSlotHandle implements SlotHandle {
     private scaler: HTMLDivElement;
     private iframe: HTMLIFrameElement;
     private mirror: HTMLCanvasElement;
-    private mirrorTimer: number;
+    private readonly mirrorStart: number;
+    private mirrorTimer?: number;
     private win: LcbWindow | null = null;
     private pending: Array<(l: Lcb) => void> | null = [];
     private destroyed = false;
@@ -182,7 +184,7 @@ class DomSlotHandle implements SlotHandle {
         this.el.append(cap);
         if (worldRouting) this.el.append(controls);
         this.el.append(scriptStatus, body);
-        this.mirrorTimer = window.setInterval(this.paintMirror, 1000);
+        this.mirrorStart = performance.now();
         this.applyLayout();
     }
 
@@ -278,6 +280,15 @@ class DomSlotHandle implements SlotHandle {
     }
 
     setRenderMode(mode: RenderMode): void {
+        if (!this.destroyed && mode === 'focused' && this.mode !== 'focused') {
+            const elapsed = Math.floor(performance.now() - this.mirrorStart);
+            this.mirrorTimer = window.setTimeout(() => {
+                this.mirrorTimer = window.setInterval(this.paintMirror, MIRROR_INTERVAL_MS);
+                this.paintMirror();
+            }, MIRROR_INTERVAL_MS - elapsed % MIRROR_INTERVAL_MS);
+        } else if (mode !== 'focused' && this.mode === 'focused') {
+            window.clearTimeout(this.mirrorTimer);
+        }
         this.mode = mode;
         this.whenReady(l => {
             l.renderGate.backgroundIntervalMs = RAIL_BACKGROUND_INTERVAL_MS;
@@ -327,7 +338,7 @@ class DomSlotHandle implements SlotHandle {
     destroy(): void {
         this.destroyed = true;
         this.cancelStartup();
-        window.clearInterval(this.mirrorTimer);
+        window.clearTimeout(this.mirrorTimer);
         window.removeEventListener('resize', this.onResize);
         this.el.remove();
     }

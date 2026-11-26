@@ -14,7 +14,7 @@ import { questRecord } from '../../data/quests.js';
 import { bankedName as banked, hasName as held, heldName as heldCount, wornName as worn } from '../../engine/snapshotItems.js';
 import { hasFlag, type QuestModule, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import { talkChoosingBy } from '../../exec/primitives.js';
-import { QuestFood } from '../../food.js';
+import { questFoodNames } from '../../food.js';
 import { QuestLoadout, questWornGear } from '../../gear.js';
 import { weaponOf } from '../../../../loadout/loadoutPlan.js';
 import {
@@ -51,9 +51,7 @@ export { trollZone, committed, ITEM, COMBAT_FOODS, FOOD_TARGET, FALADOR_WEST_BAN
 // Snapshot helpers
 
 function foodNames(): string[] {
-    const configured = QuestFood.name?.trim();
-    const names = [configured, ...COMBAT_FOODS].filter((n): n is string => Boolean(n));
-    return [...new Map(names.map(n => [n.toLowerCase(), n])).values()];
+    return questFoodNames(COMBAT_FOODS);
 }
 
 function foodHeld(snap: QuestSnapshot): number {

@@ -14,7 +14,7 @@ import {
     wornId as worn
 } from '../../engine/snapshotItems.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
-import { QuestFood } from '../../food.js';
+import { questFoodNames } from '../../food.js';
 import { BONE_SPAWNS, SV_ITEM, SV_NPC, SV_TILE, type ShiloItem } from './areas.js';
 
 export { banked, held, owned, worn };
@@ -99,9 +99,7 @@ export function sourceTools(snap: QuestSnapshot, need: readonly ShiloItem[]): Qu
 
 /** What the pack may eat, the food the script was given first. */
 export function foodNames(): string[] {
-    const chosen = QuestFood.name?.trim();
-    const names = [chosen, ...FOOD_FALLBACKS].filter((n): n is string => Boolean(n));
-    return [...new Map(names.map(n => [n.toLowerCase(), n])).values()];
+    return questFoodNames(FOOD_FALLBACKS);
 }
 
 export function foodHeld(snap: QuestSnapshot): number {

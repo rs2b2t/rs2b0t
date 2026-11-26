@@ -15,6 +15,7 @@ import { flagValue, hasFlag } from '#/bot/api/ai/quests/engine/types.js';
 import { QuestFood } from '#/bot/api/ai/quests/food.js';
 import { QuestLoadout } from '#/bot/api/ai/quests/gear.js';
 import type { QuestProgress, QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
+import { decisionSnapshot } from './decision-snapshot.fixture.js';
 
 let restoreLoadout: () => void;
 beforeEach(() => {
@@ -39,22 +40,7 @@ function progress(stage: number, flags: string[] = []): QuestProgress {
 }
 
 function snapshot(o: Partial<QuestSnapshot> = {}): QuestSnapshot {
-    return {
-        journal: o.journal ?? 'inProgress',
-        inv: o.inv ?? new Map(),
-        invIds: o.invIds ?? new Map(),
-        worn: o.worn ?? new Set(),
-        wornIds: o.wornIds ?? new Set(),
-        noProgress: 0,
-        bankCoins: o.bankCoins ?? 0,
-        stage: o.stage ?? o.progress?.stage,
-        progress: o.progress,
-        bank: o.bank ?? new Map(),
-        bankIds: o.bankIds ?? new Map(),
-        bankKnown: o.bankKnown ?? true,
-        tile: o.tile === undefined ? KARAMJA : o.tile,
-        freeSlots: o.freeSlots ?? 28
-    };
+    return decisionSnapshot(KARAMJA, o);
 }
 
 /** Everything the quest cannot buy on Karamja, so `provision` stays out of the way. */

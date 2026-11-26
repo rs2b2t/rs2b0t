@@ -1311,6 +1311,22 @@ export default class Model extends ModelSource {
                 }
             }
         } else if (type === AnimTransform.ROTATE) {
+            const pitch = (x & 0xff) * 8;
+            const yaw = (y & 0xff) * 8;
+            const roll = (z & 0xff) * 8;
+            const sinRoll = Pix3D.sinTable[roll];
+            const cosRoll = Pix3D.cosTable[roll];
+            const sinPitch = Pix3D.sinTable[pitch];
+            const cosPitch = Pix3D.cosTable[pitch];
+            const sinYaw = Pix3D.sinTable[yaw];
+            const cosYaw = Pix3D.cosTable[yaw];
+
+            const pointX = this.pointX!;
+            const pointY = this.pointY!;
+            const pointZ = this.pointZ!;
+            const originX = Model.oX;
+            const originY = Model.oY;
+            const originZ = Model.oZ;
             for (let g: number = 0; g < labelCount; g++) {
                 const label: number = labels[g];
                 if (!this.labelVertices || label >= this.labelVertices.length) {
@@ -1321,44 +1337,31 @@ export default class Model extends ModelSource {
                 if (vertices) {
                     for (let i: number = 0; i < vertices.length; i++) {
                         const v: number = vertices[i];
-                        this.pointX![v] -= Model.oX;
-                        this.pointY![v] -= Model.oY;
-                        this.pointZ![v] -= Model.oZ;
-
-                        const pitch: number = (x & 0xff) * 8;
-                        const yaw: number = (y & 0xff) * 8;
-                        const roll: number = (z & 0xff) * 8;
-
-                        let sin: number;
-                        let cos: number;
+                        let vx = (pointX[v] - originX) | 0;
+                        let vy = (pointY[v] - originY) | 0;
+                        let vz = (pointZ[v] - originZ) | 0;
 
                         if (roll !== 0) {
-                            sin = Pix3D.sinTable[roll];
-                            cos = Pix3D.cosTable[roll];
-                            const x_: number = (this.pointY![v] * sin + this.pointX![v] * cos) >> 16;
-                            this.pointY![v] = (this.pointY![v] * cos - this.pointX![v] * sin) >> 16;
-                            this.pointX![v] = x_;
+                            const nextX = (vy * sinRoll + vx * cosRoll) >> 16;
+                            vy = (vy * cosRoll - vx * sinRoll) >> 16;
+                            vx = nextX;
                         }
 
                         if (pitch !== 0) {
-                            sin = Pix3D.sinTable[pitch];
-                            cos = Pix3D.cosTable[pitch];
-                            const y_: number = (this.pointY![v] * cos - this.pointZ![v] * sin) >> 16;
-                            this.pointZ![v] = (this.pointY![v] * sin + this.pointZ![v] * cos) >> 16;
-                            this.pointY![v] = y_;
+                            const nextY = (vy * cosPitch - vz * sinPitch) >> 16;
+                            vz = (vy * sinPitch + vz * cosPitch) >> 16;
+                            vy = nextY;
                         }
 
                         if (yaw !== 0) {
-                            sin = Pix3D.sinTable[yaw];
-                            cos = Pix3D.cosTable[yaw];
-                            const x_: number = (this.pointZ![v] * sin + this.pointX![v] * cos) >> 16;
-                            this.pointZ![v] = (this.pointZ![v] * cos - this.pointX![v] * sin) >> 16;
-                            this.pointX![v] = x_;
+                            const nextX = (vz * sinYaw + vx * cosYaw) >> 16;
+                            vz = (vz * cosYaw - vx * sinYaw) >> 16;
+                            vx = nextX;
                         }
 
-                        this.pointX![v] += Model.oX;
-                        this.pointY![v] += Model.oY;
-                        this.pointZ![v] += Model.oZ;
+                        pointX[v] = vx + originX;
+                        pointY[v] = vy + originY;
+                        pointZ[v] = vz + originZ;
                     }
                 }
             }
@@ -1862,9 +1865,9 @@ export default class Model extends ModelSource {
     }
 
     private render2(clipped: boolean, picking: boolean, typecode: number): void {
-        for (let depth: number = 0; depth < this.maxDepth; depth++) {
-            Model.tmpDepthFaceCount[depth] = 0;
-        }
+        Model.tmpDepthFaceCount.fill(0, 0, this.maxDepth);
+        let minFaceDepth = this.maxDepth;
+        let maxFaceDepth = -1;
 
         for (let f: number = 0; f < this.numFaces; f++) {
             if (this.faceRenderType && this.faceRenderType[f] === -1) {
@@ -1921,10 +1924,12 @@ export default class Model extends ModelSource {
                 faces = Model.tmpDepthFaces[depth] = growBucket(faces);
             }
             faces[count] = f;
+            if (depth < minFaceDepth) minFaceDepth = depth;
+            if (depth > maxFaceDepth) maxFaceDepth = depth;
         }
 
         if (!this.facePriority) {
-            for (let depth: number = this.maxDepth - 1; depth >= 0; depth--) {
+            for (let depth = maxFaceDepth; depth >= minFaceDepth; depth--) {
                 const count: number = Model.tmpDepthFaceCount[depth];
                 if (count <= 0) {
                     continue;
@@ -1947,7 +1952,7 @@ export default class Model extends ModelSource {
             Model.tmpPriorityDepthSum[priority] = 0;
         }
 
-        for (let depth: number = this.maxDepth - 1; depth >= 0; depth--) {
+        for (let depth = maxFaceDepth; depth >= minFaceDepth; depth--) {
             const faceCount: number = Model.tmpDepthFaceCount[depth];
 
             if (faceCount > 0) {

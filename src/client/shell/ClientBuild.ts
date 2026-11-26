@@ -17,7 +17,19 @@ import Pix3D from '#/client/dash3d/Pix3D.js';
 import type OnDemand from '#/client/io/OnDemand.js';
 import Packet from '#/client/io/Packet.js';
 
-import { Int32Array2d, Int32Array3d, Uint8Array3d } from '#/client/util/Arrays.js';
+function terrainGrid<T>(Row: { new (buffer: ArrayBuffer, offset: number, length: number): T; BYTES_PER_ELEMENT: number }, levels: number, width: number, depth: number): T[][] {
+    const rowBytes = Math.trunc(depth) * Row.BYTES_PER_ELEMENT;
+    const buffer = new ArrayBuffer(levels * width * rowBytes);
+    const grid = new Array<T[]>(levels);
+    for (let level = 0; level < levels; level++) {
+        const rows = new Array<T>(width);
+        for (let x = 0; x < width; x++) {
+            rows[x] = new Row(buffer, (level * width + x) * rowBytes, depth);
+        }
+        grid[level] = rows;
+    }
+    return grid;
+}
 
 export default class ClientBuild {
     static readonly WSHAPE0: Int8Array = Int8Array.of(1, 2, 4, 8);
@@ -56,14 +68,14 @@ export default class ClientBuild {
         this.groundh = groundh;
         this.mapl = mapl;
 
-        this.floort1 = new Uint8Array3d(BuildArea.LEVELS, maxTileX, maxTileZ);
-        this.floort2 = new Uint8Array3d(BuildArea.LEVELS, maxTileX, maxTileZ);
-        this.floors = new Uint8Array3d(BuildArea.LEVELS, maxTileX, maxTileZ);
-        this.floorr = new Uint8Array3d(BuildArea.LEVELS, maxTileX, maxTileZ);
+        this.floort1 = terrainGrid(Uint8Array, BuildArea.LEVELS, maxTileX, maxTileZ);
+        this.floort2 = terrainGrid(Uint8Array, BuildArea.LEVELS, maxTileX, maxTileZ);
+        this.floors = terrainGrid(Uint8Array, BuildArea.LEVELS, maxTileX, maxTileZ);
+        this.floorr = terrainGrid(Uint8Array, BuildArea.LEVELS, maxTileX, maxTileZ);
 
-        this.mapo = new Int32Array3d(BuildArea.LEVELS, maxTileX + 1, maxTileZ + 1);
-        this.shadow = new Uint8Array3d(BuildArea.LEVELS, maxTileX + 1, maxTileZ + 1);
-        this.lightmap = new Int32Array2d(maxTileX + 1, maxTileZ + 1);
+        this.mapo = terrainGrid(Int32Array, BuildArea.LEVELS, maxTileX + 1, maxTileZ + 1);
+        this.shadow = terrainGrid(Uint8Array, BuildArea.LEVELS, maxTileX + 1, maxTileZ + 1);
+        this.lightmap = terrainGrid(Int32Array, 1, maxTileX + 1, maxTileZ + 1)[0];
 
         this.huetot = new Int32Array(maxTileZ);
         this.sattot = new Int32Array(maxTileZ);
@@ -535,8 +547,10 @@ export default class ClientBuild {
 
     static noise(x: number, y: number): number {
         const n: number = x + y * 57;
-        const n1: bigint = BigInt((n << 13) ^ n);
-        return Number(((n1 * (n1 * n1 * 15731n + 789221n) + 1376312589n) & 0x7fffffffn) >> 19n) & 0xff;
+        const n1: number = (n << 13) ^ n;
+        const square: number = Math.imul(n1, n1);
+        const hash: number = Math.imul(n1, Math.imul(square, 15731) + 789221) + 1376312589;
+        return (hash >>> 19) & 0xff;
     }
 
     fadeAdjacent(startZ: number, startX: number, endZ: number, endX: number) {

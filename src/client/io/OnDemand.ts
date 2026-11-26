@@ -16,8 +16,8 @@ import { openWorkerTrafficPort } from '#/client/io/TrafficChannel.js';
 declare const ONDEMAND_WORKER_URL: string;
 
 export default class OnDemand extends OnDemandProvider {
-    versions: number[][] = [];
-    crcs: number[][] = [];
+    versions: Uint16Array[] = [];
+    crcs: Int32Array[] = [];
     modelUse: number[] = [];
     mapIndex: number[] = [];
     mapLand: number[] = [];
@@ -52,9 +52,11 @@ export default class OnDemand extends OnDemandProvider {
             }
 
             const count = data.length / 2;
+            // Why: the startup screen displays Array's native error for partial entries.
+            if (!Number.isInteger(count)) Array(count);
             const buf = new Packet(data);
 
-            this.versions[i] = new Array(count);
+            this.versions[i] = new Uint16Array(count);
 
             for (let j = 0; j < count; j++) {
                 this.versions[i][j] = buf.g2();
@@ -69,9 +71,10 @@ export default class OnDemand extends OnDemandProvider {
             }
 
             const count = data.length / 4;
+            if (!Number.isInteger(count)) Array(count);
             const buf = new Packet(data);
 
-            this.crcs[i] = new Array(count);
+            this.crcs[i] = new Int32Array(count);
 
             for (let j = 0; j < count; j++) {
                 this.crcs[i][j] = buf.g4();
@@ -218,13 +221,35 @@ export default class OnDemand extends OnDemandProvider {
     }
 
     request(archive: number, file: number) {
+        if (this.registerRequest(archive, file)) {
+            this.postWorker({ type: 'request', archive, file });
+        }
+    }
+
+    requestStartupFiles(archive: 0 | 1) {
+        let files: number[] = [];
+        const count = this.getFileCount(archive);
+        for (let file = 0; file < count; file++) {
+            if (archive === 0 && (this.getModelUse(file) & 1) === 0) continue;
+            if (!this.registerRequest(archive, file)) continue;
+
+            files.push(file);
+            if (files.length === 32) {
+                this.postWorker({ type: 'requestBatch', archive, files });
+                files = [];
+            }
+        }
+        if (files.length) this.postWorker({ type: 'requestBatch', archive, files });
+    }
+
+    private registerRequest(archive: number, file: number): boolean {
         if (this.workerError || archive < 0 || archive >= this.versions.length || file < 0 || file >= this.versions[archive].length || this.versions[archive][file] === 0) {
-            return;
+            return false;
         }
 
         const pending = this.pendingByArchive[archive];
         if (pending.has(file)) {
-            return;
+            return false;
         }
 
         const req = new OnDemandRequest();
@@ -234,11 +259,7 @@ export default class OnDemand extends OnDemandProvider {
 
         this.requests.push(req);
         pending.set(file, req);
-        this.postWorker({
-            type: 'request',
-            archive,
-            file
-        });
+        return true;
     }
 
     remaining() {
