@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const generator = join(import.meta.dir, '../../tools/nav/derive-stairs.ts');
+const enricher = join(import.meta.dir, '../../tools/nav/enrich-transports.py');
 const previous = Buffer.from('[ { "from": {"x":1,"z":2,"level":0}, "to": {"x":1,"z":2,"level":1}, "locName":"Old stairs", "action":"Climb-up", "kind":"stair" } ]\r\n');
 let root: string;
 let stairs: string;
@@ -66,8 +67,38 @@ test('restoring Catherby writes all eight directed edges and passes --check', ()
         to: { x, z, level: 1 - level },
         locName: 'stairs',
         action: level === 0 ? 'Climb-up' : 'Climb-down',
-        kind: 'stair'
+        kind: 'stair',
+        ...(level === 0
+            ? { scriptedLocs: [{ x, z, level, debugName: 'stairs', action: 'Climb-up' }] }
+            : { autoReverse: true })
     })));
     expect(JSON.parse(readFileSync(out, 'utf8'))).toEqual(expected);
     expect(derive('--check').exitCode).toBe(0);
+});
+
+test('enrichment keeps each approach once at its scripted landing', () => {
+    mkdirSync(join(root, 'content/pack'));
+    mkdirSync(join(root, 'content/maps'));
+    writeFileSync(join(root, 'content/pack/loc.pack'), '1=stairs\n');
+    writeFileSync(join(root, 'content/scripts/stairs.loc'), '[stairs]\nname=Stairs\nop1=Climb-up\n');
+    writeFileSync(join(root, 'content/maps/m50_50.jm2'), '==== LOC ====\n0 5 9: 1 10\n');
+    const loc = { x: 3205, z: 3209, level: 0 };
+    const landing = { ...loc, level: 1 };
+    const scripted = {
+        from: { ...loc, z: 3208 }, to: landing, locName: 'Stairs', action: 'Climb-up', kind: 'stair'
+    };
+    const reverse = { ...scripted, to: { ...landing, x: 3204 }, autoReverse: true };
+    const north = { ...loc, z: 3210 };
+    writeFileSync(out, JSON.stringify([
+        reverse,
+        { ...reverse, from: north },
+        { ...scripted, scriptedLocs: [{ ...loc, debugName: 'stairs', action: 'Climb-up' }] }
+    ]));
+    const result = Bun.spawnSync(['python3', '-B', enricher, '--content', 'content'], { cwd: root });
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    const edges = JSON.parse(readFileSync(out, 'utf8'));
+    const enriched = { ...scripted, locId: 1, locX: loc.x, locZ: loc.z, debugName: 'stairs', options: ['Climb-up'] };
+    expect(edges).toHaveLength(2);
+    expect(edges).toContainEqual(enriched);
+    expect(edges).toContainEqual({ ...enriched, from: north });
 });

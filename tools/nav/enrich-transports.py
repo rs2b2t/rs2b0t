@@ -313,11 +313,11 @@ def main() -> None:
     curated = json.loads((data_dir / "transports.json").read_text(encoding="utf-8"))
     stairs = json.loads((data_dir / "stairEdges.json").read_text(encoding="utf-8"))
 
-    scripted_landings = defaultdict(list)
+    scripted_edges = defaultdict(list)
     for edge in stairs:
         for loc in edge.pop("scriptedLocs", []):
             key = (loc["x"], loc["z"], loc["level"], loc["debugName"], loc["action"])
-            scripted_landings[key].append(edge["to"])
+            scripted_edges[key].append(edge)
 
     def enrich(edges: list[dict]) -> list[dict]:
         enriched: list[dict] = []
@@ -338,8 +338,12 @@ def main() -> None:
                 config, placement = resolved
                 if auto_reverse and not edge.get("disabledReason"):
                     key = (placement.x, placement.z, placement.level, config.debug_name, edge["action"])
-                    landings = scripted_landings.get(key)
-                    if landings and edge["to"] not in landings:
+                    matches = scripted_edges.get(key, [])
+                    if matches and all(e["to"] == matches[0]["to"] for e in matches):
+                        if any(e["from"] == edge["from"] for e in matches):
+                            continue
+                        edge["to"] = matches[0]["to"]
+                    elif matches and all(e["to"] != edge["to"] for e in matches):
                         edge["disabledReason"] = "Generated reverse conflicts with the landing in stairs.rs2."
                 edge["locX"] = placement.x
                 edge["locZ"] = placement.z
@@ -373,7 +377,7 @@ def main() -> None:
 
     combined = [*enriched_curated, *enriched_stairs]
     resolved_count = sum("locId" in edge for edge in combined)
-    cross_file_keys = {edge_key(edge) for edge in curated} & {edge_key(edge) for edge in stairs}
+    cross_file_keys = {edge_key(edge) for edge in enriched_curated} & {edge_key(edge) for edge in enriched_stairs}
     kinds: dict[str, int] = defaultdict(int)
     for edge in combined:
         kinds[edge.get("kind", "unknown")] += 1

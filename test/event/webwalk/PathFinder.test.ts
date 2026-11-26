@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import stairs from '#/bot/event/webwalk/data/stairEdges.json';
 import { PathFinder, type TransportEdgeData } from '#/bot/event/webwalk/PathFinder.js';
+import { isolatedLandingFinder } from '../../lib/navCollision.js';
 
 function fullyWalkablePack(exitMask = 0xff, mx = 0, mz = 0): Uint8Array {
     const perLevel = 4096 + 512;
@@ -107,6 +108,15 @@ describe('PathFinder level-change avoidance', () => {
     const from = { x: 10, z: 10, level: 0 };
     const to = { x: 10, z: 12, level: 1 };
     const stair: TransportEdgeData = { from, to, locName: 'Test Staircase', action: 'Climb-up', kind: 'stair' };
+
+    test('the north Wilderness dungeon approach descends to the scripted landing', () => {
+        const start = { x: 3045, z: 3927, level: 0 };
+        const landing = { x: 3045, z: 10323, level: 0 };
+        const finder = isolatedLandingFinder([start, landing]);
+        expect(finder.findPath(start, landing, { maxExpansions: 1 })).toMatchObject({
+            ok: true, cost: 8, expanded: 1, hops: [{ kind: 'dungeon', from: start, to: landing }]
+        });
+    });
 
     test('walking away and back cannot change the Falador staircase landing', () => {
         const start = { x: 3034, z: 3362, level: 0 };
