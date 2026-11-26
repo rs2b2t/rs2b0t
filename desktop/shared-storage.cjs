@@ -68,12 +68,16 @@ function writeItem(state, key, value) {
         delete state.data[key];
         const removed = state.deletedDuringSettingsMigration;
         if (removed && !removed.includes(key)) removed.push(key);
+        for (const migration of Object.values(state.panelMigrations ?? {})) {
+            if (!migration.removed.includes(key)) migration.removed.push(key);
+        }
     } else state.data[key] = value;
 }
 
 function sharedStorage(dir) {
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
     const file = join(dir, 'storage.json');
+    const migrationId = randomUUID();
     const read = () => {
         try {
             return JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -103,7 +107,16 @@ function sharedStorage(dir) {
         const temporary = join(dir, `${randomUUID()}.tmp`);
         try {
             const state = read();
+            // Why: a first launch can exit before seed() drops its deletion list.
+            for (const [id, migration] of Object.entries(state.panelMigrations ?? {})) {
+                try {
+                    process.kill(migration.pid, 0);
+                } catch (error) {
+                    if (error.code === 'ESRCH') delete state.panelMigrations[id];
+                }
+            }
             const result = change(state);
+            if (state.panelMigrations && !Object.keys(state.panelMigrations).length) delete state.panelMigrations;
             fs.writeFileSync(temporary, JSON.stringify(state), { mode: 0o600 });
             fs.renameSync(temporary, file);
             return result;
@@ -114,8 +127,17 @@ function sharedStorage(dir) {
     }
     return {
         initialized: () => read().initialized,
-        migrationStatus() {
-            const state = read();
+        migrationStatus(trackPanel = false) {
+            let state = read();
+            if (!state.initialized && trackPanel) {
+                state = update(current => {
+                    if (!current.initialized) {
+                        current.panelMigrations ??= {};
+                        current.panelMigrations[migrationId] = { pid: process.pid, removed: [] };
+                    }
+                    return current;
+                });
+            }
             return { initialized: state.initialized, retrySettings: !!state.deletedDuringSettingsMigration, retryProfileOrigin: state.retryProfileOrigin };
         },
         snapshot: () => read().data,
@@ -144,6 +166,13 @@ function sharedStorage(dir) {
                     delete state.deletedDuringSettingsMigration;
                     delete state.pendingPanelSettings;
                 }
+                const migration = state.panelMigrations?.[migrationId];
+                if (migration) {
+                    delete state.panelMigrations[migrationId];
+                    if (state.initialized && values) {
+                        importSettings(state.pendingPanelSettings ?? state.data, values, migration.removed);
+                    }
+                }
                 if (state.initialized && !recover && !state.seededWithoutProfiles) return false;
                 if (!state.initialized && !profileKeys.some(key => key in state.data)) state.seededWithoutProfiles = true;
                 migrateProfiles(state.data, [values ?? {}, fallback ?? {}], { firstMigration: !state.initialized, recover });
@@ -162,8 +191,8 @@ function sharedStorage(dir) {
                 if (fallback === null) {
                     state.deletedDuringSettingsMigration = [];
                     state.pendingPanelSettings = {};
-                    importSettings(state.pendingPanelSettings, values ?? {});
-                } else importSettings(state.data, values ?? {});
+                    importSettings(state.pendingPanelSettings, values ?? {}, migration?.removed);
+                } else if (!migration) importSettings(state.data, values ?? {});
                 state.initialized = true;
                 return true;
             });

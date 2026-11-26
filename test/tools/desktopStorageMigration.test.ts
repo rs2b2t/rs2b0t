@@ -162,6 +162,37 @@ test.each(emptyRosters)('overlapping first launches recover all profiles when 80
     expect(second).toEqual(profiles);
 });
 
+test.each([custom, original])('a pending 8082 launch preserves panel settings when 8081 seeds first and the roster is on %s', async rosterOrigin => {
+    const script = 'rs2b0t:fixture:selectedScript';
+    const ore = 'rs2b0t:set:Miner:ore';
+    const tree = 'rs2b0t:set:Woodcutter:tree';
+    const method = 'rs2b0t:set:Fisher:method';
+    const rock = 'rs2b0t:fixture:set:Miner:rock';
+    const rail = 'rs2b0t:multibox:railHidden';
+    const legacy: Record<string, Record<string, string>> = {
+        [custom]: { [script]: 'Miner', [ore]: 'Tin', [tree]: 'Oak', [method]: 'Bait', [rock]: 'Copper', [rail]: '1' },
+        [original]: { [tree]: 'Willow' }
+    };
+    legacy[rosterOrigin][accounts] = JSON.stringify(profiles);
+    const { launch, openPanel, store } = fixture(legacy);
+    const ready = Promise.withResolvers<void>();
+    const pending = launch(custom, false, ready.promise);
+    await launch(original);
+    store.setItem(ore, 'Gold');
+    store.setItem(method, 'Fly');
+    store.removeItem(method);
+    ready.resolve();
+    await pending;
+    await openPanel();
+    expect(await launch(custom)).toEqual(profiles);
+    expect(store.getItem(script)).toBe('Miner');
+    expect(store.getItem(rock)).toBe('Copper');
+    expect(store.getItem(ore)).toBe('Gold');
+    expect(store.getItem(tree)).toBe('Willow');
+    expect(store.getItem(method)).toBeNull();
+    expect(store.getItem(rail)).toBeNull();
+});
+
 test('an empty roster saved before the first seed takes precedence over a pending migration', async () => {
     const { launch, store } = fixture({ [custom]: { [accounts]: JSON.stringify(profiles) } });
     const ready = Promise.withResolvers<void>();

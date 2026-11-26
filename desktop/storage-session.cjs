@@ -5,18 +5,24 @@ const { createHash } = require('node:crypto');
 const { profileKeys, savedProfileKey, sharedStorage } = require('./shared-storage.cjs');
 const legacyOrigin = 'http://localhost:8081';
 
+function isCustomOrigin(origin) {
+    return origin !== legacyOrigin && /^https?:\/\//.test(origin);
+}
+
 function prepareStorage(app, serverUrl) {
     const directory = process.env.B0T_PROFILE_DIR ? resolve(process.env.B0T_PROFILE_DIR) : app.getPath('userData');
     const cacheRoot = process.env.B0T_RUNTIME_DIR ?? tmpdir();
     fs.mkdirSync(cacheRoot, { recursive: true });
-    const runtime = fs.mkdtempSync(join(cacheRoot, 'rs2b0t-session-'));
     const storeDir = join(directory, 'Shared Storage');
     const store = sharedStorage(storeDir);
     const legacy = join(directory, 'Local Storage');
     const recover = process.env.B0T_RECOVER_LEGACY_PROFILES === '1';
     const hasLegacy = fs.existsSync(legacy);
-    const { initialized, retrySettings, retryProfileOrigin } = hasLegacy ? store.migrationStatus() : {};
+    const { initialized, retrySettings, retryProfileOrigin } = hasLegacy
+        ? store.migrationStatus(URL.canParse(serverUrl) && isCustomOrigin(new URL(serverUrl).origin))
+        : {};
     const automaticRetry = initialized && !recover;
+    const runtime = fs.mkdtempSync(join(cacheRoot, 'rs2b0t-session-'));
     let copied = false;
     if (hasLegacy && (recover || !initialized || retrySettings || retryProfileOrigin)) {
         const destination = join(runtime, 'Local Storage');
@@ -68,12 +74,12 @@ function prepareStorage(app, serverUrl) {
                     const entries = source === legacyOrigin
                         ? 'Object.entries(localStorage).filter(([key]) => key.startsWith("rs2b0t:"))'
                         : `${JSON.stringify(profileKeys)}.map(key => [key, localStorage[key]])`;
-                    if (deferPanelSettings) return await hidden.webContents.executeJavaScript(`(() => {
+                    if (!initialized && source !== legacyOrigin) return await hidden.webContents.executeJavaScript(`(() => {
                         const values = Object.fromEntries(${entries});
                         for (const key of Object.keys(localStorage)) {
                             if (!key.startsWith("rs2b0t:") || (!key.includes(":set:") && !key.endsWith(":selectedScript"))) continue;
                             values[key] = localStorage[key];
-                            delete localStorage[key];
+                            if (${deferPanelSettings}) delete localStorage[key];
                         }
                         return values;
                     })()`);
@@ -90,10 +96,10 @@ function prepareStorage(app, serverUrl) {
                     return null;
                 }
                 const profileOrigin = automaticRetry ? retryProfileOrigin : origin;
-                const readConfigured = profileOrigin && profileOrigin !== legacyOrigin && /^https?:\/\//.test(profileOrigin);
+                const readConfigured = isCustomOrigin(profileOrigin);
                 let fallback;
                 if (!initialized || retrySettings) fallback = await readLegacy(legacyOrigin).catch(failed);
-                const values = readConfigured ? await readLegacy(profileOrigin, !initialized && fallback === null).catch(failed) : {};
+                const values = readConfigured ? await readLegacy(profileOrigin, fallback === null).catch(failed) : {};
                 if (recover && fallback === undefined && !savedProfileKey(values ?? {})) fallback = await readLegacy(legacyOrigin).catch(failed);
                 let firstMigration = false;
                 if (!automaticRetry || fallback || (retryProfileOrigin && values)) {
