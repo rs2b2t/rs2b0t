@@ -2,7 +2,7 @@ import Pix2D from '#/client/graphics/Pix2D.js';
 import Pix8 from '#/client/graphics/Pix8.js';
 
 import JagFile from '#/client/io/JagFile.js';
-import { Int32Array2d, TypedArray1d } from '#/client/util/Arrays.js';
+import { TypedArray1d } from '#/client/util/Arrays.js';
 
 export default class Pix3D extends Pix2D {
     static lowMem: boolean = false;
@@ -25,7 +25,8 @@ export default class Pix3D extends Pix2D {
     static originY: number = 0;
     static texelPool: (Int32Array | null)[] | null = null;
     static poolSize: number = 0;
-    private static texelBuffers: Int32Array[] = [];
+    private static texelBuffers: (Int32Array | null)[] = [];
+    private static texelLength = 0;
     private static retainedPoolSize = 0;
     private static opaque: boolean = false;
 
@@ -78,8 +79,9 @@ export default class Pix3D extends Pix2D {
         }
 
         const texelLength = this.lowMem ? 16384 : 65536;
-        if (this.texelBuffers.length !== size || this.texelBuffers[0]?.length !== texelLength) {
-            this.texelBuffers = new Int32Array2d(size, texelLength);
+        if (this.texelBuffers.length !== size || this.texelLength !== texelLength) {
+            this.texelBuffers = new TypedArray1d(size, null);
+            this.texelLength = texelLength;
             this.retainedPoolSize = 0;
         } else {
             this.retainedPoolSize = size;
@@ -154,11 +156,17 @@ export default class Pix3D extends Pix2D {
         const palette = this.texPal[id];
         let texels: Int32Array | null;
         if (this.poolSize > 0 && this.texelPool) {
-            texels = this.texelPool[--this.poolSize];
-            this.texelPool[this.poolSize] = null;
-            if (this.poolSize < this.retainedPoolSize) {
-                this.retainedPoolSize = this.poolSize;
-                if (!texture || !palette) texels?.fill(0);
+            const slot = this.poolSize - 1;
+            texels = this.texelPool[slot];
+            if (!texels) {
+                texels = new Int32Array(this.texelLength);
+                this.texelBuffers[slot] = texels;
+            }
+            this.poolSize = slot;
+            this.texelPool[slot] = null;
+            if (slot < this.retainedPoolSize) {
+                this.retainedPoolSize = slot;
+                if (!texture || !palette) texels.fill(0);
             }
         } else {
             let cycle: number = 0;
