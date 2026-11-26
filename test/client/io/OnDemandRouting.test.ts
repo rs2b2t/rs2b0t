@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, mock, spyOn, test } from 'bun:test';
+import { throws } from 'node:assert/strict';
 import { gzipSync } from 'fflate';
 import { TARGET, resolveTarget } from '#/client/config/target.js';
 import AnimFrame from '#/client/dash3d/AnimFrame.js';
@@ -85,6 +86,16 @@ test('cache worker receives the selected frame target instead of the wall origin
         delete TARGET.httpPrefix;
         Object.assign(TARGET, previousTarget);
     }
+});
+
+test.each([
+    { row: 'model_version', bytes: 3 },
+    { row: 'model_crc', bytes: 7 }
+])('a partial $row fails with the startup diagnostic before posting to the worker', ({ row, bytes }) => {
+    const files = { read: (name: string) => name === row ? new Uint8Array(bytes) : versionlist.read(name) } as JagFile;
+    const post = spyOn(WorkerFixture.prototype, 'postMessage');
+    throws(() => new OnDemand(files, { ingame: false } as Client), { name: 'RangeError', message: 'Invalid array length' });
+    expect(post).not.toHaveBeenCalled();
 });
 
 test('worker load failure reaches the startup error screen while requesting animations', async () => {
