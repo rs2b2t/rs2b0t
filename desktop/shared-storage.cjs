@@ -5,6 +5,21 @@ const { lockSync } = require('proper-lockfile');
 
 const profileKeys = ['rs2b0t:multibox:profiles', 'rs2b0t:multibox:accounts'];
 
+function isEmptyRoster(value) {
+    return typeof value === 'string' && /^[ \t\r\n]*\[[ \t\r\n]*\][ \t\r\n]*$/.test(value);
+}
+
+function recoverProfiles(data, sources) {
+    if (profileKeys.some(key => key in data && !isEmptyRoster(data[key]))) return;
+    for (const source of sources) {
+        const saved = profileKeys.filter(key => typeof source[key] === 'string' && !isEmptyRoster(source[key]));
+        if (!saved.length) continue;
+        for (const key of profileKeys) delete data[key];
+        for (const key of saved) data[key] = source[key];
+        return;
+    }
+}
+
 function sharedStorage(dir) {
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
     const file = join(dir, 'storage.json');
@@ -66,8 +81,11 @@ function sharedStorage(dir) {
                 });
         },
         seed(values, { fallback = {}, recover = false } = {}) {
-            update(state => {
-                if (state.initialized && !recover) return;
+            return update(state => {
+                if (state.initialized) {
+                    if (recover) recoverProfiles(state.data, [values, fallback]);
+                    return false;
+                }
                 for (const source of [values, fallback]) {
                     const hasProfiles = profileKeys.some(key => key in state.data);
                     for (const [key, value] of Object.entries(source)) {
@@ -76,6 +94,7 @@ function sharedStorage(dir) {
                     }
                 }
                 state.initialized = true;
+                return true;
             });
         }
     };

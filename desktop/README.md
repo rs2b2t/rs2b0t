@@ -48,8 +48,10 @@ Point at another server with `bun run start -- --server=https://your-host`, or
 On first migration, the desktop checks the configured origin, then
 `http://localhost:8081`. If an older migration left the chooser empty, run
 `B0T_RECOVER_LEGACY_PROFILES=1 bun run start -- --server=http://localhost:8082`
-once from `desktop/`, using the origin where you saved the profiles. Recovery
-keeps existing shared profiles and settings. Ordinary launches preserve deletions.
+once from `desktop/`, using the origin where you saved the profiles. On an
+initialized store, recovery imports only profiles. It can replace an empty
+plaintext roster and preserves populated rosters and encrypted vaults.
+Ordinary launches preserve deletions.
 
 ## Package a distributable
 

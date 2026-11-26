@@ -67,7 +67,11 @@ function prepareStorage(app, serverUrl) {
             if (migrate) {
                 const values = /^https?:\/\//.test(origin) ? await readLegacy(origin) : {};
                 const fallback = origin === legacyOrigin ? {} : await readLegacy(legacyOrigin);
-                store.seed(values, { fallback, recover });
+                const firstMigration = store.seed(values, { fallback, recover });
+                if (recover && !firstMigration) {
+                    // Why: the panel also imports settings from the temporary Chromium copy.
+                    await session.defaultSession.clearStorageData({ storages: ['localstorage'] });
+                }
             }
             const clients = new Map();
             const tracked = new WeakSet();

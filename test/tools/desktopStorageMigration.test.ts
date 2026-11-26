@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from 'bun:test';
 import { EventEmitter } from 'node:events';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -10,6 +10,7 @@ import { runInNewContext } from 'node:vm';
 const sessionModule = new URL('../../desktop/storage-session.cjs', import.meta.url);
 const require = createRequire(sessionModule);
 const { sharedStorage } = require('./shared-storage.cjs');
+const vault = 'rs2b0t:multibox:profiles';
 const accounts = 'rs2b0t:multibox:accounts';
 const profiles = Array.from({ length: 30 }, (_, i) => ({ username: `fixture-${i}`, password: 'fixture' }));
 const custom = 'http://localhost:8082';
@@ -27,6 +28,8 @@ function fixture(origins: Record<string, Record<string, string>>) {
     const storeDir = join(dir, 'Shared Storage');
     const store = sharedStorage(storeDir);
 
+    let rendererStorage: Record<string, string> = {};
+
     async function launch(server: string, recover = false) {
         let runtime = '';
         let startupError: unknown;
@@ -39,6 +42,10 @@ function fixture(origins: Record<string, Record<string, string>>) {
             quit: () => opened.reject(new Error('app.quit', { cause: startupError }))
         });
         const handlers = new Map<string, (request: { url: string }) => Response>();
+        function nativeStorage(origin: string): Record<string, string> {
+            const file = join(runtime, 'Local Storage', 'fixture.json');
+            return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8'))[origin] ?? {} : {};
+        }
         const electron = {
             app,
             Menu: { buildFromTemplate() {}, setApplicationMenu() {} },
@@ -47,19 +54,23 @@ function fixture(origins: Record<string, Record<string, string>>) {
             session: { defaultSession: { protocol: {
                 handle: (scheme: string, handler: (request: { url: string }) => Response) => handlers.set(scheme, handler),
                 unhandle: (scheme: string) => handlers.delete(scheme)
+            }, clearStorageData: ({ storages }: { storages: string[] }) => {
+                if (storages.includes('localstorage')) rmSync(join(runtime, 'Local Storage'), { recursive: true, force: true });
             } } },
             BrowserWindow: class {
                 constructor(readonly options: { show?: boolean }) {}
                 origin = '';
                 loadURL(url: string) {
-                    if (this.options.show !== false) return opened.resolve();
                     const parsed = new URL(url);
+                    if (this.options.show !== false) {
+                        rendererStorage = nativeStorage(parsed.origin);
+                        return opened.resolve();
+                    }
                     expect(handlers.get(parsed.protocol.slice(0, -1))?.({ url })).toBeInstanceOf(Response);
                     this.origin = parsed.origin;
                 }
                 webContents = { on() {}, executeJavaScript: (source: string) => {
-                    const legacy = JSON.parse(readFileSync(join(runtime, 'Local Storage', 'fixture.json'), 'utf8'));
-                    return runInNewContext(source, { localStorage: legacy[this.origin] ?? {} });
+                    return runInNewContext(source, { localStorage: nativeStorage(this.origin) });
                 } };
                 destroy() {}
             }
@@ -84,7 +95,7 @@ function fixture(origins: Record<string, Record<string, string>>) {
         expect(handlers.size).toBe(0);
         return JSON.parse(store.getItem(accounts) ?? '[]');
     }
-    return { launch, store, storeDir };
+    return { launch, store, storeDir, rendererStorage: () => rendererStorage };
 }
 
 test('a malformed server URL is logged and quits through the startup error handler', async () => {
@@ -132,12 +143,11 @@ test.each([accounts, 'rs2b0t:multibox:profiles'])('recovery preserves newer save
 });
 
 test('explicit recovery leaves an existing vault intact', async () => {
-    const vault = 'rs2b0t:multibox:profiles';
     const current = JSON.stringify({ v: 1, iter: 310000, salt: 'fixture', iv: 'fixture', ct: 'current' });
     const { launch, storeDir, store } = fixture({ [custom]: { [vault]: 'older', [accounts]: JSON.stringify(profiles) } });
-    writeFileSync(join(storeDir, 'storage.json'), JSON.stringify({ initialized: true, data: { [vault]: current } }));
+    writeFileSync(join(storeDir, 'storage.json'), JSON.stringify({ initialized: true, data: { [vault]: current, [accounts]: '[]' } }));
     expect(await launch(custom, true)).toEqual([]);
-    expect(store.getItem(vault)).toBe(current);
+    expect(store.snapshot()).toEqual({ [vault]: current, [accounts]: '[]' });
 });
 
 test('profiles on the configured origin take precedence over the 8081 fallback', async () => {
@@ -146,4 +156,41 @@ test('profiles on the configured origin take precedence over the 8081 fallback',
         [original]: { [accounts]: JSON.stringify([{ username: 'fallback', password: 'fixture' }]) }
     });
     expect(await launch(custom)).toEqual(profiles);
+});
+
+test.each([[accounts, accounts], [vault, accounts], [accounts, vault]])(
+    'explicit recovery replaces an empty %s roster with profiles from %s', async (emptyKey, sourceKey) => {
+        const saved = JSON.stringify(profiles);
+        const { launch, store } = fixture({ [custom]: { [sourceKey]: saved }, [original]: { [accounts]: '[]' } });
+        store.seed({ [emptyKey]: '[]' });
+        await launch(custom);
+        expect(store.snapshot()).toEqual({ [emptyKey]: '[]' });
+        await launch(custom, true);
+        expect(store.snapshot()).toEqual({ [sourceKey]: saved });
+        await launch(custom);
+        expect(store.snapshot()).toEqual({ [sourceKey]: saved });
+    }
+);
+
+test('profile recovery keeps cleared settings out of shared and renderer storage', async () => {
+    const setting = 'rs2b0t:set:Miner:ore';
+    const selected = 'rs2b0t:fixture:selectedScript';
+    const { launch, store, rendererStorage } = fixture({
+        [custom]: { [accounts]: JSON.stringify(profiles), [setting]: 'Tin', [selected]: 'Miner' },
+        [original]: { 'rs2b0t:fallback': 'old' }
+    });
+    store.seed({});
+    expect(await launch(custom, true)).toEqual(profiles);
+    expect({
+        shared: store.keys().sort(),
+        nativeSetting: rendererStorage()[setting],
+        nativeScript: rendererStorage()[selected]
+    }).toEqual({ shared: [accounts], nativeSetting: undefined, nativeScript: undefined });
+});
+
+test('explicit recovery can use the fallback when the configured origin has only an empty roster', async () => {
+    const { launch, store } = fixture({ [custom]: { [vault]: '[]' }, [original]: { [accounts]: JSON.stringify(profiles) } });
+    store.seed({ [vault]: '[]' });
+    expect(await launch(custom, true)).toEqual(profiles);
+    expect(store.getItem(vault)).toBeNull();
 });
