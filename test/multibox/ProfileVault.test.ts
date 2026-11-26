@@ -165,6 +165,21 @@ async function writeBlob(pass: string, payload: unknown): Promise<void> {
     localStorage.setItem(KEY, JSON.stringify({ v: 1, kdf: 'PBKDF2-SHA256', iter: 310000, salt: b64(salt), iv: b64(iv), ct: b64(ct) }));
 }
 
+function quotaLimitedStorage() {
+    return {
+        failNextWrite: false,
+        getItem: (key: string) => localStorage.getItem(key),
+        removeItem: (key: string) => localStorage.removeItem(key),
+        setItem(key: string, value: string) {
+            if (this.failNextWrite) {
+                this.failNextWrite = false;
+                throw new DOMException('storage full', 'QuotaExceededError');
+            }
+            localStorage.setItem(key, value);
+        }
+    };
+}
+
 describe('ProfileVault tabs', () => {
     test('tab state round-trips through a real lock/unlock cycle', async () => {
         const v = new ProfileVault();
@@ -276,6 +291,33 @@ describe('ProfileVault tabs', () => {
         expect(reopened.snapshot()).toEqual(v.snapshot());
     });
 
+    test('a failed import preserves the roster for later saves and allows an explicit retry', async () => {
+        const storage = quotaLimitedStorage();
+        const v = new ProfileVault(storage);
+        const reopen = async () => {
+            const reopened = new ProfileVault(storage);
+            expect(await reopened.unlock('pw')).toBe(true);
+            return reopened.snapshot();
+        };
+        const original = { profiles: [{ username: 'original', password: 'a', tab: 'Old' }], tabs: ['Old'], activeTab: 'Old' };
+        const imported = { profiles: [{ username: 'imported', password: 'b', tab: 'New' }], tabs: ['New'], activeTab: 'New' };
+        await v.setup('pw');
+        await v.replaceAll(original);
+
+        storage.failNextWrite = true;
+        await expect(v.replaceAll(imported)).rejects.toThrow('storage full');
+        expect(await reopen()).toEqual(original);
+        expect(v.snapshot()).toEqual(original);
+
+        const later = { username: 'later', password: 'c' };
+        await v.upsert(later);
+        expect(await reopen()).toEqual({ ...original, profiles: [...original.profiles, { ...later, tab: 'Main' }] });
+
+        await v.replaceAll(imported);
+        expect(v.snapshot()).toEqual(imported);
+        expect(await reopen()).toEqual(imported);
+    });
+
     test('replaceAll rejects a profile pointing at a missing tab', async () => {
         const v = new ProfileVault();
         await v.setup('pw');
@@ -285,6 +327,30 @@ describe('ProfileVault tabs', () => {
             activeTab: 'Main'
         })).rejects.toThrow(/ghost/);
     });
+
+    for (const fail of [true, false]) {
+        test(`upsert during a ${fail ? 'failed' : 'successful'} import saves the ${fail ? 'original' : 'imported'} roster`, async () => {
+            const storage = quotaLimitedStorage();
+            const v = new ProfileVault(storage);
+            await v.setup('pw');
+            const original = { username: 'original', password: 'a' };
+            const imported = { username: 'imported', password: 'b' };
+            const later = { username: 'later', password: 'c' };
+            await v.upsert(original);
+            storage.failNextWrite = fail;
+            const replace = v.replaceAll({ profiles: [imported], tabs: [], activeTab: 'Main' });
+            expect(v.list()).toEqual([{ ...original, tab: 'Main' }]);
+            const add = v.upsert(later);
+            if (fail) await expect(replace).rejects.toThrow('storage full');
+            else await replace;
+            await add;
+            const reopened = new ProfileVault(storage);
+            expect(await reopened.unlock('pw')).toBe(true);
+            const expected = [fail ? original : imported, later].map(p => ({ ...p, tab: 'Main' }));
+            expect(v.list()).toEqual(expected);
+            expect(reopened.list()).toEqual(expected);
+        });
+    }
 });
 
 describe('ProfileVault worlds', () => {
