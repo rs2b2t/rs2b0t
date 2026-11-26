@@ -69,6 +69,14 @@ export function boxStoragePrefix(username: string): string {
     return `rs2b0t:${username}:`;
 }
 
+function isBoxStorageKey(key: string, prefix: string): boolean {
+    if (!key.startsWith(prefix)) return false;
+    if (prefix !== 'rs2b0t:set:') return true;
+    // Why: under this prefix, standalone settings have suffix <namespace>:<key> and profile settings have set:<namespace>:<key>.
+    const suffix = key.slice(prefix.length);
+    return !suffix.includes(':') || /^set:[^:]+:/.test(suffix);
+}
+
 function storeKeys(store: Storage): string[] {
     if (desktopStorage && store === globalThis.localStorage) return desktopStorage.keys();
     const keys: string[] = [];
@@ -92,7 +100,7 @@ export function collectBoxStorage(usernames: string[]): BoxStorageMap {
 }
 
 export function applyBoxStorage(storage: BoxStorageMap, wipe: string[]): void {
-    const users = [...new Set([...wipe, ...Object.keys(storage)])];
+    const prefixes = [...new Set([...wipe, ...Object.keys(storage)])].map(boxStoragePrefix);
     const stores: Storage[] = [];
     if (typeof localStorage !== 'undefined') {
         stores.push(localStorage);
@@ -102,14 +110,15 @@ export function applyBoxStorage(storage: BoxStorageMap, wipe: string[]): void {
     }
     for (const store of stores) {
         for (const key of storeKeys(store)) {
-            if (users.some(user => key.startsWith(boxStoragePrefix(user)))) {
+            if (prefixes.some(prefix => isBoxStorageKey(key, prefix))) {
                 store.removeItem(key);
             }
         }
         for (const [user, entries] of Object.entries(storage)) {
             const prefix = boxStoragePrefix(user);
             for (const [suffix, value] of Object.entries(entries)) {
-                store.setItem(prefix + suffix, value);
+                const key = prefix + suffix;
+                if (isBoxStorageKey(key, prefix)) store.setItem(key, value);
             }
         }
     }
@@ -119,7 +128,7 @@ function readStore(store: Storage, usernames: string[], out: BoxStorageMap, incl
     for (const key of storeKeys(store)) {
         for (const user of usernames) {
             const prefix = boxStoragePrefix(user);
-            if (!key.startsWith(prefix)) {
+            if (!isBoxStorageKey(key, prefix)) {
                 continue;
             }
             const suffix = key.slice(prefix.length);

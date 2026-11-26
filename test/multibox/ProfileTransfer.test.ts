@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
+import { Loadouts } from '#/bot/api/loadout/loadoutStore.js';
 import type { Profile } from '#/bot/multibox/ProfileVault.js';
+import { SettingsStore } from '#/bot/runtime/Settings.js';
 
 import {
     PROFILE_FILE_KIND,
@@ -113,4 +115,48 @@ describe('ProfileTransfer', () => {
         expect(localStorage.getItem('rs2b0t:multibox:profiles')).toBe('ignore');
         expect(sessionStorage.getItem('rs2b0t:alice:selectedScript')).toBe('BrimhavenAgility');
     });
+
+    test('exporting set includes only its profile storage', () => {
+        Loadouts.save([{ name: 'travel', worn: {}, carry: [] }]);
+        SettingsStore.save('Global', 'runEnergyMin', '73');
+        SettingsStore.save('set', 'custom', 'standalone');
+        localStorage.setItem('rs2b0t:set:set:Global:runEnergyMin', '42');
+        sessionStorage.setItem('rs2b0t:set:selectedScript', 'Miner');
+
+        expect(collectBoxStorage(['set'])).toEqual({
+            set: { 'set:Global:runEnergyMin': '42', selectedScript: 'Miner' }
+        });
+    });
+
+    for (const incoming of ['set', 'fixture', 'legacy set']) {
+        test(`restoring ${incoming} over set preserves standalone storage`, () => {
+            const loadout = { name: 'travel', worn: {}, carry: [{ item: 'Lobster', qty: 2 }] };
+            Loadouts.save([loadout]);
+            SettingsStore.save('Global', 'runEnergyMin', '73');
+            const user = incoming === 'fixture' ? 'fixture' : 'set';
+            const threshold = 'set:Global:runEnergyMin';
+            for (const store of [localStorage, sessionStorage]) {
+                store.setItem('rs2b0t:set:selectedScript', 'Miner');
+                store.setItem(`rs2b0t:set:${threshold}`, '31');
+            }
+            const entries: Record<string, string> = { [threshold]: '42' };
+            if (incoming === 'legacy set') {
+                entries['Loadouts:sets'] = '[]';
+                entries['Global:runEnergyMin'] = '10';
+            }
+
+            applyBoxStorage({ [user]: entries }, ['set', user]);
+
+            for (const store of [localStorage, sessionStorage]) {
+                expect(store.getItem('rs2b0t:set:selectedScript')).toBeNull();
+                expect(store.getItem(`rs2b0t:set:${threshold}`)).toBe(user === 'set' ? '42' : null);
+                expect(store.getItem(`rs2b0t:${user}:${threshold}`)).toBe('42');
+                expect(store.getItem('rs2b0t:set:Global:runEnergyMin')).toBe('73');
+                expect(store.getItem('rs2b0t:set:Loadouts:sets')).toBe(JSON.stringify([loadout]));
+            }
+            sessionStorage.clear();
+            expect(SettingsStore.saved('Global', 'runEnergyMin')).toBe('73');
+            expect(Loadouts.all()).toEqual([loadout]);
+        });
+    }
 });
