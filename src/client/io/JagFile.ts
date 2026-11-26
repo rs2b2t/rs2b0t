@@ -1,4 +1,5 @@
 import { bunzip2 } from '#/client/io/BZip2.js';
+import JagCache from '#/client/io/JagCache.js';
 import Packet from '#/client/io/Packet.js';
 
 export default class JagFile {
@@ -20,7 +21,10 @@ export default class JagFile {
     fileOffset: number[];
     fileUnpacked: Uint8Array[] = [];
 
-    constructor(src: Uint8Array) {
+    private readonly cache?: JagCache;
+
+    constructor(src: Uint8Array, crc?: number) {
+        if (crc !== undefined) this.cache = JagCache.open(crc);
         let data: Packet = new Packet(src);
         const unpackedSize: number = data.g3();
         const packedSize: number = data.g3();
@@ -29,7 +33,7 @@ export default class JagFile {
             this.data = src;
             this.unpacked = false;
         } else {
-            this.data = bunzip2(src.subarray(6), false, false, unpackedSize);
+            this.data = this.decode(src.subarray(6), unpackedSize, -1);
             data = new Packet(this.data);
             this.unpacked = true;
         }
@@ -48,6 +52,10 @@ export default class JagFile {
             this.fileOffset.push(offset);
             offset += this.filePackedSize[i];
         }
+    }
+
+    private decode(src: Uint8Array, size: number, index: number): Uint8Array {
+        return this.cache ? this.cache.decode(src, size, index) : bunzip2(src, false, false, size);
     }
 
     read(name: string): Uint8Array | null {
@@ -75,7 +83,7 @@ export default class JagFile {
             this.fileUnpacked[index] = src;
             return src;
         } else {
-            const data: Uint8Array = bunzip2(src, false, false, this.fileUnpackedSize[index]);
+            const data: Uint8Array = this.decode(src, this.fileUnpackedSize[index], index);
             this.fileUnpacked[index] = data;
             return data;
         }
