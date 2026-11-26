@@ -5,6 +5,8 @@ export interface TrafficChannelOptions {
     channelFactory?: (name: string) => BroadcastChannel | null;
 }
 
+export const TRAFFIC_END = 'rs2b0t:traffic:end';
+
 interface PublisherPort {
     port: MessagePort;
     close(): void;
@@ -13,7 +15,18 @@ interface PublisherPort {
 type TrafficWall = Document & { rs2b0tOpenTrafficPort?: () => PublisherPort | null };
 
 export function installWallTrafficChannel(wall: TrafficWall, receive: (data: unknown) => void): () => void {
-    const receivers = new Set<MessagePort>();
+    // Why: a terminated worker can disappear without a close event while its last messages are still queued.
+    const receivers = new Set<WeakRef<MessagePort>>();
+    const collected = new FinalizationRegistry<WeakRef<MessagePort>>(ref => receivers.delete(ref));
+    const dispose = (ref: WeakRef<MessagePort>) => {
+        if (!receivers.delete(ref)) return;
+        collected.unregister(ref);
+        const receiver = ref.deref();
+        if (receiver) {
+            receiver.onmessage = null;
+            receiver.close();
+        }
+    };
     const open = (): PublisherPort | null => {
         let channel: MessageChannel;
         try {
@@ -21,30 +34,31 @@ export function installWallTrafficChannel(wall: TrafficWall, receive: (data: unk
         } catch {
             return null;
         }
-        const receiver: MessagePort & { unref?: () => void } = channel.port1;
-        const sender = channel.port2;
-        receivers.add(receiver);
-        receiver.onmessage = event => receive(event.data);
-        receiver.addEventListener('close', () => receivers.delete(receiver), { once: true });
+        const { port1: receiver, port2: sender } = channel;
+        const ref = new WeakRef(receiver);
+        receivers.add(ref);
+        collected.register(receiver, ref, ref);
+        receiver.onmessage = event => {
+            if (event.data === TRAFFIC_END) dispose(ref);
+            else receive(event.data);
+        };
+        receiver.addEventListener('close', () => dispose(ref), { once: true });
         return {
             port: sender,
             close() {
+                sender.postMessage(TRAFFIC_END);
                 sender.close();
-                // Why: the disentangled receiver can drain already-posted deltas before collection.
-                receivers.delete(receiver);
-                receiver.unref?.();
             }
         };
     };
     wall.rs2b0tOpenTrafficPort = open;
     return () => {
         if (wall.rs2b0tOpenTrafficPort === open) wall.rs2b0tOpenTrafficPort = () => null;
-        for (const port of receivers) port.close();
-        receivers.clear();
+        for (const ref of receivers) dispose(ref);
     };
 }
 
-export function openFrameTrafficPort(frame: Window = globalThis.self): PublisherPort | null | undefined {
+function openFrameTrafficPort(frame: Window = globalThis.self, onClose?: () => void): PublisherPort | null | undefined {
     const wall: TrafficWall | undefined = frame?.frameElement?.ownerDocument;
     const publisher = wall?.rs2b0tOpenTrafficPort?.();
     if (!publisher) return publisher;
@@ -52,12 +66,23 @@ export function openFrameTrafficPort(frame: Window = globalThis.self): Publisher
     const onPageHide = (event: PageTransitionEvent) => {
         if (!event.persisted) close();
     };
+    let closed = false;
     function close() {
+        if (closed) return;
+        closed = true;
         frame.removeEventListener('pagehide', onPageHide);
-        release();
+        try {
+            onClose?.();
+        } finally {
+            release();
+        }
     }
     frame.addEventListener('pagehide', onPageHide);
     return { port, close };
+}
+
+export function openWorkerTrafficPort(stopWorker: () => void, frame: Window = globalThis.self): PublisherPort | null | undefined {
+    return openFrameTrafficPort(frame, stopWorker);
 }
 
 export function openTrafficChannel({ channelName = CHANNEL_NAME, channelFactory }: TrafficChannelOptions): BroadcastChannel | null {

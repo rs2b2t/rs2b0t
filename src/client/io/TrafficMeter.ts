@@ -12,7 +12,7 @@ export type TrafficMessage =
 type TimerHandle = ReturnType<typeof setTimeout>;
 
 export interface TrafficMeterOptions extends TrafficChannelOptions {
-    channel?: MessagePort | null;
+    channel?: { postMessage(message: TrafficMessage): void; close(): void } | null;
     intervalMs?: number;
     setTimeout?: (callback: () => void, delayMs: number) => TimerHandle;
     clearTimeout?: (timer: TimerHandle) => void;
@@ -26,7 +26,7 @@ function validBytes(bytes: number): boolean {
 
 /** Publishes actual WebSocket payload deltas from one browser or worker realm. */
 export class TrafficMeter {
-    private readonly channel: Pick<MessagePort, 'postMessage' | 'close'> | null;
+    private readonly channel: NonNullable<TrafficMeterOptions['channel']> | null;
     private readonly intervalMs: number;
     private readonly scheduleTimeout: (callback: () => void, delayMs: number) => TimerHandle;
     private readonly cancelTimeout: (timer: TimerHandle) => void;

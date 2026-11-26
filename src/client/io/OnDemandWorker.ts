@@ -1,4 +1,5 @@
-import { TrafficMeter } from '#/client/io/TrafficMeter.js';
+import { TrafficMeter, type TrafficMessage } from '#/client/io/TrafficMeter.js';
+import { TRAFFIC_END } from '#/client/io/TrafficChannel.js';
 import ClientStream from '#/client/io/ClientStream.js';
 
 type WorkerRequest = {
@@ -11,7 +12,7 @@ type WorkerRequest = {
 
 type InitMessage = {
     type: 'init';
-    trafficPort?: MessagePort | null;
+    trafficPort?: MessagePort | 'relay' | null;
     versions: number[][];
     crcs: number[][];
     host: string;
@@ -38,6 +39,7 @@ type CompletedMessage = {
 };
 
 type OutboundMessage =
+    | TrafficMessage
     | CompletedMessage
     | { type: 'ready' }
     | { type: 'message'; message: string }
@@ -174,6 +176,7 @@ class WorkerOnDemand {
     dbReady: Promise<void>;
 
     private readonly meter: TrafficMeter;
+    private readonly trafficPort?: MessagePort | null;
 
     constructor(message: InitMessage) {
         this.versions = message.versions;
@@ -182,7 +185,12 @@ class WorkerOnDemand {
         this.host = message.host;
         this.secured = message.secured;
         this.ingame = message.ingame;
-        this.meter = new TrafficMeter({ channel: message.trafficPort });
+        if (message.trafficPort === 'relay') {
+            this.meter = new TrafficMeter({ channel: { postMessage: delta => worker.postMessage(delta), close() {} } });
+        } else {
+            this.trafficPort = message.trafficPort;
+            this.meter = new TrafficMeter({ channel: this.trafficPort });
+        }
 
         if (message.dbEnabled) {
             this.dbReady = openDatabase().then((db) => {
@@ -195,6 +203,7 @@ class WorkerOnDemand {
 
     stop(): void {
         this.running = false;
+        this.trafficPort?.postMessage(TRAFFIC_END);
         this.meter.close();
         this.stream?.close();
         this.stream = null;

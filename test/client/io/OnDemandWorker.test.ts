@@ -1,9 +1,9 @@
 import { afterEach, beforeAll, beforeEach, expect, jest, mock, spyOn, test } from 'bun:test';
 import { setImmediate } from 'node:timers/promises';
+import { loadWorkerScope, scope } from './workerScope.js';
 import ClientStream from '#/client/io/ClientStream.js';
 
 const clock = jest as typeof jest & { advanceTimersByTime(ms: number): void; getTimerCount(): number };
-const scope = Object.assign(new EventTarget(), { postMessage: mock((_message: unknown) => {}) });
 const cached = Uint8Array.of(0, 1);
 
 function result<T>(value: T) {
@@ -29,15 +29,7 @@ async function advance(ms: number) {
     await setImmediate();
 }
 
-beforeAll(async () => {
-    const original = self;
-    Reflect.set(globalThis, 'self', scope);
-    try {
-        await import('#/client/io/OnDemandWorker.js');
-    } finally {
-        Reflect.set(globalThis, 'self', original);
-    }
-});
+beforeAll(loadWorkerScope);
 
 const originalDatabase = Object.getOwnPropertyDescriptor(globalThis, 'indexedDB');
 

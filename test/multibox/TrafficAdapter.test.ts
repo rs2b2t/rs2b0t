@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test';
-import { openFrameTrafficPort } from '#/client/io/TrafficChannel.js';
+import { installWallTrafficChannel, openWorkerTrafficPort } from '#/client/io/TrafficChannel.js';
 import { TrafficMeter } from '#/client/io/TrafficMeter.js';
 import { TrafficCollector } from '#/bot/adapter/TrafficAdapter.js';
 
@@ -36,8 +36,9 @@ describe('TrafficCollector', () => {
                     const frame = frameFor(walls[wall]);
                     frames.push(frame);
                     for (const worker of [false, true]) {
-                        const { port } = openFrameTrafficPort(frame)!;
-                        const channel = worker ? structuredClone(port, { transfer: [port] }) : port;
+                        let channel: MessagePort;
+                        const { port } = openWorkerTrafficPort(() => channel.close(), frame)!;
+                        channel = worker ? structuredClone(port, { transfer: [port] }) : port;
                         channel.onmessage = () => { peers++; };
                         let heartbeat: () => void;
                         const meter = new TrafficMeter({
@@ -102,13 +103,32 @@ describe('TrafficCollector', () => {
             await new Promise<void>(resolve => setImmediate(resolve));
             expect(collector.snapshot()).toEqual({ status: 'available', receivedBytes: 18, sentBytes: 0 });
             collector.close();
-            expect(openFrameTrafficPort(frame)).toBeNull();
+            expect(openWorkerTrafficPort(() => {}, frame)).toBeNull();
             expect(collector.snapshot()).toEqual({ status: 'unavailable', reason: 'browser traffic collector is closed' });
         } finally {
             original.close();
             replacement?.close();
             collector.close();
             Reflect.set(globalThis, 'self', originalSelf);
+        }
+    });
+
+    test('wall teardown closes a receiver still draining after pagehide', async () => {
+        const wall = document.implementation.createHTMLDocument();
+        const receive = mock();
+        const closeWall = installWallTrafficChannel(wall, receive);
+        const frame = frameFor(wall);
+        const { port } = openWorkerTrafficPort(() => remote.close(), frame)!;
+        const remote = structuredClone(port, { transfer: [port] });
+        try {
+            remote.postMessage({ type: 'rs2b0t:traffic', status: 'available', receivedBytes: 11, sentBytes: 0 });
+            frame.dispatchEvent(new Event('pagehide'));
+            closeWall();
+            await new Promise<void>(resolve => setImmediate(resolve));
+            expect(receive).not.toHaveBeenCalled();
+        } finally {
+            remote.close();
+            closeWall();
         }
     });
 

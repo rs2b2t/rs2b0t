@@ -1,9 +1,14 @@
-import { afterEach, beforeEach, expect, mock, spyOn, test } from 'bun:test';
+import { afterEach, beforeEach, expect, jest, mock, spyOn, test } from 'bun:test';
+import { once } from 'node:events';
+import { MessageChannel as ThreadChannel, Worker as Thread } from 'node:worker_threads';
 import { gzipSync } from 'fflate';
 import { TARGET, resolveTarget } from '#/client/config/target.js';
 import AnimFrame from '#/client/dash3d/AnimFrame.js';
 import Model from '#/client/dash3d/Model.js';
 import PixFont from '#/client/graphics/PixFont.js';
+import ClientStream from '#/client/io/ClientStream.js';
+import { openPublisherChannel } from '#/client/io/TrafficChannel.js';
+import { loadWorkerScope, scope } from './workerScope.js';
 import Database from '#/client/io/Database.js';
 import type JagFile from '#/client/io/JagFile.js';
 import OnDemand from '#/client/io/OnDemand.js';
@@ -13,6 +18,7 @@ import ClientBuild from '#/client/shell/ClientBuild.js';
 import * as JsUtil from '#/client/util/JsUtil.js';
 
 const originalWorker = globalThis.Worker;
+const clock = jest as typeof jest & { advanceTimersByTime(ms: number): void };
 
 beforeEach(() => {
     Reflect.set(globalThis, 'Worker', WorkerFixture);
@@ -79,9 +85,8 @@ test('cache workers transfer their wall port in init and release it on terminati
             expect(collector.snapshot()).toEqual({ status: 'available', receivedBytes: 0, sentBytes: 3 * i });
         }
         const remaining = loaderFixture();
-        const close = spyOn(Object.getPrototypeOf(workerPort!) as MessagePort, 'close');
         collector.close();
-        expect(close).toHaveBeenCalledTimes(1);
+        expect(collector.snapshot()).toEqual({ status: 'unavailable', reason: 'browser traffic collector is closed' });
         remaining.stop();
     } finally {
         Reflect.deleteProperty(window, 'frameElement');
@@ -89,19 +94,94 @@ test('cache workers transfer their wall port in init and release it on terminati
     }
 });
 
-test('a failed traffic port transfer still initializes the asset worker', () => {
+test('reload drains a transferred worker heartbeat and rejects its later posts', async () => {
     const wall = document.implementation.createHTMLDocument();
     const collector = new TrafficCollector({ wall });
-    const post = spyOn(WorkerFixture.prototype, 'postMessage').mockImplementationOnce(() => {
-        throw new DOMException('synthetic transfer failure', 'DataCloneError');
-    });
+    const posted = new Int32Array(new SharedArrayBuffer(4));
+    const commands = new ThreadChannel();
+    let thread!: Thread;
+    class CacheWorker extends Thread {
+        constructor() {
+            super(`
+                const { parentPort, workerData: { posted, commands } } = require('node:worker_threads');
+                parentPort.once('message', ({ trafficPort }) => {
+                    const send = bytes => trafficPort.postMessage({ type: 'rs2b0t:traffic', status: 'available', receivedBytes: bytes, sentBytes: 0 });
+                    send(11);
+                    Atomics.store(posted, 0, 1);
+                    Atomics.notify(posted, 0);
+                    commands.on('message', bytes => { send(bytes); parentPort.postMessage('sent'); });
+                });
+            `, { eval: true, workerData: { posted, commands: commands.port2 }, transferList: [commands.port2] });
+            thread = this;
+        }
+    }
+    Reflect.set(globalThis, 'Worker', CacheWorker);
     Object.defineProperty(window, 'frameElement', { configurable: true, value: wall.createElement('iframe') });
+    let replacement: ReturnType<typeof openPublisherChannel> = null;
     try {
         const loader = loaderFixture();
-        expect(post.mock.calls.map(([message]) => message.type)).toEqual(['init', 'init']);
-        expect(post.mock.calls[1][0].trafficPort).toBeNull();
+        const latePostOrExit = Promise.race([once(thread, 'message'), once(thread, 'exit')]);
+        Atomics.wait(posted, 0, 0, 5000);
+        expect(Atomics.load(posted, 0)).toBe(1);
+        window.dispatchEvent(new Event('pagehide'));
+        replacement = openPublisherChannel({})!;
+        replacement.postMessage({ type: 'rs2b0t:traffic', status: 'available', receivedBytes: 7, sentBytes: 0 });
+        await new Promise<void>(resolve => setImmediate(resolve));
+        const expected = { status: 'available', receivedBytes: 18, sentBytes: 0 } as const;
+        expect(collector.snapshot()).toEqual(expected);
+        commands.port1.postMessage(100);
+        await latePostOrExit;
+        await new Promise<void>(resolve => setImmediate(resolve));
+        expect(collector.snapshot()).toEqual(expected);
+        expect(loader.worker).toBeNull();
         loader.stop();
     } finally {
+        commands.port1.close();
+        if (thread && thread.threadId !== -1) await thread.terminate();
+        replacement?.close();
+        Reflect.deleteProperty(window, 'frameElement');
+        collector.close();
+    }
+});
+
+test.each([false, true])('wall totals include cache socket bytes with transfer failure %p', async failTransfer => {
+    const wall = document.implementation.createHTMLDocument();
+    const collector = new TrafficCollector({ wall });
+    await loadWorkerScope();
+    let loader: OnDemand | undefined;
+    scope.postMessage.mockImplementation(data => loader?.worker?.onmessage?.(new MessageEvent('message', { data })));
+    const socket = {
+        readyState: WebSocket.OPEN,
+        close() {},
+        onmessage(_event: MessageEvent) {},
+        send(bytes: Uint8Array) {
+            if (bytes.length === 1) socket.onmessage(new MessageEvent('message', { data: new ArrayBuffer(8) }));
+        }
+    };
+    spyOn(ClientStream, 'openSocket').mockResolvedValue(socket as unknown as WebSocket);
+    spyOn(WorkerFixture.prototype, 'postMessage').mockImplementation((data, transfer) => {
+        if (transfer && failTransfer) throw new DOMException('synthetic transfer failure', 'DataCloneError');
+        scope.dispatchEvent(new MessageEvent('message', { data: structuredClone(data, { transfer }) }));
+    });
+    Object.defineProperty(window, 'frameElement', { configurable: true, value: wall.createElement('iframe') });
+    const frame = openPublisherChannel({})!;
+    jest.useFakeTimers();
+    try {
+        loader = new OnDemand(versionlist, { ingame: false, db: null } as Client);
+        loader.request(1, 0);
+        frame.postMessage({ type: 'rs2b0t:traffic', status: 'available', receivedBytes: 100, sentBytes: 0 });
+        for (let i = 0; i < 50; i++) {
+            await new Promise<void>(resolve => setImmediate(resolve));
+            clock.advanceTimersByTime(20);
+        }
+        await new Promise<void>(resolve => setImmediate(resolve));
+        expect(collector.snapshot()).toEqual({ status: 'available', receivedBytes: 108, sentBytes: 5 });
+    } finally {
+        loader?.stop();
+        await new Promise<void>(resolve => setImmediate(resolve));
+        jest.useRealTimers();
+        scope.postMessage.mockImplementation(() => {});
+        frame.close();
         Reflect.deleteProperty(window, 'frameElement');
         collector.close();
     }

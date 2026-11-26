@@ -25,7 +25,7 @@ async function revision(root) {
 async function sample(api, profiles, instrument) {
     const wall = { documentElement: { dataset: {} } };
     const frames = Array.from({ length: profiles }, () => Object.assign(new EventTarget(), { frameElement: { ownerDocument: wall } }));
-    const direct = !!api.openFrameTrafficPort;
+    const direct = !!(api.openWorkerTrafficPort || api.openFrameTrafficPort);
     const channelName = direct ? undefined : api.installWallTrafficChannel(wall);
     let time = 0;
     let clockReads = 0;
@@ -49,9 +49,10 @@ async function sample(api, profiles, instrument) {
             globalThis.window = worker ? undefined : frame;
             let transport = {};
             if (direct && (worker || instrument)) {
-                const publisher = api.openFrameTrafficPort(frame);
+                let port;
+                const publisher = api.openWorkerTrafficPort ? api.openWorkerTrafficPort(() => port.close(), frame) : api.openFrameTrafficPort(frame);
                 ports.push(publisher);
-                const port = worker ? structuredClone(publisher.port, { transfer: [publisher.port] }) : publisher.port;
+                port = worker ? structuredClone(publisher.port, { transfer: [publisher.port] }) : publisher.port;
                 transport = { channel: observePeer(port) };
             } else if (!direct && instrument) {
                 transport = { channelFactory: name => observePeer(new BroadcastChannel(name)) };
