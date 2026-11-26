@@ -102,7 +102,7 @@ export default class Model extends ModelSource {
     static vertexViewSpaceZ: Int32Array = new Int32Array(4096);
 
     static tmpDepthFaceCount: Int32Array = new Int32Array(1500);
-    static tmpDepthFaces: Int32Array[] = new Int32Array2d(1500, 512);
+    static tmpDepthFaces: Int32Array[] = [];
     static tmpPriorityFaceCount: Int32Array = new Int32Array(12);
     static tmpPriorityFaces: Int32Array[] = new Int32Array2d(12, 2000);
     static tmpPriority10FaceDepth: Int32Array = new Int32Array(2000);
@@ -1888,9 +1888,6 @@ export default class Model extends ModelSource {
 
             if (clipped && (xA === -5000 || xB === -5000 || xC === -5000)) {
                 Model.faceNearClipped[f] = true;
-
-                const depthAverage: number = (((zA + zB + zC) / 3) | 0) + this.minDepth;
-                Model.tmpDepthFaces[depthAverage][Model.tmpDepthFaceCount[depthAverage]++] = f;
             } else {
                 if (picking && this.isMouseRoughlyInsideTriangle(Model.mouseX, Model.mouseY, yA, yB, yC, xA, xB, xC)) {
                     Model.pickedEntityTypecode[Model.pickedCount++] = typecode;
@@ -1908,10 +1905,22 @@ export default class Model extends ModelSource {
 
                 Model.faceNearClipped[f] = false;
                 Model.faceClippedX[f] = xA < 0 || xB < 0 || xC < 0 || xA > Pix2D.sizeX || xB > Pix2D.sizeX || xC > Pix2D.sizeX;
-
-                const depthAverage: number = (((zA + zB + zC) / 3) | 0) + this.minDepth;
-                Model.tmpDepthFaces[depthAverage][Model.tmpDepthFaceCount[depthAverage]++] = f;
             }
+
+            const depth = (((zA + zB + zC) / 3) | 0) + this.minDepth;
+            const count = Model.tmpDepthFaceCount[depth]++;
+            let faces = Model.tmpDepthFaces[depth];
+            if (!faces) {
+                if (depth < 0 || depth >= Model.tmpDepthFaceCount.length) {
+                    return;
+                }
+                faces = Model.tmpDepthFaces[depth] = new Int32Array(8);
+            } else if (count === faces.length) {
+                const larger = new Int32Array(count * 2);
+                larger.set(faces);
+                faces = Model.tmpDepthFaces[depth] = larger;
+            }
+            faces[count] = f;
         }
 
         if (!this.facePriority) {
