@@ -1,17 +1,30 @@
 import '../setup-dom.js';
 import assert from 'node:assert/strict';
+import type { DesktopStorage } from '#/bot/runtime/desktopStorage.js';
 
 const data = new Map<string, string>();
 let keyReads = 0;
+let notify: Parameters<DesktopStorage['subscribe']>[0];
 Reflect.set(globalThis, 'rs2b0tDesktopStorage', {
     getItem: (key: string) => data.get(key) ?? null,
     setItem: (key: string, value: string) => { data.set(key, value); },
     removeItem: (key: string) => { data.delete(key); },
     keys: () => { keyReads++; return [...data.keys()]; },
     compareAndSet: () => false,
-    subscribe: () => {}
-});
+    subscribe: listener => { notify = listener; }
+} satisfies DesktopStorage);
 await import('../../src/bot/panel/desktopStorage.js');
+if (process.argv.includes('--export-set')) {
+    const { SettingsStore } = await import('../../src/bot/runtime/Settings.js');
+    const { collectBoxStorage } = await import('../../src/bot/multibox/ProfileTransfer.js');
+    SettingsStore.save('set', 'travel:mode', 'walk');
+    sessionStorage.clear();
+    sessionStorage.setItem('rs2b0t:set:set:Miner:rock', 'coal');
+    for (const [key, value] of data) notify!(key, null, value);
+    assert.equal(sessionStorage.getItem('rs2b0t:set:set:travel:mode'), 'walk');
+    console.log(JSON.stringify(collectBoxStorage(['set'])));
+    process.exit(0);
+}
 const { readProfileScript, readScriptSettings, replaceScriptSettings, writeProfileScript } = await import('../../src/bot/multibox/RosterStorage.js');
 if (process.argv.includes('--export')) {
     const { collectBoxStorage, serializeProfileFile } = await import('../../src/bot/multibox/ProfileTransfer.js');

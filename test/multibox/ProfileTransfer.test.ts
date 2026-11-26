@@ -3,6 +3,7 @@ import { Loadouts } from '#/bot/api/loadout/loadoutStore.js';
 import { readScriptSettings, replaceScriptSettings, storedScripts } from '#/bot/multibox/RosterStorage.js';
 import type { Profile } from '#/bot/multibox/ProfileVault.js';
 import { SettingsStore } from '#/bot/runtime/Settings.js';
+import { boxKey } from '#/bot/runtime/box.js';
 
 import {
     PROFILE_FILE_KIND,
@@ -85,7 +86,7 @@ describe('ProfileTransfer', () => {
     test('a v1 file without storage still imports as an empty box map', () => {
         const parsed = parseProfileFile(JSON.stringify({
             kind: PROFILE_FILE_KIND,
-            v: PROFILE_FILE_VERSION,
+            v: 1,
             profiles: [{ username: 'alice', password: 'a' }],
             tabs: [],
             activeTab: 'Main'
@@ -97,6 +98,33 @@ describe('ProfileTransfer', () => {
         const result = Bun.spawnSync(['bun', 'test/fixtures/roster-desktop-storage.ts', '--export']);
         expect(result.exitCode).toBe(0);
         expect(parseProfileFile(result.stdout.toString()).storage.source.selectedScript).toBe('Fisher');
+    });
+
+    test('desktop export distinguishes mirrored standalone writes from legacy session settings', () => {
+        const result = Bun.spawnSync(['bun', 'test/fixtures/roster-desktop-storage.ts', '--export-set']);
+        expect(result.exitCode, result.stderr.toString()).toBe(0);
+        expect(JSON.parse(result.stdout.toString())).toEqual({ set: { 'set:Miner:rock': 'coal' } });
+    });
+
+    test('restores a colon-bearing profile key from its own export', () => {
+        const key = boxKey('plugin:mode', 'set');
+        localStorage.setItem(key, 'walk');
+        const file = serializeProfileFile({ ...snap, profiles: [{ username: 'set', password: '' }], storage: collectBoxStorage(['set']) });
+        const backup = parseProfileFile(file);
+        applyBoxStorage(backup.storage, ['set']);
+        expect(localStorage.getItem(key)).toBe('walk');
+        expect(sessionStorage.getItem(key)).toBe('walk');
+    });
+
+    test('exports a readable legacy threshold when storage is full', () => {
+        localStorage.setItem('rs2b0t:set:set:Global:runEnergyMin', '42');
+        const setItem = localStorage.setItem;
+        Object.defineProperty(localStorage, 'setItem', { value() { throw new DOMException('storage full', 'QuotaExceededError'); } });
+        try {
+            expect(collectBoxStorage(['set'])).toEqual({ set: { 'set:Global:runEnergyMin': '42' } });
+        } finally {
+            Object.defineProperty(localStorage, 'setItem', { value: setItem });
+        }
     });
 
     for (const size of [16, 32]) {
@@ -158,7 +186,7 @@ describe('ProfileTransfer', () => {
         expect(SettingsStore.globalBag().num('runEnergyMin')).toBe(73);
     });
 
-    test('export upgrades both storage layers before the profile is opened', () => {
+    test('export reads legacy values from both storage layers before the profile is opened', () => {
         localStorage.setItem('rs2b0t:set:set:Miner:rock', 'iron');
         sessionStorage.setItem('rs2b0t:set:set:Miner:rock', 'coal');
         localStorage.setItem('rs2b0t:set:set%3AMiner%3Atool', 'pickaxe');
@@ -214,7 +242,12 @@ describe('ProfileTransfer', () => {
                 entries['set:travel:mode'] = 'ride';
             }
 
-            applyBoxStorage({ [user]: entries }, ['set', user]);
+            const snapshot = { ...snap, profiles: [{ username: user, password: '' }], storage: { [user]: entries } };
+            const file = incoming === 'legacy set'
+                ? JSON.stringify({ ...snapshot, kind: PROFILE_FILE_KIND, v: 1 })
+                : serializeProfileFile(snapshot);
+            const backup = parseProfileFile(file);
+            applyBoxStorage(backup.storage, ['set', ...backup.profiles.map(p => p.username)]);
 
             expect(inBox('set', () => SettingsStore.saved('Global', 'runEnergyMin'))).toBe(user === 'set' ? '42' : undefined);
             for (const store of [localStorage, sessionStorage]) {
@@ -226,6 +259,7 @@ describe('ProfileTransfer', () => {
             sessionStorage.clear();
             expect(SettingsStore.saved('Global', 'runEnergyMin')).toBe('73');
             expect(Loadouts.all()).toEqual([loadout]);
+            expect(collectBoxStorage(['set']).set?.['Global:runEnergyMin']).toBeUndefined();
             expect(inBox('set', () => Loadouts.all())).toEqual([]);
             expect(SettingsStore.saved('set', 'travel:mode')).toBe('walk');
             expect(inBox(user, () => SettingsStore.saved('Global', 'runEnergyMin'))).toBe('42');

@@ -29,27 +29,35 @@ export function isLegacySetProfileSetting(suffix: string): boolean {
 
 const setProfileMigrationKey = 'rs2b0t:set-profile-settings-v1';
 
+export function needsSetProfileMigration(store: Storage): boolean {
+    return store.getItem(setProfileMigrationKey) === null;
+}
+
 export function finishSetProfileMigration(store: Storage): void {
     store.setItem(setProfileMigrationKey, '1');
 }
 
-function copyLegacySetSettings(store: Storage): void {
+export function uncopiedSetProfileSuffix(store: Storage, key: string): string | null {
     const prefix = 'rs2b0t:set:';
+    if (!key.startsWith(prefix)) return null;
+    const suffix = key.slice(prefix.length);
+    return isLegacySetProfileSetting(suffix) && store.getItem(boxKey(suffix, 'set')) === null ? suffix : null;
+}
+
+function copyLegacySetSettings(store: Storage): void {
     for (const key of storeKeys(store)) {
-        if (!key.startsWith(prefix)) continue;
-        const suffix = key.slice(prefix.length);
-        if (!isLegacySetProfileSetting(suffix)) continue;
-        const target = boxKey(suffix, 'set');
+        const suffix = uncopiedSetProfileSuffix(store, key);
+        if (suffix === null) continue;
         const value = store.getItem(key);
         // Why: the original key can also belong to a standalone setting.
-        if (value !== null && store.getItem(target) === null) store.setItem(target, value);
+        if (value !== null) store.setItem(boxKey(suffix, 'set'), value);
     }
     finishSetProfileMigration(store);
 }
 
 export function migrateSetProfileStorage(): void {
-    if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(setProfileMigrationKey) !== null) return;
-    if (typeof localStorage !== 'undefined' && localStorage.getItem(setProfileMigrationKey) === null) copyLegacySetSettings(localStorage);
+    if (typeof sessionStorage !== 'undefined' && !needsSetProfileMigration(sessionStorage)) return;
+    if (typeof localStorage !== 'undefined' && needsSetProfileMigration(localStorage)) copyLegacySetSettings(localStorage);
     if (typeof sessionStorage !== 'undefined') copyLegacySetSettings(sessionStorage);
 }
 

@@ -1,9 +1,9 @@
-import { boxKey, boxSuffix, finishSetProfileMigration, isLegacySetProfileSetting, migrateSetProfileStorage } from '../runtime/box.js';
+import { boxKey, boxSuffix, finishSetProfileMigration, isLegacySetProfileSetting, needsSetProfileMigration, uncopiedSetProfileSuffix } from '../runtime/box.js';
 import type { Profile } from './ProfileVault.js';
 import { desktopStorage, storeKeys } from '../runtime/desktopStorage.js';
 
 export const PROFILE_FILE_KIND = 'rs2b0t-multibox-profiles';
-export const PROFILE_FILE_VERSION = 1;
+export const PROFILE_FILE_VERSION = 2;
 export const PROFILE_FILE_NAME = 'rs2b0t-profiles.json';
 
 export type BoxStorageMap = Record<string, Record<string, string>>;
@@ -49,8 +49,8 @@ export function parseProfileFile(text: string): ProfileSnapshot {
     if (obj.kind !== PROFILE_FILE_KIND) {
         throw new Error(`profile file kind is ${JSON.stringify(obj.kind)}, expected '${PROFILE_FILE_KIND}'`);
     }
-    if (obj.v !== PROFILE_FILE_VERSION) {
-        throw new Error(`profile file version is ${JSON.stringify(obj.v)}, expected ${PROFILE_FILE_VERSION}`);
+    if (obj.v !== 1 && obj.v !== PROFILE_FILE_VERSION) {
+        throw new Error(`profile file version is ${JSON.stringify(obj.v)}, expected 1 or ${PROFILE_FILE_VERSION}`);
     }
     if (!Array.isArray(obj.profiles) || !Array.isArray(obj.tabs) || typeof obj.activeTab !== 'string') {
         throw new Error('profile file is missing profiles, tabs, or activeTab');
@@ -62,7 +62,7 @@ export function parseProfileFile(text: string): ProfileSnapshot {
         profiles: requireProfiles(obj.profiles),
         tabs: obj.tabs as string[],
         activeTab: obj.activeTab,
-        storage: parseStorage(obj.storage)
+        storage: parseStorage(obj.storage, obj.v)
     };
 }
 
@@ -71,7 +71,6 @@ export function boxStoragePrefix(username: string): string {
 }
 
 export function collectBoxStorage(usernames: string[]): BoxStorageMap {
-    if (usernames.includes('set')) migrateSetProfileStorage();
     const out: BoxStorageMap = {};
     if (typeof localStorage !== 'undefined') {
         readStore(localStorage, usernames, out);
@@ -101,7 +100,6 @@ export function applyBoxStorage(storage: BoxStorageMap, wipe: string[]): void {
         if (replacesSet) finishSetProfileMigration(store);
         for (const [user, entries] of Object.entries(storage)) {
             for (const [suffix, value] of Object.entries(entries)) {
-                if (user === 'set' && suffix.includes(':') && !isLegacySetProfileSetting(suffix)) continue;
                 store.setItem(boxKey(suffix, user), value);
             }
         }
@@ -109,9 +107,11 @@ export function applyBoxStorage(storage: BoxStorageMap, wipe: string[]): void {
 }
 
 function readStore(store: Storage, usernames: string[], out: BoxStorageMap, includeSelectedScript = true): void {
+    const includeLegacy = usernames.includes('set') && needsSetProfileMigration(store);
     for (const key of storeKeys(store)) {
         for (const user of usernames) {
-            const suffix = boxSuffix(key, boxStoragePrefix(user), user);
+            let suffix = boxSuffix(key, boxStoragePrefix(user), user);
+            if (suffix === null && includeLegacy && user === 'set') suffix = uncopiedSetProfileSuffix(store, key);
             if (suffix === null) {
                 continue;
             }
@@ -128,7 +128,7 @@ function readStore(store: Storage, usernames: string[], out: BoxStorageMap, incl
     }
 }
 
-function parseStorage(raw: unknown): BoxStorageMap {
+function parseStorage(raw: unknown, version: number): BoxStorageMap {
     if (raw === undefined) {
         return {};
     }
@@ -148,6 +148,7 @@ function parseStorage(raw: unknown): BoxStorageMap {
             if (typeof value !== 'string') {
                 throw new Error(`profile file storage '${user}.${suffix}' must be a string`);
             }
+            if (version === 1 && user === 'set' && suffix.includes(':') && !isLegacySetProfileSetting(suffix)) continue;
             box[suffix] = value;
         }
         out[user] = box;
