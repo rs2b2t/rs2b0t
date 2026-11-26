@@ -1,3 +1,4 @@
+import { loadDefinitions } from '#/client/config/configArchive.js';
 import JagFile from '#/client/io/JagFile.js';
 import Packet from '#/client/io/Packet.js';
 
@@ -11,18 +12,7 @@ export default class VarBitType {
     debugname: string = '';
 
     static init(config: JagFile): void {
-        const dat: Packet = new Packet(config.read('varbit.dat'));
-
-        this.numDefinitions = dat.g2();
-        this.list = new Array(this.numDefinitions);
-
-        for (let id: number = 0; id < this.numDefinitions; id++) {
-            if (!this.list[id]) {
-                this.list[id] = new VarBitType();
-            }
-
-            this.list[id].decode(dat);
-        }
+        const dat = loadDefinitions(this, config, 'varbit.dat');
 
         if (dat.pos != dat.data.length) {
             console.log('varbit load mismatch');

@@ -14,7 +14,7 @@ import {
     parseRangeStyle,
     type MeleeCombatStyle
 } from '../../api/combat/CombatStyle.js';
-import { Autocast } from '../../api/magic/Autocast.js';
+import { ArmAutocast } from '../../api/tasks/ArmAutocast.js';
 import { castsAvailable, runeWithdrawList } from '../../api/combat/CombatStyleLogic.js';
 import { SPELL_DB } from '../../data/spelldb.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
@@ -22,6 +22,7 @@ import { GroundItems } from '../../api/grounditems/GroundItems.js';
 import { Npcs, type Npc } from '../../api/npcs/Npcs.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Equipment } from '../../api/equipment/Equipment.js';
+import { withdrawTo } from '../../api/bank/withdrawTo.js';
 import { Bank } from '../../api/bank/Bank.js';
 import { Skills } from '../../api/skills/Skills.js';
 import { Paint } from '../../paint/Paint.js';
@@ -221,7 +222,12 @@ export default class ChickenKiller extends TaskBot {
             new Rest(this),
             new ReequipGear(this),
             new SetCombatStyle(this),
-            new ArmAutocast(this),
+            new ArmAutocast(this, {
+                enabled: () => this.fightStyle() === 'mage',
+                castsLeft: () => this.castsLeft(),
+                spell: () => this.targetSpell(),
+                warning: spell => `WARNING: could not arm autocast for '${spell}' — retrying in 60s`
+            }),
             new Fight(this),
             new ReturnToAnchor(this)
         );
@@ -437,25 +443,6 @@ export default class ChickenKiller extends TaskBot {
     }
 }
 
-async function withdrawTo(name: string, target: number): Promise<number> {
-    const start = Inventory.count(name);
-    for (let guard = 0; guard < 40 && Inventory.count(name) < target && !Inventory.isFull(); guard++) {
-        const before = Inventory.count(name);
-        const need = target - before;
-        if (need > 10 && (await Bank.withdrawX(name, need))) {
-            if (Inventory.count(name) > before) {
-                continue;
-            }
-            break;
-        }
-        await Bank.withdraw(name, need >= 10 ? 'Withdraw-10' : need >= 5 ? 'Withdraw-5' : 'Withdraw-1');
-        if (!(await Execution.delayUntil(() => Inventory.count(name) > before, 2500))) {
-            break;
-        }
-    }
-    return Inventory.count(name) - start;
-}
-
 class SetCombatStyle implements Task {
     private announced = false;
     private fails = 0;
@@ -505,32 +492,6 @@ class SetCombatStyle implements Task {
             this.fails = 0;
             this.retryAt = Date.now() + 60_000;
             this.bot.log(`could not set the ${this.bot.fightStyle()} attack style — retrying in 60s`);
-        }
-    }
-}
-
-class ArmAutocast implements Task {
-    private fails = 0;
-    private retryAt = 0;
-    constructor(private bot: ChickenKiller) {}
-    validate(): boolean {
-        if (this.bot.fightStyle() !== 'mage' || Autocast.armed() || Date.now() < this.retryAt) {
-            return false;
-        }
-        if (this.bot.castsLeft() < 1) {
-            return false;
-        }
-        return Autocast.staffTabAttached();
-    }
-    async execute(): Promise<void> {
-        const spell = this.bot.targetSpell();
-        this.bot.setStatus(`arming autocast: ${spell}`);
-        if (await Autocast.arm(spell, m => this.bot.log(m))) {
-            this.fails = 0;
-        } else if (++this.fails >= 5) {
-            this.fails = 0;
-            this.retryAt = Date.now() + 60_000;
-            this.bot.log(`WARNING: could not arm autocast for '${spell}' — retrying in 60s`);
         }
     }
 }

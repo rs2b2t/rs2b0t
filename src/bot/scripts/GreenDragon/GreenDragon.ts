@@ -8,6 +8,7 @@ import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import Tile from '../../geometry/Tile.js';
 import { DeathRecovery } from '../../api/tasks/DeathRecovery.js';
 import { ContinueDialog } from '../../api/tasks/ContinueDialog.js';
+import { withdrawTo } from '../../api/bank/withdrawTo.js';
 import { Bank } from '../../api/bank/Bank.js';
 import { BankTeleport } from '../../api/bank/BankTeleport.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
@@ -18,7 +19,7 @@ import { Paint } from '../../paint/Paint.js';
 import { fmtDuration, fmtXpHr, paintSkillShort } from '../../paint/paintLogic.js';
 import { etaHours, levelProgress } from '../../paint/levelProgress.js';
 import { COMBAT_STYLE_OPTIONS, parseCombatStyle, type MeleeCombatStyle } from '../../api/combat/CombatStyle.js';
-import { Autocast } from '../../api/magic/Autocast.js';
+import { ArmAutocast } from '../../api/tasks/ArmAutocast.js';
 import { castsAvailable, runeWithdrawList } from '../../api/combat/CombatStyleLogic.js';
 import { dragonMeleeStyle } from '../../api/combat/dragonStyle.js';
 import { SPELL_DB } from '../../data/spelldb.js';
@@ -28,7 +29,8 @@ import { SA_MAX_ENERGY, Special } from '../../api/combat/Special.js';
 import { AttackClock, URGENT_HP_FRACTION, shouldHoldEat } from '../../api/combat/eatTiming.js';
 import { buryOneInFight, swingStartedThisTick } from '../../api/combat/fightUpkeep.js';
 import { EMPTY_VIAL, plannedPotions, potionToSip, type PotionPlan } from '../../api/combat/boostPotions.js';
-import { foodForms, isFoodItem, foodCount as foodCountIn, foodHealAmount, shouldEatToUseFood } from '../../api/combat/food.js';
+import { isFoodItem, foodCount as foodCountIn } from '../../api/combat/food.js';
+import { eatSelectedFood, shouldEatNow } from '../../api/combat/eating.js';
 import { combatKeepNames } from '../../api/combat/keepList.js';
 import { depositAllExcept } from '../../api/bank/Banking.js';
 import { GroundItems } from '../../api/grounditems/GroundItems.js';
@@ -142,15 +144,7 @@ function hasFood(): boolean {
 }
 
 function needEat(): boolean {
-    if (!hasFood()) {
-        return false;
-    }
-    return shouldEatToUseFood({
-        hp: Skills.effective('hitpoints'),
-        maxHp: Skills.level('hitpoints'),
-        heal: foodHealAmount(FOOD_NAME),
-        foodCount: 1
-    });
+    return shouldEatNow(FOOD_NAME, foodCount());
 }
 
 /** Flasks of one potion held, counting every dose form. */
@@ -263,15 +257,9 @@ function keepNames(): string[] {
 /** Shared by the Eat task and slot-freeing so both respect the swing. */
 const attackClock = new AttackClock();
 
-async function eatOnce(bot: GreenDragon): Promise<boolean> {
-    const food = Inventory.items().find(i => foodForms(FOOD_NAME).includes((i.name ?? '').toLowerCase()));
-    if (!food) {
-        return false;
-    }
-    bot.setStatus(`eating ${food.name} (${Math.round(hpFrac() * 100)}% hp)`);
-    const before = Skills.effective('hitpoints');
-    await food.interact('Eat');
-    return Execution.delayUntil(() => Skills.effective('hitpoints') > before, 3000);
+function eatOnce(bot: GreenDragon): Promise<boolean> {
+    const food = Inventory.items().find(i => isFoodItem(i.name, FOOD_NAME));
+    return eatSelectedFood(bot, food, 'heal');
 }
 
 /**
@@ -460,31 +448,6 @@ class SetAttackStyle implements Task {
             this.fails = 0;
             this.retryAt = Date.now() + ASSERT_RETRY_MS;
             this.bot.log(`could not set the melee attack style — retrying in ${ASSERT_RETRY_MS / 1000}s`);
-        }
-    }
-}
-
-class ArmAutocast implements Task {
-    private fails = 0;
-    private retryAt = 0;
-    constructor(private bot: GreenDragon) {}
-    validate(): boolean {
-        if (STYLE !== 'mage' || Autocast.armed() || Date.now() < this.retryAt) {
-            return false;
-        }
-        if (castsLeft() < 1) {
-            return false;
-        }
-        return Autocast.staffTabAttached() || (WEAPON !== '' && Equipment.contains(WEAPON));
-    }
-    async execute(): Promise<void> {
-        this.bot.setStatus(`arming autocast: ${SPELL}`);
-        if (await Autocast.arm(SPELL, m => this.bot.log(m))) {
-            this.fails = 0;
-        } else if (++this.fails >= ASSERT_BATCH) {
-            this.fails = 0;
-            this.retryAt = Date.now() + ASSERT_RETRY_MS;
-            this.bot.log(`WARNING: could not arm autocast for '${SPELL}' — retrying in ${ASSERT_RETRY_MS / 1000}s.`);
         }
     }
 }
@@ -689,25 +652,6 @@ async function withdrawPotions(bot: GreenDragon): Promise<void> {
             bot.vlog(`short of ${plan.flask}: ${potionsHeld(plan)}/${plan.want} held, pack ${Inventory.used()}/28, bank has ${Bank.count(plan.flask)}`);
         }
     }
-}
-
-async function withdrawTo(name: string, target: number): Promise<number> {
-    const start = Inventory.count(name);
-    for (let guard = 0; guard < 40 && Inventory.count(name) < target && !Inventory.isFull(); guard++) {
-        const before = Inventory.count(name);
-        const need = target - before;
-        if (need > 10 && (await Bank.withdrawX(name, need))) {
-            if (Inventory.count(name) > before) {
-                continue;
-            }
-            break;
-        }
-        await Bank.withdraw(name, need >= 10 ? 'Withdraw-10' : need >= 5 ? 'Withdraw-5' : 'Withdraw-1');
-        if (!(await Execution.delayUntil(() => Inventory.count(name) > before, 2500))) {
-            break;
-        }
-    }
-    return Inventory.count(name) - start;
 }
 
 // Why: a Vial is neither grind kit nor loot, so left in the pack `isGrindForeign` reads it as clue-trail junk and sends the bot to Edgeville every time a flask empties.
@@ -1009,7 +953,13 @@ export default class GreenDragon extends TaskBot {
             traced('Eat', new Eat(this)),
             traced('GearEquip', new GearEquip(this)),
             traced('SetAttackStyle', new SetAttackStyle(this)),
-            traced('ArmAutocast', new ArmAutocast(this)),
+            traced('ArmAutocast', new ArmAutocast(this, {
+                enabled: () => STYLE === 'mage',
+                castsLeft,
+                spell: () => SPELL,
+                staff: () => WEAPON,
+                warning: () => `WARNING: could not arm autocast for '${SPELL}' — retrying in ${ASSERT_RETRY_MS / 1000}s.`
+            })),
             traced('DropVial', new DropVial(this)),
             // Above SolveClue: a trail's bank prep would otherwise deposit the
             // bones we were told to bury.

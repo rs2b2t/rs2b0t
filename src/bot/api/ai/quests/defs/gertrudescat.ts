@@ -1,4 +1,4 @@
-import { customStep, talkTo, waitForJournal, waitStep } from '../engine/questSteps.js';
+import { customStep, journalStep, talkTo, waitStep } from '../engine/questSteps.js';
 import { normalizeJournal as normalize } from '../journalText.js';
 // docs/QUESTS.md
 import { DirectNavigator } from '../../../../event/webwalk/DirectNavigator.js';
@@ -14,7 +14,7 @@ import { Npcs, type Npc } from '../../../npcs/Npcs.js';
 import { ChatDialog } from '../../../ui/dialogue/ChatDialog.js';
 import { Quests } from '../../../ui/questlog/Quests.js';
 import { Traversal } from '../../../walking/Traversal.js';
-import { QUESTS } from '../data/quests.js';
+import { questRecord } from '../data/quests.js';
 import type { QuestModule, QuestProgress, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { gotoNpc, talkStrict, talkThrough, type NpcStop } from '../exec/primitives.js';
 import { findSceneTarget, driveUntil, heldId, settleScene } from '../exec/prompts.js';
@@ -425,8 +425,8 @@ function gatherSeasonedSardine(snap: QuestSnapshot): QuestStep | null {
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
-    if (snap.journal === 'complete') { return { kind: 'done' }; }
-    if (snap.journal === 'unknown') { return waitForJournal(); }
+    const journal = journalStep(snap.journal);
+    if (journal) return journal;
     if (snap.journal === 'notStarted') { return talkTo(GERTRUDE); }
 
     const progress = snap.progress;
@@ -465,7 +465,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const gertrudescat: QuestModule = {
-    record: QUESTS.find(r => r.id === 'fluffs')!,
+    record: questRecord('fluffs'),
     bank: BANK,
     // Why: nothing here fights, but the legs cross Port Sarim and the Lumbridge farms, and a death mid-quest costs the item chain.
     food: 4,

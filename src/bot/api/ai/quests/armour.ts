@@ -1,4 +1,5 @@
 import { selectRuneLegs } from '../../../data/runeLegs.js';
+import { ITEMS_BY_OBJ } from '../../../data/itemIndex.js';
 import { ITEM_DB } from '../../../data/itemdb.js';
 import { Skills } from '../../skills/Skills.js';
 import type { QuestSnapshot } from './engine/types.js';
@@ -30,7 +31,7 @@ const RANGED_ARMOUR = [
 ] as const;
 
 export const QUEST_ARMOUR = [...METAL_ARMOUR, ...RANGED_ARMOUR.flatMap(([obj, defence, ranged]) => {
-    const item = ITEM_DB.find(record => record.obj === obj);
+    const item = ITEMS_BY_OBJ.get(obj);
     return item ? [{ id: item.id, name: item.name, slot: item.slot, defence, ranged }] : [];
 })];
 

@@ -1,3 +1,4 @@
+import { loadDefinitions } from '#/client/config/configArchive.js';
 import AnimFrame from '#/client/dash3d/AnimFrame.js';
 
 import JagFile from '#/client/io/JagFile.js';
@@ -25,7 +26,8 @@ export default class SeqType {
     static list: SeqType[] = [];
     static readonly STRICT: boolean = process.env.STRICT_CONFIG === '1';
 
-    id: number = -1;
+    constructor(public id: number = -1) {}
+
     numFrames: number = 0;
     frames: Int16Array | null = null;
     iframes: Int16Array | null = null;
@@ -42,19 +44,7 @@ export default class SeqType {
     duplicatebehaviour: number = -1;
 
     static init(config: JagFile): void {
-        const dat: Packet = new Packet(config.read('seq.dat'));
-
-        this.numDefinitions = dat.g2();
-        this.list = new Array(this.numDefinitions);
-
-        for (let id: number = 0; id < this.numDefinitions; id++) {
-            if (!this.list[id]) {
-                this.list[id] = new SeqType();
-            }
-
-            this.list[id].id = id;
-            this.list[id].decode(dat);
-        }
+        loadDefinitions(this, config, 'seq.dat');
     }
 
     getDelay(frame: number) {

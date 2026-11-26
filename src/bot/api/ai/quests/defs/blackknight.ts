@@ -1,4 +1,4 @@
-import { customStep, talkTo, waitForJournal, waitStep } from '../engine/questSteps.js';
+import { customStep, journalStep, talkTo, waitStep } from '../engine/questSteps.js';
 import { Modals } from '../../../ui/widgets/Modals.js';
 import { Execution } from '../../../execution/Execution.js';
 import { Game } from '../../../game/Game.js';
@@ -11,7 +11,7 @@ import Tile from '../../../../geometry/Tile.js';
 import { driveDialog, type NpcStop } from '../exec/primitives.js';
 import { hasName as has, wornName as worn } from '../engine/snapshotItems.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
-import { QUESTS } from '../data/quests.js';
+import { questRecord } from '../data/quests.js';
 import { Quests } from '../../../ui/questlog/Quests.js';
 
 const SIR_AMIK: NpcStop = { npc: 'Sir Amik Varze', anchor: new Tile(2962, 3338, 2), leash: 6, prefer: ['I seek a quest!', 'I laugh in the face of danger!'] };
@@ -48,8 +48,8 @@ async function readStage(): Promise<number | undefined> {
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
-    if (snap.journal === 'complete') { return { kind: 'done' }; }
-    if (snap.journal === 'unknown') { return waitForJournal(); }
+    const journal = journalStep(snap.journal);
+    if (journal) return journal;
     if (snap.journal === 'notStarted' || snap.stage === 3) return talkTo(SIR_AMIK);
     if (snap.stage === undefined) return waitStep('fortress journal stage unavailable');
     for (const item of [IRON_CHAINBODY, BRONZE_MED_HELM]) {
@@ -95,7 +95,7 @@ async function pickCabbage(log: (m: string) => void): Promise<boolean> {
 
 export const blackknight: QuestModule = {
     autoRetaliate: false,
-    record: QUESTS.find(r => r.id === 'blackknight')!,
+    record: questRecord('blackknight'),
     bank: new Tile(2946, 3369, 0),
     readStage,
     grind: ['black knight', 'aggressive black knight'],

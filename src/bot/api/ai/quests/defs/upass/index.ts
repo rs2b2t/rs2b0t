@@ -1,5 +1,5 @@
 import { customStep as custom, waitForJournal, waitStep } from '../../engine/questSteps.js';
-import { QUESTS } from '../../data/quests.js';
+import { questRecord } from '../../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { UP_ITEM, UP_TILE, carried, held, insideIbanTemple, insideWitchHouse, pastGridTile, upassArea, worn, type UpassArea } from './areas.js';
 import { UP_FLAG, UP_STAGE, readUpassProgress } from './journal.js';
@@ -287,7 +287,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const upass: QuestModule = {
-    record: QUESTS.find(record => record.id === 'upass')!,
+    record: questRecord('upass'),
     pray: { protect: 'melee', potions: 2 },
     bank: UP_TILE.ARDOUGNE_BANK,
     ownsInventory: true,

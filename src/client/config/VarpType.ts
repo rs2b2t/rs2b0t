@@ -1,3 +1,4 @@
+import { loadDefinitions } from '#/client/config/configArchive.js';
 import JagFile from '#/client/io/JagFile.js';
 import Packet from '#/client/io/Packet.js';
 
@@ -8,18 +9,7 @@ export default class VarpType {
     clientcode: number = 0;
 
     static init(config: JagFile): void {
-        const dat: Packet = new Packet(config.read('varp.dat'));
-
-        this.numDefinitions = dat.g2();
-        this.list = new Array(this.numDefinitions);
-
-        for (let id: number = 0; id < this.numDefinitions; id++) {
-            if (!this.list[id]) {
-                this.list[id] = new VarpType();
-            }
-
-            this.list[id].decode(dat);
-        }
+        const dat = loadDefinitions(this, config, 'varp.dat');
 
         if (dat.pos != dat.data.length) {
             console.log('varptype load mismatch');

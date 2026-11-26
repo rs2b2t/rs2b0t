@@ -11,6 +11,7 @@
 //   ~/redeploy.sh
 import type { Page } from 'playwright-core';
 import { fail, launchBrowser, parseArgs } from './lib/harness.js';
+import { requireTeleport } from './lib/teleport.js';
 import {
     cheatQuiet,
     clearChatDialogs,
@@ -148,17 +149,6 @@ type Abi = {
     };
 };
 
-function teleCmd(t: Tile): string {
-    return `tele ${t.level},${t.x >> 6},${t.z >> 6},${t.x & 63},${t.z & 63}`;
-}
-
-function cheb(a: Tile, b: Tile): number {
-    if (a.level !== b.level) {
-        return 999;
-    }
-    return Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
-}
-
 function selectCases(): Case[] {
     if (FILTER.length === 0) {
         return CASES_ALL;
@@ -167,21 +157,6 @@ function selectCases(): Case[] {
         const n = c.camp.toLowerCase();
         return FILTER.some(f => n.includes(f) || f.includes(n) || c.id.includes(f));
     });
-}
-
-async function teleArrive(page: Page, spot: Tile, maxDist = 12): Promise<void> {
-    for (let a = 0; a < 5; a++) {
-        await cheatQuiet(page, teleCmd(spot));
-        for (let p = 0; p < 14; p++) {
-            const t = await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.reader.worldTile());
-            if (t && cheb(t, spot) <= maxDist) {
-                await page.waitForTimeout(600);
-                return;
-            }
-            await page.waitForTimeout(300);
-        }
-    }
-    fail(`tele to ${spot.x},${spot.z} failed`);
 }
 
 async function setFisher(page: Page, map: Record<string, string>): Promise<void> {
@@ -326,7 +301,7 @@ try {
         await page.waitForTimeout(400);
 
         const start = c.role === 'bank' ? c.bank : c.spot;
-        await teleArrive(page, start);
+        await requireTeleport(page, start, 12, { attempts: 5, polls: 14, pollMs: 300 });
         await page.waitForTimeout(600);
 
         // Cooker + raw pack → path to range and cook (no fishing restock thrash).

@@ -7,7 +7,7 @@ import { Quests } from '../../../ui/questlog/Quests.js';
 import { GroundItems } from '../../../grounditems/GroundItems.js';
 import { Traversal } from '../../../walking/Traversal.js';
 import Tile from '../../../../geometry/Tile.js';
-import { QUESTS } from '../data/quests.js';
+import { questRecord } from '../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { gotoNpc, talkStrict, type NpcStop } from '../exec/primitives.js';
 
@@ -277,7 +277,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const romeojuliet: QuestModule = {
-    record: QUESTS.find(record => record.id === 'romeojuliet')!,
+    record: questRecord('romeojuliet'),
     bank: VARROCK_WEST_BANK,
     ownsInventory: true,
     readStage: readRomeoJulietStage,

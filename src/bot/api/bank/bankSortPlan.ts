@@ -1,5 +1,5 @@
 import { rankWithin } from './bankSortRank.js';
-import { CATEGORY_ORDER, categoryOf, isUnmatched, type BankCategory, type SortableItem } from './bankSortRules.js';
+import { CATEGORY_ORDER, matchedCategory, type BankCategory, type SortableItem } from './bankSortRules.js';
 
 export type BankSortMode = 'swap' | 'insert';
 
@@ -121,12 +121,15 @@ function planInserts(targetOf: readonly number[]): BankMove[] {
 
 /** Requires dense slots 0..n-1, which the server guarantees by compacting the bank on open. */
 export function planBankSort(items: readonly SortableItem[], opts: PlanOptions = {}): BankSortPlan {
-    const categoryFor = (item: SortableItem): BankCategory =>
-        opts.overrides?.get(item.id) ?? categoryOf(item);
+    const current = [...items].sort((a, b) => a.slot - b.slot);
+    if (!current.every((item, i) => item.slot === i)) {
+        return { mode: 'swap', moves: [], layout: current.map(i => i.id), unmatched: [] };
+    }
 
-    const compare = (a: SortableItem, b: SortableItem): number => {
-        const catA = categoryFor(a);
-        const catB = categoryFor(b);
+    const categories = current.map(item => opts.overrides?.get(item.id) ?? matchedCategory(item));
+    const ranked = [...current].sort((a, b) => {
+        const catA = categories[a.slot] ?? 'junk';
+        const catB = categories[b.slot] ?? 'junk';
         const byCategory = CATEGORY_ORDER.indexOf(catA) - CATEGORY_ORDER.indexOf(catB);
         if (byCategory !== 0) {
             return byCategory;
@@ -139,14 +142,7 @@ export function planBankSort(items: readonly SortableItem[], opts: PlanOptions =
             return b.cost - a.cost;
         }
         return a.id - b.id;
-    };
-
-    const current = [...items].sort((a, b) => a.slot - b.slot);
-    if (!current.every((item, i) => item.slot === i)) {
-        return { mode: 'swap', moves: [], layout: current.map(i => i.id), unmatched: [] };
-    }
-
-    const ranked = [...current].sort(compare);
+    });
     const targetIndex = new Map<number, number>();
     ranked.forEach((item, index) => targetIndex.set(item.slot, index));
     const targetOf = current.map(item => targetIndex.get(item.slot)!);
@@ -159,6 +155,6 @@ export function planBankSort(items: readonly SortableItem[], opts: PlanOptions =
         mode: useInsert ? 'insert' : 'swap',
         moves: useInsert ? inserts : swaps,
         layout: ranked.map(item => item.id),
-        unmatched: current.filter(item => !opts.overrides?.has(item.id) && isUnmatched(item)).map(item => item.id)
+        unmatched: current.filter(item => categories[item.slot] === null).map(item => item.id)
     };
 }

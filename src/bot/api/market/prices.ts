@@ -1,17 +1,13 @@
-import type { PriceBook, PriceRow } from './priceBook.js';
+import { resolvePrices as resolveOrderbookPrices } from './orderbook-format.js';
+import { rowOf, type PriceBook, type PriceRow } from './priceBook.js';
 
 export interface ResolvedPrices {
     buy: number;
     sell: number;
 }
 
-// Why: margin is the total spread, so it splits either side of mid and a 20% book quotes 90/110 on a 100gp item.
-// Why: multiply before dividing. `100 * (1 + 20/200)` is 110.00000000000001, so the ceil overcharges every round number by 1gp.
 export function resolvePrices(book: PriceBook, row: PriceRow): ResolvedPrices {
-    const m = row.margin ?? book.margin;
-    const buy = Math.max(1, row.buy ?? Math.floor((row.mid * (200 - m)) / 200));
-    const sell = Math.max(buy + 1, row.sell ?? Math.ceil((row.mid * (200 + m)) / 200));
-    return { buy, sell };
+    return resolveOrderbookPrices(book, row);
 }
 
 export function rowValid(book: PriceBook, row: PriceRow): boolean {
@@ -23,4 +19,9 @@ export function rowValid(book: PriceBook, row: PriceRow): boolean {
     }
     const { buy, sell } = resolvePrices(book, row);
     return buy >= 1 && sell > buy;
+}
+
+export function tradeRow(book: PriceBook, id: number, side: 'buying' | 'selling'): PriceRow | null {
+    const row = rowOf(book, id);
+    return row && row[side] && rowValid(book, row) ? row : null;
 }

@@ -1,5 +1,5 @@
-import { customStep as custom, talkTo, waitForJournal, waitStep } from '../../engine/questSteps.js';
-import { QUESTS } from '../../data/quests.js';
+import { customStep as custom, decideJournalStage, talkTo } from '../../engine/questSteps.js';
+import { questRecord } from '../../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { BLOOM_MAX_COST, DREZEL, inGrotto, NS_HOPS, NS_ID, NS_STAGE } from './areas.js';
 import { askToHelp, bloomWithScroll, feedStones, journalLeg, mirrorLeg, solvePuzzle, talkFilliman } from './camp.js';
@@ -76,16 +76,10 @@ function ghastLoop(snap: QuestSnapshot): QuestStep {
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
-    if (snap.journal === 'unknown') {
-        return waitForJournal();
-    }
-    if (snap.journal === 'complete') {
-        return { kind: 'done' };
-    }
-    const stage = snap.progress?.stage ?? snap.stage;
-    if (stage === undefined) {
-        return waitStep('quest stage not readable');
-    }
+    return decideJournalStage(snap, decideStage);
+}
+
+function decideStage(snap: QuestSnapshot, stage: number): QuestStep {
     // Why: Both spirits require the amulet; equipping it before starting avoids an extra Lumbridge round trip.
     const wearing = amulet(snap);
     if (wearing) {
@@ -141,7 +135,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const druidspirit: QuestModule = {
-    record: QUESTS.find(r => r.id === 'druidspirit')!,
+    record: questRecord('druidspirit'),
     // Paterdomus, the swamp and Al Kharid: pinning one booth costs a kingdom crossing on the sickle leg.
     bank: 'nearest',
     tools: [...NS_TOOLS],

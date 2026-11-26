@@ -21,6 +21,15 @@ export default class LruCache<T extends Linkable2> {
         return node;
     }
 
+    remove(key: bigint): void {
+        const node = this.table.find(key);
+        if (node) {
+            node.unlink();
+            node.unlink2();
+            this.available++;
+        }
+    }
+
     put(node: T, key: bigint): void {
         if (this.available === 0) {
             const first = this.history.popFront();

@@ -2,11 +2,10 @@
  *  Why: `fishing_movement.enum` moves a spot to any of ten river tiles every 280 to 530 ticks, and only the ones with a walkable bank tile beside them on the village side can be fished, so the script carries the pairs this prints. */
 
 //   bun tools/nav/shilo-fishing-stands.ts [--content ~/code/rs2b2t-content] [--pack out/collision.lcnav.gz] [--from 2870,2971,0]
+import { readCollisionPack } from '../lib/readCollisionPack.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { homedir } from 'node:os';
-
-import { gunzipSync } from 'fflate';
 
 import { PathFinder, type NavPoint } from '#/bot/event/webwalk/PathFinder.js';
 import { loadDefaultNavEdges } from '#/bot/event/webwalk/loadTransportGraph.js';
@@ -55,11 +54,7 @@ for (const hit of npcSection.matchAll(new RegExp(`^0 (\\d+) (\\d+): ${SPOT_NPC}$
     tiles.set(`${t.x},${t.z}`, t);
 }
 
-let bytes: Uint8Array = new Uint8Array(fs.readFileSync(packPath));
-if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-    bytes = gunzipSync(bytes);
-}
-const finder = new PathFinder(bytes);
+const finder = new PathFinder(readCollisionPack(packPath));
 loadDefaultNavEdges(finder);
 
 const SIDES = [{ dx: 0, dz: -1, name: 'south' }, { dx: -1, dz: 0, name: 'west' }, { dx: 1, dz: 0, name: 'east' }, { dx: 0, dz: 1, name: 'north' }];

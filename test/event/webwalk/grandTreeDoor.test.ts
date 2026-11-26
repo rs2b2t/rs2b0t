@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { collisionPack } from '../../lib/syntheticCollisionPack.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { gunzipSync } from 'fflate';
 
@@ -24,21 +25,6 @@ const ENTER = {
     kind: 'door'
 } as const satisfies TransportEdgeData;
 
-function twoSidesPack(): Uint8Array {
-    const bytes = new Uint8Array(10 + 3 + 4096 + 512);
-    bytes.set([0x4c, 0x43, 0x4e, 0x56, 1, 1]);
-    new DataView(bytes.buffer).setUint16(8, 1, true);
-    bytes[10] = INSIDE.x >> 6;
-    bytes[11] = INSIDE.z >> 6;
-    bytes[12] = 1;
-    const walk = bytes.subarray(13 + 4096);
-    for (const tile of [INSIDE, OUTSIDE]) {
-        const index = (tile.x & 63) * 64 + (tile.z & 63);
-        walk[index >> 3] |= 1 << (index & 7);
-    }
-    return bytes;
-}
-
 function sameEdge(actual: TransportEdgeData, expected: TransportEdgeData): boolean {
     return actual.from.x === expected.from.x && actual.from.z === expected.from.z && actual.from.level === expected.from.level
         && actual.to.x === expected.to.x && actual.to.z === expected.to.z && actual.to.level === expected.to.level
@@ -52,7 +38,7 @@ describe('Grand Tree main doors', () => {
     function expectRoute(from: typeof INSIDE | typeof OUTSIDE, to: typeof INSIDE | typeof OUTSIDE, edge: TransportEdgeData | undefined): void {
         expect(edge).toBeDefined();
         if (!edge) return;
-        const finder = new PathFinder(twoSidesPack());
+        const finder = new PathFinder(collisionPack([INSIDE], [OUTSIDE]));
         finder.addEdges([], [edge]);
         const outcome = finder.findPath(from, to);
         expect(outcome.ok).toBe(true);
@@ -91,7 +77,7 @@ describe('Grand Tree main doors', () => {
     });
 
     test('the two collision sides remain disconnected without the crossing', () => {
-        const finder = new PathFinder(twoSidesPack());
+        const finder = new PathFinder(collisionPack([INSIDE], [OUTSIDE]));
         finder.addEdges([], []);
         expect(finder.findPath(INSIDE, OUTSIDE).ok).toBe(false);
     });

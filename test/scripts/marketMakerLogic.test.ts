@@ -24,8 +24,8 @@ import {
     type Window
 } from '#/bot/scripts/MarketMaker/marketMakerLogic.js';
 import { buildCatalog } from '#/bot/api/market/catalog.js';
-import type { ObjRecord } from '#/bot/adapter/ClientAdapter.js';
 import type { PriceBook } from '#/bot/api/market/priceBook.js';
+import { rec } from '../fixtures/obj-record.js';
 
 const IRON = 440;
 const COINS = 995;
@@ -473,11 +473,6 @@ describe('the coin id is never assumed', () => {
         expect(sideSignature(new Map([[COINS, 2200]]))).toBe('995x2200');
     });
 });
-
-
-function rec(id: number, name: string, over: Partial<ObjRecord> = {}): ObjRecord {
-    return { id, name, cost: 1, stackable: false, members: false, equippable: false, certlink: -1, certtemplate: -1, ...over };
-}
 
 // Why: the strung bow is the equippable one, and that flag is the only thing separating the pair by name.
 const QUOTE_CAT = buildCatalog([

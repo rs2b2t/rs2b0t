@@ -1,4 +1,4 @@
-import { customStep, talkTo, waitForJournal, waitStep } from '../engine/questSteps.js';
+import { customStep, journalStep, talkTo, waitStep } from '../engine/questSteps.js';
 import { Modals } from '../../../ui/widgets/Modals.js';
 import { normalizeJournal as normalize } from '../journalText.js';
 // docs/QUESTS.md
@@ -10,7 +10,7 @@ import { Inventory } from '../../../inventory/Inventory.js';
 import { Locs, type Loc } from '../../../locs/Locs.js';
 import { Quests } from '../../../ui/questlog/Quests.js';
 import { Traversal } from '../../../walking/Traversal.js';
-import { QUESTS } from '../data/quests.js';
+import { questRecord } from '../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { isUnderground, talkStrict, walkWithHops, type LadderHop, type NpcStop } from '../exec/primitives.js';
 import { heldId, settleScene, useOnLoc } from '../exec/prompts.js';
@@ -272,12 +272,8 @@ export function gatherLogs(snap: QuestSnapshot): QuestStep {
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
-    if (snap.journal === 'complete') {
-        return { kind: 'done' };
-    }
-    if (snap.journal === 'unknown') {
-        return waitForJournal();
-    }
+    const journal = journalStep(snap.journal);
+    if (journal) return journal;
     const stage = snap.stage;
     if (stage === undefined) {
         return waitStep("Monk's Friend journal stage unavailable");
@@ -311,7 +307,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const monksfriend: QuestModule = {
-    record: QUESTS.find(record => record.id === 'drunkmonk')!,
+    record: questRecord('drunkmonk'),
     bank: ARDOUGNE_BANK,
     hops: HOPS,
     // Why: the cave thieves are `huntmode=cowardly`, so at quest-ready stats nothing attacks; the float is traversal upkeep.

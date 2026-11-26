@@ -1,5 +1,5 @@
 import type { NpcStop } from '../exec/primitives.js';
-import type { QuestStep } from './types.js';
+import type { QuestSnapshot, QuestStep } from './types.js';
 
 type CustomStep = Extract<QuestStep, { kind: 'custom' }>;
 
@@ -17,4 +17,22 @@ export function waitStep(reason: string): Extract<QuestStep, { kind: 'wait' }> {
 
 export function waitForJournal() {
     return waitStep('quest journal not loaded');
+}
+
+export function journalStep(journal: QuestSnapshot['journal']): QuestStep | null {
+    if (journal === 'complete') return { kind: 'done' };
+    if (journal === 'unknown') return waitForJournal();
+    return null;
+}
+
+export function decideJournalStage(
+    snap: QuestSnapshot,
+    decideStage: (snap: QuestSnapshot, stage: number) => QuestStep,
+    missingStage = 'quest stage not readable'
+): QuestStep {
+    const journal = journalStep(snap.journal);
+    if (journal) return journal;
+
+    const stage = snap.progress?.stage ?? snap.stage;
+    return stage === undefined ? waitStep(missingStage) : decideStage(snap, stage);
 }

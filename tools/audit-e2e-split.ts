@@ -1,6 +1,9 @@
 #!/usr/bin/env bun
-import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join, posix, relative } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { posix, relative } from 'node:path';
+import { walk } from './lib/walkTypeScriptFiles.js';
+
+export { walk };
 
 export const SPEC = /(?:from\s+|import\s*\(\s*|require\s*\(\s*|import\s+)['"]([^'"]+)['"]/g;
 
@@ -20,16 +23,25 @@ export function resolveSpec(fromFile: string, spec: string): string | null {
     return posix.basename(target).includes('.') ? null : `${target}.ts`;
 }
 
+function* resolvedImports(file: string, src: string) {
+    SPEC.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = SPEC.exec(src))) {
+        const spec = match[1];
+        const target = resolveSpec(file, spec);
+        if (target !== null) {
+            yield { spec, target };
+        }
+    }
+}
+
 function depGraph(sources: Map<string, string>): Map<string, Set<string>> {
     const dep = new Map<string, Set<string>>();
     for (const [file, src] of sources) {
         const out = new Set<string>();
-        SPEC.lastIndex = 0;
-        let m: RegExpExecArray | null;
-        while ((m = SPEC.exec(src))) {
-            const target = resolveSpec(file, m[1]);
+        for (const { target } of resolvedImports(file, src)) {
             // Why: stay inside the supplied map to avoid including product source under src/.
-            if (target !== null && sources.has(target)) {
+            if (sources.has(target)) {
                 out.add(target);
             }
         }
@@ -42,11 +54,8 @@ function depGraph(sources: Map<string, string>): Map<string, Set<string>> {
 function outboundInto(consumers: Map<string, string>, sources: Map<string, string>): Set<string> {
     const out = new Set<string>();
     for (const [file, src] of consumers) {
-        SPEC.lastIndex = 0;
-        let m: RegExpExecArray | null;
-        while ((m = SPEC.exec(src))) {
-            const target = resolveSpec(file, m[1]);
-            if (target !== null && sources.has(target)) {
+        for (const { target } of resolvedImports(file, src)) {
+            if (sources.has(target)) {
                 out.add(target);
             }
         }
@@ -110,12 +119,9 @@ export function importsInto(fromPrefix: string, toPrefix: string, sources: Map<s
         if (!file.startsWith(`${fromPrefix}/`)) {
             continue;
         }
-        SPEC.lastIndex = 0;
-        let m: RegExpExecArray | null;
-        while ((m = SPEC.exec(src))) {
-            const target = resolveSpec(file, m[1]);
-            if (target !== null && target.startsWith(`${toPrefix}/`)) {
-                found.push(`${file}\t${m[1]}`);
+        for (const { spec, target } of resolvedImports(file, src)) {
+            if (target.startsWith(`${toPrefix}/`)) {
+                found.push(`${file}\t${spec}`);
             }
         }
     }
@@ -170,13 +176,6 @@ const BUN_TEST = /(?:\.|_)(?:test|spec)\.(?:ts|tsx|js|jsx)$/;
 
 export function bunTestNamesUnder(prefix: string, files: string[]): string[] {
     return files.filter(f => f.startsWith(`${prefix}/`) && BUN_TEST.test(f)).sort();
-}
-
-export function walk(dir: string): string[] {
-    return readdirSync(dir).flatMap(name => {
-        const p = join(dir, name);
-        return statSync(p).isDirectory() ? walk(p) : p.endsWith('.ts') ? [p] : [];
-    });
 }
 
 export function readTree(dir: string): Map<string, string> {

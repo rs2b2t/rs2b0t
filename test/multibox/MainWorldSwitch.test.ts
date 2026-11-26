@@ -1,10 +1,12 @@
 import { expect, mock, spyOn, test } from 'bun:test';
+import { Script } from 'node:vm';
 import { VaultPrompt } from '#/bot/multibox/VaultPrompt.js';
 import { ProfileVault, vault } from '#/bot/multibox/ProfileVault.js';
 import { parseProfileFile, serializeProfileFile } from '#/bot/multibox/ProfileTransfer.js';
 import { SettingsPanel } from '#/bot/multibox/SettingsPanel.js';
 import { ResourcePanel } from '#/bot/multibox/ResourcePanel.js';
-import { DomSlotOps } from '#/bot/multibox/DomSlotOps.js';
+import { DomSlotOps, orderedSlotElements } from '#/bot/multibox/DomSlotOps.js';
+import { renderRailTile } from '#/bot/multibox/RailTile.js';
 import { DiagSampler } from '#/bot/multibox/DiagSampler.js';
 import { FreezeWatch } from '#/bot/runtime/diag/FreezeWatch.js';
 import type { MultiBoxController } from '#/bot/multibox/MultiBoxController.js';
@@ -116,6 +118,72 @@ async function waitFor(done: () => boolean): Promise<void> {
     for (let i = 0; i < 100 && !done(); i++) await Bun.sleep(5);
     expect(done()).toBe(true);
 }
+
+test.each([30, 61])('settled rail tiles produce no mutations for %i clients', async count => {
+    const build = await Bun.build({ entrypoints: ['e2e/fixtures/roster-client.ts'], format: 'iife' });
+    const fixture = new Script('HTMLCanvasElement.prototype.getContext = () => ({ fillRect() {}, fillText() {} });\n' + await build.outputs[0].text());
+    await withWall('proxy', async wall => {
+        const profiles = Array.from({ length: count }, (_, i) => ({ username: `rail${i}`, password: '' }));
+        wall.controller.addGroup(profiles);
+        const rail = document.getElementById('mbx-rail')!;
+        for (const frame of Array.from(rail.querySelectorAll('iframe'))) {
+            const client = frame.contentWindow!;
+            fixture.runInNewContext({
+                window: client, globalThis: client, document: frame.contentDocument, location: client.location,
+                localStorage: client.localStorage, sessionStorage: client.sessionStorage,
+                URLSearchParams, setInterval, clearInterval, HTMLCanvasElement: Reflect.get(client, 'HTMLCanvasElement')
+            });
+            frame.dispatchEvent(new Event('mbx-client-initialized'));
+        }
+        await waitFor(() => wall.slots().every(s => s.ready));
+        const tiles = orderedSlotElements(rail);
+        expect(tiles).toHaveLength(count);
+        const refresh = () => wall.slots().forEach((s, i) => renderRailTile(tiles[i], s));
+        const checkOutput = () => tiles.forEach((tile, i) => {
+            expect(tile.querySelector('.mbx-name')!.textContent).toBe(profiles[i].username);
+            expect(tile.querySelector('.mbx-script-status')!.textContent).toBe('Miner (idle)');
+            const dot = tile.querySelector<HTMLElement>('.mbx-dot')!;
+            expect(dot.title).toBe('logged in World 1; script idle');
+            expect(dot.classList.contains('is-running')).toBe(false);
+            const select = tile.querySelector<HTMLSelectElement>('.mbx-world-select')!;
+            expect(select.value).toBe('1');
+            expect(select.disabled).toBe(false);
+            const change = tile.querySelector<HTMLButtonElement>('.mbx-world-switch')!;
+            expect(change.textContent).toBe('Switch');
+            expect(change.disabled).toBe(true);
+            expect(tile.querySelector<HTMLButtonElement>('.mbx-world-cancel')!.hidden).toBe(true);
+        });
+        refresh();
+        checkOutput();
+        const observer = new MutationObserver(() => {});
+        observer.observe(rail, { attributes: true, childList: true, subtree: true });
+        let mutations = 0;
+        let removedText = 0;
+        let renderMs = 0;
+        for (let poll = 0; poll < 25; poll++) {
+            const start = performance.now();
+            refresh();
+            renderMs += performance.now() - start;
+            const records = observer.takeRecords();
+            mutations += records.length;
+            for (const record of records) {
+                record.removedNodes.forEach(node => { if (node.nodeType === Node.TEXT_NODE) removedText++; });
+            }
+        }
+        observer.disconnect();
+        console.log(`${count} clients, 25 polls: ${renderMs.toFixed(1)} ms, ${mutations} mutations, ${removedText} text nodes removed`);
+        checkOutput();
+        const client = wall.controller.rosterClient(wall.slots()[0].id)!;
+        const status = tiles[0].querySelector('.mbx-script-status')!;
+        client.startScript();
+        refresh();
+        expect(status.textContent).toBe('Miner');
+        client.stopScript();
+        refresh();
+        expect(status.textContent).toBe('Miner (stopped)');
+        expect(mutations).toBe(0);
+    });
+});
 
 test.each([0, 4])('settings import applies modes once with %i profiles already loaded', async loaded => {
     await withWall('local', async wall => {
@@ -1159,19 +1227,42 @@ test('wall wiring preserves pending slots and retries persistence after a succes
                 cancelWorldSwitch: () => { cancelled++; },
                 setRenderMode: () => {}, setLoginCoordination: () => {}, setCredentials: () => {}, setAutoLogin: () => {}
             });
-            Reflect.set(aliceFrame.contentWindow!, 'rs2b0t', runtime(1));
+            const aliceRuntime = runtime(1);
+            Reflect.set(aliceFrame.contentWindow!, 'rs2b0t', aliceRuntime);
             Reflect.set(bobFrame.contentWindow!, 'rs2b0t', runtime(2));
+            aliceFrame.dispatchEvent(new Event('mbx-client-initialized'));
+            bobFrame.dispatchEvent(new Event('mbx-client-initialized'));
             await new Promise(resolve => setTimeout(resolve, 75));
 
+            wall.focus(alice.id);
+            const select = document.querySelector<HTMLSelectElement>('.mbx-world-select')!;
+            const status = document.querySelector('.mbx-script-status')!;
+            const cancel = document.querySelector<HTMLButtonElement>('.mbx-world-cancel')!;
+            select.value = '2';
+            select.dispatchEvent(new Event('change'));
+            wall.focus(alice.id);
+            expect(select.value).toBe('2');
             const pending = wall.setWorld(alice.id, 2);
             await new Promise(resolve => setTimeout(resolve, 10));
             expect(wall.slots()[0]).toMatchObject({ world: 1, targetWorld: 1, switchingWorld: 2 });
             expect(document.querySelector('iframe')).toBe(aliceFrame);
             expect(vault.list()[0].world).toBe(1);
-            document.querySelector<HTMLButtonElement>('.mbx-world-cancel')!.click();
+            wall.focus(alice.id);
+            expect(status.textContent).toBe('Switching to World 2...');
+            expect(cancel.hidden).toBe(false);
+            cancel.click();
             expect(await pending).toBe(false);
             expect(cancelled).toBe(1);
             expect(wall.slots()[0].switchingWorld).toBeNull();
+            expect(cancel.hidden).toBe(true);
+            expect(select.value).toBe('1');
+            expect(status.textContent).toBe('No script running');
+
+            const prepare = spyOn(aliceRuntime, 'prepareWorldSwitch').mockImplementationOnce(() => { throw new Error('fixture switch failure'); });
+            expect(await wall.setWorld(alice.id, 2)).toBe(false);
+            expect(status.textContent).toBe('Could not switch worlds. Check the connection.');
+            expect(select.disabled).toBe(false);
+            prepare.mockRestore();
 
             ingame = false;
             save = spyOn(vault, 'setWorld').mockRejectedValueOnce(new Error('storage unavailable'));
@@ -1184,6 +1275,7 @@ test('wall wiring preserves pending slots and retries persistence after a succes
             expect(wall.slots()[0]).toMatchObject({ world: null, targetWorld: 2, switchingWorld: null });
             expect(vault.list()[0].world).toBe(1);
             expect(await wall.setWorld(alice.id, 2)).toBe(true);
+            expect(status.textContent).toBe('Loading');
             expect(document.querySelector('iframe')).toBe(replacement);
             expect(document.querySelectorAll('iframe')[1]).toBe(bobFrame);
             expect(vault.list().map(profile => profile.world)).toEqual([2, 2]);

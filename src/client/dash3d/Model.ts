@@ -1180,13 +1180,12 @@ export default class Model extends ModelSource {
         Model.oY = 0;
         Model.oZ = 0;
 
-        for (let i: number = 0; i < transform.size; i++) {
-            if (!transform.ti || !transform.tx || !transform.ty || !transform.tz || !base || !base.labels || !base.type) {
-                continue;
-            }
+        if (!base?.labels || !base.type) return;
 
-            const ti: number = transform.ti[i];
-            this.animate2(transform.tx[i], transform.ty[i], transform.tz[i], base.labels[ti], base.type[ti]);
+        const transforms = transform.transforms;
+        for (let i = 0; i < transforms.length; i += 4) {
+            const group = transforms[i];
+            this.animate2(transforms[i + 1], transforms[i + 2], transforms[i + 3], base.labels[group], base.type[group]);
         }
     }
 
@@ -1217,21 +1216,19 @@ export default class Model extends ModelSource {
         Model.oY = 0;
         Model.oZ = 0;
 
-        let counter: number = 0;
-        let maskBase: number = mask[counter++];
+        if (!skeleton?.labels || !skeleton.type) return;
 
-        for (let i: number = 0; i < primary.size; i++) {
-            if (!primary.ti) {
-                continue;
-            }
+        const first = primary.transforms;
+        let counter = 0;
+        let maskBase = mask[counter++];
 
-            const base: number = primary.ti[i];
-            while (base > maskBase) {
+        for (let i = 0; i < first.length; i += 4) {
+            const group = first[i];
+            while (group > maskBase) {
                 maskBase = mask[counter++];
             }
-
-            if (skeleton && skeleton.type && primary.tx && primary.ty && primary.tz && skeleton.labels && (base !== maskBase || skeleton.type[base] === 0)) {
-                this.animate2(primary.tx[i], primary.ty[i], primary.tz[i], skeleton.labels[base], skeleton.type[base]);
+            if (group !== maskBase || skeleton.type[group] === AnimTransform.ORIGIN) {
+                this.animate2(first[i + 1], first[i + 2], first[i + 3], skeleton.labels[group], skeleton.type[group]);
             }
         }
 
@@ -1239,21 +1236,17 @@ export default class Model extends ModelSource {
         Model.oY = 0;
         Model.oZ = 0;
 
+        const second = secondary.transforms;
         counter = 0;
         maskBase = mask[counter++];
 
-        for (let i: number = 0; i < secondary.size; i++) {
-            if (!secondary.ti) {
-                continue;
-            }
-
-            const base: number = secondary.ti[i];
-            while (base > maskBase) {
+        for (let i = 0; i < second.length; i += 4) {
+            const group = second[i];
+            while (group > maskBase) {
                 maskBase = mask[counter++];
             }
-
-            if (skeleton && skeleton.type && secondary.tx && secondary.ty && secondary.tz && skeleton.labels && (base === maskBase || skeleton.type[base] === 0)) {
-                this.animate2(secondary.tx[i], secondary.ty[i], secondary.tz[i], skeleton.labels[base], skeleton.type[base]);
+            if (group === maskBase || skeleton.type[group] === AnimTransform.ORIGIN) {
+                this.animate2(second[i + 1], second[i + 2], second[i + 3], skeleton.labels[group], skeleton.type[group]);
             }
         }
     }

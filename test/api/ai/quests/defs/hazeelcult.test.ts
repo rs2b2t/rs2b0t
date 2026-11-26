@@ -1,8 +1,9 @@
+import { customName, itemCounts } from '../../../../lib/questSteps.js';
 import { describe, expect, test } from 'bun:test';
 
 import { ARMOUR_OBJ, HC_STAGE, atCaveMouth, decide, hazeelcult, inHideout, parseHazeelJournal } from '#/bot/api/ai/quests/defs/hazeelcult.js';
 import { QUEST_DEFS } from '#/bot/api/ai/quests/defs/index.js';
-import type { QuestProgress, QuestSnapshot, QuestStep } from '#/bot/api/ai/quests/engine/types.js';
+import type { QuestProgress, QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
 
 const NOT_STARTED =
     '@dbl@I can start this quest by talking to @dre@Sir Ceril Carnillean@dbl@ at the house due @dre@West@dbl@ of @dre@Ardougne Zoo';
@@ -71,14 +72,6 @@ interface SnapshotOptions {
     progress?: QuestProgress | undefined;
 }
 
-function idCounts(ids: number[]): Map<number, number> {
-    const result = new Map<number, number>();
-    for (const id of ids) {
-        result.set(id, (result.get(id) ?? 0) + 1);
-    }
-    return result;
-}
-
 function snap(options: SnapshotOptions = {}): QuestSnapshot {
     const progress = 'progress' in options
         ? options.progress
@@ -86,7 +79,7 @@ function snap(options: SnapshotOptions = {}): QuestSnapshot {
     return {
         journal: options.journal ?? 'inProgress',
         inv: new Map(),
-        invIds: idCounts(options.invIds ?? []),
+        invIds: itemCounts(options.invIds ?? []),
         worn: new Set(),
         wornIds: new Set(options.wornIds ?? []),
         noProgress: 0,
@@ -94,14 +87,10 @@ function snap(options: SnapshotOptions = {}): QuestSnapshot {
         stage: progress?.stage,
         progress,
         bank: new Map(),
-        bankIds: idCounts(options.bankIds ?? []),
+        bankIds: itemCounts(options.bankIds ?? []),
         bankKnown: options.bankKnown ?? true,
         freeSlots: 28
     };
-}
-
-function customName(step: QuestStep): string | null {
-    return step.kind === 'custom' ? step.name : null;
 }
 
 describe('Hazeel Cult journal parsing', () => {

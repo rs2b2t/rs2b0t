@@ -2,10 +2,10 @@
  *  Why: walkable is not reachable and a multi-tile body slides several tiles off its spawn, so the melee-proof set has to come from the collision pack rather than from looking at the map. */
 
 //   bun tools/nav/jive-safespots.ts [--target blue|demon|kbd] [--anywhere] [--probe x,z] [--content ~/code/rs2b2t-content] [--engine ~/code/rs2b2t-engine]
+import { readCollisionPack } from '../lib/readCollisionPack.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { homedir } from 'node:os';
-import { gunzipSync } from 'fflate';
 import CollisionEngine from '#/bot/event/webwalk/rsmod/CollisionEngine.js';
 import { changeLandCollision, changeLocCollision, changeRoofCollision } from '#/bot/event/webwalk/rsmod/collision.js';
 import { CollisionFlag, CollisionType } from '#/bot/event/webwalk/rsmod/flags.js';
@@ -111,11 +111,7 @@ interface Collision {
 }
 
 function packSource(packPath: string): Collision {
-    let bytes: Uint8Array = new Uint8Array(fs.readFileSync(packPath));
-    if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-        bytes = gunzipSync(bytes);
-    }
-    const finder = new PathFinder(bytes);
+    const finder = new PathFinder(readCollisionPack(packPath));
     const walk = (x: number, z: number): boolean => finder.walkable(x, z, LEVEL);
     const wall = (x: number, z: number): number => finder.wallMask(x, z, LEVEL);
     return {

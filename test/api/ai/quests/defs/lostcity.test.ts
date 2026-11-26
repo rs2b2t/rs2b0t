@@ -1,8 +1,9 @@
+import { customName, nameCounts } from '../../../../lib/questSteps.js';
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { decide, lostCityArea, LOST_CITY_FOOD_TARGET, LOST_CITY_STAGE, LOST_CITY_STAFF_TARGET, lostcity, parseLostCityJournal } from '#/bot/api/ai/quests/defs/lostcity.js';
 import { QuestFood } from '#/bot/api/ai/quests/food.js';
 import type { WorldTile } from '#/bot/adapter/ClientAdapter.js';
-import type { QuestSnapshot, QuestStep } from '#/bot/api/ai/quests/engine/types.js';
+import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
 
 const MAINLAND: WorldTile = { x: 3200, z: 3200, level: 0 };
 const ENTRANA_SHIP: WorldTile = { x: 2834, z: 3334, level: 1 };
@@ -23,33 +24,20 @@ interface SnapshotOptions {
     magic?: number;
 }
 
-function counts(names: string[]): Map<string, number> {
-    const result = new Map<string, number>();
-    for (const name of names) {
-        const key = name.toLowerCase();
-        result.set(key, (result.get(key) ?? 0) + 1);
-    }
-    return result;
-}
-
 function snap(options: SnapshotOptions = {}): QuestSnapshot {
     return {
         journal: options.journal ?? 'inProgress',
-        inv: counts(options.inv ?? []),
+        inv: nameCounts(options.inv ?? []),
         worn: new Set((options.worn ?? []).map(name => name.toLowerCase())),
         noProgress: 0,
         bankCoins: 0,
         stage: options.stage ?? LOST_CITY_STAGE.NOT_STARTED,
-        bank: counts(options.bank ?? []),
+        bank: nameCounts(options.bank ?? []),
         bankKnown: options.bankKnown ?? true,
         tile: options.tile === undefined ? MAINLAND : options.tile,
         magic: options.magic ?? 1,
         freeSlots: options.freeSlots
     };
-}
-
-function customName(step: QuestStep): string | null {
-    return step.kind === 'custom' ? step.name : null;
 }
 
 beforeEach(() => {

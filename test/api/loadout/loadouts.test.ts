@@ -31,8 +31,11 @@ describe('parseLoadouts', () => {
         expect(parseLoadouts('{"name":"melee"}')).toEqual([]);
     });
 
-    test('drops entries with no usable name', () => {
-        expect(parseLoadouts('[{"worn":{},"carry":[]}]')).toEqual([]);
+    test('skips unusable names and preserves valid names in order, including duplicates', () => {
+        const raw = JSON.stringify([
+            null, { name: ' melee ' }, {}, { name: '   ' }, { name: 'range' }, { name: 7 }, { name: ' melee ' }
+        ]);
+        expect(parseLoadouts(raw).map(entry => entry.name)).toEqual([' melee ', 'range', ' melee ']);
     });
 
     test('drops unknown slots and keeps known ones', () => {

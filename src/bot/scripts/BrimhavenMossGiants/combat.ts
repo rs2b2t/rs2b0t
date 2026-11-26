@@ -1,7 +1,7 @@
 import { Game } from '../../api/game/Game.js';
 import { Equipment } from '../../api/equipment/Equipment.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { Autocast } from '../../api/magic/Autocast.js';
+import { ArmAutocast as ArmAutocastTask } from '../../api/tasks/ArmAutocast.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { ASSERT_BATCH, ASSERT_RETRY_MS, cfg } from './config.js';
 import { castsLeft, equipPackProjectiles, rangeLoadout, rangeProjectile, equippedProjectileCount } from './shared.js';
@@ -80,27 +80,14 @@ export class SetAttackStyle implements Task {
 }
 
 /** Arm the autocast spell once a staff is equipped and casts remain. */
-export class ArmAutocast implements Task {
-    private fails = 0;
-    private retryAt = 0;
-    constructor(private bot: BrimhavenMossGiants) {}
-    validate(): boolean {
-        if (cfg.style !== 'mage' || Autocast.armed() || Date.now() < this.retryAt) {
-            return false;
-        }
-        if (castsLeft() < 1) {
-            return false;
-        }
-        return Autocast.staffTabAttached() || (cfg.weapon !== '' && Equipment.contains(cfg.weapon));
-    }
-    async execute(): Promise<void> {
-        this.bot.setStatus(`arming autocast: ${cfg.spell}`);
-        if (await Autocast.arm(cfg.spell, m => this.bot.log(m))) {
-            this.fails = 0;
-        } else if (++this.fails >= ASSERT_BATCH) {
-            this.fails = 0;
-            this.retryAt = Date.now() + ASSERT_RETRY_MS;
-            this.bot.log(`WARNING: could not arm autocast for '${cfg.spell}' — retrying in ${ASSERT_RETRY_MS / 1000}s (check spell/level/staff).`);
-        }
+export class ArmAutocast extends ArmAutocastTask {
+    constructor(bot: BrimhavenMossGiants) {
+        super(bot, {
+            enabled: () => cfg.style === 'mage',
+            castsLeft,
+            spell: () => cfg.spell,
+            staff: () => cfg.weapon,
+            warning: () => `WARNING: could not arm autocast for '${cfg.spell}' — retrying in ${ASSERT_RETRY_MS / 1000}s (check spell/level/staff).`
+        });
     }
 }

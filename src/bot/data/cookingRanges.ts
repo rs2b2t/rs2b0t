@@ -1,5 +1,8 @@
 import Tile from '../geometry/Tile.js';
 import { COOKING_SURFACE_LOCS } from './cookSurfaceLocs.js';
+import { findCookSurface } from './cookSurfaceSearch.js';
+
+export { chebyshev } from './cookSurfaceSearch.js';
 
 /**
  * Cooking surfaces from `cooking_sources.loc`; `bun run gen:cooksurfaces` generates their world placements.
@@ -36,37 +39,22 @@ export function rangeStandFromLoc(loc: { x: number; z: number; level: number }):
     return new Tile(loc.x, loc.z - 1, loc.level);
 }
 
-export function chebyshev(
-    a: { x: number; z: number; level?: number },
-    b: { x: number; z: number; level?: number }
-): number {
-    if ((a.level ?? 0) !== (b.level ?? 0)) {
-        return Number.POSITIVE_INFINITY;
-    }
-    return Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
-}
-
 /** Nearest catalog Range to `origin` within maxCheb (same plane). */
 export function nearestCookingRange(
     origin: { x: number; z: number; level?: number },
     maxCheb = 64
 ): CookingSurface | null {
-    const level = origin.level ?? 0;
-    let best: { loc: (typeof COOKING_RANGE_LOCS)[number]; d: number } | null = null;
-    for (const loc of COOKING_RANGE_LOCS) {
-        if (loc.level !== level) continue;
-        const d = chebyshev(origin, loc);
-        if (d > maxCheb) continue;
-        if (!best || d < best.d) best = { loc, d };
-    }
+    const tile = new Tile(origin.x, origin.z, origin.level ?? 0);
+    const best = findCookSurface(COOKING_RANGE_LOCS, tile, maxCheb, () => 0);
     if (!best) return null;
+    const { entry: loc, distance } = best;
     return {
-        stand: rangeStandFromLoc(best.loc),
-        loc: new Tile(best.loc.x, best.loc.z, best.loc.level),
+        stand: rangeStandFromLoc(loc),
+        loc: new Tile(loc.x, loc.z, loc.level),
         locName: 'Range',
         kind: 'range',
-        label: `Range @ ${best.loc.x},${best.loc.z}`,
-        notes: `cheb ${best.d} from origin`
+        label: `Range @ ${loc.x},${loc.z}`,
+        notes: `cheb ${distance} from origin`
     };
 }
 

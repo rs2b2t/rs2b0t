@@ -1,6 +1,6 @@
-import { talkTo, waitForJournal, waitStep } from '../../engine/questSteps.js';
+import { journalStep, talkTo, waitStep } from '../../engine/questSteps.js';
 import { Skills } from '../../../../skills/Skills.js';
-import { QUESTS } from '../../data/quests.js';
+import { questRecord } from '../../data/quests.js';
 import { hasFlag, type QuestModule, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import { BRUNDT, FT_TILE, THORVALD } from './areas.js';
 import { bardStep } from './bard.js';
@@ -19,12 +19,8 @@ export { FT_ID, FT_LOC, FT_TILE, MAZE_ROUTE } from './areas.js';
 const VOTES_NEEDED = 7;
 
 export function decide(snap: QuestSnapshot): QuestStep {
-    if (snap.journal === 'unknown') {
-        return waitForJournal();
-    }
-    if (snap.journal === 'complete') {
-        return { kind: 'done' };
-    }
+    const journal = journalStep(snap.journal);
+    if (journal) return journal;
     const stage = snap.progress?.stage;
     if (stage === undefined) {
         return waitStep('quest stage not readable');
@@ -79,7 +75,7 @@ function readiness(): string | null {
 }
 
 export const fremenniktrials: QuestModule = {
-    record: QUESTS.find(r => r.id === 'viking')!,
+    record: questRecord('viking'),
     pray: { protect: 'melee', potions: 2 },
     bank: FT_TILE.SEERS_BANK,
     // Why: 2 trials are walked with an empty pack and one with a full combat kit, so the module owns every banking decision.

@@ -1,3 +1,4 @@
+import { firstFreeName, parseNamedEntries, upsertNamedEntry } from '../namedEntries.js';
 import { SLOTS, type Slot } from './types.js';
 
 export interface CarryEntry {
@@ -44,27 +45,11 @@ function readCarry(raw: unknown): CarryEntry[] {
 
 /** Parse user-edited storage without throwing; invalid data returns no loadouts. */
 export function parseLoadouts(raw: string): Loadout[] {
-    if (raw.trim().length === 0) {
-        return [];
-    }
-    let payload: unknown;
-    try {
-        payload = JSON.parse(raw);
-    } catch {
-        return [];
-    }
-    if (!Array.isArray(payload)) {
-        return [];
-    }
-    const out: Loadout[] = [];
-    for (const entry of payload as Record<string, unknown>[]) {
-        const name = entry?.name;
-        if (typeof name !== 'string' || name.trim().length === 0) {
-            continue;
-        }
-        out.push({ name, worn: readWorn(entry.worn), carry: readCarry(entry.carry) });
-    }
-    return out;
+    return parseNamedEntries(raw).map(entry => ({
+        name: entry.name,
+        worn: readWorn(entry.worn),
+        carry: readCarry(entry.carry)
+    }));
 }
 
 export function serializeLoadouts(list: readonly Loadout[]): string {
@@ -72,13 +57,7 @@ export function serializeLoadouts(list: readonly Loadout[]): string {
 }
 
 export function upsertLoadout(list: readonly Loadout[], loadout: Loadout): Loadout[] {
-    const at = list.findIndex(l => l.name.toLowerCase() === loadout.name.toLowerCase());
-    if (at < 0) {
-        return [...list, loadout];
-    }
-    const out = [...list];
-    out[at] = loadout;
-    return out;
+    return upsertNamedEntry(list, loadout);
 }
 
 export function removeLoadout(list: readonly Loadout[], name: string): Loadout[] {
@@ -87,14 +66,5 @@ export function removeLoadout(list: readonly Loadout[], name: string): Loadout[]
 }
 
 export function uniqueName(list: readonly Loadout[], base: string): string {
-    const taken = new Set(list.map(l => l.name.toLowerCase()));
-    if (!taken.has(base.toLowerCase())) {
-        return base;
-    }
-    for (let n = 2; ; n++) {
-        const candidate = `${base} ${n}`;
-        if (!taken.has(candidate.toLowerCase())) {
-            return candidate;
-        }
-    }
+    return firstFreeName(list, base);
 }

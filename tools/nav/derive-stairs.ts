@@ -1,8 +1,7 @@
+import { readCollisionPack } from '../lib/readCollisionPack.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { homedir } from 'node:os';
-
-import { gunzipSync } from 'fflate';
 
 import { PathFinder, type NavPoint, type TransportEdgeData } from '#/bot/event/webwalk/PathFinder.js';
 
@@ -340,11 +339,7 @@ function main(): void {
         });
     }
 
-    let packBytes: Uint8Array = new Uint8Array(fs.readFileSync(packPath));
-    if (packBytes[0] === 0x1f && packBytes[1] === 0x8b) {
-        packBytes = gunzipSync(packBytes);
-    }
-    const finder = new PathFinder(packBytes);
+    const finder = new PathFinder(readCollisionPack(packPath));
     const dataDir = path.join('src', 'bot', 'event', 'webwalk', 'data');
     const curatedTransports = JSON.parse(fs.readFileSync(path.join(dataDir, 'transports.json'), 'utf8')) as TransportEdgeData[];
     const rawCount = edges.length;

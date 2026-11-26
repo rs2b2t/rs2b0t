@@ -10,16 +10,19 @@ import { PeriodicBank } from '../../api/tasks/PeriodicBank.js';
 import { PERIODIC_BANK_SETTINGS, parseBankStrategy } from '../../api/bank/Banking.js';
 import { SolveClue } from '../../api/ai/clues/SolveClue.js';
 import { paintClueProgress } from '../../api/ai/clues/cluePaint.js';
+import { withdrawTo } from '../../api/bank/withdrawTo.js';
 import { Bank } from '../../api/bank/Bank.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { Equipment } from '../../api/equipment/Equipment.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { COMBAT_STYLE_OPTIONS, RANGE_STYLE_OPTIONS, describeCombatStyle, parseCombatStyle, parseRangeStyle, type MeleeCombatStyle } from '../../api/combat/CombatStyle.js';
 import { Autocast } from '../../api/magic/Autocast.js';
+import { ArmAutocast } from '../../api/tasks/ArmAutocast.js';
 import { castsAvailable, runeWithdrawList, spellButtonCom } from '../../api/combat/CombatStyleLogic.js';
 import { SPELL_DB } from '../../data/spelldb.js';
 import { STAFFS } from '../../api/combat/equipment.js';
-import { foodHealAmount, shouldEatToUseFood } from '../../api/combat/food.js';
+import { isFoodItem } from '../../api/combat/food.js';
+import { eatSelectedFood, shouldEatNow } from '../../api/combat/eating.js';
 import { sweepPlan } from './AmmoLogic.js';
 import type { GroundItem } from '../../api/grounditems/GroundItems.js';
 import { Paint } from '../../paint/Paint.js';
@@ -188,7 +191,7 @@ export default class RockCrab extends TaskBot {
                 }
                 this.setStatus(s);
             },
-            isFood: isFoodItem,
+            isFood: name => isFoodItem(name, FOOD_NAME),
             foodName: () => FOOD_NAME,
             foodWithdraw: () => FOOD_WITHDRAW,
             weaponName: () => WEAPON,
@@ -233,7 +236,13 @@ export default class RockCrab extends TaskBot {
             new Eat(this),
             new GearEquip(this),
             new SetAttackStyle(this),
-            new ArmAutocast(this),
+            new ArmAutocast(this, {
+                enabled: () => STYLE === 'mage',
+                castsLeft,
+                spell: () => SPELL,
+                staff: () => WEAPON,
+                warning: () => `WARNING: could not arm autocast for '${SPELL}' — retrying in ${ASSERT_RETRY_MS / 1000}s. Check the spell name, magic level and staff; if the staff IS wielded but the combat tab stayed unarmed, this account's equip-time tab update is tutorial-gated — relog once with it wielded.`
+            }),
             new CollectProjectiles(this),
             this.solveClue!,
             new BankRun(this),
@@ -388,29 +397,8 @@ function atCentre(): boolean {
     return here !== null && currentSpot().distanceTo(Tile.from(here)) <= CENTRE_RADIUS;
 }
 
-const FOOD_FORMS: Record<string, string[]> = {
-    'cake': ['cake', '2/3 cake', 'slice of cake'],
-    'chocolate cake': ['chocolate cake', '2/3 chocolate cake', 'chocolate slice'],
-    'plain pizza': ['plain pizza', '1/2 plain pizza'],
-    'meat pizza': ['meat pizza', '1/2 meat pizza'],
-    'anchovy pizza': ['anchovy pizza', '1/2 anchovy pizza'],
-    'pineapple pizza': ['pineapple pizza', '1/2 pineapple pizza'],
-    'redberry pie': ['redberry pie', 'half a redberry pie'],
-    'meat pie': ['meat pie', 'half a meat pie'],
-    'apple pie': ['apple pie', 'half an apple pie']
-};
-
-function foodForms(): string[] {
-    const key = FOOD_NAME.toLowerCase();
-    return FOOD_FORMS[key] ?? [key];
-}
-
-function isFoodItem(name: string | null | undefined): boolean {
-    return foodForms().includes((name ?? '').toLowerCase());
-}
-
 function foodCount(): number {
-    return Inventory.items().filter(i => isFoodItem(i.name)).length;
+    return Inventory.items().filter(i => isFoodItem(i.name, FOOD_NAME)).length;
 }
 
 function hasFood(): boolean {
@@ -418,15 +406,7 @@ function hasFood(): boolean {
 }
 
 function needEat(): boolean {
-    if (!hasFood()) {
-        return false;
-    }
-    return shouldEatToUseFood({
-        hp: Skills.effective('hitpoints'),
-        maxHp: Skills.level('hitpoints'),
-        heal: foodHealAmount(FOOD_NAME),
-        foodCount: 1
-    });
+    return shouldEatNow(FOOD_NAME, foodCount());
 }
 
 
@@ -520,15 +500,9 @@ async function equipPackProjectiles(): Promise<boolean> {
     return Execution.delayUntil(() => Inventory.count(projectile) < before, 3000);
 }
 
-async function eatOnce(bot: RockCrab): Promise<boolean> {
-    const food = Inventory.items().find(i => isFoodItem(i.name));
-    if (!food) {
-        return false;
-    }
-    bot.setStatus(`eating ${food.name} (${Math.round(Skills.hpFraction() * 100)}% hp)`);
-    const before = Skills.effective('hitpoints');
-    await food.interact('Eat');
-    return Execution.delayUntil(() => Skills.effective('hitpoints') > before, 3000);
+function eatOnce(bot: RockCrab): Promise<boolean> {
+    const food = Inventory.items().find(i => isFoodItem(i.name, FOOD_NAME));
+    return eatSelectedFood(bot, food, 'heal');
 }
 
 function activeCrabs(): Npc[] {
@@ -634,34 +608,6 @@ class SetAttackStyle implements Task {
     }
 }
 
-class ArmAutocast implements Task {
-    private fails = 0;
-    private retryAt = 0;
-
-    constructor(private bot: RockCrab) {}
-
-    validate(): boolean {
-        if (STYLE !== 'mage' || Autocast.armed() || Date.now() < this.retryAt) {
-            return false;
-        }
-        if (castsLeft() < 1) {
-            return false;
-        }
-        return Autocast.staffTabAttached() || (WEAPON !== '' && Equipment.contains(WEAPON));
-    }
-
-    async execute(): Promise<void> {
-        this.bot.setStatus(`arming autocast: ${SPELL}`);
-        if (await Autocast.arm(SPELL, m => this.bot.log(m))) {
-            this.fails = 0;
-        } else if (++this.fails >= ASSERT_BATCH) {
-            this.fails = 0;
-            this.retryAt = Date.now() + ASSERT_RETRY_MS;
-            this.bot.log(`WARNING: could not arm autocast for '${SPELL}' — retrying in ${ASSERT_RETRY_MS / 1000}s. Check the spell name, magic level and staff; if the staff IS wielded but the combat tab stayed unarmed, this account's equip-time tab update is tutorial-gated — relog once with it wielded.`);
-        }
-    }
-}
-
 class CollectProjectiles implements Task {
     private warnedMismatch = false;
 
@@ -761,30 +707,10 @@ class BankRun implements Task {
         this.bot.clearWakes();
     }
 
-    private async withdrawTo(name: string, target: number): Promise<number> {
-        const start = Inventory.count(name);
-        for (let guard = 0; guard < 40 && Inventory.count(name) < target && !Inventory.isFull(); guard++) {
-            const before = Inventory.count(name);
-            const need = target - before;
-            if (need > 10 && (await Bank.withdrawX(name, need))) {
-                if (Inventory.count(name) > before) {
-                    continue;
-                }
-                break;
-            }
-            const op = need >= 10 ? 'Withdraw-10' : need >= 5 ? 'Withdraw-5' : 'Withdraw-1';
-            await Bank.withdraw(name, op);
-            if (!(await Execution.delayUntil(() => Inventory.count(name) > before, 2500))) {
-                break;
-            }
-        }
-        return Inventory.count(name) - start;
-    }
-
     private async withdrawStyleSupplies(): Promise<void> {
         if (this.needWeapon()) {
             this.bot.setStatus(`withdrawing ${WEAPON}`);
-            if ((await this.withdrawTo(WEAPON, 1)) > 0) {
+            if ((await withdrawTo(WEAPON, 1)) > 0) {
                 await Equipment.equip(WEAPON);
                 this.bot.log(`withdrew and wielded ${WEAPON}`);
             } else {
@@ -799,7 +725,7 @@ class BankRun implements Task {
             for (const { rune, count } of runeWithdrawList(SPELL, wieldedNames(), RUNES_WITHDRAW)) {
                 const have = Inventory.count(rune);
                 if (have < count) {
-                    const gained = await this.withdrawTo(rune, count);
+                    const gained = await withdrawTo(rune, count);
                     this.bot.log(`withdrew ${gained} ${rune} (${Inventory.count(rune)}/${count})`);
                 }
                 short ||= Inventory.count(rune) === 0;
@@ -813,7 +739,7 @@ class BankRun implements Task {
         } else if (STYLE === 'range') {
             const projectile = rangeProjectile();
             this.bot.setStatus(`withdrawing ${projectile}`);
-            const gained = await this.withdrawTo(projectile, AMMO_WITHDRAW);
+            const gained = await withdrawTo(projectile, AMMO_WITHDRAW);
             if (gained > 0) {
                 if (!(await Bank.close()) || !(await equipPackProjectiles())) {
                     this.bot.log(`WARNING: withdrew ${projectile}, but could not equip the stack — will retry from the pack`);

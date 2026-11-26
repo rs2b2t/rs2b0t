@@ -1,3 +1,4 @@
+import { getIndexedDefinition, loadDefinitionIndex } from '#/client/config/configArchive.js';
 import LruCache from '#/client/datastruct/LruCache.js';
 
 import JagFile from '#/client/io/JagFile.js';
@@ -66,56 +67,29 @@ export default class ObjType {
     static init(config: JagFile, members: boolean): void {
         this.memServer = members;
 
-        this.dat = new Packet(config.read('obj.dat'));
-        const idx: Packet = new Packet(config.read('obj.idx'));
-
-        this.numDefinitions = idx.g2();
-        this.idx = new Int32Array(this.numDefinitions);
-
-        let offset: number = 2;
-        for (let id: number = 0; id < this.numDefinitions; id++) {
-            this.idx[id] = offset;
-            offset += idx.g2();
-        }
-
-        this.recent = new TypedArray1d(10, null);
-        for (let id: number = 0; id < 10; id++) {
-            this.recent[id] = new ObjType();
-        }
+        loadDefinitionIndex(this, config, 'obj', 10);
     }
 
     static list(id: number): ObjType {
-        if (!this.recent || !this.idx || !this.dat) {
-            throw new Error();
-        }
+        return getIndexedDefinition(this, id, (recent, slot, dat) => {
+            const obj: ObjType = recent[slot]!;
+            obj.id = id;
+            obj.reset();
+            obj.decode(dat);
 
-        for (let i: number = 0; i < 10; i++) {
-            const type: ObjType | null = this.recent[i];
-            if (type && type.id === id) {
-                return type;
+            if (obj.certtemplate !== -1) {
+                obj.genCert();
             }
-        }
 
-        this.recentPos = (this.recentPos + 1) % 10;
+            if (!this.memServer && obj.members) {
+                obj.name = 'Members Object';
+                obj.desc = "Login to a members' server to use this object.";
+                obj.op = null;
+                obj.iop = null;
+            }
 
-        const obj: ObjType = this.recent[this.recentPos]!;
-        this.dat.pos = this.idx[id];
-        obj.id = id;
-        obj.reset();
-        obj.decode(this.dat);
-
-        if (obj.certtemplate !== -1) {
-            obj.genCert();
-        }
-
-        if (!this.memServer && obj.members) {
-            obj.name = 'Members Object';
-            obj.desc = "Login to a members' server to use this object.";
-            obj.op = null;
-            obj.iop = null;
-        }
-
-        return obj;
+            return obj;
+        });
     }
 
     private reset(): void {
@@ -371,15 +345,13 @@ export default class ObjType {
 
     static getSprite(id: number, count: number, outlineRgb: number): Pix32 | null {
         if (outlineRgb === 0) {
-            let icon = ObjType.spriteCache.find(BigInt(id));
-
-            if (icon && icon.ohi !== count && icon.ohi !== -1) {
-                icon.unlink();
-                icon = null;
-            }
-
+            const key = BigInt(id);
+            const icon = ObjType.spriteCache.find(key);
             if (icon) {
-                return icon;
+                if (icon.ohi === count || icon.ohi === -1) {
+                    return icon;
+                }
+                ObjType.spriteCache.remove(key);
             }
         }
 

@@ -1,5 +1,5 @@
-import { customStep, talkTo as talk, waitForJournal, waitStep } from '../../engine/questSteps.js';
-import { QUESTS } from '../../data/quests.js';
+import { customStep, decideJournalStage, talkTo as talk } from '../../engine/questSteps.js';
+import { questRecord } from '../../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { FRANK, LUTHAS, PT_ID, PT_NAME, PT_STAGE, WYDIN, ZAMBO_SHOP } from './areas.js';
 import { onKaramja, shipCrate } from './karamja.js';
@@ -59,16 +59,10 @@ function treasure(snap: QuestSnapshot): QuestStep {
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
-    if (snap.journal === 'unknown') {
-        return waitForJournal();
-    }
-    if (snap.journal === 'complete') {
-        return { kind: 'done' };
-    }
-    const stage = snap.progress?.stage ?? snap.stage;
-    if (stage === undefined) {
-        return waitStep('quest stage not readable');
-    }
+    return decideJournalStage(snap, decideStage);
+}
+
+function decideStage(snap: QuestSnapshot, stage: number): QuestStep {
     const flag = [...(snap.progress?.flags ?? [])][0];
     const supplies = kit(
         snap,
@@ -93,7 +87,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const piratestreasure: QuestModule = {
-    record: QUESTS.find(r => r.id === 'hunt')!,
+    record: questRecord('hunt'),
     // Why: 4 kingdoms and a bankless island, so no booth is worth pinning.
     bank: 'nearest',
     // Why: the smuggle has to acquire at the stage that needs it, or the engine's provisioning block buys rum before Frank has asked for any.

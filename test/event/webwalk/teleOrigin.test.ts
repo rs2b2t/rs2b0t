@@ -1,15 +1,11 @@
 /**
  * #339, origin-aware teleports + deny list for failed teles.
  */
+import { loadStaticFinder } from '../../lib/navigation.js';
 import { describe, expect, test } from 'bun:test';
 import fs from 'node:fs';
 import path from 'node:path';
-import { gunzipSync } from 'fflate';
 
-import doorsJson from '#/bot/event/webwalk/data/doors.json';
-import stairsJson from '#/bot/event/webwalk/data/stairEdges.json';
-import transportsJson from '#/bot/event/webwalk/data/transports.json';
-import { PathFinder, type DoorEdgeData } from '#/bot/event/webwalk/PathFinder.js';
 import { teleportAllowedByPolicy } from '#/bot/event/webwalk/policy.js';
 import {
     SPELL_TELEPORTS,
@@ -25,16 +21,6 @@ import type { WorldStateData } from '#/bot/event/webwalk/worldStateData.js';
 
 const PACK_PATH = path.join(process.cwd(), 'out/collision.lcnav.gz');
 const HAS_PACK = fs.existsSync(PACK_PATH);
-
-function loadFinder(): PathFinder {
-    let bytes: Uint8Array = new Uint8Array(fs.readFileSync(PACK_PATH));
-    if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-        bytes = new Uint8Array(gunzipSync(bytes));
-    }
-    const finder = new PathFinder(bytes as Uint8Array);
-    finder.addEdges(doorsJson as DoorEdgeData[], transportsJson as never, stairsJson as never);
-    return finder;
-}
 
 const rich: WorldStateData = {
     members: true,
@@ -116,7 +102,7 @@ describe('denyTeleportIds policy', () => {
 
 describe('PathFinder tele inject origin gates', () => {
     test.skipIf(!HAS_PACK)('deep wildy does not inject spell tele even with runes', () => {
-        const finder = loadFinder();
+        const finder = loadStaticFinder(PACK_PATH);
         // Deep wildy tile (level ~26) → Lumbridge, long enough that tele would win if allowed.
         const from = { x: 3100, z: 3520 + 25 * 8, level: 0 };
         const to = { x: 3222, z: 3218, level: 0 };
@@ -141,7 +127,7 @@ describe('PathFinder tele inject origin gates', () => {
     });
 
     test.skipIf(!HAS_PACK)('bank stand start ignores deep-wildy state and may inject spell tele', () => {
-        const finder = loadFinder();
+        const finder = loadStaticFinder(PACK_PATH);
         // Bank→Varrock with virtual/deep-wildy state (poisoned snapshot) must use bank origin.
         const bank = { x: 3094, z: 3493, level: 0 }; // Edgeville bank
         const varrock = { x: 3213, z: 3424, level: 0 };
@@ -161,7 +147,7 @@ describe('PathFinder tele inject origin gates', () => {
     });
 
     test.skipIf(!HAS_PACK)('denyTeleportIds drops varrock tele from long route', () => {
-        const finder = loadFinder();
+        const finder = loadStaticFinder(PACK_PATH);
         const from = { x: 3222, z: 3218, level: 0 }; // Lumbridge
         const to = { x: 3213, z: 3424, level: 0 }; // Varrock
         const state: WorldStateData = { ...rich };

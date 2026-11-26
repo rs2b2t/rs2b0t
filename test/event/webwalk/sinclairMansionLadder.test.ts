@@ -1,30 +1,18 @@
+import { loadStaticFinder } from '../../lib/navigation.js';
 import fs from 'node:fs';
 import path from 'node:path';
 
 import { describe, expect, test } from 'bun:test';
-import { gunzipSync } from 'fflate';
 
-import doors from '#/bot/event/webwalk/data/doors.json';
 import stairs from '#/bot/event/webwalk/data/stairEdges.json';
-import transports from '#/bot/event/webwalk/data/transports.json';
-import { PathFinder, type DoorEdgeData, type NavPoint, type TransportEdgeData } from '#/bot/event/webwalk/PathFinder.js';
+import { PathFinder, type NavPoint, type TransportEdgeData } from '#/bot/event/webwalk/PathFinder.js';
 import { TALK_ANCHORS } from '#/bot/api/ai/clues/data/talkAnchors.js';
 
 // The pack is a build artifact, not a committed file, so CI runs without it.
 const PACK_PATH = path.join(process.cwd(), 'out/collision.lcnav.gz');
 const HAS_COLLISION_PACK = fs.existsSync(PACK_PATH);
 
-function loadFinder(): PathFinder {
-    let bytes: Uint8Array = new Uint8Array(fs.readFileSync(PACK_PATH));
-    if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-        bytes = gunzipSync(bytes);
-    }
-    const built = new PathFinder(bytes);
-    built.addEdges(doors as DoorEdgeData[], transports as TransportEdgeData[], stairs as TransportEdgeData[]);
-    return built;
-}
-
-const finder = HAS_COLLISION_PACK ? loadFinder() : (null as unknown as PathFinder);
+const finder = HAS_COLLISION_PACK ? loadStaticFinder(PACK_PATH) : (null as unknown as PathFinder);
 
 const ARDOUGNE_BANK: NavPoint = { x: 2655, z: 3286, level: 0 };
 /** trail_clue_medium_anagram009, Donovan the Family Handyman, upstairs. */

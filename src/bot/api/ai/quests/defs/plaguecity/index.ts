@@ -1,5 +1,5 @@
 import { customStep as custom, waitForJournal, waitStep } from '../../engine/questSteps.js';
-import { QUESTS } from '../../data/quests.js';
+import { questRecord } from '../../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { PC_ITEM, PC_TILE, held, owned, plagueArea, worn, type PlagueArea } from './areas.js';
 import { PC_STAGE, readPlagueProgress } from './journal.js';
@@ -230,7 +230,7 @@ async function exitPlagueCity(log: (m: string) => void): Promise<boolean> {
 }
 
 export const plaguecity: QuestModule = {
-    record: QUESTS.find(record => record.id === 'elena')!,
+    record: questRecord('elena'),
     bank: PC_TILE.BANK,
     ownsInventory: true,
     readProgress: readPlagueProgress,

@@ -1,3 +1,4 @@
+import { customName, talkTarget } from '../../../../lib/questSteps.js';
 import { describe, expect, test } from 'bun:test';
 import {
     BLASTS,
@@ -15,7 +16,7 @@ import {
 import { sourceCalebFish } from '#/bot/api/ai/quests/defs/familycrest/fish.js';
 import { SHOP_DB } from '#/bot/data/shopdb.js';
 import type { WorldTile } from '#/bot/adapter/ClientAdapter.js';
-import type { QuestSnapshot, QuestStep } from '#/bot/api/ai/quests/engine/types.js';
+import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
 
 const VARROCK: WorldTile = { x: 3253, z: 3420, level: 0 };
 const MINE_MAIN: WorldTile = { x: 2700, z: 9683, level: 0 };
@@ -71,14 +72,6 @@ function snap(options: {
 const ALL_FISH: [number, number][] = [
     [FC_ID.SWORDFISH, 1], [FC_ID.BASS, 1], [FC_ID.TUNA, 1], [FC_ID.SALMON, 1], [FC_ID.SHRIMP, 1]
 ];
-
-function talkTarget(step: QuestStep): string | null {
-    return step.kind === 'talk' ? step.stop.npc : null;
-}
-
-function customName(step: QuestStep): string | null {
-    return step.kind === 'custom' ? step.name : null;
-}
 
 /**
  * Journal lines copied verbatim out of `quest_crest/scripts/crest_journal.rs2`,

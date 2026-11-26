@@ -1,7 +1,8 @@
 import { CASKET_IDS, CLUE_DB } from '../../api/ai/clues/data/cluedb.js';
 import { clueRequirements, missingClueRequirements } from '../../api/ai/clues/requirements.js';
 import { SUPERANTI } from '../../api/ai/clues/hardClueKit.js';
-import { QUESTS } from '../../api/ai/quests/data/quests.js';
+import { QUEST_POINT_PRIORITY, questPoints } from './questPoints.js';
+import { QUESTS, questRecord } from '../../api/ai/quests/data/quests.js';
 import type { QuestRecord } from '../../api/ai/quests/types.js';
 import Tile from '../../geometry/Tile.js';
 import { earlyMeleeStep, isMeleeSkill } from './priority.js';
@@ -14,7 +15,6 @@ export const HARD_CLUE_FARM = 'hard-clue-hellhounds';
 type Result = ActivityPlan | { reason: string };
 const guardianWeapons = ['Dragon dagger(p)', 'Dragon dagger', 'Dragon longsword'];
 const baseLevels = { attack: 60, strength: 60, defence: 60, hitpoints: 60, prayer: 43 };
-const questPointOrder = ['runemysteries', 'cook', 'doric', 'sheep', 'priest', 'haunted', 'hetty', 'romeojuliet', 'prince', 'hunt', 'gobdip', 'blackknight', 'vampire', 'squire', 'arthur'];
 const noWildQuests = new Set(['crest']);
 
 const clueIds = Object.keys({ ...CLUE_DB, ...CASKET_IDS }).map(Number);
@@ -46,9 +46,9 @@ function prepareQuest(s: LevelerSnapshot, quest: QuestRecord | undefined, memory
         const prerequisite = prepareQuest(s, QUESTS.find(candidate => candidate.id === id || candidate.name === id), memory, random, [...chain, quest.id]);
         if (prerequisite) return prerequisite;
     }
-    const points = s.questPoints ?? QUESTS.reduce((sum, candidate) => sum + (s.quests[candidate.name] ? candidate.questPoints : 0), 0);
+    const points = questPoints(s);
     if (points < (quest.requirements.minQuestPoints ?? 0)) {
-        const candidates = [...questPointOrder.map(id => QUESTS.find(candidate => candidate.id === id)!), ...QUESTS];
+        const candidates = [...QUEST_POINT_PRIORITY, ...QUESTS];
         for (const candidate of candidates) {
             if (!candidate || s.quests[candidate.name] || candidate.id === quest.id || chain.includes(candidate.id) || (candidate.requirements.minQuestPoints ?? 0) > points) continue;
             const plan = prepareQuest(s, candidate, memory, random, [...chain, quest.id]);
@@ -80,7 +80,7 @@ function farm(s: LevelerSnapshot, clueId?: number, abandon = false): ActivityPla
 export function hardCluePlan(s: LevelerSnapshot, memory: SessionMemory, random: () => number = Math.random): Result {
     const base = train(s, baseLevels, memory, random);
     if (base) return base;
-    const lostCity = prepareQuest(s, QUESTS.find(quest => quest.id === 'zanaris'), memory, random);
+    const lostCity = prepareQuest(s, questRecord('zanaris'), memory, random);
     if (lostCity) return lostCity;
     const needsWeapon = !guardianWeapons.some(name => stockOf(s, name) > 0);
     if (needsWeapon && stockOf(s, 'Dramen staff') < 1) return { reason: 'Need a Dramen staff to buy the hard clue guardian weapon; Lost City staff recovery is not supported' };
@@ -102,7 +102,7 @@ export function hardCluePlan(s: LevelerSnapshot, memory: SessionMemory, random: 
         ...(needsWeapon && stockOf(s, 'Diamond') < 1 ? { crafting: 43 } : {}) }, memory, random);
     if (supplies) return supplies;
     if (stockOf(s, 'Dragonfire shield') < 1 && !s.quests['Dragon Slayer']) {
-        const dragon = prepareQuest(s, QUESTS.find(quest => quest.id === 'dragon'), memory, random);
+        const dragon = prepareQuest(s, questRecord('dragon'), memory, random);
         if (dragon && (!('script' in dragon) || dragon.quest !== 'Dragon Slayer')) return dragon;
     }
     if (stockOf(s, 'Dusty key') < 1 || stockOf(s, 'Dragonfire shield') < 1) {

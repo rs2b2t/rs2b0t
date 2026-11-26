@@ -22,16 +22,7 @@ export function locateOnPath(tiles: PathTileLike[], me: PathTileLike, fromIdx: n
 }
 
 export function selectClickTarget(tiles: PathTileLike[], pathIdx: number, steps: number, limitIdx: number, level: number, isClickable: (t: PathTileLike) => boolean): number {
-    const top = Math.min(pathIdx + steps, limitIdx, tiles.length - 1);
-    for (let i = top; i > pathIdx; i--) {
-        if (tiles[i].level !== level) {
-            continue;
-        }
-        if (isClickable(tiles[i])) {
-            return i;
-        }
-    }
-    return -1;
+    return selectClientWalkTarget(tiles, pathIdx, steps, limitIdx, level, isClickable, () => true);
 }
 
 // Why: the scan runs far to near so a failed `tryMove` falls back to a closer path tile without waiting for stall ticks.

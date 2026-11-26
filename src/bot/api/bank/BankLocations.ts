@@ -1,4 +1,5 @@
 import type { WorldTile } from '../../adapter/ClientAdapter.js';
+import { BANK_STAND_COORDINATES } from '../../data/bankStandCoordinates.js';
 import { bankDistance } from '../../geometry/distance.js';
 import { SettingsStore } from '../../runtime/Settings.js';
 import { Quests } from '../ui/questlog/Quests.js';
@@ -57,51 +58,51 @@ export const USE_ZANARIS_BANK = 'useZanarisBank';
  * @see docs/reference/nav-walker.md#arrival
  */
 export const BANK_LOCATIONS: BankLocation[] = [
-    { name: 'Varrock East', tile: new Tile(3253, 3420, 0) },
-    { name: 'Varrock West', tile: new Tile(3185, 3440, 0) },
-    { name: 'Al Kharid', tile: new Tile(3269, 3167, 0) },
-    { name: 'Draynor', tile: new Tile(3093, 3243, 0) },
-    { name: 'Falador East', tile: new Tile(3013, 3355, 0) },
-    { name: 'Falador West', tile: new Tile(2946, 3369, 0) },
-    { name: 'Edgeville', tile: new Tile(3094, 3493, 0) },
-    { name: 'Seers', tile: new Tile(2725, 3491, 0) },
-    { name: 'Catherby', tile: new Tile(2809, 3441, 0) },
-    { name: 'Yanille', tile: new Tile(2612, 3092, 0) },
-    { name: 'Ardougne West', tile: new Tile(2616, 3332, 0) },
-    { name: 'Ardougne East', tile: new Tile(2655, 3283, 0) },
-    { name: 'Canifis', tile: new Tile(3512, 3480, 0), requires: { quest: 'Priest in Peril' } },
+    { name: 'Varrock East', tile: new Tile(...BANK_STAND_COORDINATES.varrockEast) },
+    { name: 'Varrock West', tile: new Tile(...BANK_STAND_COORDINATES.varrockWest) },
+    { name: 'Al Kharid', tile: new Tile(...BANK_STAND_COORDINATES.alKharid) },
+    { name: 'Draynor', tile: new Tile(...BANK_STAND_COORDINATES.draynor) },
+    { name: 'Falador East', tile: new Tile(...BANK_STAND_COORDINATES.faladorEast) },
+    { name: 'Falador West', tile: new Tile(...BANK_STAND_COORDINATES.faladorWest) },
+    { name: 'Edgeville', tile: new Tile(...BANK_STAND_COORDINATES.edgeville) },
+    { name: 'Seers', tile: new Tile(...BANK_STAND_COORDINATES.seers) },
+    { name: 'Catherby', tile: new Tile(...BANK_STAND_COORDINATES.catherby) },
+    { name: 'Yanille', tile: new Tile(...BANK_STAND_COORDINATES.yanille) },
+    { name: 'Ardougne West', tile: new Tile(...BANK_STAND_COORDINATES.ardougneWest) },
+    { name: 'Ardougne East', tile: new Tile(...BANK_STAND_COORDINATES.ardougneEast) },
+    { name: 'Canifis', tile: new Tile(...BANK_STAND_COORDINATES.canifis), requires: { quest: 'Priest in Peril' } },
     // Why: Shilo has no booth: `bank_store_icon` is the only bank loc in the mapsquare and the teller is `shilobanker` (npc 499), whose `op3=Bank` runs `@openbank`. Without npcAccess the booth query finds nothing and the bank never opens.
     // Why: the quest gate is the village itself: every tile is behind Vigroy's cart, and `shiloCartEdges` refuses the Brimhaven crossing until Shilo Village is complete.
     {
         name: 'Shilo Village',
-        tile: new Tile(2852, 2954, 0),
+        tile: new Tile(...BANK_STAND_COORDINATES.shiloVillage),
         requires: { quest: 'Shilo Village' },
         npcAccess: { name: 'Banker', op: 'Bank' }
     },
-    { name: 'Zanaris', tile: new Tile(3153, 9576, 0), requires: { quest: 'Lost City', setting: USE_ZANARIS_BANK }, npcAccess: { name: 'Banker', op: 'Bank' } },
-    { name: 'Fishing Guild', tile: new Tile(2586, 3420, 0), requires: { skill: { name: 'fishing', level: 68 } } },
-    { name: 'Legends Guild', tile: new Tile(2732, 3378, 2), requires: { quest: 'Legends Quest' }, npcAccess: { name: 'Banker', op: 'Bank' } },
+    { name: 'Zanaris', tile: new Tile(...BANK_STAND_COORDINATES.zanaris), requires: { quest: 'Lost City', setting: USE_ZANARIS_BANK }, npcAccess: { name: 'Banker', op: 'Bank' } },
+    { name: 'Fishing Guild', tile: new Tile(...BANK_STAND_COORDINATES.fishingGuild), requires: { skill: { name: 'fishing', level: 68 } } },
+    { name: 'Legends Guild', tile: new Tile(...BANK_STAND_COORDINATES.legendsGuild), requires: { quest: 'Legends Quest' }, npcAccess: { name: 'Banker', op: 'Bank' } },
     // Why: the live object is "Shantay chest" (id 2693) with Open; "Bank chest" with Use doesn't exist here, and neither does a Bank booth.
     {
         name: 'Shantay Pass',
-        tile: new Tile(3308, 3120, 0),
+        tile: new Tile(...BANK_STAND_COORDINATES.shantayPass),
         access: { name: 'Shantay chest', op: 'Open' }
     },
     // Why: Gundai's cellar, where magearena_ladder_to_cellar lands: slash the 2 bigweb_slashable webs along z=3957 and climb down at (3091,3958), all 3 baked as edges. Kolodion's arena teleport is unrelated.
     // Why: still gated, because that's ~level 55 Wilderness and the webs need a wielded slash weapon, so it must not win on distance for a script working elsewhere.
     {
         name: 'Mage Arena',
-        tile: new Tile(2542, 4714, 0),
+        tile: new Tile(...BANK_STAND_COORDINATES.mageArena),
         requires: { setting: USE_MAGE_BANK },
         approach: new Tile(3091, 3958, 0),
         npcAccess: { name: 'Gundai', op: 'Talk-to', choose: "I'd like to access my bank account" }
     },
     // Why: the Grand Tree 1F bank booths (SE of the trunk ladder) open without the Grand Tree quest, though the mine still requires it.
     // Why: the stand is in front of the south booth row.
-    { name: 'Grand Tree', tile: new Tile(2449, 3482, 1) },
+    { name: 'Grand Tree', tile: new Tile(...BANK_STAND_COORDINATES.grandTree) },
     {
         name: 'Duel Arena',
-        tile: new Tile(3382, 3269, 0),
+        tile: new Tile(...BANK_STAND_COORDINATES.duelArena),
         access: {
             name: 'Open chest',
             op: 'Bank',
@@ -111,6 +112,14 @@ export const BANK_LOCATIONS: BankLocation[] = [
 ];
 
 export { bankDistance };
+
+export function bankTile(bankName: string): Tile {
+    const loc = BANK_LOCATIONS.find(b => b.name === bankName);
+    if (!loc) {
+        throw new Error(`bankTile: unknown bank '${bankName}'`);
+    }
+    return loc.tile;
+}
 
 /** The tile a bank is walked to, its approach when it has one. */
 export function approachOf(bank: BankLocation): Tile {

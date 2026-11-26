@@ -27,6 +27,12 @@ describe('pickNearestPreferLocal', () => {
     test('empty candidates → null', () => {
         expect(pickNearestPreferLocal([], () => 0)).toBe(null);
     });
+
+    test('preferRadius 0 falls back to global nearest', () => {
+        const near = rock('near', 3);
+        const far = rock('far', 28);
+        expect(pickNearestPreferLocal([far, near], r => r.dist, 0)?.id).toBe('near');
+    });
 });
 
 describe('pickBucketNearest', () => {

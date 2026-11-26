@@ -2,11 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { buildCatalog, tradeable, worthStocking } from '#/bot/api/market/catalog.js';
 import { UNTRADEABLE_IDS } from '#/bot/data/untradeable.js';
-import type { ObjRecord } from '#/bot/adapter/ClientAdapter.js';
-
-function rec(id: number, name: string, over: Partial<ObjRecord> = {}): ObjRecord {
-    return { id, name, cost: 1, stackable: false, members: false, equippable: false, certlink: -1, certtemplate: -1, ...over };
-}
+import { rec } from '../fixtures/obj-record.js';
 
 describe('untradeable objs', () => {
     test('the list is sorted and has no repeats, so a lookup is decidable', () => {

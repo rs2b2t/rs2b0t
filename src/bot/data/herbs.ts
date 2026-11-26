@@ -10,21 +10,31 @@ export interface HerbDef {
     level: number;
 }
 
+export interface PotionHerb extends Pick<HerbDef, 'key' | 'name' | 'id'> {
+    unfId: number;
+}
+
+const potionHerbs: readonly (HerbDef & PotionHerb)[] = [
+    { key: 'guam', name: 'Guam leaf', id: 249, unidId: 199, level: 3, unfId: 91 },
+    { key: 'marrentill', name: 'Marrentill', id: 251, unidId: 201, level: 5, unfId: 93 },
+    { key: 'tarromin', name: 'Tarromin', id: 253, unidId: 203, level: 11, unfId: 95 },
+    { key: 'harralander', name: 'Harralander', id: 255, unidId: 205, level: 20, unfId: 97 },
+    { key: 'ranarr', name: 'Ranarr weed', id: 257, unidId: 207, level: 25, unfId: 99 },
+    { key: 'toadflax', name: 'Toadflax', id: 2998, unidId: 3049, level: 30, unfId: 3002 },
+    { key: 'irit', name: 'Irit leaf', id: 259, unidId: 209, level: 40, unfId: 101 },
+    { key: 'avantoe', name: 'Avantoe', id: 261, unidId: 211, level: 48, unfId: 103 },
+    { key: 'kwuarm', name: 'Kwuarm', id: 263, unidId: 213, level: 54, unfId: 105 },
+    { key: 'snapdragon', name: 'Snapdragon', id: 3000, unidId: 3051, level: 59, unfId: 3004 },
+    { key: 'cadantine', name: 'Cadantine', id: 265, unidId: 215, level: 65, unfId: 107 },
+    { key: 'lantadyme', name: 'Lantadyme', id: 2481, unidId: 2485, level: 67, unfId: 2483 },
+    { key: 'dwarf weed', name: 'Dwarf weed', id: 267, unidId: 217, level: 70, unfId: 109 },
+    { key: 'torstol', name: 'Torstol', id: 269, unidId: 219, level: 75, unfId: 111 }
+];
+
+export const POTION_HERBS: readonly PotionHerb[] = potionHerbs.map(({ key, name, id, unfId }) => ({ key, name, id, unfId }));
+
 export const HERBS: readonly HerbDef[] = [
-    { key: 'guam', name: 'Guam leaf', id: 249, unidId: 199, level: 3 },
-    { key: 'marrentill', name: 'Marrentill', id: 251, unidId: 201, level: 5 },
-    { key: 'tarromin', name: 'Tarromin', id: 253, unidId: 203, level: 11 },
-    { key: 'harralander', name: 'Harralander', id: 255, unidId: 205, level: 20 },
-    { key: 'ranarr', name: 'Ranarr weed', id: 257, unidId: 207, level: 25 },
-    { key: 'toadflax', name: 'Toadflax', id: 2998, unidId: 3049, level: 30 },
-    { key: 'irit', name: 'Irit leaf', id: 259, unidId: 209, level: 40 },
-    { key: 'avantoe', name: 'Avantoe', id: 261, unidId: 211, level: 48 },
-    { key: 'kwuarm', name: 'Kwuarm', id: 263, unidId: 213, level: 54 },
-    { key: 'snapdragon', name: 'Snapdragon', id: 3000, unidId: 3051, level: 59 },
-    { key: 'cadantine', name: 'Cadantine', id: 265, unidId: 215, level: 65 },
-    { key: 'lantadyme', name: 'Lantadyme', id: 2481, unidId: 2485, level: 67 },
-    { key: 'dwarf weed', name: 'Dwarf weed', id: 267, unidId: 217, level: 70 },
-    { key: 'torstol', name: 'Torstol', id: 269, unidId: 219, level: 75 },
+    ...potionHerbs.map(({ key, name, id, unidId, level }) => ({ key, name, id, unidId, level })),
     // Karamja herbs (ids verified against quest/JunglePotion defs).
     { key: 'snake weed', name: 'Snake weed', id: 1526, unidId: 1525, level: 3 },
     { key: 'ardrigal', name: 'Ardrigal', id: 1528, unidId: 1527, level: 3 },
@@ -34,3 +44,17 @@ export const HERBS: readonly HerbDef[] = [
 ];
 
 export const HERB_OPTIONS = HERBS.map(h => h.name);
+
+/** Find a herb by clean name (exact, then substring, then key), case-insensitive. */
+export function potionHerbByName(name: string): PotionHerb | null {
+    const wanted = name.trim().toLowerCase();
+    if (!wanted) {
+        return null;
+    }
+    return (
+        POTION_HERBS.find(h => h.name.toLowerCase() === wanted) ??
+        POTION_HERBS.find(h => h.name.toLowerCase().includes(wanted)) ??
+        POTION_HERBS.find(h => h.key.toLowerCase() === wanted) ??
+        null
+    );
+}

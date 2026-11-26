@@ -10,14 +10,13 @@ import { Skills } from '../../../../skills/Skills.js';
 import { Sustain } from '../../../../sustain/Sustain.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import { ChatDialog } from '../../../../ui/dialogue/ChatDialog.js';
-import { ITEM_DB } from '../../../../../data/itemdb.js';
+import { ITEMS_BY_ID } from '../../../../../data/itemIndex.js';
 import type Tile from '../../../../../geometry/Tile.js';
 import { driveDialog } from '../../exec/primitives.js';
 import { findSceneTarget } from '../../exec/prompts.js';
 import { FA_LOC, FA_OBJ, FA_TILE, pocketOf, type FaPocket } from './areas.js';
 import { PROTECT_LEVEL, PROTECT_MELEE, runFight, type ArenaFight } from './fights.js';
 
-const SLOT_BY_ID = new Map(ITEM_DB.filter(r => r.slot !== undefined).map(r => [r.id, r.slot]));
 const DISGUISE = new Set<number>([FA_OBJ.HELMET, FA_OBJ.ARMOUR]);
 
 // Why: equipping the Khazard pieces pushes whatever was worn into the pack, so the combat kit is already carried and the swap back needs no bank.
@@ -25,7 +24,7 @@ const DISGUISE = new Set<number>([FA_OBJ.HELMET, FA_OBJ.ARMOUR]);
 /** The pack's own hat and torso ids, hat first. */
 export function combatSwap(packIds: readonly number[]): number[] {
     const pick = (slot: string): number | undefined =>
-        packIds.find(id => !DISGUISE.has(id) && SLOT_BY_ID.get(id) === slot);
+        packIds.find(id => !DISGUISE.has(id) && ITEMS_BY_ID.get(id)?.slot === slot);
     return [pick('hat'), pick('torso')].filter((id): id is number => id !== undefined);
 }
 

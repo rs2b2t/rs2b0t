@@ -221,6 +221,10 @@ export default class Pix3D extends Pix2D {
 
     static initColourTable(brightness: number): void {
         const randomBrightness: number = brightness + Math.random() * 0.03 - 0.015;
+        const channels = new Int32Array(256);
+        for (let i = 0; i < channels.length; i++) {
+            channels[i] = this.gammaCorrectChannel(i, randomBrightness);
+        }
 
         let offset: number = 0;
         for (let y: number = 0; y < 512; y++) {
@@ -283,11 +287,10 @@ export default class Pix3D extends Pix2D {
                     }
                 }
 
-                const intR: number = (r * 256.0) | 0;
-                const intG: number = (g * 256.0) | 0;
-                const intB: number = (b * 256.0) | 0;
-                const rgb: number = (intR << 16) + (intG << 8) + intB;
-                this.colourTable[offset++] = this.gammaCorrect(rgb, randomBrightness);
+                const intR = channels[(r * 256.0) | 0];
+                const intG = channels[(g * 256.0) | 0];
+                const intB = channels[(b * 256.0) | 0];
+                this.colourTable[offset++] = (intR << 16) + (intG << 8) + intB;
             }
         }
 
@@ -298,15 +301,12 @@ export default class Pix3D extends Pix2D {
             }
 
             const palette: Int32Array = texture.bpal;
-            this.texPal[id] = new Int32Array(palette.length);
+            const texturePalette = new Int32Array(palette.length);
             for (let i: number = 0; i < palette.length; i++) {
-                const texturePalette: Int32Array | null = this.texPal[id];
-                if (!texturePalette) {
-                    continue;
-                }
-
-                texturePalette[i] = this.gammaCorrect(palette[i], randomBrightness);
+                const rgb = palette[i];
+                texturePalette[i] = (channels[rgb >> 16] << 16) + (channels[(rgb >> 8) & 0xff] << 8) + channels[rgb & 0xff];
             }
+            this.texPal[id] = texturePalette;
         }
 
         for (let id: number = 0; id < 50; id++) {
@@ -314,18 +314,14 @@ export default class Pix3D extends Pix2D {
         }
     }
 
+    private static gammaCorrectChannel(channel: number, gamma: number): number {
+        return (Math.pow(channel / 256.0, gamma) * 256.0) | 0;
+    }
+
     private static gammaCorrect(rgb: number, gamma: number): number {
-        const r: number = (rgb >> 16) / 256.0;
-        const g: number = ((rgb >> 8) & 0xff) / 256.0;
-        const b: number = (rgb & 0xff) / 256.0;
-
-        const powR: number = Math.pow(r, gamma);
-        const powG: number = Math.pow(g, gamma);
-        const powB: number = Math.pow(b, gamma);
-
-        const intR: number = (powR * 256.0) | 0;
-        const intG: number = (powG * 256.0) | 0;
-        const intB: number = (powB * 256.0) | 0;
+        const intR = this.gammaCorrectChannel(rgb >> 16, gamma);
+        const intG = this.gammaCorrectChannel((rgb >> 8) & 0xff, gamma);
+        const intB = this.gammaCorrectChannel(rgb & 0xff, gamma);
         return (intR << 16) + (intG << 8) + intB;
     }
 

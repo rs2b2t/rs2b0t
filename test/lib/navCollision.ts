@@ -1,8 +1,9 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { gunzipSync } from 'fflate';
+import { existsSync } from 'node:fs';
 
 import { PathFinder, type NavPoint } from '#/bot/event/webwalk/PathFinder.js';
 import { loadDefaultNavEdges } from '#/bot/event/webwalk/loadTransportGraph.js';
+
+import { readCollisionPack } from '../../tools/lib/readCollisionPack.js';
 
 const packPath = 'out/collision.lcnav.gz';
 export const hasCollisionPack = existsSync(packPath);
@@ -14,8 +15,7 @@ function finderFor(bytes: Uint8Array): PathFinder {
 }
 
 export function fullMapFinder(): PathFinder {
-    const bytes = readFileSync(packPath);
-    return finderFor(bytes[0] === 0x1f && bytes[1] === 0x8b ? gunzipSync(bytes) : bytes);
+    return finderFor(readCollisionPack(packPath));
 }
 
 export function isolatedLandingFinder(tiles: NavPoint[]): PathFinder {

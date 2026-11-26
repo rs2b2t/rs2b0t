@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { ITEMS_BY_ID, ITEMS_BY_NAME, ITEMS_BY_OBJ } from '#/bot/data/itemIndex.js';
 import { ITEM_DB } from '#/bot/data/itemdb.js';
 import { SLOTS } from '#/bot/api/loadout/types.js';
 
@@ -22,6 +23,16 @@ describe('ITEM_DB', () => {
 
     test('ids are unique', () => {
         expect(new Set(ITEM_DB.map(r => r.id)).size).toBe(ITEM_DB.length);
+    });
+
+    test('id and object keys resolve the same record, and duplicate names keep catalog order', () => {
+        for (const record of ITEM_DB) {
+            expect(ITEMS_BY_ID.get(record.id)).toBe(record);
+            expect(ITEMS_BY_OBJ.get(record.obj)).toBe(record);
+        }
+        for (const name of new Set(ITEM_DB.map(item => item.name.toLowerCase()))) {
+            expect(ITEMS_BY_NAME.get(name)).toEqual(ITEM_DB.filter(item => item.name.toLowerCase() === name));
+        }
     });
 
     test('the rune scimitar is a one-handed righthand weapon', () => {

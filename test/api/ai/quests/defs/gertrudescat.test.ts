@@ -1,3 +1,4 @@
+import { customName, itemCounts, nameCounts } from '../../../../lib/questSteps.js';
 import { describe, expect, test } from 'bun:test';
 
 import {
@@ -7,7 +8,7 @@ import {
     gertrudescat,
     parseGertrudesCatJournal
 } from '#/bot/api/ai/quests/defs/gertrudescat.js';
-import type { QuestProgress, QuestSnapshot, QuestStep } from '#/bot/api/ai/quests/engine/types.js';
+import type { QuestProgress, QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
 
 const ACCEPTED = "@str@I accepted the challenge of finding Gertrude's lost cat.";
 const SPOKE = "@str@I spoke to Shilop, Gertrude's Son.";
@@ -40,32 +41,15 @@ interface SnapshotOptions {
     progress?: QuestProgress | undefined;
 }
 
-function counts(names: string[]): Map<string, number> {
-    const result = new Map<string, number>();
-    for (const name of names) {
-        const key = name.toLowerCase();
-        result.set(key, (result.get(key) ?? 0) + 1);
-    }
-    return result;
-}
-
-function idCounts(ids: number[]): Map<number, number> {
-    const result = new Map<number, number>();
-    for (const id of ids) {
-        result.set(id, (result.get(id) ?? 0) + 1);
-    }
-    return result;
-}
-
 function snap(options: SnapshotOptions = {}): QuestSnapshot {
     const progress =
         'progress' in options ? options.progress : { stage: options.stage ?? FLUFFS_STAGE.STARTED, flags: new Set<string>() };
-    const inv = counts(options.inv ?? []);
+    const inv = nameCounts(options.inv ?? []);
     inv.set('coins', options.coins ?? 1000);
     return {
         journal: options.journal ?? 'inProgress',
         inv,
-        invIds: idCounts(options.invIds ?? []),
+        invIds: itemCounts(options.invIds ?? []),
         worn: new Set(),
         noProgress: 0,
         bankCoins: 2_000_000,
@@ -75,10 +59,6 @@ function snap(options: SnapshotOptions = {}): QuestSnapshot {
         bankKnown: true,
         freeSlots: 28
     };
-}
-
-function customName(step: QuestStep): string | null {
-    return step.kind === 'custom' ? step.name : null;
 }
 
 describe("Gertrude's Cat journal parsing", () => {

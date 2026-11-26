@@ -3,9 +3,8 @@
 
 //   bun --preload ./test/setup-dom.ts tools/nav/mainland-corpus.ts
 //   bun --preload ./test/setup-dom.ts tools/nav/mainland-corpus.ts --explain
+import { readCollisionPack } from '../lib/readCollisionPack.js';
 import fs from 'node:fs';
-
-import { gunzipSync } from 'fflate';
 
 import { PathFinder } from '#/bot/event/webwalk/PathFinder.js';
 import { loadDefaultNavEdges } from '#/bot/event/webwalk/loadTransportGraph.js';
@@ -28,11 +27,7 @@ if (!fs.existsSync(packPath)) {
     process.exit(2);
 }
 
-let bytes: Uint8Array = new Uint8Array(fs.readFileSync(packPath));
-if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-    bytes = gunzipSync(bytes);
-}
-const finder = new PathFinder(bytes);
+const finder = new PathFinder(readCollisionPack(packPath));
 loadDefaultNavEdges(finder);
 
 let fail = 0;

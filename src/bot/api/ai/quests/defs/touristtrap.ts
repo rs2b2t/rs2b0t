@@ -19,7 +19,7 @@ import { Reachability } from '../../../../event/webwalk/geometry/Reachability.js
 import { Sustain } from '../../../sustain/Sustain.js';
 import { Traversal } from '../../../walking/Traversal.js';
 import { GameMessages } from '../../../chatbox/gameMessages.js';
-import { QUESTS } from '../data/quests.js';
+import { questRecord } from '../data/quests.js';
 import { bankedName as banked, hasName as held, heldName as heldCount, wornName as worn } from '../engine/snapshotItems.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
 import { earnQuestCoinsStep } from '../exec/fundCoins.js';
@@ -2399,7 +2399,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const touristtrap: QuestModule = {
-    record: QUESTS.find(record => record.id === 'desertrescue')!,
+    record: questRecord('desertrescue'),
     bank: DRAYNOR_BANK,
     grind: ['Mercenary Captain'],
     tools: ['bronze pickaxe'],

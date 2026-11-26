@@ -1,5 +1,5 @@
 import { RUNES } from '../../data/runeCraftLocations.js';
-import { bankTile } from '../MuleCrafter/MuleCrafterLogic.js';
+import { bankTile } from '../../api/bank/BankLocations.js';
 import { FISH_RECIPES } from '../../data/fishingMethods.js';
 import { crowdBlocked } from './crowding.js';
 import { canStealChaos } from './runes.js';

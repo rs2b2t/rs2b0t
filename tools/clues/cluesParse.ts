@@ -76,18 +76,25 @@ export function parseClueObjs(text: string): Record<string, ParsedClueObj> {
 }
 
 const OPNPC_RE = /^\[opnpc\d+,([a-z0-9_]+)\]/;
+
+function* linesWithNpc(scriptText: string) {
+    let npc = '';
+    for (const raw of scriptText.split('\n')) {
+        const line = raw.trim();
+        const header = OPNPC_RE.exec(line);
+        if (header) {
+            npc = header[1];
+        }
+        yield { line, npc };
+    }
+}
+
 const progressRe = (tier: ClueTier): RegExp => new RegExp(`~progress_clue_${tier}\\(\\s*(trail_clue_${tier}_[a-z0-9]+)`);
 
 export function parseTalkMappings(scriptText: string, tier: ClueTier = 'easy'): TalkMapping[] {
     const re = progressRe(tier);
     const out: TalkMapping[] = [];
-    let npc = '';
-    for (const raw of scriptText.split('\n')) {
-        const line = raw.trim();
-        const h = OPNPC_RE.exec(line);
-        if (h) {
-            npc = h[1];
-        }
+    for (const { line, npc } of linesWithNpc(scriptText)) {
         const c = re.exec(line);
         if (c && npc) {
             out.push({ obj: c[1], npc });
@@ -102,13 +109,7 @@ const GIVE_PUZZLE_RE = /~give_trail_puzzle\(\s*(trail_clue_hard_[a-z0-9]+)_puzzl
  *  The handing NPC is the enclosing opnpc block, same attribution rule as parseTalkMappings. */
 export function parsePuzzleTalk(scriptText: string): PuzzleMapping[] {
     const out: PuzzleMapping[] = [];
-    let npc = '';
-    for (const raw of scriptText.split('\n')) {
-        const line = raw.trim();
-        const h = OPNPC_RE.exec(line);
-        if (h) {
-            npc = h[1];
-        }
+    for (const { line, npc } of linesWithNpc(scriptText)) {
         const g = GIVE_PUZZLE_RE.exec(line);
         if (g && npc) {
             out.push({ obj: g[1], npc, puzzleObj: `${g[1]}_puzzlebox` });
@@ -137,13 +138,7 @@ export function parseChallengeTalk(scriptText: string): TalkMapping[] {
     }
     const gate = /inv_total\(inv,\s*(trail_clue_medium_anagram\d+)\)/;
     const out: TalkMapping[] = [];
-    let npc = '';
-    for (const raw of scriptText.split('\n')) {
-        const line = raw.trim();
-        const h = OPNPC_RE.exec(line);
-        if (h) {
-            npc = h[1];
-        }
+    for (const { line, npc } of linesWithNpc(scriptText)) {
         const g = gate.exec(line);
         if (g && npc && challenge.has(g[1])) {
             out.push({ obj: g[1], npc });

@@ -3,38 +3,15 @@ import { describe, expect, test } from 'bun:test';
 import { SOA_ID } from '#/bot/api/ai/quests/defs/shieldofarrav/areas.js';
 import { blackarmStep } from '#/bot/api/ai/quests/defs/shieldofarrav/blackarm.js';
 import { SOA_STAGE } from '#/bot/api/ai/quests/defs/shieldofarrav/journal.js';
-import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
+
+import { arravSnapshot } from './shieldofarrav-snapshot.fixture.js';
 
 const ALLEY = { x: 3208, z: 3391, level: 0 };
+const at = arravSnapshot.bind(null, ALLEY);
 /** Inside the weapon store's ground-floor pocket, which only the store door leaves. */
 const STORE_GROUND = { x: 3251, z: 3384, level: 0 };
 /** The store's upper floor, where the crossbows spawn. */
 const STORE_UPPER = { x: 3251, z: 3384, level: 1 };
-
-function at(
-    stage: number,
-    flags: string[] = [],
-    ids: [number, number][] = [],
-    bankIds: [number, number][] = [],
-    bankKnown = true
-): QuestSnapshot {
-    return {
-        journal: 'inProgress',
-        inv: new Map(),
-        invIds: new Map(ids),
-        worn: new Set(),
-        wornIds: new Set(),
-        noProgress: 0,
-        bankCoins: 2_000_000,
-        bank: new Map(),
-        bankIds: new Map(bankIds),
-        bankKnown,
-        tile: ALLEY as QuestSnapshot['tile'],
-        freeSlots: 20,
-        stage,
-        progress: { stage, flags: new Set(flags) }
-    };
-}
 
 describe('black arm leg', () => {
     test('an unstarted quest talks to the Tramp', () => {
@@ -49,14 +26,12 @@ describe('black arm leg', () => {
 
     // Why: the regression, decide() preferred the hand-in the moment the crossbows landed, and the raid step was the only thing that ever tried to leave, so a failed crossing read "no path to Katrine: unreachable" forever.
     test('crossbows held inside the store pocket leave before the hand-in', () => {
-        const snap = at(SOA_STAGE.KATRINE_TASK, [], [[SOA_ID.CROSSBOW, 2]]);
-        snap.tile = STORE_GROUND as QuestSnapshot['tile'];
+        const snap = arravSnapshot(STORE_GROUND, SOA_STAGE.KATRINE_TASK, [], [[SOA_ID.CROSSBOW, 2]]);
         expect(blackarmStep(snap)).toMatchObject({ kind: 'custom', name: 'leave the weapon store' });
     });
 
     test('crossbows held upstairs in the store leave before the hand-in', () => {
-        const snap = at(SOA_STAGE.KATRINE_TASK, [], [[SOA_ID.CROSSBOW, 2]]);
-        snap.tile = STORE_UPPER as QuestSnapshot['tile'];
+        const snap = arravSnapshot(STORE_UPPER, SOA_STAGE.KATRINE_TASK, [], [[SOA_ID.CROSSBOW, 2]]);
         expect(blackarmStep(snap)).toMatchObject({ kind: 'custom', name: 'leave the weapon store' });
     });
 

@@ -2,8 +2,8 @@
  *  Nothing teleports onto the island: strip gear → Port Sarim monk stand (3048,3236) → walk to (2818,3351) → Monk Talk-to → deck → Cross gangplank. */
 
 //   ~/redeploy.sh && HEADED=1 bun e2e/entrana-gear-368-live.ts
-import type { Page } from 'playwright-core';
 import { launchBrowser, parseArgs } from './lib/harness.js';
+import { cheb, teleportForRoute } from './lib/teleport.js';
 import { createHarnessProof } from './lib/harnessProof.js';
 import { cheatQuiet, mainlandAccount, maxmeAndClearDialogs } from './tutorial/harness.js';
 
@@ -37,38 +37,6 @@ type Abi = {
 
 const proof = createHarnessProof({ issue: 368, slug: 'entrana-gear' });
 
-function cheb(a: Tile, b: Tile): number {
-    if (a.level !== b.level) {
-        return 9999;
-    }
-    return Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
-}
-
-function teleCmd(t: Tile): string {
-    return `tele ${t.level},${t.x >> 6},${t.z >> 6},${t.x & 63},${t.z & 63}`;
-}
-
-async function teleArrive(page: Page, spot: Tile, maxDist = 3): Promise<void> {
-    for (let a = 0; a < 8; a++) {
-        if (page.isClosed()) {
-            throw new Error('page closed before tele');
-        }
-        await cheatQuiet(page, teleCmd(spot));
-        for (let p = 0; p < 25; p++) {
-            if (page.isClosed()) {
-                throw new Error('page closed during tele settle');
-            }
-            const t = await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.reader.worldTile());
-            if (t && cheb(t, spot) <= maxDist) {
-                await page.waitForTimeout(600);
-                return;
-            }
-            await page.waitForTimeout(200);
-        }
-    }
-    throw new Error(`tele ${spot.x},${spot.z} failed`);
-}
-
 const browser = await launchBrowser({ swiftshader: true });
 const page = await browser.newPage();
 page.on('console', msg => {
@@ -89,7 +57,7 @@ try {
     console.log('emptied pack for monk search');
 
     console.log(`tele to monk stand ${MONK_STAND.x},${MONK_STAND.z}`);
-    await teleArrive(page, MONK_STAND, 3);
+    await teleportForRoute(page, MONK_STAND, 3);
     const here = await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.reader.worldTile());
     console.log(`at ${JSON.stringify(here)}`);
 

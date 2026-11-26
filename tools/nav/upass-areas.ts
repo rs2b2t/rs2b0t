@@ -1,19 +1,14 @@
 /** Flood Underground Pass pockets and derive crossing stands and landings. Run: bun tools/nav/upass-areas.ts [--stage 3] [--emit] */
+import { readCollisionPack } from '../lib/readCollisionPack.js';
 import fs from 'node:fs';
 import path from 'node:path';
-
-import { gunzipSync } from 'fflate';
 
 import { PathFinder, type NavPoint } from '#/bot/event/webwalk/PathFinder.js';
 
 const args = process.argv.slice(2);
 const stage = Number(args[args.indexOf('--stage') + 1] ?? 3);
 
-let bytes: Uint8Array = new Uint8Array(fs.readFileSync('out/collision.lcnav.gz'));
-if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-    bytes = gunzipSync(bytes);
-}
-const finder = new PathFinder(bytes);
+const finder = new PathFinder(readCollisionPack('out/collision.lcnav.gz'));
 const T = (x: number, z: number): NavPoint => ({ x, z, level: 0 });
 
 function routes(from: NavPoint, to: NavPoint): boolean {

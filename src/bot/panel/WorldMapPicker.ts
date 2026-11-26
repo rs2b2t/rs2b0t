@@ -1,6 +1,6 @@
 /** Tile-setting picker backed by collision.lcnav.gz, with an optional worldmap basemap. */
 // Why: paint only runs on input or a setting change, coalesced into one requestAnimationFrame, and basemap rebuild is manual, so opening the picker never spins MapView.
-import { gunzipSync } from 'fflate';
+import { decodeCollisionPack } from '../event/webwalk/decodeCollisionPack.js';
 import { PathFinder } from '../event/webwalk/PathFinder.js';
 import { WALK_DESTINATIONS } from '../api/map/WalkDestinations.js';
 import { Game } from '../api/game/Game.js';
@@ -62,10 +62,7 @@ async function loadFinder(): Promise<PathFinder> {
             if (!res.ok) {
                 throw new Error(`collision pack HTTP ${res.status}`);
             }
-            let bytes: Uint8Array = new Uint8Array(await res.arrayBuffer());
-            if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-                bytes = Uint8Array.from(gunzipSync(bytes));
-            }
+            const bytes = decodeCollisionPack(new Uint8Array(await res.arrayBuffer()));
             return new PathFinder(bytes);
         })().catch(err => {
             finderPromise = null;
@@ -240,7 +237,7 @@ function paintYouAreHere(
 /** Load the basemap once per page without running MapView: an IndexedDB hit on matching CRC + bake prefs wins, then the local copy marked `crc-unverified` when `/crc` is unavailable, then the deploy PNG with a Rebuild hint when CRC or prefs mismatch. Manual Rebuild always regenerates and overwrites the local entry. */
 async function loadBasemap(): Promise<LoadedBasemap | null> {
     if (!basemapPromise) {
-        basemapPromise = (async () => {
+        const pending = (async () => {
             const crcKey = await fetchClientCrcKey();
             const local = await readBasemapLocalCache();
             const prefsKey = prefsKeyFromBakePrefs(resolveBasemapBakePrefs());
@@ -297,9 +294,12 @@ async function loadBasemap(): Promise<LoadedBasemap | null> {
 
             return null;
         })().catch(() => {
-            basemapPromise = null;
+            if (basemapPromise === pending) {
+                basemapPromise = null;
+            }
             return null;
         });
+        basemapPromise = pending;
     }
     return basemapPromise;
 }
@@ -1157,7 +1157,7 @@ export class WorldMapPicker {
             // Cache or deploy PNG only, never MapView on open; fetch even when the basemap is hidden so enabling it mid-session is free.
             void loadBasemap()
                 .then(bm => {
-                    if (closed) {
+                    if (closed || basemap) {
                         return;
                     }
                     if (bm) {
@@ -1172,7 +1172,7 @@ export class WorldMapPicker {
                     requestPaint();
                 })
                 .catch(() => {
-                    if (closed) {
+                    if (closed || basemap) {
                         return;
                     }
                     basemapState = 'error';

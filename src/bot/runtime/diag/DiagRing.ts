@@ -74,23 +74,21 @@ export class DiagRing {
         if (col === undefined) {
             throw new RangeError(`unknown diagnostics field "${field}"`);
         }
-        const len = this.length;
-        const out = new Float64Array(len);
-        const stride = this.fields.length;
-        const start = this.writes - len;
-        for (let i = 0; i < len; i++) {
-            out[i] = this.data[((start + i) % this.capacity) * stride + col];
-        }
-        return out;
+        return this.copyColumn(this.data, this.fields.length, col);
     }
 
     /** Sample timestamps aligned 1:1 with `series()`. */
     timestamps(): Float64Array {
+        return this.copyColumn(this.stamps, 1, 0);
+    }
+
+    private copyColumn(buffer: Float64Array, stride: number, col: number): Float64Array {
         const len = this.length;
         const out = new Float64Array(len);
         const start = this.writes - len;
         for (let i = 0; i < len; i++) {
-            out[i] = this.stamps[(start + i) % this.capacity];
+            const slot = (start + i) % this.capacity;
+            out[i] = buffer[slot * stride + col];
         }
         return out;
     }

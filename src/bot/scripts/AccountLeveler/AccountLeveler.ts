@@ -52,7 +52,7 @@ import { gameSupplyPort, provision, SupplyUnavailableError, SupplyStockError } f
 import { auditSupplies, SHOPPING_RESERVE } from './shopping.js';
 import { ActionQueue, activityActions, describeActivity, type ActionEvent } from './actions.js';
 import { paintLeveler } from './paint.js';
-import { herbByName } from '../PotionMaker/PotionMakerLogic.js';
+import { potionHerbByName } from '../../data/herbs.js';
 import { canResumeObjective, meleeStepMet } from './priority.js';
 import { bankedStockOf, banksGatheredResource, requirementKey, stockOf, type ActivityPlan, type Decision, type LevelerSnapshot, type Requirement, type SessionMemory } from './types.js';
 
@@ -252,7 +252,7 @@ export default class AccountLeveler extends LoopingBot {
             if (saleResult !== undefined && saleResult !== SUPPLIER_LOT_SOLD) this.session.memory.cooldowns[plan.id] = Date.now() + 15 * 60000;
             const reached = saleResult !== undefined || this.reached(plan, snapshot);
             const meleeMilestone = meleeStepMet(plan, snapshot.levels);
-            const pendingPotions = plan.script === 'PotionMaker' && Inventory.countById(herbByName(String(plan.settings.herb))?.unfId ?? 91) > 0;
+            const pendingPotions = plan.script === 'PotionMaker' && Inventory.countById(potionHerbByName(String(plan.settings.herb))?.unfId ?? 91) > 0;
             const remaining = (need: Requirement) => stockOf(snapshot, requirementKey(need)) + (plan.script === 'Alcher' || plan.script === 'JiveRC' && need.item === 'Rune essence'
                 ? Inventory.items().filter(item => item.noted && (need.id === undefined ? item.name?.toLowerCase() === need.item.toLowerCase() : item.id === liveCatalog().notedOf.get(need.id))).reduce((count, item) => count + item.count, 0) : 0);
             const exhausted = !pendingPotions && plan.needs.some(need => need.minimum !== undefined

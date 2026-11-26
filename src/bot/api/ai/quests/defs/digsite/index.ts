@@ -1,6 +1,6 @@
-import { customStep as custom, waitForJournal, waitStep } from '../../engine/questSteps.js';
+import { customStep as custom, decideJournalStage, waitStep } from '../../engine/questSteps.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
-import { QUESTS } from '../../data/quests.js';
+import { questRecord } from '../../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { DIG_ID, DIG_ITEM, DIG_NPC, DIG_TILE, DIG_ZONE, inAltarCave, inDigCave, inShaftWest } from './areas.js';
 import { barrelLeg, blastLeg, chestLeg, leaveCaveStep, mixStep, tabletLeg, westShaftLeg } from './caves.js';
@@ -315,16 +315,10 @@ function plan(snap: QuestSnapshot, stage: number, underground: boolean): QuestSt
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
-    if (snap.journal === 'unknown') {
-        return waitForJournal();
-    }
-    if (snap.journal === 'complete') {
-        return { kind: 'done' };
-    }
-    const stage = snap.progress?.stage ?? snap.stage;
-    if (stage === undefined) {
-        return waitStep('quest stage not readable');
-    }
+    return decideJournalStage(snap, decideStage);
+}
+
+function decideStage(snap: QuestSnapshot, stage: number): QuestStep {
     // Why: `ownsInventory` skips the engine's provisioning, so nothing else opens a booth and a banked trowel or vial stays invisible until one read happens.
     if (!snap.bankKnown) {
         return { kind: 'scanBank', bank: DIG_TILE.VARROCK_BANK };
@@ -346,7 +340,7 @@ function region(snap: QuestSnapshot): string {
 }
 
 export const digsite: QuestModule = {
-    record: QUESTS.find(r => r.id === 'itexam')!,
+    record: questRecord('itexam'),
     // Why: the quest sits between Varrock and the dig site, and the east booth is the only one either end walks past.
     bank: DIG_TILE.VARROCK_BANK,
     // Why: 9 of the 10 items are stolen, panned, dug or mixed at the stage that needs them, which the engine's up-front provisioning can't express.

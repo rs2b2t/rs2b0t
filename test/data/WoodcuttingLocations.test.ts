@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'bun:test';
-import { BANK_LOCATIONS } from '#/bot/api/bank/BankLocations.js';
 import Tile from '#/bot/geometry/Tile.js';
 import {
     WOODCUTTING_LOCATIONS,
@@ -10,8 +9,7 @@ import {
     isEntNpcId,
     entNpcOnTile
 } from '#/bot/data/woodcuttingLocations.js';
-
-const bankTiles = new Set(BANK_LOCATIONS.map(b => `${b.tile.x},${b.tile.z},${b.tile.level}`));
+import { expectKnownBankStands } from './expectKnownBankStands.js';
 
 describe('resolveWoodcuttingLocation', () => {
     test('Use Start Position and Use Custom Position are freeform (null)', () => {
@@ -54,10 +52,7 @@ describe('WOODCUTTING_LOCATIONS table', () => {
     });
 
     test('every bankStand is a known BANK_LOCATIONS tile', () => {
-        for (const loc of WOODCUTTING_LOCATIONS) {
-            const key = `${loc.bankStand.x},${loc.bankStand.z},${loc.bankStand.level}`;
-            expect(bankTiles.has(key), `${loc.name} bank ${key}`).toBe(true);
-        }
+        expectKnownBankStands(WOODCUTTING_LOCATIONS);
     });
 
     test('core catalog entries are verified; tick-manip camps may be provisional', () => {

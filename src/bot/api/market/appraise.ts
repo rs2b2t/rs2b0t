@@ -1,9 +1,9 @@
 import { displayName, unnotedId, type Catalog } from './catalog.js';
-import { rowOf, type PriceBook } from './priceBook.js';
-import { resolvePrices, rowValid } from './prices.js';
+import type { PriceBook } from './priceBook.js';
+import { resolvePrices, tradeRow } from './prices.js';
 import { formatGp, truncateChat } from './chatProtocol.js';
 import type { OfferItem, ValuedLine } from './quote.js';
-import { saleItems, saleName, salePrice, saleStock, type SellIntent } from './saleIntent.js';
+import { saleItems, saleName, salePrice, saleQuantity, saleStock, type SellIntent } from './saleIntent.js';
 
 export type { SellIntent } from './saleIntent.js';
 
@@ -54,8 +54,8 @@ function fold(cat: Catalog, items: readonly OfferItem[], coinId: number) {
 
 /** The unit price, or null when the book will not trade that item that way. */
 function priceOf(book: PriceBook, id: number, side: 'buying' | 'selling'): number | null {
-    const row = rowOf(book, id);
-    if (!row || !rowValid(book, row) || !row[side]) {
+    const row = tradeRow(book, id, side);
+    if (!row) {
         return null;
     }
     const { buy, sell } = resolvePrices(book, row);
@@ -107,7 +107,7 @@ function sale(
         return nothing(ignored, `I don't sell ${name} any more`);
     }
 
-    const qty = Math.min(intent.maxQty, saleStock(intent, desk.available), Math.floor(book.maxTradeValue / each));
+    const qty = saleQuantity(intent.maxQty, saleStock(intent, desk.available), each, book.maxTradeValue);
     if (qty <= 0) {
         return nothing(ignored, `I'm out of ${name}`);
     }
@@ -150,9 +150,9 @@ function purchase(
     let note: string | null = null;
 
     for (const [id, { name, count }] of goods) {
-        const each = priceOf(book, id, 'buying');
-        const row = rowOf(book, id);
-        const take = each === null || !row ? 0 : Math.min(count, Math.max(0, row.cap - desk.held(id)));
+        const row = tradeRow(book, id, 'buying');
+        const each = row ? resolvePrices(book, row).buy : null;
+        const take = row ? Math.min(count, Math.max(0, row.cap - desk.held(id))) : 0;
         if (take < count) {
             ignored.push({ name, count: count - take });
             if (each !== null) {

@@ -7,11 +7,12 @@ import { Skills } from '../../../skills/Skills.js';
 import { Npcs } from '../../../npcs/Npcs.js';
 import { Traversal } from '../../../walking/Traversal.js';
 import Tile from '../../../../geometry/Tile.js';
+import { ITEMS_BY_ID } from '../../../../data/itemIndex.js';
 import { ITEM_DB } from '../../../../data/itemdb.js';
 import { afterDialogueAction, gotoNpc, talkThrough, type NpcStop } from '../exec/primitives.js';
 import { executeStep } from '../exec/steps.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
-import { QUESTS } from '../data/quests.js';
+import { questRecord } from '../data/quests.js';
 import { QuestFood } from '../food.js';
 import { questDone, wieldable } from '../weapons.js';
 import { farmGoblinMail, inGoblinMailField, resetGoblinMailCombat } from './goblindiplomacy/combat.js';
@@ -299,7 +300,7 @@ export function goblinMailGatherStep(snap: QuestSnapshot, need = 1): QuestStep {
             if ((snap.invIds?.get(weapon.id) ?? snap.inv.get(weapon.name.toLowerCase()) ?? 0) > 0) {
                 const displaced = new Set(ITEM_DB.filter(item => (item.slot === 'righthand' || item.slot === 'lefthand')
                     && (snap.wornIds?.has(item.id) || snap.worn.has(item.name.toLowerCase()))).map(item => item.slot)).size;
-                if (ITEM_DB.find(item => item.id === weapon.id)?.twoHanded && displaced > (snap.freeSlots ?? 28) + 1) {
+                if (ITEMS_BY_ID.get(weapon.id)?.twoHanded && displaced > (snap.freeSlots ?? 28) + 1) {
                     return foodAcquisitionSpace(snap, displaced - 1)!;
                 }
                 return { kind: 'equip', item: weapon.name };
@@ -430,7 +431,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const goblindiplomacy: QuestModule = {
-    record: QUESTS.find(r => r.id === 'gobdip')!,
+    record: questRecord('gobdip'),
     bank: DRAYNOR_BANK,
     onStart: resetGoblinMailCombat,
     sustain: { foods: [FALLBACK_FOOD], eatBelowHp: 0.6 },

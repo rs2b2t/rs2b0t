@@ -1,5 +1,6 @@
 import type { WorldTile } from '../adapter/ClientAdapter.js';
 import Tile from '../geometry/Tile.js';
+import { BANK_STAND_COORDINATES } from './bankStandCoordinates.js';
 
 export const SHILO_WATER_VENDOR = { keeper: 'Obli', stand: new Tile(2825, 2959, 0), item: 'Vial of water' } as const;
 import { cookSurfaceForFishCamp } from './cookingRanges.js';
@@ -36,14 +37,14 @@ function withCampCook(loc: FishingLocation): FishingLocation {
 }
 
 const BANK = {
-    draynor: new Tile(3093, 3243, 0),
-    catherby: new Tile(2809, 3441, 0),
-    fishingGuild: new Tile(2586, 3420, 0),
-    edgeville: new Tile(3094, 3493, 0),
-    seers: new Tile(2725, 3491, 0),
-    faladorWest: new Tile(2946, 3369, 0),
-    grandTree: new Tile(2449, 3482, 1),
-    shilo: new Tile(2852, 2954, 0)
+    draynor: new Tile(...BANK_STAND_COORDINATES.draynor),
+    catherby: new Tile(...BANK_STAND_COORDINATES.catherby),
+    fishingGuild: new Tile(...BANK_STAND_COORDINATES.fishingGuild),
+    edgeville: new Tile(...BANK_STAND_COORDINATES.edgeville),
+    seers: new Tile(...BANK_STAND_COORDINATES.seers),
+    faladorWest: new Tile(...BANK_STAND_COORDINATES.faladorWest),
+    grandTree: new Tile(...BANK_STAND_COORDINATES.grandTree),
+    shilo: new Tile(...BANK_STAND_COORDINATES.shiloVillage)
 } as const;
 
 export const FISHING_LOCATIONS: FishingLocation[] = (

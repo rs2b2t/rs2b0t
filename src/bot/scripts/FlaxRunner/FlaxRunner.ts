@@ -1,3 +1,4 @@
+import { CARVE_DROP, carveFlaxPocket, flaxAt, flaxBlocksExit } from '../../api/acquisition/flaxPocket.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { Game, waitForPlayerTile } from '../../api/game/Game.js';
@@ -24,7 +25,7 @@ import {
     MEET_TILE, TRADE_RANGE, TRADE_REQUEST_COOLDOWN_MS, TRADE_FAIL_COOLDOWN_MS,
     FLAX, BOW_STRING, SPINNING_WHEEL, SPIN_OP, PICK_OP,
     BOOTH_NAME, LADDER_NAME, CLIMB_UP, CLIMB_DOWN, FIELD_SCOPE, FIELD_ARRIVE,
-    LOCAL_PICK_RADIUS, POCKET_CAP, CARVE_DROP,
+    LOCAL_PICK_RADIUS,
     partnerNameMatches, flaxUnitsInOffer, spinnerNeedsClearPack, canReceiveFlaxOffer,
 } from './FlaxRunnerLogic.js';
 import { driveActivePartnerTrade } from '../../api/trade/drivePartnerTrade.js';
@@ -320,11 +321,7 @@ export default class FlaxRunner extends TaskBot {
     }
 
     flaxLocAt(x: number, z: number, level: number): Loc | null {
-        return Locs.query()
-            .name(FLAX)
-            .action(PICK_OP)
-            .where(l => l.tile().x === x && l.tile().z === z && l.tile().level === level)
-            .nearest();
+        return flaxAt(FLAX, PICK_OP, x, z, level);
     }
 
     flaxStillAt(tile: { x: number; z: number; level: number }): boolean {
@@ -384,47 +381,6 @@ export default class FlaxRunner extends TaskBot {
         this.stickyFlax = null;
     }
 
-    private pocketTiles(cap: number): { x: number; z: number }[] {
-        const me = Game.tile();
-        if (!me) return [];
-        const level = me.level;
-        const key = (x: number, z: number): string => `${x},${z}`;
-        const seen = new Set<string>([key(me.x, me.z)]);
-        const out: { x: number; z: number }[] = [{ x: me.x, z: me.z }];
-        const queue: { x: number; z: number }[] = [{ x: me.x, z: me.z }];
-        const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-        while (queue.length > 0 && out.length < cap) {
-            const cur = queue.shift()!;
-            const from = { x: cur.x, z: cur.z, level };
-            for (const [dx, dz] of dirs) {
-                const nx = cur.x + dx, nz = cur.z + dz, k = key(nx, nz);
-                if (seen.has(k) || !Reachability.canStep(from, { x: nx, z: nz, level })) continue;
-                seen.add(k);
-                out.push({ x: nx, z: nz });
-                queue.push({ x: nx, z: nz });
-            }
-        }
-        return out;
-    }
-
-    private boundaryFlax(pocket: { x: number; z: number }[]): Loc[] {
-        const level = Game.tile()?.level ?? 0;
-        const inPocket = new Set(pocket.map(t => `${t.x},${t.z}`));
-        const seen = new Set<string>();
-        const walls: Loc[] = [];
-        const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-        for (const p of pocket) {
-            for (const [dx, dz] of dirs) {
-                const nx = p.x + dx, nz = p.z + dz, k = `${nx},${nz}`;
-                if (inPocket.has(k) || seen.has(k)) continue;
-                seen.add(k);
-                const flax = this.flaxLocAt(nx, nz, level);
-                if (flax) walls.push(flax);
-            }
-        }
-        return walls;
-    }
-
     /**
      * Full pack (or delivering) and reachable ground is a small pocket walled by flax.
      * 2004 flax is solid collision. The runner can be sealed in as plants respawn.
@@ -432,45 +388,17 @@ export default class FlaxRunner extends TaskBot {
     boxedByFlax(): boolean {
         if (!this.atField()) return false;
         if (!Inventory.isFull() && !this.readyToDeliver()) return false;
-        const pocket = this.pocketTiles(POCKET_CAP);
-        return pocket.length < POCKET_CAP && this.boundaryFlax(pocket).length > 0;
-    }
-
-    private async dropFlax(n: number): Promise<void> {
-        for (let i = 0; i < n; i++) {
-            const flax = Inventory.items().find(it => this.isFlax(it.name));
-            if (!flax) return;
-            const before = flaxCount();
-            if (!(await flax.interact('Drop'))) return;
-            await Execution.delayUntilTicks(() => flaxCount() < before, 4);
-        }
+        return flaxBlocksExit(FLAX, PICK_OP);
     }
 
     async carveOut(): Promise<void> {
         this.setStatus('boxed in by flax — carving a way out');
         this.log(`boxed in by flax — dropping ${CARVE_DROP} flax to pick a path toward the gate`);
         this.clearStickyFlax();
-        await this.dropFlax(CARVE_DROP);
-        for (let n = 0; n < 20; n++) {
-            if (ChatDialog.canContinue() || EventSignal.pending()) return;
-            const pocket = this.pocketTiles(POCKET_CAP);
-            if (pocket.length >= POCKET_CAP) {
-                this.log('carved back out to open ground');
-                return;
-            }
-            const walls = this.boundaryFlax(pocket);
-            if (walls.length === 0) return; // map wall, not flax
-            if (Inventory.isFull()) await this.dropFlax(CARVE_DROP);
-            const target = walls.sort(
-                (a, b) => a.tile().distanceTo(FLAX_GATE) - b.tile().distanceTo(FLAX_GATE),
-            )[0];
-            const t = target.tile();
-            if (!(await target.interact(PICK_OP))) {
-                await Execution.delayTicks(2);
-                continue;
-            }
-            await Execution.delayUntilTicks(() => !this.flaxStillAt(t), 7);
-        }
+        await carveFlaxPocket({
+            name: FLAX, op: PICK_OP, gate: FLAX_GATE,
+            timing: 'ticks', log: m => this.log(m)
+        });
     }
 
     nearestPartner(): Player | null {

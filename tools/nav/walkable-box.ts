@@ -2,9 +2,7 @@
  *  Why: a stand the pack calls walkable can still sit where the live client refuses every click, and the first thing to check is which tiles the two disagree on. */
 
 //   bun tools/nav/walkable-box.ts --at 2854,2974,0 --radius 6 --to 2870,2971,0
-import fs from 'node:fs';
-
-import { gunzipSync } from 'fflate';
+import { readCollisionPack } from '../lib/readCollisionPack.js';
 
 import { PathFinder, type NavPoint } from '#/bot/event/webwalk/PathFinder.js';
 import { loadDefaultNavEdges } from '#/bot/event/webwalk/loadTransportGraph.js';
@@ -35,11 +33,7 @@ for (let i = 0; i < args.length; i++) {
     }
 }
 
-let bytes: Uint8Array = new Uint8Array(fs.readFileSync(packPath));
-if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-    bytes = gunzipSync(bytes);
-}
-const finder = new PathFinder(bytes);
+const finder = new PathFinder(readCollisionPack(packPath));
 loadDefaultNavEdges(finder);
 
 const onPath = new Set<string>();

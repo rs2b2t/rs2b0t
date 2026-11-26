@@ -10,6 +10,7 @@ import OnDemand from '#/client/io/OnDemand.js';
 import { installWallTrafficChannel } from '#/client/io/TrafficChannel.js';
 import { Client } from '#/client/shell/Client.js';
 import ClientBuild from '#/client/shell/ClientBuild.js';
+import * as JsUtil from '#/client/util/JsUtil.js';
 
 const originalWorker = globalThis.Worker;
 
@@ -31,7 +32,7 @@ const versionlist = {
 
 class WorkerFixture {
     constructor(_url: URL, readonly options: WorkerOptions) {}
-    postMessage(_message: { type: string; id?: number }) {}
+    postMessage(_message: { type: string; id?: number; archive?: number; file?: number }) {}
     terminate() {}
 }
 
@@ -47,7 +48,7 @@ function failWorker(loader: OnDemand) {
 function completeFile(loader: OnDemand, archive: number, file: number, data: Uint8Array | null) {
     let buffer: ArrayBuffer | null = null;
     if (data) {
-        const compressed = gzipSync(data);
+        const compressed = gzipSync(data, { mtime: 0 });
         const payload = new Uint8Array(compressed.length + 2);
         payload.set(compressed);
         buffer = payload.buffer;
@@ -114,6 +115,97 @@ test('worker load failure reaches the startup error screen while requesting anim
     await client.mainredraw();
     expect(drawError).toHaveBeenCalledTimes(1);
 });
+
+async function checkStartupAssets(optional: boolean, responseDelay?: number) {
+    const files = {
+        read(name: string) {
+            if (name.endsWith('_version')) return Uint8Array.of(0, 1);
+            if (name.endsWith('_crc')) return new Uint8Array(4);
+            if (name === 'model_index') return Uint8Array.of(1);
+            if (name === 'map_index') return Uint8Array.of(48, 47, 0, 0, 0, 0, 0);
+            return new Uint8Array();
+        }
+    } as JagFile;
+    spyOn(Database, 'openDatabase').mockResolvedValue({} as IDBDatabase);
+    spyOn(PixFont, 'depack').mockReturnValue(new PixFont());
+    spyOn(AnimFrame, 'init').mockImplementation(() => {});
+    spyOn(Model, 'init').mockImplementation(() => {});
+    const animation = spyOn(AnimFrame, 'unpack').mockImplementation(() => {});
+    const model = spyOn(Model, 'unpack').mockImplementation(() => {});
+    const saveMidi = mock((_data: Uint8Array, _fading: boolean) => {});
+    const progress: [string, number][] = [];
+    let deliver: (() => void) | undefined;
+    let start = 0;
+    let elapsed = 0;
+    const client: Client = Object.assign(Object.create(Client.prototype), {
+        collision: [], midiActive: optional, searchParams: new URLSearchParams(optional ? '' : 'box'),
+        sceneState: 1, mapBuildGroundFile: [0], mapBuildGroundData: [null], mapBuildLocationData: [null],
+        getJagChecksums() {}, getJagFile: () => files, loadTitleBackground() {}, loadTitleImages() {},
+        saveMidi,
+        async onDemandLoop() {
+            await Client.prototype.onDemandLoop.call(client);
+            deliver?.();
+            deliver = undefined;
+        },
+        drawProgress(message: string, percent: number) {
+            progress.push([message, percent]);
+            if (percent === 65) start = performance.now();
+            if (percent === 80) {
+                elapsed = performance.now() - start;
+                throw new Error('End of asset stages');
+            }
+        }
+    });
+    spyOn(console, 'error').mockImplementation(() => {});
+    const requests: number[][] = [];
+    spyOn(WorkerFixture.prototype, 'postMessage').mockImplementation((message) => {
+        if (message.type === 'prefetchPriority') {
+            client['onDemand']!.worker!.onmessage!(new MessageEvent('message', { data: { type: 'ack', id: message.id } }));
+        } else if (message.type === 'request' && message.archive !== undefined && message.file !== undefined) {
+            const { archive, file } = message;
+            requests.push([archive, file]);
+            const reply = () => completeFile(client['onDemand']!, archive, file, Uint8Array.of(archive, file));
+            if (responseDelay === undefined) deliver = reply;
+            else setTimeout(reply, responseDelay);
+        }
+    });
+    const sleep = JsUtil.sleep;
+    const sleeps: number[][] = [];
+    spyOn(JsUtil, 'sleep').mockImplementation(async ms => {
+        sleeps.push([client['onDemand']!.remaining(), ms]);
+        if (responseDelay !== undefined) await sleep(ms);
+    });
+
+    await client.maininit();
+
+    const stages: [string, number][] = [['Connecting to update server', 60], ['Requesting animations', 65], ['Requesting models', 70]];
+    if (optional) stages.push(['Requesting maps', 75]);
+    expect(progress).toEqual([...stages, ['Unpacking media', 80]]);
+    expect(requests).toEqual(optional ? [[2, 0], [1, 0], [0, 0], [3, 0]] : [[1, 0], [0, 0]]);
+    expect(animation.mock.calls).toEqual([[Uint8Array.of(1, 0)]]);
+    expect(model.mock.calls).toEqual([[0, Uint8Array.of(0, 0)]]);
+    expect(saveMidi.mock.calls).toEqual(optional ? [[Uint8Array.of(2, 0), true]] : []);
+    expect(client['mapBuildGroundData']).toEqual([optional ? Uint8Array.of(3, 0) : null]);
+    expect(client['onDemand']!.remaining()).toBe(0);
+    return { sleeps, elapsed };
+}
+
+test.each([
+    { stages: 'animation and model', optional: false },
+    { stages: 'music, animation, model and map', optional: true }
+])('startup polls only pending assets for $stages', async ({ optional }) => {
+    const { sleeps } = await checkStartupAssets(optional);
+    expect(sleeps).toEqual(Array(optional ? 4 : 2).fill([1, 100]));
+});
+
+const benchmarkDelay = process.env.STARTUP_POLL_BENCH_MS;
+if (benchmarkDelay) {
+    test('measure animation and model polling', async () => {
+        const { elapsed, sleeps } = await checkStartupAssets(false, Number(benchmarkDelay));
+        const empty = sleeps.filter(([remaining]) => remaining === 0).length;
+        console.log('sample', elapsed, empty, sleeps.length - empty);
+    });
+}
 
 test('pending and subsequent priority prefetches settle after worker load failure', async () => {
     spyOn(console, 'error').mockImplementation(() => {});

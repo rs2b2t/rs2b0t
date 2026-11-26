@@ -1,3 +1,4 @@
+import { nameCounts } from '../../../../lib/questSteps.js';
 import { beforeEach, describe, expect, test } from 'bun:test';
 
 import { armourWanted, resetUnwearable } from '#/bot/api/ai/quests/defs/holygrail/armour.js';
@@ -15,28 +16,19 @@ interface Options {
     tile?: { x: number; z: number; level: number } | null;
 }
 
-function counts(names: string[]): Map<string, number> {
-    const out = new Map<string, number>();
-    for (const name of names) {
-        const key = name.toLowerCase();
-        out.set(key, (out.get(key) ?? 0) + 1);
-    }
-    return out;
-}
-
 const KIT = ['Rune chainbody', 'Rune platelegs', 'Rune full helm', 'Rune kiteshield'];
 
 function snap(options: Options = {}): QuestSnapshot {
     const stage = options.stage ?? GRAIL_STAGE.NOT_STARTED;
     return {
         journal: options.journal ?? 'inProgress',
-        inv: counts(options.inv ?? []),
+        inv: nameCounts(options.inv ?? []),
         worn: new Set((options.worn ?? []).map(n => n.toLowerCase())),
         noProgress: 0,
         bankCoins: 2_000_000,
         stage,
         progress: { stage, flags: new Set() },
-        bank: counts(options.bank ?? ['Excalibur', 'Coins', ...KIT]),
+        bank: nameCounts(options.bank ?? ['Excalibur', 'Coins', ...KIT]),
         bankKnown: options.bankKnown ?? true,
         tile: options.tile === undefined ? { x: 3222, z: 3218, level: 0 } : options.tile,
         freeSlots: 20

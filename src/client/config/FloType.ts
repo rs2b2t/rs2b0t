@@ -1,3 +1,4 @@
+import { loadDefinitions } from '#/client/config/configArchive.js';
 import JagFile from '#/client/io/JagFile.js';
 import Packet from '#/client/io/Packet.js';
 
@@ -20,18 +21,7 @@ export default class FloType {
     overlayHsl: number = 0;
 
     static init(config: JagFile): void {
-        const dat: Packet = new Packet(config.read('flo.dat'));
-
-        this.numDefinitions = dat.g2();
-        this.list = new Array(this.numDefinitions);
-
-        for (let id: number = 0; id < this.numDefinitions; id++) {
-            if (!this.list[id]) {
-                this.list[id] = new FloType();
-            }
-
-            this.list[id].decode(dat);
-        }
+        loadDefinitions(this, config, 'flo.dat');
     }
 
     decode(dat: Packet): void {

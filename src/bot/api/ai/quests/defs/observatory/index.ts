@@ -1,7 +1,7 @@
 // docs/QUESTS.md
-import { customStep, talkTo, waitForJournal, waitStep } from '../../engine/questSteps.js';
+import { customStep, journalStep, talkTo, waitStep } from '../../engine/questSteps.js';
 import { Skills } from '../../../../skills/Skills.js';
-import { QUESTS } from '../../data/quests.js';
+import { questRecord } from '../../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import {
     OBSERVATORY_TOOLS, OBS_ID, OBS_ITEM, OBS_STAGE, OBS_TILE, PLANKS_NEEDED, PROFESSOR
@@ -79,8 +79,8 @@ function supply(snap: QuestSnapshot, want: Wanted): QuestStep | null {
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
-    if (snap.journal === 'complete') { return { kind: 'done' }; }
-    if (snap.journal === 'unknown') { return waitForJournal(); }
+    const journal = journalStep(snap.journal);
+    if (journal) return journal;
     if (snap.journal === 'notStarted') { return talkProfessor; }
 
     const stage = snap.stage;
@@ -135,7 +135,7 @@ export function warnObservatoryReadiness(): string | null {
 }
 
 export const observatory: QuestModule = {
-    record: QUESTS.find(r => r.id === 'itgronigen')!,
+    record: questRecord('itgronigen'),
     bank: OBS_TILE.BANK,
     food: 8,
     tools: [...OBSERVATORY_TOOLS],

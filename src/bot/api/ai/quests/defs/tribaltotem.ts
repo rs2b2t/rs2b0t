@@ -1,4 +1,4 @@
-import { customStep, talkTo, waitForJournal, waitStep } from '../engine/questSteps.js';
+import { customStep, journalStep, talkTo, waitStep } from '../engine/questSteps.js';
 import { normalizeJournal as normalize } from '../journalText.js';
 // docs/QUESTS.md
 import { actions, reader } from '../../../../adapter/ClientAdapter.js';
@@ -9,7 +9,7 @@ import { Game } from '../../../game/Game.js';
 import { Locs, type Loc } from '../../../locs/Locs.js';
 import { Modals } from '../../../ui/widgets/Modals.js';
 import { Quests } from '../../../ui/questlog/Quests.js';
-import { QUESTS } from '../data/quests.js';
+import { questRecord } from '../data/quests.js';
 import { hasFlag, type QuestModule, type QuestProgress, type QuestSnapshot, type QuestStep } from '../engine/types.js';
 import type { NpcStop } from '../exec/primitives.js';
 import { driveUntil, heldId, promptLoc, settleScene, useOnLoc } from '../exec/prompts.js';
@@ -332,8 +332,8 @@ async function takeTotem(log: (m: string) => void): Promise<boolean> {
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
-    if (snap.journal === 'complete') { return { kind: 'done' }; }
-    if (snap.journal === 'unknown') { return waitForJournal(); }
+    const journal = journalStep(snap.journal);
+    if (journal) return journal;
     if (snap.journal === 'notStarted') { return talkTo(KANGAI); }
 
     const progress = snap.progress;
@@ -362,7 +362,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const tribaltotem: QuestModule = {
-    record: QUESTS.find(record => record.id === 'totem')!,
+    record: questRecord('totem'),
     bank: BANK,
     // Why: the mansion crate is the only source of the label, and both it and the totem have to survive the spillover deposit that opens every provisioning pass.
     tools: ['address label', 'totem', 'coins'],

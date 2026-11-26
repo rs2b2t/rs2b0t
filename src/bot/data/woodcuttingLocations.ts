@@ -1,5 +1,6 @@
 import type { WorldTile } from '../adapter/ClientAdapter.js';
 import Tile from '../geometry/Tile.js';
+import { BANK_STAND_COORDINATES } from './bankStandCoordinates.js';
 import {
     locationOptions,
     resolveGatheringLocation,
@@ -32,12 +33,12 @@ export function entNpcOnTile(
 }
 
 const BANK = {
-    draynor: new Tile(3093, 3243, 0),
-    seers: new Tile(2725, 3491, 0),
-    edgeville: new Tile(3094, 3493, 0),
-    faladorWest: new Tile(2946, 3369, 0),
-    ardougneWest: new Tile(2616, 3332, 0),
-    grandTree: new Tile(2449, 3482, 1)
+    draynor: new Tile(...BANK_STAND_COORDINATES.draynor),
+    seers: new Tile(...BANK_STAND_COORDINATES.seers),
+    edgeville: new Tile(...BANK_STAND_COORDINATES.edgeville),
+    faladorWest: new Tile(...BANK_STAND_COORDINATES.faladorWest),
+    ardougneWest: new Tile(...BANK_STAND_COORDINATES.ardougneWest),
+    grandTree: new Tile(...BANK_STAND_COORDINATES.grandTree)
 } as const;
 
 function camp(

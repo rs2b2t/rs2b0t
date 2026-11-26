@@ -1,8 +1,8 @@
-import { customStep as custom, waitForJournal, waitStep } from '../../engine/questSteps.js';
+import { customStep as custom, decideJournalStage, waitStep } from '../../engine/questSteps.js';
 import { Equipment } from '../../../../equipment/Equipment.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
 import { Skills } from '../../../../skills/Skills.js';
-import { QUESTS } from '../../data/quests.js';
+import { questRecord } from '../../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { kitWanted } from '../fightarena/index.js';
 import { wearKit } from '../fightarena/legs.js';
@@ -227,17 +227,10 @@ function cookLeg(snap: QuestSnapshot): QuestStep {
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
-    if (snap.journal === 'unknown') {
-        return waitForJournal();
-    }
-    if (snap.journal === 'complete') {
-        return { kind: 'done' };
-    }
-    const stage = snap.progress?.stage ?? snap.stage;
-    if (stage === undefined) {
-        return waitStep('quest stage not readable');
-    }
+    return decideJournalStage(snap, decideStage);
+}
 
+function decideStage(snap: QuestSnapshot, stage: number): QuestStep {
     if (stage === CB_STAGE.NOT_STARTED) {
         // Why: the kit, the axe and the feathers all come from the Lumbridge side of the map, so fetch them before the walk to the Feldip Hills.
         return kitStep(snap)
@@ -296,7 +289,7 @@ function warnReadiness(): string | null {
 }
 
 export const chompybird: QuestModule = {
-    record: QUESTS.find(r => r.id === 'chompybird')!,
+    record: questRecord('chompybird'),
     bank: CB_TILE.YANILLE_BANK,
     ownsInventory: true,
     readProgress: readChompyProgress,

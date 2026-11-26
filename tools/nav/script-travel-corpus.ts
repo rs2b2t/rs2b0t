@@ -4,10 +4,9 @@
 //   bun --preload ./test/setup-dom.ts tools/nav/script-travel-corpus.ts --list
 //   bun --preload ./test/setup-dom.ts tools/nav/script-travel-corpus.ts --segment=fishing --write
 //   bun --preload ./test/setup-dom.ts tools/nav/script-travel-corpus.ts --segment=clues --stats
+import { readCollisionPack } from '../lib/readCollisionPack.js';
 import fs from 'node:fs';
 import path from 'node:path';
-
-import { gunzipSync } from 'fflate';
 
 import { FISHING_LOCATIONS } from '#/bot/data/fishingLocations.js';
 import { MINING_LOCATIONS } from '#/bot/data/miningLocations.js';
@@ -78,11 +77,7 @@ function endpointPathFinder(): PathFinder | null {
         return endpointFinder;
     }
     try {
-        let bytes: Uint8Array = new Uint8Array(fs.readFileSync(COLLISION_PACK));
-        if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-            bytes = gunzipSync(bytes);
-        }
-        endpointFinder = new PathFinder(bytes);
+        endpointFinder = new PathFinder(readCollisionPack(COLLISION_PACK));
     } catch {
         endpointFinder = null;
         if (!endpointSnapMissingLogged) {

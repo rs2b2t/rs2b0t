@@ -9,6 +9,7 @@
 //   ~/redeploy.sh
 import type { Page } from 'playwright-core';
 import { fail, launchBrowser, parseArgs } from './lib/harness.js';
+import { requireTeleport } from './lib/teleport.js';
 import {
     cheatQuiet,
     clearChatDialogs,
@@ -46,25 +47,6 @@ type Abi = {
         registry: { get(n: string): unknown };
     };
 };
-
-function teleCmd(t: Tile): string {
-    return `tele ${t.level},${t.x >> 6},${t.z >> 6},${t.x & 63},${t.z & 63}`;
-}
-
-async function teleArrive(page: Page, spot: Tile, maxDist = 14): Promise<void> {
-    for (let a = 0; a < 4; a++) {
-        await cheatQuiet(page, teleCmd(spot));
-        for (let p = 0; p < 12; p++) {
-            const t = await page.evaluate(() => (globalThis as never as Abi).__rs2b0t.reader.worldTile());
-            if (t && t.level === spot.level && Math.max(Math.abs(t.x - spot.x), Math.abs(t.z - spot.z)) <= maxDist) {
-                await page.waitForTimeout(700);
-                return;
-            }
-            await page.waitForTimeout(350);
-        }
-    }
-    fail(`tele to ${spot.x},${spot.z} failed`);
-}
 
 async function setFisher(page: Page, map: Record<string, string>): Promise<void> {
     await page.evaluate(entries => {
@@ -136,7 +118,7 @@ try {
     await cheatQuiet(pageG, '~clearinv');
     await cheatQuiet(pageG, 'give lobster_pot 1');
     await cheatQuiet(pageG, 'give raw_lobster 27');
-    await teleArrive(pageG, PIER);
+    await requireTeleport(pageG, PIER, 14);
     await setFisher(pageG, {
         fishMethod: 'Lobster cage — lobster',
         location: 'Catherby',
@@ -155,7 +137,7 @@ try {
     await maxmeAndClearDialogs(pageC);
     await clearChatDialogs(pageC);
     await cheatQuiet(pageC, '~clearinv');
-    await teleArrive(pageC, MEET);
+    await requireTeleport(pageC, MEET, 14);
     await setFisher(pageC, {
         fishMethod: 'Lobster cage — lobster',
         location: 'Catherby',

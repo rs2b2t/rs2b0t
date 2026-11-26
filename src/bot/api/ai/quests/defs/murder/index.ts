@@ -1,6 +1,6 @@
 // docs/QUESTS.md
-import { customStep as custom, talkTo, waitForJournal, waitStep } from '../../engine/questSteps.js';
-import { QUESTS } from '../../data/quests.js';
+import { customStep as custom, journalStep, talkTo, waitStep } from '../../engine/questSteps.js';
+import { questRecord } from '../../data/quests.js';
 import { hasFlag, type QuestModule, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import {
     ARHEIN,
@@ -43,12 +43,8 @@ export function sourcePot(snap: QuestSnapshot): QuestStep | null {
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
-    if (snap.journal === 'unknown') {
-        return waitForJournal();
-    }
-    if (snap.journal === 'complete') {
-        return { kind: 'done' };
-    }
+    const journal = journalStep(snap.journal);
+    if (journal) return journal;
     const progress = snap.progress;
     if (snap.journal !== 'notStarted' && progress === undefined) {
         return waitStep('Murder Mystery journal stage unavailable');
@@ -87,7 +83,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const murder: QuestModule = {
-    record: QUESTS.find(r => r.id === 'murder')!,
+    record: questRecord('murder'),
     bank: MURDER_TILE.BANK,
     food: 4,
     tools: ['pot', 'criminals', 'silver', 'flypaper', 'print', 'thread'],

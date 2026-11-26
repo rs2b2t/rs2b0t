@@ -1,5 +1,5 @@
-import { customStep, talkTo as talk, waitForJournal, waitStep } from '../../engine/questSteps.js';
-import { QUESTS } from '../../data/quests.js';
+import { customStep, decideJournalStage, talkTo as talk } from '../../engine/questSteps.js';
+import { questRecord } from '../../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { EC_ID, EC_STAGE, EC_TILE, ODDENSTEIN, VERONICA } from './areas.js';
 import { basementRegion, fetchOilCan, inAlcove, leaveManorBasement } from './basement.js';
@@ -24,16 +24,10 @@ function parts(snap: QuestSnapshot): QuestStep {
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
-    if (snap.journal === 'unknown') {
-        return waitForJournal();
-    }
-    if (snap.journal === 'complete') {
-        return { kind: 'done' };
-    }
-    const stage = snap.progress?.stage ?? snap.stage;
-    if (stage === undefined) {
-        return waitStep('quest stage not readable');
-    }
+    return decideJournalStage(snap, decideStage);
+}
+
+function decideStage(snap: QuestSnapshot, stage: number): QuestStep {
     // Why: the 3 sealed pockets are only reachable by scripted teleport, and a leg that starts inside one burns its budget failing to walk out.
     // Why: runs ahead of the bank trip, which is itself a walk.
     if (inCloset(snap.tile)) {
@@ -60,7 +54,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const ernest: QuestModule = {
-    record: QUESTS.find(r => r.id === 'haunted')!,
+    record: questRecord('haunted'),
     bank: EC_TILE.DRAYNOR_BANK,
     // Why: the record lists the 3 parts as acquirable, and the engine would call a gather fn, skipping decide(), while any is missing, fetching the oil can before Veronica is spoken to.
     // Why: ownsInventory hands the loop to decide(), and kit() takes over the spade and food the engine no longer withdraws.

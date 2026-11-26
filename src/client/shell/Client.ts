@@ -5,6 +5,7 @@ import { audioEnabled } from '#/client/config/audio.js';
 import ClientBuild from '#/client/shell/ClientBuild.js';
 import { ClientCode } from '#/client/shell/ClientCode.js';
 import GameShell from '#/client/shell/GameShell.js';
+import { rebaseGroundItems } from '#/client/shell/rebaseGroundItems.js';
 import { MiniMenuAction } from '#/client/shell/MiniMenuAction.js';
 import MobileKeyboard from '#/client/shell/MobileKeyboard.js';
 import MouseTracking from '#/client/shell/MouseTracking.js';
@@ -77,8 +78,11 @@ import WordPack from '#/client/wordfilter/WordPack.js';
 
 import JagFX from '#/client/sound/JagFX.js';
 
+import { buildExperienceThresholds } from '#/shared/experience.js';
+
 const MAX_PLAYER_COUNT = 2048;
 const LOCAL_PLAYER_INDEX = 2047;
+const MINIMAP_DOT_RADIUS = 80;
 
 const MAX_CHATS = 50;
 const CHAT_COLOURS = [Colour.YELLOW, Colour.RED, Colour.GREEN, Colour.CYAN, Colour.MAGENTA, Colour.WHITE];
@@ -133,21 +137,13 @@ export class Client extends GameShell {
     static CHARSET: string = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!\"£$%^&*()-_=+[{]};:'@#~,<.>/?\\| ";
 
     static readbit = new Int32Array(32);
-    static levelExperience: number[] = [];
+    static levelExperience: number[] = buildExperienceThresholds();
 
     static {
         let n = 2;
         for (let bit = 0; bit < 32; bit++) {
             Client.readbit[bit] = n - 1;
             n += n;
-        }
-
-        let acc: number = 0;
-        for (let i: number = 0; i < 99; i++) {
-            const level: number = i + 1;
-            const delta: number = (level + Math.pow(2.0, level / 7.0) * 300.0) | 0;
-            acc += delta;
-            Client.levelExperience[i] = (acc / 4) | 0;
         }
     }
 
@@ -791,10 +787,6 @@ export class Client extends GameShell {
             data = undefined;
         }
 
-        if (data) {
-            return new JagFile(data);
-        }
-
         let loops = 0;
         while (!data) {
             await this.drawProgress(`Requesting ${displayName}`, progress);
@@ -837,7 +829,7 @@ export class Client extends GameShell {
             }
         }
 
-        return new JagFile(data);
+        return new JagFile(data, this.searchParams.has('box') ? crc : undefined);
     }
 
     override async maininit() {
@@ -905,7 +897,9 @@ export class Client extends GameShell {
 
                 while (this.onDemand.remaining() > 0) {
                     await this.onDemandLoop();
-                    await sleep(100);
+                    if (this.onDemand.remaining() > 0) {
+                        await sleep(100);
+                    }
                 }
             }
 
@@ -923,7 +917,9 @@ export class Client extends GameShell {
                 }
 
                 await this.onDemandLoop();
-                await sleep(100);
+                if (this.onDemand.remaining() > 0) {
+                    await sleep(100);
+                }
             }
 
             await this.drawProgress('Requesting models', 70);
@@ -944,7 +940,9 @@ export class Client extends GameShell {
                 }
 
                 await this.onDemandLoop();
-                await sleep(100);
+                if (this.onDemand.remaining() > 0) {
+                    await sleep(100);
+                }
             }
 
             const prefetchAssets = !this.searchParams.has('box');
@@ -977,7 +975,9 @@ export class Client extends GameShell {
                     }
 
                     await this.onDemandLoop();
-                    await sleep(100);
+                    if (this.onDemand.remaining() > 0) {
+                        await sleep(100);
+                    }
                 }
             }
 
@@ -7161,38 +7161,7 @@ export class Client extends GameShell {
 
                 this.awaitingPlayerInfo = true;
 
-                let startTileX: number = 0;
-                let endTileX: number = BuildArea.SIZE;
-                let dirX: number = 1;
-                if (dx < 0) {
-                    startTileX = BuildArea.SIZE - 1;
-                    endTileX = -1;
-                    dirX = -1;
-                }
-
-                let startTileZ: number = 0;
-                let endTileZ: number = BuildArea.SIZE;
-                let dirZ: number = 1;
-                if (dz < 0) {
-                    startTileZ = BuildArea.SIZE - 1;
-                    endTileZ = -1;
-                    dirZ = -1;
-                }
-
-                for (let x: number = startTileX; x !== endTileX; x += dirX) {
-                    for (let z: number = startTileZ; z !== endTileZ; z += dirZ) {
-                        const lastX: number = x + dx;
-                        const lastZ: number = z + dz;
-
-                        for (let level: number = 0; level < BuildArea.LEVELS; level++) {
-                            if (lastX >= 0 && lastZ >= 0 && lastX < BuildArea.SIZE && lastZ < BuildArea.SIZE) {
-                                this.groundObj[level][x][z] = this.groundObj[level][lastX][lastZ];
-                            } else {
-                                this.groundObj[level][x][z] = null;
-                            }
-                        }
-                    }
-                }
+                rebaseGroundItems(this.groundObj, dx, dz);
 
                 for (let loc = this.locChanges.head(); loc !== null; loc = this.locChanges.next()) {
                     loc.x -= dx;
@@ -11523,8 +11492,10 @@ export class Client extends GameShell {
         }
 
         const angle: number = (this.orbitCameraYaw + this.macroMinimapAngle) & 0x7ff;
-        let anchorX: number = ((this.localPlayer.x / 32) | 0) + 48;
-        let anchorY: number = 464 - ((this.localPlayer.z / 32) | 0);
+        const playerMapX = (this.localPlayer.x / 32) | 0;
+        const playerMapZ = (this.localPlayer.z / 32) | 0;
+        let anchorX: number = playerMapX + 48;
+        let anchorY: number = 464 - playerMapZ;
 
         this.minimap?.scanlineRotatePlotSprite(25, 5, 146, 151, anchorX, anchorY, angle, this.macroMinimapZoom + 256, this.minimapMaskLineOffsets, this.minimapMaskLineLengths);
         this.compass?.scanlineRotatePlotSprite(0, 0, 33, 33, 25, 25, this.orbitCameraYaw, 256, this.compassMaskLineOffsets, this.compassMaskLineLengths);
@@ -11535,12 +11506,17 @@ export class Client extends GameShell {
             this.minimapDrawDot(anchorY, this.activeMapFunctions[i], anchorX);
         }
 
-        for (let ltx: number = 0; ltx < BuildArea.SIZE; ltx++) {
-            for (let ltz: number = 0; ltz < BuildArea.SIZE; ltz++) {
-                const objs = this.groundObj[this.minusedlevel][ltx][ltz];
+        const minTileX = Math.max(0, Math.ceil((playerMapX - 2 - MINIMAP_DOT_RADIUS) / 4));
+        const maxTileX = Math.min(BuildArea.SIZE - 1, Math.floor((playerMapX - 2 + MINIMAP_DOT_RADIUS) / 4));
+        const minTileZ = Math.max(0, Math.ceil((playerMapZ - 2 - MINIMAP_DOT_RADIUS) / 4));
+        const maxTileZ = Math.min(BuildArea.SIZE - 1, Math.floor((playerMapZ - 2 + MINIMAP_DOT_RADIUS) / 4));
+        for (let ltx = minTileX; ltx <= maxTileX; ltx++) {
+            const row = this.groundObj[this.minusedlevel][ltx];
+            for (let ltz = minTileZ; ltz <= maxTileZ; ltz++) {
+                const objs = row[ltz];
                 if (objs) {
-                    anchorX = ltx * 4 + 2 - ((this.localPlayer.x / 32) | 0);
-                    anchorY = ltz * 4 + 2 - ((this.localPlayer.z / 32) | 0);
+                    anchorX = ltx * 4 + 2 - playerMapX;
+                    anchorY = ltz * 4 + 2 - playerMapZ;
                     this.minimapDrawDot(anchorY, this.mapdots1, anchorX);
                 }
             }
@@ -11648,7 +11624,7 @@ export class Client extends GameShell {
         }
 
         const distance: number = dx * dx + dy * dy;
-        if (distance > 6400) {
+        if (distance > MINIMAP_DOT_RADIUS * MINIMAP_DOT_RADIUS) {
             return;
         }
 

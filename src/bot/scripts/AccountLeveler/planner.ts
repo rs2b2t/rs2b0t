@@ -1,4 +1,4 @@
-import { secondaryByName } from '../HerbloreSecondaries/HerbloreSecondariesLogic.js';
+import { secondarySourceByName as secondaryByName } from '../../data/herbloreSecondarySources.js';
 import { clientName, displayName, liveCatalog } from '../../api/market/catalog.js';
 import { wildernessLevelAt } from '../../event/webwalk/wilderness.js';
 import { economyReserve, ECONOMY_SALE, ECONOMY_SALE_LOT, saleQuantity, supplierSaleItems } from './economySupplies.js';
@@ -13,7 +13,7 @@ import Skill from '../../../client/shell/Skill.js';
 import { usesActivityCooldown } from './session.js';
 import { methodFor, producer, questPlan } from './methods.js';
 import { auditDragonWeapons, DRAGON_SHOP_COOLDOWN, zanarisExitNeeds } from './dragonWeapons.js';
-import { QUESTS } from '../../api/ai/quests/data/quests.js';
+import { questRecord } from '../../api/ai/quests/data/quests.js';
 import { isRuneGearShop, purchaseBudget, supplyOffer } from './offers.js';
 import { SHOPPING_RESERVE } from './shopping.js';
 import { bankedStockOf, requirementKey, stockOf, type ActivityPlan, type Decision, type LevelerSnapshot, type SessionMemory } from './types.js';
@@ -21,7 +21,7 @@ import { bankedStockOf, requirementKey, stockOf, type ActivityPlan, type Decisio
 export { scimitarFor } from './combat.js';
 export const enabledSkills = Skill.names.filter((name, index) => Skill.used[index] && name !== '-unused-');
 export const emptyMemory = (): SessionMemory => ({ objective: null, recent: [], cooldowns: {}, attempted: {}, deaths: 0 });
-const LOST_CITY = QUESTS.find(quest => quest.id === 'zanaris')!;
+const LOST_CITY = questRecord('zanaris');
 
 export function resolveActivity(s: LevelerSnapshot, plan: ActivityPlan, memory: SessionMemory, random: () => number, chain: string[] = []): Decision {
     if (crowdBlocked(plan, memory, s.now)) return { kind: 'blocked', reason: plan.label + ' is on cooldown because the area was crowded' };

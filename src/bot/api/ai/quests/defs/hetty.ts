@@ -1,4 +1,4 @@
-import { customStep, talkTo, waitForJournal, waitStep } from '../engine/questSteps.js';
+import { customStep, journalStep, talkTo, waitForJournal, waitStep } from '../engine/questSteps.js';
 import { Execution } from '../../../execution/Execution.js';
 import { Game } from '../../../game/Game.js';
 import { Inventory } from '../../../inventory/Inventory.js';
@@ -12,7 +12,7 @@ import Tile from '../../../../geometry/Tile.js';
 import type { NpcStop } from '../exec/primitives.js';
 import { gotoNpc, talkThrough } from '../exec/primitives.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
-import { QUESTS } from '../data/quests.js';
+import { questRecord } from '../data/quests.js';
 
 const HETTY: NpcStop = {
     npc: 'Hetty',
@@ -169,8 +169,8 @@ function gatherFor(name: string, snap: QuestSnapshot): QuestStep {
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
-    if (snap.journal === 'complete') { return { kind: 'done' }; }
-    if (snap.journal === 'unknown') { return waitForJournal(); }
+    const journal = journalStep(snap.journal);
+    if (journal) return journal;
     if (snap.journal === 'notStarted') { return talkTo(HETTY); }
     const need = INGREDIENTS.filter(i => !snap.inv.has(i));
     if (need.length === 0) {
@@ -180,7 +180,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const hetty: QuestModule = {
-    record: QUESTS.find(r => r.id === 'hetty')!,
+    record: questRecord('hetty'),
     bank: DRAYNOR_BANK,
     grind: ['Rat'],
     tools: ['coins', 'raw beef', 'cooked meat'],

@@ -1,7 +1,7 @@
 import { customStep as custom, waitStep as wait } from '../../engine/questSteps.js';
 import { TB_FOODS } from './loadout.js';
 import { Skills } from '../../../../skills/Skills.js';
-import { QUESTS } from '../../data/quests.js';
+import { questRecord } from '../../data/quests.js';
 import { hasFlag, type QuestModule, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import {
     FOOD_TARGET,
@@ -315,7 +315,7 @@ function observe(snap: QuestSnapshot): string[] {
 }
 
 export const tbwt: QuestModule = {
-    record: QUESTS.find(record => record.id === 'tbwt')!,
+    record: questRecord('tbwt'),
     // Why: Karamja has no bank until Shilo Village is complete, and Ardougne West is the nearest booth to the Brimhaven ferry.
     bank: TB_TILE.ARDOUGNE_BANK,
     ownsInventory: true,

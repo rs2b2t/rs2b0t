@@ -1,10 +1,10 @@
 import type { SellIntent } from '../../api/market/appraise.js';
 import { displayName, resolveByName, type Catalog } from '../../api/market/catalog.js';
 import type { Candidate } from '../../api/market/chatProtocol.js';
-import { rowOf, type PriceBook, type PriceRow } from '../../api/market/priceBook.js';
-import { rowValid } from '../../api/market/prices.js';
+import type { PriceBook, PriceRow } from '../../api/market/priceBook.js';
+import { rowValid, tradeRow } from '../../api/market/prices.js';
 import { resolveSet, setVariants, type MarketSet } from '../../api/market/sets.js';
-import { salePrice, saleStock } from '../../api/market/saleIntent.js';
+import { salePrice, saleQuantity, saleStock } from '../../api/market/saleIntent.js';
 
 /** A chat request naming what the customer wants to buy. Carries no price and no reservation. */
 export type Intent = SellIntent & {
@@ -388,7 +388,8 @@ export function resolveQuote(input: {
             const intent = { set, maxQty: input.requested ?? Infinity };
             const price = salePrice(book, intent);
             if (price === null || !set.itemIds.every(id => cat.byId.has(id))) continue;
-            const qty = Math.min(intent.maxQty, Math.floor(book.maxTradeValue / price), input.held ? saleStock(intent, input.held) : Infinity);
+            const stock = input.held ? saleStock(intent, input.held) : Infinity;
+            const qty = saleQuantity(intent.maxQty, stock, price, book.maxTradeValue);
             if (qty > bestQty) {
                 best = set;
                 bestQty = qty;
@@ -396,10 +397,7 @@ export function resolveQuote(input: {
         }
         return best ? { kind: 'set', set: best } : { kind: 'miss', answer: !qtyImplied };
     }
-    const candidates = resolveByName(cat, query, { exactOnly: qtyImplied }).filter(r => {
-        const row = rowOf(book, r.id);
-        return row !== null && row[side] && rowValid(book, row);
-    });
+    const candidates = resolveByName(cat, query, { exactOnly: qtyImplied }).filter(r => tradeRow(book, r.id, side) !== null);
     if (candidates.length === 0) {
         return { kind: 'miss', answer: !qtyImplied };
     }

@@ -159,6 +159,17 @@ describe('consumersOf', () => {
 });
 
 describe('importsInto', () => {
+    test('sorts raw specifiers and keeps repeated imports of a missing target', () => {
+        const sources = new Map([
+            ['tools/x.ts', "import '../e2e/a.js';\nimport '../e2e/a';\nimport '../e2e/a.js';"]
+        ]);
+        expect(importsInto('tools', 'e2e', sources)).toEqual([
+            'tools/x.ts\t../e2e/a',
+            'tools/x.ts\t../e2e/a.js',
+            'tools/x.ts\t../e2e/a.js'
+        ]);
+    });
+
     test('flags a tools file importing across into e2e', () => {
         const sources = new Map([['tools/probe.ts', "import { boot } from '../e2e/lib/harness.js';"]]);
         expect(importsInto('tools', 'e2e', sources)).toEqual(['tools/probe.ts\t../e2e/lib/harness.js']);

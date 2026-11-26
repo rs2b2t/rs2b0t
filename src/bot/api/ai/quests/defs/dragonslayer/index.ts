@@ -14,7 +14,7 @@ import Tile from '../../../../../geometry/Tile.js';
 import { bankedId, cachedBankId, heldId, wornId } from '../../engine/snapshotItems.js';
 import { hasFlag } from '../../engine/types.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
-import { QUESTS } from '../../data/quests.js';
+import { questRecord } from '../../data/quests.js';
 import { QuestFood } from '../../food.js';
 import { afterDialogueAction, gotoNpc, openDialogue, talkThrough, type NpcStop } from '../../exec/primitives.js';
 import { DS_ID, DS_ITEM, DS_LOC, DS_NPC, SHIP_PRICE, SHIP_REPAIR, WORMBRAIN_PRICE } from './areas.js';
@@ -862,7 +862,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const dragonslayer: QuestModule = {
-    record: QUESTS.find(r => r.id === 'dragon')!,
+    record: questRecord('dragon'),
     pray: { protect: 'melee', potions: 2 },
     // Port Sarim, Falador, Varrock, the wilderness, Karamja: no one bank is near enough to walk back to.
     bank: 'nearest',

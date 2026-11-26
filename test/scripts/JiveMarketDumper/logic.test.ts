@@ -1,11 +1,7 @@
 import { describe, expect, test } from 'bun:test';
-import type { ObjRecord } from '#/bot/adapter/ClientAdapter.js';
 import { buildCatalog } from '#/bot/api/market/catalog.js';
 import { COINS, PACK, TRADE_SLOTS, acceptAction, decide, dumpables, heldWithOffer, planPile, type Dumpable } from '#/bot/scripts/JiveMarketDumper/logic.js';
-
-function rec(id: number, name: string, over: Partial<ObjRecord> = {}): ObjRecord {
-    return { id, name, cost: 1, stackable: false, members: false, equippable: false, certlink: -1, certtemplate: -1, ...over };
-}
+import { rec } from '../../fixtures/obj-record.js';
 
 const IRON = 440;
 const IRON_NOTE = 441;

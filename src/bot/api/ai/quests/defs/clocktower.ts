@@ -1,4 +1,4 @@
-import { customStep, talkTo, waitForJournal, waitStep } from '../engine/questSteps.js';
+import { customStep, journalStep, talkTo, waitStep } from '../engine/questSteps.js';
 import { Modals } from '../../../ui/widgets/Modals.js';
 import { normalizeJournal as normalize } from '../journalText.js';
 // docs/QUESTS.md
@@ -11,7 +11,7 @@ import { Inventory } from '../../../inventory/Inventory.js';
 import { Locs, type Loc } from '../../../locs/Locs.js';
 import { Quests } from '../../../ui/questlog/Quests.js';
 import { Traversal } from '../../../walking/Traversal.js';
-import { QUESTS } from '../data/quests.js';
+import { questRecord } from '../data/quests.js';
 import { hasFlag, type QuestModule, type QuestProgress, type QuestSnapshot, type QuestStep } from '../engine/types.js';
 import { isUnderground, walkWithHops, type LadderHop, type NpcStop } from '../exec/primitives.js';
 import { driveUntil, heldId, settleScene, useOnLoc } from '../exec/prompts.js';
@@ -457,8 +457,8 @@ export function gatherWater(snap: QuestSnapshot): QuestStep {
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
-    if (snap.journal === 'complete') { return { kind: 'done' }; }
-    if (snap.journal === 'unknown') { return waitForJournal(); }
+    const journal = journalStep(snap.journal);
+    if (journal) return journal;
     if (snap.journal === 'notStarted') { return talkTo(KOJO); }
 
     const progress = snap.progress;
@@ -482,7 +482,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 }
 
 export const clocktower: QuestModule = {
-    record: QUESTS.find(r => r.id === 'cog')!,
+    record: questRecord('cog'),
     bank: BANK,
     hops: HOPS,
     tools: ['cog', 'rat poison', 'bucket', 'bucket of water'],

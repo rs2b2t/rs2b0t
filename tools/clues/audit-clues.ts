@@ -1,8 +1,7 @@
+import { readCollisionPack } from '../lib/readCollisionPack.js';
 import fs from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-
-import { gunzipSync } from 'fflate';
 
 import doorsJson from '#/bot/event/webwalk/data/doors.json';
 import { allTransportRows } from '#/bot/event/webwalk/loadTransportGraph.js';
@@ -77,11 +76,7 @@ export function auditInputsPresent(opts: ClueAuditOptions = {}): boolean {
 }
 
 function loadPack(pack: string): PathFinder {
-    let bytes: Uint8Array = new Uint8Array(fs.readFileSync(pack));
-    if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-        bytes = gunzipSync(bytes);
-    }
-    const finder = new PathFinder(bytes);
+    const finder = new PathFinder(readCollisionPack(pack));
     // Why: transports.json alone omits the curated travel edges, so routing on it calls reachable destinations unreachable.
     finder.addEdges(doorsJson as DoorEdgeData[], allTransportRows(), stairsJson as TransportEdgeData[]);
     return finder;

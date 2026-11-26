@@ -10,7 +10,7 @@ import { GroundItems } from '../../../../grounditems/GroundItems.js';
 import { Locs } from '../../../../locs/Locs.js';
 import { Npcs } from '../../../../npcs/Npcs.js';
 import { Traversal } from '../../../../walking/Traversal.js';
-import { QUESTS } from '../../data/quests.js';
+import { questRecord } from '../../data/quests.js';
 import { bankedName as banked, hasName as held, heldName as heldCount, wornName as worn } from '../../engine/snapshotItems.js';
 import { hasFlag, type QuestModule, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
 import { talkChoosingBy } from '../../exec/primitives.js';
@@ -600,7 +600,7 @@ function warnTrollStrongholdReadiness(): string | null {
 }
 
 export const trollstronghold: QuestModule = {
-    record: QUESTS.find(r => r.id === 'troll')!,
+    record: questRecord('troll'),
     pray: { protect: 'melee', potions: 2 },
     bank: FALADOR_WEST_BANK,
     grind: ['Dad', 'Troll General', 'Twig', 'Berry'],

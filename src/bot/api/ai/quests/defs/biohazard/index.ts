@@ -1,5 +1,5 @@
 import { customStep as custom, waitForJournal, waitStep } from '../../engine/questSteps.js';
-import { QUESTS } from '../../data/quests.js';
+import { questRecord } from '../../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import {
     BIO_ITEM,
@@ -254,7 +254,7 @@ function banking(step: QuestStep): boolean {
 }
 
 export const biohazard: QuestModule = {
-    record: QUESTS.find(record => record.id === 'biohazard')!,
+    record: questRecord('biohazard'),
     bank: 'nearest',
     ownsInventory: true,
     readProgress: readBiohazardProgress,

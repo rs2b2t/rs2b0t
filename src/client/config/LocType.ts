@@ -1,3 +1,4 @@
+import { getIndexedDefinition, loadDefinitionIndex } from '#/client/config/configArchive.js';
 import LruCache from '#/client/datastruct/LruCache.js';
 
 import AnimFrame from '#/client/dash3d/AnimFrame.js';
@@ -63,45 +64,18 @@ export default class LocType {
     static readonly STRICT: boolean = process.env.STRICT_CONFIG === '1';
 
     static init(config: JagFile): void {
-        this.dat = new Packet(config.read('loc.dat'));
-        const idx: Packet = new Packet(config.read('loc.idx'));
-
-        this.numDefinitions = idx.g2();
-        this.idx = new Int32Array(this.numDefinitions);
-
-        let offset: number = 2;
-        for (let id: number = 0; id < this.numDefinitions; id++) {
-            this.idx[id] = offset;
-            offset += idx.g2();
-        }
-
-        this.recent = new TypedArray1d(10, null);
-        for (let id: number = 0; id < 10; id++) {
-            this.recent[id] = new LocType();
-        }
+        loadDefinitionIndex(this, config, 'loc', 10);
     }
 
     static list(id: number): LocType {
-        if (!this.recent || !this.idx || !this.dat) {
-            throw new Error();
-        }
+        return getIndexedDefinition(this, id, (recent, slot, dat) => {
+            const loc: LocType = recent[slot]!;
+            loc.id = id;
+            loc.reset();
+            loc.decode(dat);
 
-        for (let i: number = 0; i < 10; i++) {
-            const type: LocType | null = this.recent[i];
-            if (type && type.id === id) {
-                return type;
-            }
-        }
-
-        this.recentPos = (this.recentPos + 1) % 10;
-
-        const loc: LocType = this.recent[this.recentPos]!;
-        this.dat.pos = this.idx[id];
-        loc.id = id;
-        loc.reset();
-        loc.decode(this.dat);
-
-        return loc;
+            return loc;
+        });
     }
 
     private reset(): void {
