@@ -3,12 +3,17 @@ import { desktopStorage } from '../runtime/desktopStorage.js';
 
 export interface SettingsPanelHooks {
     ensureUnlocked: () => Promise<boolean>;
-    snapshot: () => ProfileSnapshot;
+    snapshot: () => ProfileSnapshot | Promise<ProfileSnapshot>;
     confirmLegacy?: ConfirmLegacySetting;
     replaceAll: (data: ProfileSnapshot) => Promise<void>;
     download?: (filename: string, text: string) => void;
     onImported?: (data: ProfileSnapshot) => void;
     beforeExport?: () => Promise<void>;
+}
+
+async function withImportLock<T>(action: () => Promise<T>): Promise<T> {
+    if (!desktopStorage && navigator.locks?.request) return await navigator.locks.request('rs2b0t:multibox:profile-import', action);
+    return action();
 }
 
 function downloadTextFile(filename: string, text: string): void {
@@ -112,7 +117,7 @@ export class SettingsPanel {
         }
         try {
             await this.hooks.beforeExport?.();
-            const text = serializeProfileFile(this.hooks.snapshot());
+            const text = await withImportLock(async () => serializeProfileFile(await this.hooks.snapshot()));
             (this.hooks.download ?? downloadTextFile)(PROFILE_FILE_NAME, text);
         } catch (e) {
             this.err.textContent = e instanceof Error ? e.message : String(e);
@@ -126,9 +131,7 @@ export class SettingsPanel {
         }
         const currentImport = this.importTail.then(async () => {
             const data = parseProfileFile(text, this.hooks.confirmLegacy);
-            const restore = () => this.hooks.replaceAll(data);
-            if (!desktopStorage && navigator.locks?.request) await navigator.locks.request('rs2b0t:multibox:profile-import', restore);
-            else await restore();
+            await withImportLock(() => this.hooks.replaceAll(data));
             this.hooks.onImported?.(data);
             if (this.importTail === currentImport) this.close();
         }).catch(e => {

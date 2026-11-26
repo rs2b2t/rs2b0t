@@ -10,7 +10,7 @@ import { installDiagnostics } from './installDiagnostics.js';
 import { installWallTrafficChannel } from '../../client/io/TrafficChannel.js';
 import { TrafficCollector } from '../adapter/TrafficAdapter.js';
 import { DomSlotOps, orderedSlotElements } from './DomSlotOps.js';
-import { indexByUsername, MultiBoxController, normalizeUsername } from './MultiBoxController.js';
+import { MultiBoxController, normalizeUsername } from './MultiBoxController.js';
 import { ProfileChooser } from './ProfileChooser.js';
 import { vault, type Profile, type TabReplacement } from './ProfileVault.js';
 import { renderRailTile, slotIsRunning } from './RailTile.js';
@@ -21,7 +21,8 @@ import { RosterPanel } from './RosterPanel.js';
 import { TabBar } from './TabBar.js';
 import { BotTabMenu } from './BotTabMenu.js';
 import { VaultPrompt } from './VaultPrompt.js';
-import { applyBoxStorage, collectBoxStorage } from './ProfileTransfer.js';
+import { applyBoxStorage, collectBoxStorage, PROFILE_IMPORT_REVISION_KEY, pendingSettingsImport, refreshImportedSettings } from './ProfileTransfer.js';
+import { desktopStorage } from '../runtime/desktopStorage.js';
 import type { Account, SlotSnapshot } from './types.js';
 
 type DesktopWall = Window & { rs2b0tLoginCoordinator?: LoginCoordinationRegistry & { parallelism: number } };
@@ -391,9 +392,9 @@ function boot(): void {
             if (selected !== previousActive) persistActiveTab(selected);
         });
     }, {
-        defaultWorld, worldRouting, onWorldChange: worldRouting ? changeProfileWorld : undefined,
+        defaultWorld, worldRouting, beforeRender: ensureChooserGroups, onWorldChange: worldRouting ? changeProfileWorld : undefined,
         onLoadGroup: (profiles, tab) => {
-            mergeSavedTabs(vault.tabState().tabs);
+            ensureChooserGroups();
             const selected = tab && controller.setActiveTab(tab);
             controller.addGroup(profiles);
             renderRail();
@@ -405,9 +406,11 @@ function boot(): void {
     const prompt = new VaultPrompt(vault);
     document.body.appendChild(prompt.el);
     window.addEventListener('storage', event => {
-        if (event.key === 'rs2b0t:multibox:profiles') {
+        if (event.key === 'rs2b0t:multibox:profiles' || event.key === PROFILE_IMPORT_REVISION_KEY) {
+            if (event.key === PROFILE_IMPORT_REVISION_KEY && !pendingSettingsImport()) return;
             void updateSavedTabs(async () => {
-                await vault.refresh();
+                await refreshVault();
+                if (event.key === PROFILE_IMPORT_REVISION_KEY) return;
                 if (pendingTabEdits.length) {
                     pendingTabEdits.length = 0;
                     tabSaveError.textContent = 'Tab edits could not be saved. Check the groups and retry your edit.';
@@ -418,13 +421,26 @@ function boot(): void {
                     roster?.close();
                     return;
                 }
-                if (tabsHydrated) syncSavedGroups();
-                else hydrateTabState();
+                if (tabsHydrated) {
+                    syncSavedGroups();
+                    renderRail();
+                } else {
+                    hydrateTabState();
+                }
                 if (!chooser.el.hidden) chooser.open();
                 roster?.refresh();
             }).catch(error => console.error('[rs2b0t] failed to refresh saved accounts', error));
         }
     });
+
+    async function refreshVault(): Promise<void> {
+        const revision = pendingSettingsImport();
+        const previous = revision && vault.status() === 'unlocked' ? vault.list().map(p => p.username) : [];
+        await vault.refresh();
+        if (revision && revision === pendingSettingsImport() && vault.status() === 'unlocked') {
+            refreshImportedSettings([...new Set([...previous, ...vault.list().map(p => p.username)])], revision);
+        }
+    }
 
     let tabsHydrated = false;
     function hydrateTabState(): void {
@@ -458,7 +474,10 @@ function boot(): void {
                     return false;
                 }
             }
-            await vault.setWorld(profile.username, world);
+            await updateSavedTabs(async () => {
+                await vault.setWorld(profile.username, world);
+                syncSavedGroups();
+            });
             return true;
         } finally {
             worldWrites.delete(identity);
@@ -481,30 +500,18 @@ function boot(): void {
         }
     }
 
-    function mergeSavedTabs(tabs: string[]): void {
-        let changed = false;
-        for (const tab of tabs) {
-            if (controller.addTab(tab)) changed = true;
+    function ensureChooserGroups(): void {
+        const known = new Set(controller.tabs());
+        if (vault.tabState().tabs.some(tab => !known.has(tab))) {
+            syncSavedGroups();
+            renderRail();
         }
-        if (changed) renderRail();
     }
 
     function syncSavedGroups(): void {
-        const { tabs, assignments } = vault.adoptGroupState();
-        mergeSavedTabs(tabs);
-        const groups = indexByUsername(assignments);
-        const liveTabs = new Set(tabs);
-        for (const slot of controller.snapshot()) {
-            const tab = groups.get(slot.username);
-            if (tab) controller.setSlotTab(slot.id, tab);
-            else if (slot.tab !== 'Main') liveTabs.add(slot.tab);
-        }
-        for (const tab of controller.tabs().slice(1)) {
-            if (!liveTabs.has(tab)) controller.removeTab(tab);
-        }
+        const { tabs } = vault.adoptGroupState();
+        controller.restoreProfiles(vault.list(), tabs, undefined, false);
         wallOnlyTabs = new Set(controller.tabs().slice(1).filter(tab => !tabs.includes(tab)));
-        controller.setTabState([...tabs, ...wallOnlyTabs], controller.activeTab());
-        renderRail();
     }
 
     const confirmLegacy = (suffix: string, user: string) =>
@@ -512,10 +519,11 @@ function boot(): void {
     const settings = new SettingsPanel({
         confirmLegacy,
         ensureUnlocked: () => ensureUnlocked(),
-        snapshot: () => ({
-            ...vault.snapshot(),
-            storage: collectBoxStorage(vault.list().map(p => p.username), confirmLegacy)
-        }),
+        snapshot: async () => {
+            if (!desktopStorage) await refreshVault();
+            const snapshot = vault.snapshot();
+            return { ...snapshot, storage: collectBoxStorage(snapshot.profiles.map(p => p.username), confirmLegacy) };
+        },
         replaceAll: data => updateSavedTabs(async () => {
             const previous = vault.list().map(p => p.username);
             const replaced = await vault.replaceAll(data);
@@ -575,6 +583,7 @@ function boot(): void {
             await flushTabEdits();
             await vault.assignGroup(usernames, name);
             syncSavedGroups();
+            renderRail();
         }),
         edit: async profile => {
             const current = rosterProfiles().find(p => p.username === profile.username);

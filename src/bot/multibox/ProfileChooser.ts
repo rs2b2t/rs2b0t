@@ -3,6 +3,7 @@ import { resolveWorldNumber, type WorldNumber } from '../../client/config/worlds
 import { supportsWorldRouting } from '../../client/config/target.js';
 
 export interface ProfileChooserOptions {
+    beforeRender?: () => void;
     onLoadGroup?: (profiles: Profile[], tab?: string) => void;
     worldRouting?: boolean;
     defaultWorld?: WorldNumber;
@@ -175,6 +176,7 @@ export class ProfileChooser {
     }
 
     private render(): void {
+        this.options.beforeRender?.();
         this.list.textContent = '';
         const profiles = vault.list();
         if (profiles.length === 0) {

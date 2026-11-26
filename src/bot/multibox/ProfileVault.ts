@@ -188,7 +188,7 @@ export class ProfileVault {
         return result;
     }
 
-    private browserWrite<T>(operation: () => T | Promise<T>): Promise<T> {
+    private withBrowserLock<T>(operation: () => T | Promise<T>): Promise<T> {
         return this.queueShared(async () => {
             if (!navigator.locks?.request) throw new Error('Saving profiles requires browser Web Locks support.');
             return navigator.locks.request(KEY, operation);
@@ -197,7 +197,7 @@ export class ProfileVault {
 
     async refresh(): Promise<void> {
         if (!this.shared) return;
-        return this.queueShared(async () => {
+        const read = async () => {
             if (!this.key) return;
             const generation = this.persistGeneration;
             const raw = this.storage!.getItem(KEY);
@@ -213,7 +213,8 @@ export class ProfileVault {
             this.cache = payload.profiles;
             this.customTabs = payload.tabs;
             this.active = payload.activeTab;
-        });
+        };
+        return !desktopStorage && typeof navigator.locks?.request === 'function' ? this.withBrowserLock(read) : this.queueShared(read);
     }
 
     private async decrypt(blob: StoredBlob): Promise<VaultPayload> {
@@ -266,7 +267,7 @@ export class ProfileVault {
             throw new Error('Saved accounts changed in another instance; try again.');
         };
         if (!this.shared) return this.queueReplacement(update);
-        return desktopStorage ? this.queueShared(update) : this.browserWrite(update);
+        return desktopStorage ? this.queueShared(update) : this.withBrowserLock(update);
     }
 
     status(): VaultStatus {
@@ -287,7 +288,7 @@ export class ProfileVault {
     }
 
     async setup(pass: string): Promise<void> {
-        if (this.shared && !desktopStorage) return this.browserWrite(() => this.setupStored(pass));
+        if (this.shared && !desktopStorage) return this.withBrowserLock(() => this.setupStored(pass));
         return this.setupStored(pass);
     }
 
@@ -345,7 +346,7 @@ export class ProfileVault {
     }
 
     async reset(): Promise<void> {
-        if (this.shared && !desktopStorage) return this.browserWrite(() => this.resetStored());
+        if (this.shared && !desktopStorage) return this.withBrowserLock(() => this.resetStored());
         this.resetStored();
     }
 

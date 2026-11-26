@@ -24,6 +24,8 @@ export interface ProfileFile extends ProfileSnapshot {
 }
 
 const MAIN_TAB = 'Main';
+export const PROFILE_IMPORT_REVISION_KEY = 'rs2b0t:profile-import-revision';
+const initialImportRevision = !desktopStorage && typeof localStorage !== 'undefined' ? localStorage.getItem(PROFILE_IMPORT_REVISION_KEY) : null;
 
 export function serializeProfileFile(data: ProfileSnapshot): string {
     requireProfiles(data.profiles);
@@ -84,7 +86,7 @@ export function collectBoxStorage(usernames: string[], includeLegacy?: ConfirmLe
     if (typeof localStorage !== 'undefined') {
         readStore(localStorage, usernames, out, legacy);
     }
-    if (typeof sessionStorage !== 'undefined') {
+    if (typeof sessionStorage !== 'undefined' && !pendingSettingsImport()) {
         readStore(sessionStorage, usernames, out, legacy, !!desktopStorage);
     }
     if (legacy && includeLegacy) {
@@ -124,6 +126,30 @@ export function applyBoxStorage(storage: BoxStorageMap, wipe: string[]): void {
             }
         }
     }
+    if (!desktopStorage && typeof localStorage !== 'undefined' && typeof sessionStorage !== 'undefined') {
+        const revision = crypto.randomUUID();
+        sessionStorage.setItem(PROFILE_IMPORT_REVISION_KEY, revision);
+        localStorage.setItem(PROFILE_IMPORT_REVISION_KEY, revision);
+    }
+}
+
+export function pendingSettingsImport(): string | null {
+    if (desktopStorage || typeof localStorage === 'undefined' || typeof sessionStorage === 'undefined') return null;
+    const revision = localStorage.getItem(PROFILE_IMPORT_REVISION_KEY);
+    const applied = sessionStorage.getItem(PROFILE_IMPORT_REVISION_KEY) ?? initialImportRevision;
+    return revision === applied ? null : revision;
+}
+
+export function refreshImportedSettings(users: string[], revision: string): void {
+    const boxes = users.map(user => ({ user, prefix: boxStoragePrefix(user) }));
+    for (const key of storeKeys(sessionStorage)) {
+        if (!boxes.some(({ user, prefix }) => boxSuffix(key, prefix, user) !== null)) continue;
+        const value = localStorage.getItem(key);
+        if (sessionStorage.getItem(key) === value) continue;
+        if (value === null) sessionStorage.removeItem(key);
+        else sessionStorage.setItem(key, value);
+    }
+    sessionStorage.setItem(PROFILE_IMPORT_REVISION_KEY, revision);
 }
 
 function readStore(store: Storage, usernames: string[], out: BoxStorageMap, legacy?: LegacySettings, desktopSession = false): void {
