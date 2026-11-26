@@ -16,6 +16,10 @@ describe('findForwardRecoveryIndex', () => {
         expect(idx).toBe(20);
     });
 
+    test('falls back to the furthest corridor tile when every probe fails', () => {
+        expect(findForwardRecoveryIndex(line, t(5, 0), 5, () => false, { corridor: 3 })).toBe(8);
+    });
+
     test('returns -1 when nothing ahead', () => {
         const me = t(40, 0);
         expect(findForwardRecoveryIndex(line, me, 40, () => true)).toBe(-1);

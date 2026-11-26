@@ -865,9 +865,6 @@ class WalkExecutorImpl {
         const follow = this.pathFollow;
         const approachR = follow.transportApproachChebyshev;
 
-        const clickable = (t: WorldTile): boolean =>
-            reader.toLocal(t.x, t.z) !== null && Reachability.canReach(t, { maxSteps: REACH_CHECK_STEPS });
-
         while (performance.now() < deadline) {
             if (EventSignal.pending()) {
                 return 'interrupted';
@@ -1019,7 +1016,7 @@ class WalkExecutorImpl {
                 const recoverLimit = nextCrossingIdx !== -1 ? nextCrossingIdx - 1 : tiles.length - 1;
                 const recover =
                     stallRetries === 0
-                        ? findForwardRecoveryIndex(tiles, me, pathIdx, clickable, {
+                        ? findForwardRecoveryIndex(tiles, me, pathIdx, Reachability.routeProbe(me, REACH_CHECK_STEPS), {
                             corridor: CORRIDOR,
                             window: PROGRESS_WINDOW + 20,
                             limitIdx: recoverLimit
@@ -1149,6 +1146,7 @@ class WalkExecutorImpl {
                     }
                     return ok;
                 };
+                const clickable = Reachability.routeProbe(me, REACH_CHECK_STEPS);
                 let chosen = selectClientWalkTarget(tiles, pathIdx, steps, limit, me.level, clickable, tryWalkAt);
                 if (chosen === -1) {
                     const starve = starvedTerminalIndex(tiles, me, clickable);

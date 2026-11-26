@@ -5,6 +5,7 @@ import { WATCHTOWER_STAGE, parseWatchtowerJournal } from '#/bot/api/ai/quests/de
 import { flagValue, hasFlag } from '#/bot/api/ai/quests/engine/types.js';
 import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
 import { decide, watchtower } from '#/bot/api/ai/quests/defs/watchtower/index.js';
+import { decisionSnapshot } from './decision-snapshot.fixture.js';
 
 const at = (x: number, z: number, level = 0) => ({ x, z, level });
 
@@ -170,22 +171,7 @@ describe('parseWatchtowerJournal', () => {
 });
 
 function snapshot(o: Partial<QuestSnapshot> = {}): QuestSnapshot {
-    return {
-        journal: o.journal ?? 'inProgress',
-        inv: o.inv ?? new Map(),
-        invIds: o.invIds ?? new Map(),
-        worn: o.worn ?? new Set(),
-        wornIds: o.wornIds ?? new Set(),
-        noProgress: 0,
-        bankCoins: o.bankCoins ?? 0,
-        stage: o.stage ?? o.progress?.stage,
-        progress: o.progress,
-        bank: o.bank ?? new Map(),
-        bankIds: o.bankIds ?? new Map(),
-        bankKnown: o.bankKnown ?? true,
-        tile: o.tile === undefined ? { x: 2612, z: 3092, level: 0 } : o.tile,
-        freeSlots: o.freeSlots ?? 28
-    };
+    return decisionSnapshot({ x: 2612, z: 3092, level: 0 }, o);
 }
 
 describe('watchtower decide — terminal cases', () => {

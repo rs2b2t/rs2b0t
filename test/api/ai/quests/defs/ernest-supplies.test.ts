@@ -4,6 +4,7 @@ import { EC_ID } from '#/bot/api/ai/quests/defs/ernest/areas.js';
 import { kit } from '#/bot/api/ai/quests/defs/ernest/supplies.js';
 import { QuestFood } from '#/bot/api/ai/quests/food.js';
 import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
+import { ernestSnapshot } from './ernest-snapshot.fixture.js';
 
 // QuestFood is a live module-level object; restore it or this file silently
 // changes whichever test bun runs next.
@@ -19,20 +20,7 @@ function snap(options: {
     food?: number;
     bankKnown?: boolean;
 } = {}): QuestSnapshot {
-    return {
-        journal: 'inProgress',
-        inv: new Map([['lobster', options.food ?? 10]]),
-        invIds: new Map(options.invIds ?? [[EC_ID.SPADE, 1]]),
-        worn: new Set(),
-        wornIds: new Set(),
-        noProgress: 0,
-        bankCoins: 2_000_000,
-        bank: new Map(options.bank ?? []),
-        bankIds: new Map(options.bankIds ?? []),
-        bankKnown: options.bankKnown ?? true,
-        tile: { x: 3093, z: 3243, level: 0 },
-        freeSlots: 20
-    };
+    return ernestSnapshot({ ...options, journal: 'inProgress', food: options.food ?? 10 });
 }
 
 describe('Ernest kit()', () => {
