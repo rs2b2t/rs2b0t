@@ -1,8 +1,8 @@
 import { MARKET_PRICES } from '../../data/marketprices.js';
 import { ALCH_ITEMS, CUSTOM_ALCH_KEY, DEFAULT_ALCH_ITEMS, HIGH_ALCH_LEVEL, HIGH_ALCH_FIRES, customAlchItem, type AlchItem } from '../../api/magic/alchemy.js';
 import { FIRE_STAFF, NATURE_RUNE, pickFireStaff } from '../../api/magic/fireStaves.js';
-import { barsPerTrip, MAGIC_REQUIRED, SUPERHEAT_FIRES } from '../../api/magic/superheat.js';
-import { barsSmeltable, RECIPES } from '../../data/smelting.js';
+import { superheatBatchSize, MAGIC_REQUIRED, SUPERHEAT_FIRES } from '../../api/magic/superheat.js';
+import { RECIPES } from '../../data/smelting.js';
 import { purchaseBudget, shoppingReserve, supplyOffer } from './offers.js';
 import { requirementKey, stockOf, type ActivityPlan, type LevelerSnapshot, type Requirement } from './types.js';
 
@@ -49,7 +49,7 @@ export function utilityMagicPlan(s: LevelerSnapshot, objective: string): Activit
     const heat = fuel(SUPERHEAT_FIRES);
     for (const recipe of RECIPES.toReversed()) {
         if (s.levels.smithing < recipe.level) continue;
-        const count = Math.min(heat.casts, barsPerTrip(recipe, heat.useFireRunes), barsSmeltable(recipe, ore => stockOf(s, ore)));
+        const count = superheatBatchSize(recipe, heat.casts, heat.useFireRunes, ore => stockOf(s, ore));
         if (!count) continue;
         return { id: 'superheat-' + recipe.bar.toLowerCase(), label: 'Superheat ' + recipe.bar + ' bars', objective, script: 'Superheater',
             settings: { bar: recipe.bar, useFireRunes: heat.useFireRunes, goldsmithGauntlets: recipe.bar === 'Gold' && stockOf(s, 'Goldsmith gauntlet') > 0 },
