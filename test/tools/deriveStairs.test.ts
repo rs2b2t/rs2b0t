@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -9,6 +9,7 @@ const previous = Buffer.from('[ { "from": {"x":1,"z":2,"level":0}, "to": {"x":1,
 let root: string;
 let stairs: string;
 let out: string;
+let transports: string;
 
 beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'derive-stairs-'));
@@ -36,7 +37,8 @@ case 0_50_50_29_13 : p_telejump(1_50_50_29_13);
 
     const data = join(root, 'src/bot/event/webwalk/data');
     mkdirSync(data, { recursive: true });
-    writeFileSync(join(data, 'transports.json'), '[]');
+    transports = join(data, 'transports.json');
+    writeFileSync(transports, '[]');
     out = join(data, 'stairEdges.json');
     writeFileSync(out, previous);
 });
@@ -83,6 +85,42 @@ function placeStairs(placements: string, pack = '1=stairs\n', configs = '[stairs
     writeFileSync(join(root, 'content/scripts/stairs.loc'), configs);
     writeFileSync(join(root, 'content/maps/m50_50.jm2'), '==== LOC ====\n' + placements);
 }
+
+test('the shell rebuild publishes both graphs only after enrichment succeeds', () => {
+    symlinkSync(join(import.meta.dir, '../../tools'), join(root, 'tools'), 'dir');
+    appendFileSync(stairs, 'case 0_43_53_55_62 : p_telejump(1_43_53_55_62);\n');
+    placeStairs('0 5 9: 1 10\n0 29 13: 1 10\n');
+    const maps = join(root, 'content/maps');
+    writeFileSync(join(maps, 'm50_53.jm2'), '==== LOC ====\n0 55 28: 1 10\n');
+    const from = { x: 3205, z: 3209, level: 0 };
+    const edge = { from, to: { ...from, x: 3210 }, locName: 'Stairs', action: 'Climb-up', kind: 'shortcut' };
+    const curated = Buffer.from(JSON.stringify([edge]) + '\r\n');
+    writeFileSync(transports, curated);
+    const rebuild = () => Bun.spawnSync(['sh', 'tools/nav/derive-transports.sh'], {
+        cwd: root,
+        env: {
+            PATH: process.env.PATH,
+            ENGINE_DIR: 'engine',
+            CONTENT_DIR: 'content',
+            NAV_PACK_PATH: 'collision.lcnav',
+            PYTHONDONTWRITEBYTECODE: '1'
+        }
+    });
+
+    const failed = rebuild();
+    expect(failed.exitCode, failed.stderr.toString()).toBe(1);
+    expect(failed.stderr.toString()).toContain('Missing scripted placement for stairs (Climb-up) at (2807, 3454, 0)');
+    expect(readFileSync(out)).toEqual(previous);
+    expect(readFileSync(transports)).toEqual(curated);
+
+    writeFileSync(join(maps, 'm43_53.jm2'), '==== LOC ====\n0 55 62: 1 10\n');
+    const retried = rebuild();
+    expect(retried.exitCode, retried.stderr.toString()).toBe(0);
+    expect(JSON.parse(readFileSync(transports, 'utf8'))).toMatchObject([{ ...edge, locId: 1 }]);
+    const edges = JSON.parse(readFileSync(out, 'utf8'));
+    expect(edges).toHaveLength(8);
+    expect(edges).toContainEqual(expect.objectContaining({ locX: 2807, locZ: 3454, locId: 1 }));
+});
 
 function runEnricher(args: string[] = [], exitCode = 0) {
     const result = Bun.spawnSync(['python3', '-B', enricher, '--content', 'content', ...args], { cwd: root });
