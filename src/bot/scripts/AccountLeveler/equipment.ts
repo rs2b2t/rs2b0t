@@ -1,4 +1,5 @@
 import { AXES, PICKAXES } from '../../api/acquisition/Tools.js';
+import { BOW_TIERS, SHORTBOW } from '../../data/bows.js';
 import { DRAGONHIDE_SLOTS, DRAGONHIDE_TIERS } from '../../data/dragonhide.js';
 import { isRuneGearShop, purchaseBudget, supplyOffer } from './offers.js';
 import { requirementKey, stockOf, type LevelerSnapshot, type Requirement } from './types.js';
@@ -14,14 +15,7 @@ export function combatGauntlets(s: LevelerSnapshot): Requirement[] {
 
 const metals = [{ item: 'Rune', level: 40 }, { item: 'Adamant', level: 30 }, { item: 'Mithril', level: 20 },
     { item: 'Black', level: 10 }, { item: 'Steel', level: 5 }, { item: 'Iron', level: 1 }, { item: 'Bronze', level: 1 }];
-const bows: Choice[] = [
-    { item: 'Magic shortbow', id: 861, level: 50 }, { item: 'Magic longbow', id: 859, level: 50 },
-    { item: 'Yew shortbow', id: 857, level: 40 }, { item: 'Yew longbow', id: 855, level: 40 },
-    { item: 'Maple shortbow', id: 853, level: 30 }, { item: 'Maple longbow', id: 851, level: 30 },
-    { item: 'Willow shortbow', id: 849, level: 20 }, { item: 'Willow longbow', id: 847, level: 20 },
-    { item: 'Oak shortbow', id: 843, level: 5 }, { item: 'Oak longbow', id: 845, level: 5 },
-    { item: 'Shortbow', id: 841, level: 1 }, { item: 'Longbow', id: 839, level: 1 }
-];
+const bows: Choice[] = BOW_TIERS.map(({ name, id, level }) => ({ item: name, id, level }));
 
 function cost(s: LevelerSnapshot, level: number, choice: Choice): number {
     if (level < choice.level || (choice.quest && !s.quests[choice.quest])) return Infinity;
@@ -102,7 +96,7 @@ export function rangedBow(s: LevelerSnapshot): Requirement {
         if (price === 0 || price <= (s.stock.coins ?? 0) - 200) return need;
         if (!Number.isFinite(price) && bow.item.endsWith('shortbow') && (s.stock.coins ?? 0) > 200 && s.marketItem?.(need) !== undefined) return need;
     }
-    return { item: 'Shortbow', id: 841, count: 1, carry: 1, equip: true };
+    return { item: SHORTBOW.name, id: SHORTBOW.id, count: 1, carry: 1, equip: true };
 }
 
 const dragonhideNames = { body: 'Dragonhide body', chaps: 'Dragonhide chaps', vambraces: 'Dragon vambraces' };
