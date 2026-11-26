@@ -1,6 +1,6 @@
 import Tile from '../geometry/Tile.js';
 import { WORLDMAP_KEY_NAMES } from '../../client/mapview/worldmapKeyNames.js';
-import { boxId, boxKey, clearBoxItem, readBoxItem } from './box.js';
+import { boxId, boxKey, clearBoxItem, readBoxItem, replaceBoxSettings } from './box.js';
 import { signedOptions } from './optionSelection.js';
 
 type SettingType = 'boolean' | 'number' | 'string' | 'string[]' | 'tile';
@@ -578,6 +578,17 @@ class SettingsStoreImpl {
         if (hasLocal) {
             localStorage.setItem(address, rawString);
         }
+        this.notifyChange(name, key, rawString);
+    }
+
+    replace(name: string, keys: Set<string>, values: Record<string, string>): void {
+        const scripts = name === 'JiveRC' ? [name, 'NatureCrafter'] : [name];
+        const suffixes = scripts.flatMap(script => Array.from(keys, key => `set:${script}:${key}`));
+        replaceBoxSettings([sessionStorage, localStorage], boxId(), name, suffixes, values);
+        for (const [key, value] of Object.entries(values)) this.notifyChange(name, key, value);
+    }
+
+    private notifyChange(name: string, key: string, rawString: string): void {
         for (const fn of this.changeListeners) {
             try {
                 fn(name, key, rawString);

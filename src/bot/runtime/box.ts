@@ -120,14 +120,38 @@ export function readBoxItem(suffix: string, id: string): string | null {
     return null;
 }
 
-export function clearBoxItem(store: Storage, suffix: string, id: string): void {
+function writeItem(store: Storage, key: string, value: string | null): void {
+    if (value === null) store.removeItem(key);
+    else store.setItem(key, value);
+}
+
+export function clearBoxItem(store: Storage, suffix: string, id: string, write = writeItem): void {
     const key = boxKey(suffix, id);
     const legacy = legacyKey(suffix, id);
     if (legacy && allowsLegacyBoxItem(store, key, id)) {
         const savedOnDesktop = desktopStorage && id !== '' && store === localStorage && store.getItem(key) !== null;
-        if (savedOnDesktop || store.getItem(legacy) !== null) store.setItem(clearedKey(key), '1');
+        if (savedOnDesktop || store.getItem(legacy) !== null) write(store, clearedKey(key), '1');
     }
-    store.removeItem(key);
+    write(store, key, null);
+}
+
+export function replaceBoxSettings(stores: Storage[], id: string, script: string, clearSuffixes: string[], values: Record<string, string>): void {
+    const undo: Array<{ store: Storage; key: string; value: string | null }> = [];
+    function write(store: Storage, key: string, value: string | null): void {
+        const previous = store.getItem(key);
+        if (previous === value) return;
+        writeItem(store, key, value);
+        undo.push({ store, key, value: previous });
+    }
+    try {
+        for (const store of stores) {
+            for (const suffix of clearSuffixes) clearBoxItem(store, suffix, id, write);
+            for (const [key, value] of Object.entries(values)) write(store, boxKey(`set:${script}:${key}`, id), value);
+        }
+    } catch (error) {
+        for (const { store, key, value } of undo.reverse()) writeItem(store, key, value);
+        throw error;
+    }
 }
 
 export function legacyBoxSuffix(store: Storage, key: string, id: string): string | null {

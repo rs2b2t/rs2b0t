@@ -203,6 +203,62 @@ test('read returns effective registered parameters and copied values remain inde
     expect(client.scripts()).toEqual(expect.arrayContaining(names));
 });
 
+test.each(['loaded', 'unloaded'])('%s target keeps both stores when the second copied setting exceeds quota', async target => {
+    Reflect.get(window, 'happyDOM').setURL('http://localhost:8081/bot.html?box=loaded');
+    const profiles: RosterProfile[] = [target, 'source', 'good'].map(username => ({ username, tab: 'Main', world: 1 }));
+    if (target === 'loaded') profiles[0].slot = {
+        id: 1, username: target, tab: 'Main', focused: true, mode: 'focused', targetWorld: 1, switchingWorld: null,
+        ready: true, ingame: false, world: 1, player: '', loopCycle: 0, drawn: 0, scriptState: 'idle', scriptName: 'RosterDemo'
+    };
+    const actions = new RosterActions({ profiles: () => profiles, client: profile => profile.slot ? client : null, setWorld: async () => true });
+    const prefix = `rs2b0t:${target}:set:RosterDemo:`;
+    for (const store of [localStorage, sessionStorage]) {
+        store.setItem('rs2b0t:source:set:RosterDemo:leash', '12');
+        store.setItem('rs2b0t:source:set:RosterDemo:mode', 'None');
+        store.setItem('rs2b0t:good:set:RosterDemo:leash', '8');
+        store.setItem('rs2b0t:good:set:RosterDemo:mode', 'Auto');
+        store.setItem(prefix + 'leash', store === localStorage ? '17' : '19');
+    }
+    const limited = target === 'loaded' ? localStorage : sessionStorage;
+    const other = limited === localStorage ? sessionStorage : localStorage;
+    other.setItem(prefix + 'obsolete', '');
+    limited.setItem('padding', '1');
+    const capacity = limited.length;
+    const setItem = limited.setItem;
+    Object.defineProperty(limited, 'setItem', { configurable: true, value(key: string, value: string) {
+        if (limited.getItem(key) === null && limited.length >= capacity) throw new DOMException(key, 'QuotaExceededError');
+        setItem.call(limited, key, value);
+    } });
+    const command = { kind: 'copy', script: 'RosterDemo', source: 'source' } as const;
+    const changes: string[] = [];
+    const unsubscribe = SettingsStore.onChange((_name, key) => changes.push(key));
+    try {
+        const [good, failed] = await actions.run(['good', target], command);
+        expect(good.state).toBe('done');
+        expect(failed).toMatchObject({ state: 'failed', message: prefix + 'mode' });
+        expect(changes).toEqual([]);
+        for (const store of [localStorage, sessionStorage]) {
+            expect(store.getItem(prefix + 'leash')).toBe(store === localStorage ? '17' : '19');
+            expect(store.getItem(prefix + 'mode')).toBeNull();
+            expect(store.getItem(prefix + 'obsolete')).toBe(store === other ? '' : null);
+            expect(store.getItem('rs2b0t:good:set:RosterDemo:leash')).toBe('12');
+            expect(store.getItem('rs2b0t:good:set:RosterDemo:mode')).toBe('None');
+        }
+        limited.removeItem('padding');
+        expect((await actions.run([target], command))[0].state).toBe('done');
+        expect(changes).toEqual(target === 'loaded' ? ['leash', 'mode'] : []);
+        for (const store of [localStorage, sessionStorage]) {
+            expect(store.getItem(prefix + 'leash')).toBe('12');
+            expect(store.getItem(prefix + 'mode')).toBe('None');
+            expect(store.getItem(prefix + 'obsolete')).toBeNull();
+        }
+    } finally {
+        unsubscribe();
+        Object.defineProperty(limited, 'setItem', { value: setItem });
+        Reflect.get(window, 'happyDOM').setURL('http://localhost:8081/bot.html');
+    }
+});
+
 for (const state of ['running', 'paused', 'stopping']) test(`${state} blocks assignments, copies, editing and starts at the panel boundary`, () => {
     runner.setState(state);
     expect(() => client.assignScript('RosterOther')).toThrow();

@@ -261,10 +261,8 @@ export default class BotPanel {
     copyScriptSettings(name: string, values: Record<string, string>): void {
         this.assertScriptIdle();
         const { name: script, keys } = this.validateSettings(name, values);
-        name = script;
         this.paramsModal.close();
-        for (const key of keys) SettingsStore.clear(name, key);
-        for (const [key, value] of Object.entries(values)) SettingsStore.save(name, key, value);
+        SettingsStore.replace(script, keys, values);
         this.renderSettings();
     }
 
