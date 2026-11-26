@@ -87,6 +87,19 @@ function placeStairs(placements: string, pack = '1=stairs\n', configs = '[stairs
     writeFileSync(join(root, 'content/maps/m50_50.jm2'), '==== LOC ====\n' + placements);
 }
 
+function rebuild() {
+    return Bun.spawnSync(['sh', 'tools/nav/derive-transports.sh'], {
+        cwd: root,
+        env: {
+            PATH: process.env.PATH,
+            ENGINE_DIR: 'engine',
+            CONTENT_DIR: 'content',
+            NAV_PACK_PATH: 'collision.lcnav',
+            PYTHONDONTWRITEBYTECODE: '1'
+        }
+    });
+}
+
 test('the shell rebuild publishes both graphs only after enrichment succeeds', () => {
     symlinkSync(join(import.meta.dir, '../../tools'), join(root, 'tools'), 'dir');
     appendFileSync(stairs, 'case 0_43_53_55_62 : p_telejump(1_43_53_55_62);\n');
@@ -97,17 +110,6 @@ test('the shell rebuild publishes both graphs only after enrichment succeeds', (
     const edge = { from, to: { ...from, x: 3210 }, locName: 'Stairs', action: 'Climb-up', kind: 'shortcut' };
     const curated = Buffer.from(JSON.stringify([edge]) + '\r\n');
     writeFileSync(transports, curated);
-    const rebuild = () => Bun.spawnSync(['sh', 'tools/nav/derive-transports.sh'], {
-        cwd: root,
-        env: {
-            PATH: process.env.PATH,
-            ENGINE_DIR: 'engine',
-            CONTENT_DIR: 'content',
-            NAV_PACK_PATH: 'collision.lcnav',
-            PYTHONDONTWRITEBYTECODE: '1'
-        }
-    });
-
     const failed = rebuild();
     expect(failed.exitCode, failed.stderr.toString()).toBe(1);
     expect(failed.stderr.toString()).toContain('Missing scripted placement for stairs (Climb-up) at (2807, 3454, 0)');
@@ -243,33 +245,79 @@ test('a shared stand tile keeps the scripted landing of each adjacent staircase'
     const east = { ...west, x: 3207 };
     const westLanding = { ...from, x: 3208, level: 1 };
     const eastLanding = { ...westLanding, x: 3207 };
+    const eastApproach = { ...from, x: 3208 };
     const edges = enrich([
         { ...stair, to: { ...westLanding, x: 3204 }, autoReverse: true },
         { ...stair, to: westLanding, scriptedLocs: [west] },
-        { ...stair, to: eastLanding, scriptedLocs: [east] }
+        { ...stair, to: eastLanding, scriptedLocs: [east] },
+        { ...stair, from: eastApproach, to: { ...eastLanding, x: 3202 }, autoReverse: true }
     ]);
     const metadata = { ...stair, locId: 1, locZ: 3209, debugName: 'stairs', options: ['Climb-up'] };
     expect(edges).toEqual([
         { ...metadata, locX: 3205, to: westLanding },
-        { ...metadata, locX: 3207, to: eastLanding }
+        { ...metadata, locX: 3207, to: eastLanding },
+        { ...metadata, from: eastApproach, locX: 3207, to: eastLanding }
     ]);
     expect(enrich(edges)).toEqual(edges);
 });
 
+test.each([
+    { name: 'out of reach', length: 1, wall: 0, approach: 'north', reachable: false },
+    { name: 'against the west wall', length: 3, wall: 8, approach: 'north', reachable: false },
+    { name: 'on a forbidden face', length: 3, wall: 0, approach: 'west', reachable: false },
+    { name: 'beside the rotated footprint', length: 3, wall: 0, approach: 'north', reachable: true }
+])('an isolated reverse starts $name', ({ length, wall, approach, reachable }) => {
+    const level = Buffer.alloc(4096 + 512 + 2048);
+    level.fill(0xff, 4096, 4096 + 512);
+    const ground = Buffer.from(level);
+    const stand = 8 * 64 + 21;
+    ground[4096 + 512 + (stand >> 1)] = wall << 4;
+    const pack = Buffer.concat([
+        Buffer.from('LCNV'), Buffer.from([2, 0, 0, 0, 3, 0]),
+        Buffer.from([50, 50, 3]), ground, level,
+        Buffer.from([50, 53, 3]), level, level,
+        Buffer.from([43, 53, 3]), level, level
+    ]);
+    writeFileSync(join(root, 'collision.lcnav'), pack);
+    const locDat = join(root, 'engine/data/pack/server/loc.dat');
+    const def = readFileSync(locDat).subarray(0, -1);
+    writeFileSync(locDat, Buffer.concat([def, Buffer.from([31]), Buffer.from('Climb-down\n\0')]));
+    appendFileSync(stairs, `case 0_43_53_55_62 : p_telejump(1_43_53_55_62);
+case 0_50_50_5_21 : p_telejump(1_50_50_4_21);
+[oploc2,stairs]
+case 1_50_50_6_21 : p_telejump(0_50_50_8_21);
+`);
+    placeStairs('0 5 9: 1 10\n0 29 13: 1 10\n0 5 21: 1 10 1\n1 6 21: 1 10\n', '1=stairs\n',
+        `[stairs]\nname=Stairs\nop1=Climb-up\nop2=Climb-down\nlength=${length}\nforceapproach=${approach}\n`);
+    writeFileSync(join(root, 'content/maps/m50_53.jm2'), '==== LOC ====\n0 55 28: 1 10\n');
+    writeFileSync(join(root, 'content/maps/m43_53.jm2'), '==== LOC ====\n0 55 62: 1 10\n');
+    symlinkSync(join(import.meta.dir, '../../tools'), join(root, 'tools'), 'dir');
+    const result = rebuild();
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    runEnricher(['--check']);
+    const finder = new PathFinder(pack);
+    finder.addEdges([], [], JSON.parse(readFileSync(out, 'utf8')));
+    const to = { x: 3204, z: 3221, level: 1 };
+    expect(finder.findPath({ x: 3205, z: 3221, level: 0 }, to)).toMatchObject({ ok: true, cost: 6 });
+    expect(finder.findPath({ x: 3208, z: 3221, level: 0 }, to)).toMatchObject(
+        reachable ? { ok: true, cost: 6 } : { ok: false, reason: 'unreachable' }
+    );
+});
+
 test('a generated descent uses the staircase on its source floor', () => {
-    placeStairs('1 7 9: 1 10\n2 5 9: 1 10\n', '1=stairs\n', '[stairs]\nname=Stairs\nop1=Climb-down\n');
+    placeStairs('1 6 9: 1 10\n2 5 9: 1 10\n', '1=stairs\n', '[stairs]\nname=Stairs\nop1=Climb-down\n');
     const from = { x: 3205, z: 3209, level: 1 };
     const landing = { ...from, x: 3208, level: 0 };
     const stair = { locName: 'Stairs', action: 'Climb-down', kind: 'stair' };
-    const lower = { ...from, x: 3207, debugName: 'stairs', action: stair.action };
+    const lower = { ...from, x: 3206, debugName: 'stairs', action: stair.action };
     const upper = { ...lower, x: 3205, level: 2 };
     const edges = enrich([
         { ...stair, from, to: { ...from, level: 0 }, autoReverse: true },
-        { ...stair, from: { ...from, x: 3206 }, to: landing, scriptedLocs: [lower] },
+        { ...stair, from: { ...from, x: 3207 }, to: landing, scriptedLocs: [lower] },
         { ...stair, from: { ...from, level: 2 }, to: { ...from, x: 3206 }, scriptedLocs: [upper] }
     ]);
     expect(edges).toContainEqual({
-        ...stair, from, to: landing, locX: 3207, locZ: 3209, locId: 1, debugName: 'stairs', options: ['Climb-down']
+        ...stair, from, to: landing, locX: 3206, locZ: 3209, locId: 1, debugName: 'stairs', options: ['Climb-down']
     });
     runEnricher(['--check']);
 });

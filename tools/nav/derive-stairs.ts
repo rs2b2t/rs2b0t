@@ -27,6 +27,7 @@ const LADDER_LOC_IDS = new Set([1746, 1747, 1748, 1749, 1750]);
 interface StairEdge extends TransportEdgeData {
     scriptedLocs?: (NavPoint & { debugName: string; action: string })[];
     autoReverse?: boolean;
+    fromWalls?: number;
 }
 
 // The Castle Wars spawn trapdoors have no Climb-down, and the Handelmort stairs are trapped.
@@ -264,6 +265,8 @@ function snapAndReverse(finder: PathFinder, curated: TransportEdgeData[], raw: S
                 kind: edgeKind(e),
                 autoReverse: true
             };
+            const walls = finder.wallMask(e.to.x, e.to.z, e.to.level);
+            if (walls) reverse.fromWalls = walls;
             const disabledReason = DISABLED_AUTO_REVERSES.get(key(reverse));
             add(disabledReason ? { ...reverse, disabledReason } : reverse);
         }

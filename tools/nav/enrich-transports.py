@@ -22,6 +22,9 @@ class LocConfig:
     debug_name: str
     display_name: str | None = None
     options: list[str | None] = field(default_factory=lambda: [None] * 5)
+    width: int = 1
+    length: int = 1
+    force_approach: str | None = None
 
 
 @dataclass(frozen=True)
@@ -87,6 +90,12 @@ def load_loc_configs(content: Path) -> dict[int, LocConfig]:
             value = clean_value(value)
             if key == "name":
                 current.display_name = value
+            elif key == "width":
+                current.width = int(value)
+            elif key == "length":
+                current.length = int(value)
+            elif key == "forceapproach":
+                current.force_approach = value
             elif len(key) == 3 and key.startswith("op") and key[2].isdigit():
                 index = int(key[2]) - 1
                 if 0 <= index < 5:
@@ -161,6 +170,29 @@ def candidates_near(
                     yield distance, placement
 
 
+def can_operate(source: dict, walls: int, placement: Placement, config: LocConfig) -> bool:
+    width, length = config.width, config.length
+    if placement.angle & 1:
+        width, length = length, width
+    x, z = source["x"] - placement.x, source["z"] - placement.z
+    if 0 <= x < width and 0 <= z < length:
+        return True
+    if 0 <= x < width and z == length:
+        side = 0
+    elif x == width and 0 <= z < length:
+        side = 1
+    elif 0 <= x < width and z == -1:
+        side = 2
+    elif x == -1 and 0 <= z < length:
+        side = 3
+    else:
+        return False
+    if walls & (1 << ((side + 2) % 4)):
+        return False
+    directions = ("north", "east", "south", "west")
+    return not config.force_approach or config.force_approach == directions[(side - placement.angle) % 4]
+
+
 def resolve_source_loc(
     edge: dict,
     configs: dict[int, LocConfig],
@@ -168,11 +200,12 @@ def resolve_source_loc(
     allowed_stair_debugs: set[str],
     *,
     generated_stair: bool,
+    reverse_walls: int | None = None,
 ) -> tuple[LocConfig, Placement] | None:
     wanted_name = normalized(edge.get("locName"))
     wanted_action = normalized(edge.get("action"))
     kind = normalized(edge.get("kind"))
-    ranked: list[tuple[float, float, int, int, LocConfig, Placement]] = []
+    ranked: list[tuple[bool, float, float, int, int, LocConfig, Placement]] = []
 
     source = edge["from"]
     destination = edge["to"]
@@ -233,17 +266,14 @@ def resolve_source_loc(
             corridor_distance = max(abs(placement.x - midpoint_x), abs(placement.z - midpoint_z))
             proximity = corridor_distance if use_midpoint else distance
             score -= proximity * 6
-            ranked.append((score, -proximity, -distance, -placement.loc_id, config, placement))
+            if score >= 70:
+                operable = reverse_walls is None or can_operate(source, reverse_walls, placement, placed_config)
+                ranked.append((operable, score, -proximity, -distance, -placement.loc_id, config, placement))
 
     if not ranked:
         return None
-    ranked.sort(key=lambda item: item[:4], reverse=True)
-    best = ranked[0]
-    # Name-only matches far from the source are too ambiguous for common names
-    # such as Door, Gate, Ladder, and Staircase.
-    if best[0] < 70:
-        return None
-    return best[4], best[5]
+    best = max(ranked, key=lambda item: item[:5])
+    return best[-2], best[-1]
 
 
 def edge_key(edge: dict) -> tuple[int, int, int, int, int, int, str, str]:
@@ -374,6 +404,7 @@ def main() -> None:
             edge = dict(raw)
             scripted_locs = edge.pop("scriptedLocs", [])
             auto_reverse = edge.pop("autoReverse", False)
+            walls = edge.pop("fromWalls", 0)
             existing = configs.get(edge.get("locId", -1))
             source_backed_ladder = existing is not None and (
                 normalized(existing.display_name) == "ladder"
@@ -386,13 +417,18 @@ def main() -> None:
             if resolved is None and not scripted_locs:
                 levels = (edge["from"]["level"],) if generated_stairs else range(4)
                 candidates = candidates_near(spatial, edge["from"], levels)
-                resolved = resolve_source_loc(edge, configs, candidates, allowed_stair_debugs, generated_stair=generated_stairs)
+                resolved = resolve_source_loc(
+                    edge, configs, candidates, allowed_stair_debugs,
+                    generated_stair=generated_stairs, reverse_walls=walls if auto_reverse else None,
+                )
             if resolved:
                 config, placement = resolved
                 if auto_reverse and not edge.get("disabledReason"):
                     key = (placement.x, placement.z, placement.level, config.debug_name, normalized(edge["action"]))
                     matches = scripted_edges.get(key, [])
-                    if matches and all(e["to"] == matches[0]["to"] for e in matches):
+                    if not can_operate(edge["from"], walls, placement, configs[placement.loc_id]):
+                        edge["disabledReason"] = "Generated reverse cannot operate the staircase from its starting tile."
+                    elif matches and all(e["to"] == matches[0]["to"] for e in matches):
                         if any(e["from"] == edge["from"] for e in matches):
                             continue
                         edge["to"] = matches[0]["to"]
