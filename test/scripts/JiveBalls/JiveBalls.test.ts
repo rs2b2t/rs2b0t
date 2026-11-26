@@ -16,6 +16,7 @@ import { ScriptRegistry } from '#/bot/runtime/ScriptRegistry.js';
 import JiveBalls from '#/bot/scripts/JiveBalls/JiveBalls.js';
 import { SHEEP_SITES, chooseSite } from '#/bot/scripts/JiveBalls/sites.js';
 import '#/bot/scripts/index.js';
+import { depositMatching } from '../../fixtures/bank.js';
 
 afterEach(() => { mock.restore(); GameMessages.reset(); });
 
@@ -53,11 +54,7 @@ async function fixture(pack = [item(1735)], location = 'lumbridge') {
     spyOn(Bank, 'backpackReady').mockImplementation(async () => state.sideReady);
     spyOn(Bank, 'countById').mockImplementation(id => state.bank.get(id) ?? 0);
     spyOn(Bank, 'depositAllMatching').mockImplementation(async match => {
-        state.pack = state.pack.filter(i => {
-            if (!match(i.name!, i.id)) return true;
-            state.bank.set(i.id, (state.bank.get(i.id) ?? 0) + i.count);
-            return false;
-        });
+        state.pack = depositMatching(state.pack, state.bank, match);
     });
     spyOn(Bank, 'deposit').mockImplementation(name => {
         const target = state.pack.find(i => i.name === name);
