@@ -4,6 +4,7 @@ import { Traversal } from '../../../../walking/Traversal.js';
 import { talkStrict, type NpcStop } from '../../exec/primitives.js';
 import { wornId as worn } from '../../engine/snapshotItems.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
+import { selectTieredGear } from '../../tieredGear.js';
 import { questRecord } from '../../data/quests.js';
 import { FA_NPC, FA_OBJ, FA_TILE, pocketOf, type FaPocket } from './areas.js';
 import { FA_FIGHT } from './fights.js';
@@ -76,58 +77,21 @@ const FIGHT_BOUNCER = custom(`fight ${FA_FIGHT.bouncer.what}`, log =>
 
 // Why: the queue keeps its gear banked between quests, so a bot that walks in wearing nothing punches a level-137 dog for 116 hitpoints.
 // Why: Bouncer's damagetype is stab and its defences are flat, so a scimitar is as good as anything and faster than a two-hander.
-const TIERS = ['rune', 'adamant', 'mithril', 'black', 'steel', 'iron', 'bronze'] as const;
-
 // Why: chainbody outranks platebody because rune plate wants Dragon Slayer complete and refuses in silence.
-const KIT_SLOTS: readonly { readonly kinds: readonly string[] }[] = [
-    { kinds: ['scimitar', 'longsword', 'battleaxe', 'mace', 'sword'] },
-    { kinds: ['chainbody', 'platebody'] },
-    { kinds: ['platelegs', 'plateskirt'] },
-    { kinds: ['full helm', 'med helm'] },
-    { kinds: ['kiteshield', 'sq shield'] }
-];
+const KIT_SLOTS = [
+    ['scimitar', 'longsword', 'battleaxe', 'mace', 'sword'],
+    ['chainbody', 'platebody'],
+    ['platelegs', 'plateskirt'],
+    ['full helm', 'med helm'],
+    ['kiteshield', 'sq shield']
+] as const;
 
 /** Every word `KIT_SLOTS` can pick, so the spillover deposit never banks the kit. */
-export const KIT_KEEP: readonly string[] = KIT_SLOTS.flatMap(s => s.kinds);
-
-function wearingKind(snap: QuestSnapshot, kinds: readonly string[]): boolean {
-    for (const name of snap.worn) {
-        if (kinds.some(kind => name.endsWith(kind))) {
-            return true;
-        }
-    }
-    return false;
-}
-
-function bestForSlot(snap: QuestSnapshot, kinds: readonly string[]): string | null {
-    for (const tier of TIERS) {
-        for (const kind of kinds) {
-            const name = `${tier} ${kind}`;
-            if (unwearable.has(name)) {
-                continue;
-            }
-            if ((snap.bank?.get(name) ?? 0) > 0 || (snap.inv.get(name) ?? 0) > 0) {
-                return name[0]!.toUpperCase() + name.slice(1);
-            }
-        }
-    }
-    return null;
-}
+export const KIT_KEEP: readonly string[] = KIT_SLOTS.flat();
 
 /** The best melee kit the account owns for the slots it has not filled. */
 export function kitWanted(snap: QuestSnapshot): string[] {
-    const out: string[] = [];
-    for (const { kinds } of KIT_SLOTS) {
-        if (wearingKind(snap, kinds)) {
-            continue;
-        }
-        // Why: a two-hander would take the shield slot with it, and none of the weapon kinds here is one.
-        const pick = bestForSlot(snap, kinds);
-        if (pick) {
-            out.push(pick);
-        }
-    }
-    return out;
+    return selectTieredGear(snap, KIT_SLOTS, unwearable);
 }
 
 function outsideStep(snap: QuestSnapshot, stage: number): QuestStep {
