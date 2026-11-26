@@ -1,5 +1,5 @@
 import { afterEach, expect, mock, spyOn, test } from 'bun:test';
-import { reader, type InvItemSnapshot } from '#/bot/adapter/ClientAdapter.js';
+import type { InvItemSnapshot } from '#/bot/adapter/ClientAdapter.js';
 import { Bank } from '#/bot/api/bank/Bank.js';
 import { Banking } from '#/bot/api/bank/Banking.js';
 import { Execution } from '#/bot/api/execution/Execution.js';
@@ -7,6 +7,7 @@ import { Game } from '#/bot/api/game/Game.js';
 import { InvItem } from '#/bot/api/inventory/Inventory.js';
 import { ChatDialog } from '#/bot/api/ui/dialogue/ChatDialog.js';
 import JiveCaskets from '#/bot/scripts/JiveCaskets/JiveCaskets.js';
+import { installBankSpies } from '../../fixtures/bank.js';
 
 afterEach(() => mock.restore());
 
@@ -22,19 +23,8 @@ async function fixture(stock = 30) {
     spyOn(Game, 'ingame').mockReturnValue(true);
     spyOn(Game, 'sceneReady').mockReturnValue(true);
     spyOn(Game, 'tile').mockReturnValue({ x: 3185, z: 3440, level: 0 });
-    spyOn(reader, 'bankComId').mockImplementation(() => state.open ? 5382 : -1);
-    spyOn(reader, 'inventorySize').mockReturnValue(28);
-    spyOn(reader, 'inventory').mockImplementation(() => state.pack);
-    spyOn(reader, 'bankSideItems').mockImplementation(() => state.sideReady ? state.pack : []);
+    installBankSpies(state);
     spyOn(Banking, 'open').mockImplementation(async () => { state.dialog = false; state.open = true; return true; });
-    spyOn(Bank, 'waitReady').mockImplementation(async () => state.ready);
-    spyOn(Bank, 'backpackReady').mockImplementation(async () => state.sideReady);
-    spyOn(Bank, 'countById').mockImplementation(id => state.ready ? state.bank.get(id) ?? 0 : 0);
-    spyOn(Bank, 'depositInventory').mockImplementation(async () => {
-        for (const i of state.pack) state.bank.set(i.id, (state.bank.get(i.id) ?? 0) + i.count);
-        state.pack = [];
-    });
-    spyOn(Bank, 'setNoteMode').mockImplementation(async notes => { state.notes = notes; });
     spyOn(Bank, 'withdrawLoad').mockImplementation(async id => {
         expect(id).toBe(405);
         expect(state.notes).toBe(false);
@@ -43,7 +33,6 @@ async function fixture(stock = 30) {
         state.pack.push(...Array.from({ length: count }, () => item(405)));
         return count > 0;
     });
-    spyOn(Bank, 'close').mockImplementation(async () => { state.open = false; return true; });
     spyOn(ChatDialog, 'canContinue').mockImplementation(() => state.dialog);
     spyOn(ChatDialog, 'continue').mockImplementation(async () => { state.dialog = false; return true; });
     spyOn(Execution, 'delayUntil').mockImplementation(async condition => condition());
