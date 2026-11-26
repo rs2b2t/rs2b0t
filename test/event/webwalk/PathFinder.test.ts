@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { PathFinder, type TransportEdgeData } from '#/bot/event/webwalk/PathFinder.js';
+import { isolatedLandingFinder } from '../../lib/navCollision.js';
 
-function fullyWalkablePack(): Uint8Array {
+function fullyWalkablePack(exitMask = 0xff, mx = 0, mz = 0): Uint8Array {
     const perLevel = 4096 + 512;
     const bytes = new Uint8Array(10 + 3 + 2 * perLevel);
     bytes[0] = 0x4c;
@@ -12,11 +13,11 @@ function fullyWalkablePack(): Uint8Array {
     bytes[5] = 0;
     bytes[8] = 1;
     let pos = 10;
-    bytes[pos++] = 0;
-    bytes[pos++] = 0;
+    bytes[pos++] = mx;
+    bytes[pos++] = mz;
     bytes[pos++] = 0b0011;
     for (let level = 0; level < 2; level++) {
-        bytes.fill(0xff, pos, pos + 4096);
+        bytes.fill(exitMask, pos, pos + 4096);
         pos += 4096;
         bytes.fill(0xff, pos, pos + 512);
         pos += 512;
@@ -62,12 +63,125 @@ describe('PathFinder A* heuristic with transport shortcuts (#335)', () => {
             expect(out.cost).toBe(5);
         }
     });
+
+    test('follows chained shortcuts when the first landing is farther from the goal', () => {
+        const finder = new PathFinder(fullyWalkablePack());
+        const from = { x: 5, z: 5, level: 0 };
+        const to = { x: 55, z: 5, level: 0 };
+        const landing = { x: 4, z: 50, level: 0 };
+        const tunnel = { locName: 'Tunnel', action: 'Enter', kind: 'shortcut' };
+        finder.addEdges([], [
+            { ...tunnel, from: { ...from, x: 6 }, to: landing },
+            { ...tunnel, from: { ...landing, z: 51 }, to }
+        ]);
+        expect(finder.findPath(from, to, { maxExpansions: 10 })).toMatchObject({ ok: true, cost: 22 });
+    });
+
+    test('accounts for the far doorway on a long route and a new landing inside it', () => {
+        const room = v2Pack();
+        for (let i = 27; i <= 37; i++) {
+            room.blockTile(27, i);
+            room.blockTile(37, i);
+            room.blockTile(i, 27);
+            if (i !== 32) room.blockTile(i, 37);
+        }
+        const remote = v2Pack(2, 0).bytes;
+        const pack = new Uint8Array(room.bytes.length + remote.length - 10);
+        pack.set(room.bytes);
+        pack.set(remote.subarray(10), room.bytes.length);
+        pack[8] = 2;
+        const finder = new PathFinder(pack);
+        const start = { x: 140, z: 16, level: 0 };
+        const landing = { x: 32, z: 16, level: 0 };
+        const goal = { ...landing, z: 32 };
+        const tunnel = { kind: 'shortcut', locName: 'Tunnel', action: 'Enter' };
+        finder.addEdges([], [{ ...tunnel, from: start, to: landing }]);
+        expect(finder.findPath(start, goal, { maxExpansions: 500 })).toMatchObject({ ok: true, cost: 42 });
+
+        finder.addEdges([], [{ ...tunnel, from: { ...landing, x: 33 }, to: { ...goal, z: 33 } }]);
+        expect(finder.findPath(start, goal)).toMatchObject({ ok: true, cost: 22 });
+    });
+
+    const caster = {
+        members: true, skills: { magic: 25 }, quests: {}, freeSlots: 25,
+        items: { 'Law rune': 1, 'Fire rune': 1, 'Air rune': 3 }
+    };
+
+    test('only skips casts for a legal two-step walk', () => {
+        const from = { x: 3211, z: 3424, level: 0 };
+        const to = { ...from, x: 3213 };
+        const pack = fullyWalkablePack(0, 50, 53);
+        const startExit = 13 + (from.x & 63) * 64 + (from.z & 63);
+        pack[startExit] = 2;
+        pack[startExit + 64] = 2;
+        const finder = new PathFinder(pack);
+        const opts = { state: caster, useTeleportCatalog: true };
+        expect(finder.findPath(from, to, { ...opts, maxExpansions: 2 })).toEqual({
+            ok: true, cost: 2, expanded: 2, waypoints: [from, to], hops: []
+        });
+        expect(finder.findPath(from, to, { ...opts, maxExpansions: 1 })).toMatchObject({ ok: false, expanded: 2 });
+        const spell = { ok: true, cost: 10, hops: [{ kind: 'teleport' }] };
+        const avoidZones = [{ minX: 3212, maxX: 3212, minZ: from.z, maxZ: from.z }];
+        expect(finder.findPath(from, to, { ...opts, avoidZones })).toMatchObject(spell);
+        pack[startExit + 64] = 0;
+        expect(new PathFinder(pack).findPath(from, to, opts)).toMatchObject(spell);
+    });
+
+    test('can return to the start and cast after an essence entry changes the available exit', () => {
+        const from = { x: 3201, z: 3430, level: 0 };
+        const entry = { ...from, x: 3202 };
+        const varrock = { x: 3213, z: 3424, level: 0 };
+        const goal = { ...varrock, x: 3243 };
+        const pack = fullyWalkablePack(0, 50, 53);
+        pack[13 + (entry.x & 63) * 64 + (entry.z & 63)] = 1 << 3;
+        const finder = new PathFinder(pack);
+        const tunnel = { kind: 'dungeon', locName: 'Tunnel', action: 'Enter' };
+        finder.addEdges([], [
+            { ...tunnel, from, to: entry, requires: { essenceEntrySetsReturn: 'sedridor' } },
+            { ...tunnel, from: varrock, to: goal, requires: { essenceExitReturn: 'sedridor' } }
+        ]);
+        expect(finder.findPath(from, goal, {
+            useTeleportCatalog: true, state: { ...caster, essenceExitReturn: 'aubury' }
+        })).toMatchObject({ ok: true, cost: 27, hops: [{ kind: 'dungeon' }, { kind: 'teleport' }, { kind: 'dungeon' }] });
+    });
+
+    test.each([
+        { useShortcuts: true, maxExpansions: 100, cost: 11, transport: { kind: 'shortcut' } },
+        { useShortcuts: true, maxExpansions: 10, cost: 11, transport: { kind: 'shortcut' } },
+        { useShortcuts: false, maxExpansions: 100, cost: 40, transport: { teleportId: 'varrock' } }
+    ])('chooses the cheapest route with Varrock teleport available at budget $maxExpansions and useShortcuts=$useShortcuts', opts => {
+        const finder = new PathFinder(v2Pack(50, 53).bytes);
+        const from = { x: 3201, z: 3430, level: 0 };
+        const to = { x: 3243, z: 3424, level: 0 };
+        finder.addEdges([], [{ from: { ...from, x: 3202 }, to, locName: 'Tunnel', action: 'Enter', kind: 'shortcut' }]);
+        const out = finder.findPath(from, to, {
+            policy: { useShortcuts: opts.useShortcuts, useTeleports: true },
+            state: caster,
+            maxExpansions: opts.maxExpansions
+        });
+        expect(out).toMatchObject({ ok: true, cost: opts.cost });
+        if (out.ok) {
+            expect(out.waypoints.find(w => w.transport)?.transport).toMatchObject(opts.transport);
+        }
+    });
 });
 
 describe('PathFinder level-change avoidance', () => {
     const from = { x: 10, z: 10, level: 0 };
     const to = { x: 10, z: 12, level: 1 };
     const stair: TransportEdgeData = { from, to, locName: 'Test Staircase', action: 'Climb-up', kind: 'stair' };
+
+    test("opening a door and returning cannot reverse the Wizards' Tower staircase", () => {
+        const start = { x: 3103, z: 3161, level: 1 };
+        const ground = { x: 3105, z: 3160, level: 0 };
+        const landing = { x: 3103, z: 3158, level: 1 };
+        const besideDoor = { ...ground, z: ground.z + 1 };
+        const finder = isolatedLandingFinder([start, ground, landing, besideDoor]);
+        finder.addEdges([{ ...ground, dir: 'N', locId: 1, locName: 'Door' }], []);
+        expect(finder.findPath(start, besideDoor)).toMatchObject({ ok: true, cost: 10 });
+        expect(finder.findPath(ground, landing)).toMatchObject({ ok: true, cost: 6 });
+        expect(finder.findPath(start, landing)).toMatchObject({ ok: false, reason: 'unreachable' });
+    });
 
     test('level-change transport is used when its key is NOT avoided', () => {
         const finder = new PathFinder(fullyWalkablePack());
@@ -146,7 +260,7 @@ describe('PathFinder transport loc metadata', () => {
 const DX8 = [0, 1, 0, -1, 1, 1, -1, -1];
 const DZ8 = [1, 0, -1, 0, 1, -1, -1, 1];
 
-function v2Pack(): { bytes: Uint8Array; blockTile(x: number, z: number): void } {
+function v2Pack(mx = 0, mz = 0): { bytes: Uint8Array; blockTile(x: number, z: number): void } {
     const perLevel = 4096 + 512 + 2048;
     const bytes = new Uint8Array(10 + 3 + perLevel);
     bytes[0] = 0x4c;
@@ -156,8 +270,8 @@ function v2Pack(): { bytes: Uint8Array; blockTile(x: number, z: number): void } 
     bytes[4] = 2;
     bytes[5] = 0;
     bytes[8] = 1;
-    bytes[10] = 0;
-    bytes[11] = 0;
+    bytes[10] = mx;
+    bytes[11] = mz;
     bytes[12] = 0b0001;
     const exitBase = 13;
     const walkBase = exitBase + 4096;
