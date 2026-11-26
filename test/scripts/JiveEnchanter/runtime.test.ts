@@ -10,6 +10,7 @@ import { ChatDialog } from '#/bot/api/ui/dialogue/ChatDialog.js';
 import { Quests } from '#/bot/api/ui/questlog/Quests.js';
 import Tile from '#/bot/geometry/Tile.js';
 import JiveEnchanter from '#/bot/scripts/JiveEnchanter/JiveEnchanter.js';
+import { depositMatching } from '../../fixtures/bank.js';
 
 const RING = 1637;
 const RECOIL = 2550;
@@ -57,11 +58,7 @@ function fixture(pack: InvItemSnapshot[] = [], staff = false, tile = new Tile(30
         return true;
     });
     spyOn(Bank, 'depositAllMatching').mockImplementation(async match => {
-        state.pack = state.pack.filter(i => {
-            if (!match(i.name!, i.id)) return true;
-            state.bank.set(i.id, (state.bank.get(i.id) ?? 0) + i.count);
-            return false;
-        });
+        state.pack = depositMatching(state.pack, state.bank, match);
     });
     const withdraw = async (id: number, count: number) => {
         const stackable = id === COSMIC || id === WATER;

@@ -11,6 +11,14 @@ interface BankFixtureState {
     notes: boolean;
 }
 
+export function depositMatching(pack: readonly InvItemSnapshot[], bank: Map<number, number>, match: (name: string, id: number) => boolean): InvItemSnapshot[] {
+    return pack.filter(item => {
+        if (!match(item.name!, item.id)) return true;
+        bank.set(item.id, (bank.get(item.id) ?? 0) + item.count);
+        return false;
+    });
+}
+
 export function depositPack(state: BankFixtureState) {
     for (const { id, count } of state.pack) {
         state.bank.set(id, (state.bank.get(id) ?? 0) + count);
