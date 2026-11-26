@@ -16,6 +16,7 @@ import '#/client/config/target.js';
 interface Wall {
     controller: MultiBoxController;
     add(account: Account): SlotSnapshot;
+    focus(id: number): void;
     addTab(name: string): boolean | Promise<boolean>;
     renameTab(from: string, to: string): boolean | Promise<boolean>;
     removeTab(name: string): boolean | Promise<boolean>;
@@ -319,6 +320,21 @@ async function reopenAfterAddingTab(wall: Wall): Promise<ProfileVault> {
         saves.mockRestore();
     }
 }
+
+test('focusing an imported worker keeps Work selected after adding a tab and reopening', async () => {
+    await withWall('local', async wall => {
+        const worker = { username: 'worker', password: 'fixture', tab: 'Work' };
+        await openSettings().importText(serializeProfileFile({
+            profiles: [worker], tabs: ['Fleet', 'Work'], activeTab: 'Fleet', storage: {}
+        }));
+        expect(wall.controller.activeTab()).toBe('Fleet');
+        wall.focus(wall.slots()[0].id);
+        expect(wall.controller.activeTab()).toBe('Work');
+
+        const reopened = await reopenAfterAddingTab(wall);
+        expect(reopened.snapshot()).toEqual({ profiles: [worker], tabs: ['Fleet', 'Work', 'Local'], activeTab: 'Work' });
+    });
+});
 
 test('saving an omitted profile from its panel restores its live group', async () => {
     await withWall('local', async wall => {

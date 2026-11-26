@@ -190,6 +190,16 @@ function boot(): void {
         return mutateTabs(() => controller.setSlotTab(id, tab), () => [id]);
     }
 
+    function focusSlot(id: number) {
+        return mutateTabs(() => {
+            const previousActive = controller.activeTab();
+            controller.focus(id);
+            if (controller.activeTab() !== previousActive) return true;
+            renderRail();
+            return false;
+        });
+    }
+
     const tabBar = new TabBar(tabStrip, {
         onSelect: name => void mutateTabs(() => controller.setActiveTab(name)),
         onAdd: name => mutateTabs(() => controller.addTab(name)),
@@ -564,13 +574,7 @@ function boot(): void {
             const current = rosterProfiles().find(p => p.username === profile.username);
             const client = current?.slot ? controller.rosterClient(current.slot.id) : null;
             if (!current?.slot || !client) throw new Error('Load this profile and wait for its client before editing.');
-            const id = current.slot.id;
-            const changedTab = await mutateTabs(() => {
-                const previousActive = controller.activeTab();
-                controller.focus(id);
-                return controller.activeTab() !== previousActive;
-            });
-            if (!changedTab) renderRail();
+            await focusSlot(current.slot.id);
             await rosterActions.edit(current);
         }
     });
@@ -668,10 +672,7 @@ function boot(): void {
             renderRail();
             return slot;
         },
-        focus: (id: number) => {
-            controller.focus(id);
-            renderRail();
-        },
+        focus: (id: number) => void focusSlot(id),
         move: (id: number, toIndex: number) => moveSlot(id, toIndex),
         slots: () => controller.snapshot(),
         setWorld: (id: number, world: WorldNumber) => changeSlotWorld(id, world),
