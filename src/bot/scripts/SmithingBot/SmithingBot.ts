@@ -18,6 +18,7 @@ const DEFAULT_ANVIL_STAND = new Tile(3188, 3425, 0);
 const DEFAULT_BANK_STAND = new Tile(3185, 3440, 0);
 const BOOTH = { op: 'Use-quickly' };
 const HAMMER = 'Hammer';
+const HAMMER_ID = 2347;
 const ANVIL = 'Anvil';
 const OPENABLE_OBSTACLES = ['door', 'gate'];
 // Why: the step through a door goes out on the frame its leaf swings, so the crossing lands the tick after the open instead of one tick later.
@@ -29,7 +30,7 @@ const PRODUCT_OPTIONS = ['Dagger', 'Sword', 'Scimitar', 'Longsword', '2h sword',
 // Why: a product needs this many bars to forge even one, so smithing starts only when the pack holds that many. Below it the make panel opens, forges nothing and loops.
 const BARS_PER_PRODUCT: Readonly<Record<string, number>> = {
     Dagger: 1, Sword: 1, Scimitar: 2, Longsword: 2, '2h sword': 3, Axe: 1, Mace: 1,
-    Warhammer: 3, Battleaxe: 3, Chainbody: 2, Platelegs: 3, Plateskirt: 3, Platebody: 5,
+    Warhammer: 3, Battleaxe: 3, Chainbody: 3, Platelegs: 3, Plateskirt: 3, Platebody: 5,
     'Med helm': 1, 'Full helm': 2, 'Sq shield': 2, Kiteshield: 3, Nails: 1, 'Dart tip': 1,
     Arrowtips: 1, Knife: 1, Wire: 1, Claws: 2
 };
@@ -121,8 +122,7 @@ export default class SmithingBot extends TaskBot {
     }
 
     hammerItem(): InvItem | null {
-        const pat = HAMMER.toLowerCase();
-        return Inventory.items().find(i => i.name?.toLowerCase().includes(pat)) ?? null;
+        return Inventory.items().find(i => i.id === HAMMER_ID) ?? null;
     }
 }
 
@@ -169,8 +169,7 @@ class BankTrip implements Task {
         const barName = this.bot.barItemName();
         const available = Bank.count(barName) + this.bot.barCount();
         const needed = this.bot.barsNeededForProduct();
-        const hammerPat = this.bot.hammerName().toLowerCase();
-        await Bank.depositAllMatching(name => !name.toLowerCase().includes(hammerPat));
+        await Bank.depositAllMatching((_name, id) => id !== HAMMER_ID);
         this.bot.countTrip();
 
         if (available < needed) {
@@ -179,16 +178,15 @@ class BankTrip implements Task {
         }
 
         if (!this.bot.hammerItem()) {
-            const hammerBank = Bank.items().find(i => i.name !== null && i.name.toLowerCase().includes(hammerPat));
-            if (!hammerBank || hammerBank.name === null) {
+            const hammerBank = Bank.items().find(i => i.id === HAMMER_ID);
+            if (!hammerBank) {
                 this.bot.log(`no '${this.bot.hammerName()}' carried or in the bank — idling`);
                 await Execution.delayTicks(5);
                 return;
             }
-            const hammerName = hammerBank.name;
             const hOps = hammerBank.ops.filter((o): o is string => o !== null);
             const oneOp = withdrawOp(hOps, '1') ?? withdrawOp(hOps, 'any') ?? 'Withdraw-1';
-            await Bank.withdraw(hammerName, oneOp);
+            await Bank.withdrawById(HAMMER_ID, oneOp);
             await Execution.delayUntil(() => this.bot.hammerItem() !== null, 3000);
         }
 
