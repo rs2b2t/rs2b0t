@@ -17,6 +17,7 @@ interface Wall {
     controller: MultiBoxController;
     add(account: Account): SlotSnapshot;
     addTab(name: string): boolean | Promise<boolean>;
+    setActiveTab(name: string): boolean | Promise<boolean>;
     setSlotTab(id: number, tab: string): boolean | Promise<boolean>;
     slots(): SlotSnapshot[];
     setWorld(id: number, world: WorldNumber): Promise<boolean>;
@@ -268,17 +269,21 @@ test('a mixed import keeps an omitted slot in Work and saves a reused slot moved
     });
 });
 
-test('adding a tab while viewing an omitted slot keeps the saved active tab', async () => {
+test.each([
+    { active: 'Work', tabs: ['Fleet'] },
+    { active: 'Main', tabs: ['Fleet'] },
+    { active: 'Work', tabs: ['Fleet', 'Work'] }
+])('adding a tab while viewing $active keeps Fleet selected in the saved tabs $tabs', async ({ active, tabs }) => {
     await withWall('local', async wall => {
         const guest = { username: 'guest', password: 'fixture', tab: 'Work' };
         await openSettings().importText(serializeProfileFile({
-            profiles: [guest], tabs: ['Work'], activeTab: 'Work', storage: {}
+            profiles: [guest], tabs: ['Work'], activeTab: active, storage: {}
         }));
         const saved = { username: 'fixture', password: 'fixture', tab: 'Fleet' };
-        await vault.replaceAll({ profiles: [saved], tabs: ['Fleet'], activeTab: 'Fleet' });
+        await vault.replaceAll({ profiles: [saved], tabs, activeTab: 'Fleet' });
         window.dispatchEvent(new StorageEvent('storage', { key: 'rs2b0t:multibox:profiles' }));
         await waitFor(() => wall.controller.tabs().includes('Fleet'));
-        expect(wall.controller.activeTab()).toBe('Work');
+        expect(wall.controller.activeTab()).toBe(active);
 
         const saves = spyOn(vault, 'saveTabState');
         try {
@@ -286,9 +291,13 @@ test('adding a tab while viewing an omitted slot keeps the saved active tab', as
             await saves.mock.results[0].value;
             const reopened = new ProfileVault();
             expect(await reopened.unlock('test-passphrase')).toBe(true);
-            expect(reopened.snapshot()).toEqual({ profiles: [saved], tabs: ['Fleet', 'Local'], activeTab: 'Fleet' });
-            expect(wall.controller.activeTab()).toBe('Work');
+            expect(reopened.snapshot()).toEqual({ profiles: [saved], tabs: [...tabs, 'Local'], activeTab: 'Fleet' });
+            expect(wall.controller.activeTab()).toBe(active);
             expect(wall.slots().map(slot => [slot.username, slot.tab])).toEqual([['guest', 'Work']]);
+            expect(await wall.setActiveTab('Local')).toBe(true);
+            await saves.mock.results[1].value;
+            expect(await reopened.unlock('test-passphrase')).toBe(true);
+            expect(reopened.tabState().activeTab).toBe('Local');
         } finally {
             saves.mockRestore();
         }
@@ -357,7 +366,11 @@ test('a roster move queued during replacement uses the imported username', async
     });
 });
 
-test.each(['succeeds', 'exceeds quota'])('a queued tab edit preserves imported memberships when the settings write %s', async result => {
+test.each([
+    ['succeeds', ''],
+    ['exceeds quota', 'settings storage full'],
+    ['fails to spawn', 'fixture spawn failed']
+])('a queued tab edit preserves imported memberships when the import %s', async (result, expectedError) => {
     await withWall('local', async wall => {
         const panel = openSettings();
         const profile = { username: 'fixture', password: 'fixture' };
@@ -375,19 +388,23 @@ test.each(['succeeds', 'exceeds quota'])('a queued tab edit preserves imported m
             return replacing;
         });
         const saves = spyOn(vault, 'saveTabState');
+        const spawn = spyOn(DomSlotOps.prototype, 'spawn');
         const setItem = sessionStorage.setItem;
         try {
+            if (result === 'fails to spawn') {
+                spawn.mockImplementationOnce(() => { throw new Error(expectedError); });
+            }
             if (result === 'exceeds quota') {
                 Object.defineProperty(sessionStorage, 'setItem', {
                     configurable: true,
-                    value() { throw new DOMException('settings storage full', 'QuotaExceededError'); }
+                    value() { throw new DOMException(expectedError, 'QuotaExceededError'); }
                 });
             }
             await panel.importText(serializeProfileFile({
                 profiles, tabs: ['Fleet'], activeTab: 'Fleet', storage: { fixture: { selectedScript: 'Miner' } }
             }));
             expect(await added).toBe(true);
-            expect(panel.el.querySelector('#mbx-settings-error')!.textContent).toBe(result === 'exceeds quota' ? 'settings storage full' : '');
+            expect(panel.el.querySelector('#mbx-settings-error')!.textContent).toBe(expectedError);
             await Promise.all(saves.mock.results.map(result => result.value));
             const reopened = new ProfileVault();
             expect(await reopened.unlock('test-passphrase')).toBe(true);
@@ -396,9 +413,12 @@ test.each(['succeeds', 'exceeds quota'])('a queued tab edit preserves imported m
             });
             expect(wall.controller.tabs()).toEqual(['Main', 'Fleet', 'Work', 'Local']);
             expect(wall.controller.activeTab()).toBe('Fleet');
-            expect(wall.slots().map(s => [s.username, s.tab])).toEqual([['fixture', 'Fleet'], ['guest', 'Work'], ['new', 'Fleet']]);
+            const expectedSlots = [['fixture', 'Fleet'], ['guest', 'Work']];
+            if (result !== 'fails to spawn') expectedSlots.push(['new', 'Fleet']);
+            expect(wall.slots().map(s => [s.username, s.tab])).toEqual(expectedSlots);
             expect(wall.slots().slice(0, 2).map(s => s.id)).toEqual([reused.id, omitted.id]);
         } finally {
+            spawn.mockRestore();
             Object.defineProperty(sessionStorage, 'setItem', { configurable: true, value: setItem });
             for (const store of [localStorage, sessionStorage]) store.removeItem('rs2b0t:fixture:selectedScript');
             replace.mockRestore();

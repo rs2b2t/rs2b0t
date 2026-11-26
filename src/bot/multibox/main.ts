@@ -117,12 +117,11 @@ function boot(): void {
         orderWrite = orderWrite.then(() => vault.reorder(usernames)).catch(err => console.error('[rs2b0t] failed to save bot order', err));
     }
 
-    function persistTabState(renamed?: { from: string; to: string }): void {
+    function persistTabState(selected?: string, renamed?: { from: string; to: string }): void {
         if (vault.status() !== 'unlocked') {
             return;
         }
         const tabs = controller.tabs().slice(1);
-        const activeTab = controller.activeTab();
         const profiles = vault.list();
         const savedUsername = resolveSavedUsernames(profiles);
         const live = new Map(controller.snapshot().map(slot => [savedUsername(slot.username), slot.tab]));
@@ -136,8 +135,8 @@ function boot(): void {
         }
         wallOnlyTabs = new Set(tabs.filter(tab => wallOnlyTabs.has(tab)));
         const customTabs = tabs.filter(tab => !wallOnlyTabs.has(tab));
-        const savedActiveTab = wallOnlyTabs.has(activeTab) ? undefined : activeTab;
-        orderWrite = orderWrite.then(() => vault.saveTabState(customTabs, tabByUser, savedActiveTab)).catch(err => console.error('[rs2b0t] failed to save tab state', err));
+        const activeTab = selected === controller.activeTab() && !wallOnlyTabs.has(selected) ? selected : undefined;
+        orderWrite = orderWrite.then(() => vault.saveTabState(customTabs, tabByUser, activeTab)).catch(err => console.error('[rs2b0t] failed to save tab state', err));
     }
 
     function mutateTabs(action: () => boolean, renamed?: { from: string; to: string }) {
@@ -145,9 +144,10 @@ function boot(): void {
             const previousActive = controller.activeTab();
             const changed = action();
             if (changed) {
-                if (controller.activeTab() !== previousActive) wallOnlyTabs.delete(controller.activeTab());
+                const active = controller.activeTab();
+                if (active !== previousActive) wallOnlyTabs.delete(active);
                 renderRail();
-                persistTabState(renamed);
+                persistTabState(active !== previousActive ? active : undefined, renamed);
             }
             return changed;
         });
@@ -324,14 +324,15 @@ function boot(): void {
     });
 
     const chooser = new ProfileChooser((p, focus) => {
+        const previousActive = controller.activeTab();
         const added = controller.add(p);
         if (focus) {
             const slot = added ?? controller.snapshot().find(s => normalizeUsername(s.username) === normalizeUsername(p.username));
             if (slot) controller.focus(slot.id);
         }
+        const selected = controller.activeTab();
         renderRail();
-        // a fresh profile joins the active tab; record that membership
-        afterTabRestore(() => persistTabState());
+        afterTabRestore(() => persistTabState(selected !== previousActive ? selected : undefined));
     }, {
         defaultWorld, worldRouting, onWorldChange: worldRouting ? changeProfileWorld : undefined,
         onLoadGroup: (profiles, tab) => {
@@ -456,9 +457,12 @@ function boot(): void {
                 applyBoxStorage(data.storage, [...previous, ...data.profiles.map(p => p.username)]);
             } finally {
                 vault.adoptGroupState();
-                controller.restoreProfiles(vault.list(), data.tabs, data.activeTab);
-                wallOnlyTabs = new Set(controller.tabs().slice(1).filter(tab => !data.tabs.includes(tab)));
-                renderRail();
+                try {
+                    controller.restoreProfiles(vault.list(), data.tabs, data.activeTab);
+                } finally {
+                    wallOnlyTabs = new Set(controller.tabs().slice(1).filter(tab => !data.tabs.includes(tab)));
+                    renderRail();
+                }
             }
         })
     });
