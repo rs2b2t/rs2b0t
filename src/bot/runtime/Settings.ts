@@ -1,8 +1,8 @@
-import { desktopStorage } from './desktopStorage.js';
 import Tile from '../geometry/Tile.js';
 import { WORLDMAP_KEY_NAMES } from '../../client/mapview/worldmapKeyNames.js';
 import { boxKey } from './box.js';
 import { signedOptions } from './optionSelection.js';
+import { desktopStorage } from './desktopStorage.js';
 
 type SettingType = 'boolean' | 'number' | 'string' | 'string[]' | 'tile';
 
@@ -567,6 +567,21 @@ type SettingChangeListener = (name: string, key: string, value: string) => void;
 
 export type DraftValues = Pick<ReadonlyMap<string, string>, 'get'>;
 
+function mapPickerStorageKey(key: string): string {
+    return boxKey(`set:${MAP_PICKER_SETTINGS_NS}:${key}`);
+}
+
+function saveDurableMapPickerPreference(id: string, value: string, expected: string | null): boolean {
+    const store = desktopStorage ?? (hasLocal ? localStorage : undefined);
+    if (!store) return true;
+    const current = store.getItem(id);
+    if (current === value) return true;
+    if (current !== expected) return false;
+    if (desktopStorage) return desktopStorage.compareAndSet(id, expected, value) || desktopStorage.getItem(id) === value;
+    store.setItem(id, value);
+    return true;
+}
+
 function withBakePreferenceTransaction(id: string, commit: () => boolean): Promise<boolean> {
     return new Promise((resolve, reject) => {
         const open = indexedDB.open('rs2b0t-bake-preferences', 1);
@@ -652,12 +667,12 @@ class SettingsStoreImpl {
     }
 
     durableBakePreference(key: string): string | null {
-        return hasLocal ? localStorage.getItem(storageKey(MAP_PICKER_SETTINGS_NS, key)) : null;
+        return hasLocal ? localStorage.getItem(mapPickerStorageKey(key)) : null;
     }
 
     rememberRebuildConfirmation(expected: string | null): boolean {
         const key = 'skipRebuildConfirm';
-        return this.commitMapPickerPreference(storageKey(MAP_PICKER_SETTINGS_NS, key), key, 'true', expected);
+        return this.commitMapPickerPreference(mapPickerStorageKey(key), key, 'true', expected);
     }
 
     private commitMapPickerPreference(id: string, key: string, value: string, expected: string | null): boolean {
@@ -665,25 +680,20 @@ class SettingsStoreImpl {
         if (hasSession) sessionStorage.setItem(id, value);
         let saved = false;
         try {
-            if (desktopStorage) {
-                if (!desktopStorage.compareAndSet(id, expected, value)) return false;
-            } else if (hasLocal) {
-                if (localStorage.getItem(id) !== expected) return false;
-                localStorage.setItem(id, value);
-            }
-            saved = true;
+            saved = saveDurableMapPickerPreference(id, value, expected);
         } finally {
             if (!saved && hasSession && previous !== value) {
                 if (previous === null) sessionStorage.removeItem(id);
                 else sessionStorage.setItem(id, previous);
             }
         }
+        if (!saved) return false;
         this.notify(MAP_PICKER_SETTINGS_NS, key, value);
         return true;
     }
 
     async saveBakePreference(key: string, value: string, expected: string | null): Promise<boolean> {
-        const id = storageKey(MAP_PICKER_SETTINGS_NS, key);
+        const id = mapPickerStorageKey(key);
         const commit = () => this.commitMapPickerPreference(id, key, value, expected);
         if (hasLocal && !desktopStorage) {
             if (typeof globalThis.navigator?.locks?.request === 'function') return navigator.locks.request(id, commit);

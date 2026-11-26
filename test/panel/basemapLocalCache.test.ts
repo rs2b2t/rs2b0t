@@ -551,6 +551,43 @@ describe('map picker bake settings drafts', () => {
         }
     });
 
+    test('a matching peer save becomes the baseline for the next rebuild', async () => {
+        SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'skipRebuildConfirm', 'true');
+        SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'bakeBorders', 'false');
+        const first = Promise.withResolvers<ReturnType<typeof rebuiltMap>>();
+        const bake = spyOn(basemapRegen, 'regenerateBasemap').mockReturnValueOnce(first.promise).mockResolvedValue(rebuiltMap());
+        const setItem = localStorage.setItem;
+        let writes = 0;
+        Object.defineProperty(localStorage, 'setItem', { configurable: true, value(key: string, value: string) {
+            writes++;
+            setItem.call(localStorage, key, value);
+        } });
+        try {
+            await withPicker(async () => {
+                openSettings();
+                const borders = bakeCheckbox('Map-square borders');
+                borders.click();
+                clickRebuild(true);
+                expect(bake).toHaveBeenCalledWith(prefs({ borders: true }));
+                localStorage.setItem('rs2b0t:set:MapPicker:bakeBorders', 'true');
+                first.resolve(rebuiltMap());
+                await new Promise<void>(resolve => setImmediate(resolve));
+                expect(stored('bakeBorders')).toEqual({ local: 'true', session: 'true' });
+                expect(borders.checked).toBe(true);
+                expect(document.querySelector('[role="alert"]')).toBeNull();
+
+                clickRebuild(true);
+                await new Promise<void>(resolve => setImmediate(resolve));
+                expect(bake).toHaveBeenCalledTimes(2);
+                expect(bake).toHaveBeenLastCalledWith(prefs({ borders: true }));
+                expect(writes).toBe(1);
+            });
+        } finally {
+            Object.defineProperty(localStorage, 'setItem', { value: setItem });
+            bake.mockRestore();
+        }
+    });
+
     test('a peer save during regeneration survives while the cache records the submitted labels', async () => {
         SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'skipRebuildConfirm', 'true');
         const pending = Promise.withResolvers<ReturnType<typeof rebuiltMap>>();
