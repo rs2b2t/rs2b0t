@@ -17,6 +17,10 @@ export function saleStock(intent: SellIntent, count: (id: number) => number): nu
     return Math.min(...saleItems(intent).map(count));
 }
 
+export function saleQuantity(requested: number, stock: number, price: number, maxTradeValue: number): number {
+    return Math.min(requested, stock, Math.floor(maxTradeValue / price));
+}
+
 export function salePrice(book: PriceBook, intent: SellIntent): number | null {
     let total = 0;
     for (const id of saleItems(intent)) {

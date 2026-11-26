@@ -150,6 +150,12 @@ test('a set quote is limited by the least stocked piece', async () => {
     expect(bot.counter().intentFor('Alice', Date.now(), 90_000)?.maxQty).toBe(4);
 });
 
+test('buying all quotes only the complete sets that fit the trade value cap', async () => {
+    const { bot } = await fixture({}, [[1163, 4000], [1127, 4000], [1079, 4000]]);
+    bot.handleCommand('Alice', 'buying all rune sets');
+    expect(bot.counter().intentFor('Alice', Date.now(), 90_000)?.maxQty).toBe(3300);
+});
+
 test('waits for each set component instead of treating earlier components as its offer', async () => {
     const { bot, tick } = await fixture({}, [[1163, 10], [1127, 10], [1079, 10]]);
     bot.handleCommand('Alice', 'buying 10 rune sets');
