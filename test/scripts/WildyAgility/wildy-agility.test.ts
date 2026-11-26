@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 
 import Tile from '#/bot/geometry/Tile.js';
+import WildyAgility from '#/bot/scripts/WildyAgility/WildyAgility.js';
 import {
     COURSE_OBSTACLES,
     COURSE_X_RADIUS,
@@ -21,6 +22,27 @@ import {
     onCourse,
     southOfRidge
 } from '#/bot/scripts/WildyAgility/WildyAgilityLogic.js';
+
+test('two wilderness bots advance and count laps independently', () => {
+    const first = new WildyAgility();
+    const second = new WildyAgility();
+    first.courseNames().push('pipe', 'rocks');
+    second.courseNames().push('log', 'rope');
+    const messages: string[] = [];
+    first.bindLog(message => messages.push(message));
+    second.bindLog(message => messages.push(message));
+
+    first.advance();
+    expect(first.currentName()).toBe('rocks');
+    expect(second.currentName()).toBe('log');
+    expect(second.resyncTo('rope')).toBe(true);
+    first.advance();
+    expect(first.currentName()).toBe('pipe');
+    expect(second.currentName()).toBe('rope');
+    second.advance();
+    expect(second.currentName()).toBe('log');
+    expect(messages).toEqual(['lap re-sync: step 0 (log) -> 1 (rope)', 'lap 1 complete', 'lap 1 complete']);
+});
 
 test('the default lap is the five wilderness obstacles in order', () => {
     expect([...COURSE_OBSTACLES]).toEqual([

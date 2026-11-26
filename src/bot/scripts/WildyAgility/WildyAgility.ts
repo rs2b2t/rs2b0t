@@ -1,7 +1,8 @@
 import { FOOD_OPTIONS, foodHealAmount, isFoodItem, shouldEatToUseFood } from '../../api/combat/food.js';
 import type { WorldTile } from '../../adapter/ClientAdapter.js';
 import { actions, reader } from '../../adapter/ClientAdapter.js';
-import { TaskBot, type Task } from '../../api/bot/Bot.js';
+import type { Task } from '../../api/bot/Bot.js';
+import { AgilityCourseBot } from '../shared/AgilityCourseBot.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Game, waitForPlayerTile } from '../../api/game/Game.js';
@@ -241,12 +242,9 @@ async function attemptRidgeCrossing(bot: WildyAgility, label: string): Promise<R
     return outcome;
 }
 
-export default class WildyAgility extends TaskBot {
+export default class WildyAgility extends AgilityCourseBot {
     override loopDelay = 600;
 
-    private course: string[] = [];
-    private step = 0;
-    private laps = 0;
     private cleared = 0;
     private eats = 0;
     private deaths = 0;
@@ -471,28 +469,8 @@ export default class WildyAgility extends TaskBot {
     searchRadius(): number {
         return SEARCH_RADIUS;
     }
-    currentName(): string {
-        return this.course[this.step];
-    }
-    courseNames(): string[] {
-        return this.course;
-    }
-    advance(): void {
-        this.step++;
-        if (this.step >= this.course.length) {
-            this.step = 0;
-            this.laps++;
-            this.log(`lap ${this.laps} complete`);
-        }
-    }
-    resyncTo(name: string): boolean {
-        const idx = this.course.indexOf(name);
-        if (idx === -1) {
-            return false;
-        }
-        this.log(`lap re-sync: step ${this.step} (${this.currentName()}) -> ${idx} (${name})`);
-        this.step = idx;
-        return true;
+    protected override logResync(change: string): void {
+        this.log(`lap re-sync: ${change}`);
     }
 }
 
