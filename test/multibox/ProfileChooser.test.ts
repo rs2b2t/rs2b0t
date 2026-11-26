@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { ProfileChooser } from '#/bot/multibox/ProfileChooser.js';
-import { vault, type Profile } from '#/bot/multibox/ProfileVault.js';
+import { ProfileVault, vault, type Profile } from '#/bot/multibox/ProfileVault.js';
 
 const clearAll = () => {
     sessionStorage.clear();
@@ -81,10 +81,28 @@ describe('ProfileChooser', () => {
         const { chooser, loaded } = make();
         chooser.open();
         (chooser.el.querySelector('.mbx-profile-del') as HTMLElement).click();
+        await waitFor(() => !!chooser.el.querySelector('.mbx-chooser-empty'));
         expect(vault.list()).toEqual([]);
         expect(loaded).toEqual([]);
         expect(chooser.el.hidden).toBe(false);
         expect(chooser.el.querySelector('.mbx-chooser-empty')).not.toBeNull();
+    });
+
+    test('a conflicting delete shows the saved profile and allows a retry', async () => {
+        await vault.upsert({ username: 'set', password: '', world: 1 });
+        const peer = new ProfileVault();
+        expect(await peer.unlock('pw')).toBe(true);
+        const { chooser } = make();
+        chooser.open();
+        await peer.setWorld('set', 2);
+        const remove = () => chooser.el.querySelector<HTMLButtonElement>('.mbx-profile-del')!.click();
+        remove();
+        await waitFor(() => !!chooser.el.querySelector('[role=status]')?.textContent?.includes('changed'));
+        expect(chooser.el.querySelector<HTMLSelectElement>('.mbx-profile-world')?.value).toBe('2');
+        remove();
+        await waitFor(() => !!chooser.el.querySelector('.mbx-chooser-empty'));
+        expect(await peer.unlock('pw')).toBe(true);
+        expect(peer.list()).toEqual([]);
     });
 
     test('create-new trims, saves and loads the profile', async () => {

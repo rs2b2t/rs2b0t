@@ -104,7 +104,7 @@ describe('ProfileTransfer', () => {
         const result = Bun.spawnSync(['bun', 'test/fixtures/roster-desktop-storage.ts', '--export-set']);
         expect(result.exitCode, result.stderr.toString()).toBe(0);
         expect(JSON.parse(result.stdout.toString())).toEqual({
-            before: { set: { 'set:Miner:rock': 'coal' } }, offered: [], after: {}
+            before: { set: { 'set:Miner:rock': 'coal', 'set:Global:runEnergyMin': '73' } }, offered: [], after: {}
         });
     });
 

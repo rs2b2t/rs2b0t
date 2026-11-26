@@ -36,6 +36,19 @@ describe('ProfileVault', () => {
         expect(v2.list()).toEqual([{ username: 'alice', password: 'hunter2', tab: 'Main' }]);
     });
 
+    test('browser refresh adopts the latest roster and its write version', async () => {
+        const wall = new ProfileVault();
+        const peer = new ProfileVault();
+        await wall.setup('pw');
+        expect(await peer.unlock('pw')).toBe(true);
+        await peer.upsert({ username: 'set', password: '', world: 2 });
+        await wall.refresh();
+        expect(wall.list()).toEqual(peer.list());
+        await wall.setWorld('set', 3);
+        await peer.refresh();
+        expect(peer.list()[0].world).toBe(3);
+    });
+
     test('stored blob never contains plaintext', async () => {
         const v = new ProfileVault();
         await v.setup('pw');

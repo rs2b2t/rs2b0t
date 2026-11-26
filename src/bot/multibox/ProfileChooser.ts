@@ -161,8 +161,23 @@ export class ProfileChooser {
         }
     }
 
+    private async remove(username: string): Promise<void> {
+        if (this.pending) return;
+        this.setPending(true);
+        this.status.textContent = '';
+        try {
+            await vault.remove(username);
+        } catch (error) {
+            this.status.textContent = error instanceof Error ? error.message : 'Could not delete the profile';
+        } finally {
+            this.setPending(false);
+            this.render();
+        }
+    }
+
     private render(): void {
         this.list.textContent = '';
+        if (vault.status() !== 'unlocked') return;
         const profiles = vault.list();
         if (profiles.length === 0) {
             const none = document.createElement('div');
@@ -205,9 +220,7 @@ export class ProfileChooser {
             del.textContent = '✕';
             del.addEventListener('click', ev => {
                 ev.stopPropagation();
-                if (this.pending) return;
-                void vault.remove(p.username);
-                this.render();
+                void this.remove(p.username);
             });
             del.disabled = this.pending;
             row.append(name);

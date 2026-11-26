@@ -15,9 +15,16 @@ test('shared encrypted vault preserves simultaneous changes from two instances',
 });
 
 test("a rejected restore preserves the other process's durable settings", () => {
-    const result = Bun.spawnSync([process.execPath, join(import.meta.dir, '../fixtures/competing-desktop-restores.ts')]);
+    const result = Bun.spawnSync([process.execPath, join(import.meta.dir, '../fixtures/competing-desktop-restores.ts'), 'restore']);
     expect(result.exitCode, result.stderr.toString()).toBe(0);
 });
+
+for (const scenario of ['edit-after-commit', 'edit-during-cleanup']) {
+    test(`a desktop restore completes with a concurrent world change (${scenario})`, () => {
+        const result = Bun.spawnSync([process.execPath, join(import.meta.dir, '../fixtures/competing-desktop-restores.ts'), scenario]);
+        expect(result.exitCode, result.stderr.toString()).toBe(0);
+    });
+}
 
 test('desktop instances share saved values and preserve concurrent writes to different keys', () => {
     const root = mkdtempSync(join(tmpdir(), 'rs2b0t-shared-test-'));

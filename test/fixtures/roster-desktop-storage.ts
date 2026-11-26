@@ -16,18 +16,32 @@ Reflect.set(globalThis, 'rs2b0tDesktopStorage', {
 await import('../../src/bot/panel/desktopStorage.js');
 if (process.argv.includes('--export-set')) {
     const { SettingsStore } = await import('../../src/bot/runtime/Settings.js');
-    const { collectBoxStorage } = await import('../../src/bot/multibox/ProfileTransfer.js');
+    const { collectBoxStorage, applyBoxStorage } = await import('../../src/bot/multibox/ProfileTransfer.js');
     const { boxKey, readBoxItem, disableLegacySetProfileSettings } = await import('../../src/bot/runtime/box.js');
     SettingsStore.save('set', 'travel:mode', 'walk');
     sessionStorage.clear();
     sessionStorage.setItem('rs2b0t:set:set:Miner:rock', 'coal');
     for (const [key, value] of data) notify!(key, null, value);
     assert.equal(sessionStorage.getItem(boxKey('set:set:travel:mode', '')), 'walk');
+    const threshold = 'rs2b0t:set:set:Global:runEnergyMin';
+    localStorage.setItem(threshold, '73');
+    sessionStorage.setItem(threshold, '42');
+    assert.equal(readBoxItem('set:Global:runEnergyMin', 'set'), '73');
     const before = collectBoxStorage(['set'], () => true);
+    const current = boxKey('set:Global:runEnergyMin', 'set');
+    sessionStorage.setItem(current, '51');
+    assert.equal(collectBoxStorage(['set'], () => true).set['set:Global:runEnergyMin'], '73');
+    localStorage.setItem(current, '87');
+    assert.equal(collectBoxStorage(['set'], () => true).set['set:Global:runEnergyMin'], '87');
+    sessionStorage.removeItem(current);
+    localStorage.removeItem(current);
     disableLegacySetProfileSettings(localStorage);
     assert.equal(readBoxItem('set:Miner:rock', 'set'), null);
     const offered: string[] = [];
     const after = collectBoxStorage(['set'], suffix => { offered.push(suffix); return true; });
+    applyBoxStorage(before, ['set']);
+    sessionStorage.clear();
+    assert.equal(readBoxItem('set:Global:runEnergyMin', 'set'), '73');
     console.log(JSON.stringify({ before, offered, after }));
     process.exit(0);
 }

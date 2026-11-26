@@ -76,12 +76,12 @@ export function collectBoxStorage(usernames: string[], includeLegacy?: (suffix: 
         readStore(localStorage, usernames, out, legacy);
     }
     if (typeof sessionStorage !== 'undefined') {
-        readStore(sessionStorage, usernames, out, legacy, !desktopStorage);
+        readStore(sessionStorage, usernames, out, legacy, !!desktopStorage);
     }
     if (legacy && includeLegacy) {
+        const preferred = desktopStorage ? globalThis.localStorage : globalThis.sessionStorage;
         for (const [suffix, store] of legacy) {
-            const liveSession = !desktopStorage && store === globalThis.sessionStorage;
-            if (out.set && Object.hasOwn(out.set, suffix) && (!liveSession || store.getItem(boxKey(suffix, 'set')) !== null)) continue;
+            if (out.set && Object.hasOwn(out.set, suffix) && (store !== preferred || store.getItem(boxKey(suffix, 'set')) !== null)) continue;
             const value = store.getItem(boxStoragePrefix('set') + suffix);
             if (value === null || !includeLegacy(suffix)) continue;
             out.set ??= {};
@@ -107,16 +107,16 @@ export function applyBoxStorage(storage: BoxStorageMap, wipe: string[]): void {
     if (typeof sessionStorage !== 'undefined') replaceBoxItems(sessionStorage, storeKeys(sessionStorage), update);
 }
 
-function readStore(store: Storage, usernames: string[], out: BoxStorageMap, legacy: Map<string, Storage> | null, includeSelectedScript = true): void {
+function readStore(store: Storage, usernames: string[], out: BoxStorageMap, legacy: Map<string, Storage> | null, desktopSession = false): void {
     for (const key of storeKeys(store)) {
         const candidate = legacy && legacyBoxSuffix(store, key, 'set');
-        if (legacy && candidate !== null) legacy.set(candidate, store);
+        if (legacy && candidate !== null && (!desktopSession || !legacy.has(candidate))) legacy.set(candidate, store);
         for (const user of usernames) {
             const suffix = boxSuffix(key, boxStoragePrefix(user), user);
             if (suffix === null) {
                 continue;
             }
-            if (!includeSelectedScript && suffix === 'selectedScript') {
+            if (desktopSession && (suffix === 'selectedScript' || (user === 'set' && out.set && Object.hasOwn(out.set, suffix)))) {
                 continue;
             }
             const value = store.getItem(key);
