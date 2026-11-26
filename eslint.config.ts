@@ -16,7 +16,7 @@ const APP_ENTRYPOINT = {
 };
 
 export default defineConfig([
-    globalIgnores(['src/client/3rdparty/', 'out/', 'desktop/', 'packages/', 'docs/script-template/', 'public-bot/', '.claude/', 'identifier.js']),
+    globalIgnores(['src/client/3rdparty/', 'out/', 'desktop/', 'packages/', 'docs/local/', 'docs/script-template/', 'public-bot/', '.claude/', 'identifier.js']),
     { files: ['**/*.{js,mjs,cjs,ts,mts,cts}'], plugins: { js }, extends: ['js/recommended'], languageOptions: { globals: globals.browser } },
     tseslint.configs.recommended,
     {
