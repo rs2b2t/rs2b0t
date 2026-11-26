@@ -1,4 +1,4 @@
-import { PICKAXES as MINING_PICKAXES } from '../../../../../data/pickaxes.js';
+import { createPickaxes } from '../../../../../data/pickaxes.js';
 import Tile from '../../../../../geometry/Tile.js';
 import type { QuestSnapshot } from '../../engine/types.js';
 
@@ -26,7 +26,7 @@ export const EW_ITEM = {
     COINS: { id: 995, name: 'Coins' }
 } as const satisfies Record<string, EwItem>;
 
-export const PICKAXES: readonly EwItem[] = MINING_PICKAXES.map(pickaxe => ({ ...pickaxe }));
+export const PICKAXES: readonly EwItem[] = createPickaxes();
 
 export const SEERS_BANK = new Tile(2725, 3491, 0);
 export const COAL_ROCKS = new Tile(2581, 3480, 0);

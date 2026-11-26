@@ -16,7 +16,7 @@ import { Skills } from '../../../skills/Skills.js';
 import { GroundItems } from '../../../grounditems/GroundItems.js';
 import { Locs } from '../../../locs/Locs.js';
 import { ROCK_TYPES } from '../../../../data/miningRocks.js';
-import { PICKAXES as MINING_PICKAXES } from '../../../../data/pickaxes.js';
+import { createPickaxes } from '../../../../data/pickaxes.js';
 import { PICKAXES } from '../../../acquisition/Tools.js';
 import { questRecord } from '../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../engine/types.js';
@@ -37,7 +37,7 @@ export const DORIC_ITEM = {
 } as const;
 
 const PICKAXE_ID: Readonly<Record<string, number>> = Object.fromEntries(
-    MINING_PICKAXES.map(({ name, id }) => [name, id])
+    createPickaxes().map(({ name, id }) => [name, id])
 );
 
 /** Best-first, matching the server's Mining-level gates. */

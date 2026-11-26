@@ -1,3 +1,4 @@
+import { createPickaxes } from '../../../../../data/pickaxes.js';
 import Tile from '../../../../../geometry/Tile.js';
 
 export const FC_QUEST = 'Family Crest';
@@ -89,7 +90,7 @@ export const DUEL_RING_IDS = [2552, 2554, 2556, 2558, 2560, 2562, 2564, 2566] as
 /** Antipoison in every dose; any of them cures Johnathon. */
 export const ANTIPOISON_IDS = [FC_ID.ANTIPOISON_4, FC_ID.ANTIPOISON_3, FC_ID.ANTIPOISON_2, FC_ID.ANTIPOISON_1] as const;
 
-export { PICKAXES } from '../../../../../data/pickaxes.js';
+export const PICKAXES = createPickaxes();
 
 /** Every coordinate here was read out of the engine's own map spawns. */
 export const FC_NPC = {
