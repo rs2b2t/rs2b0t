@@ -30,6 +30,28 @@ async function waitFor(check: () => boolean) {
     expect(check()).toBe(true);
 }
 
+function killFixtureChild(pid: number) {
+    try {
+        process.kill(pid, 'SIGKILL');
+    } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
+    }
+}
+
+test('fixture cleanup ignores ESRCH from SIGKILL and propagates other errors', () => {
+    const denied = Object.assign(new Error('permission denied'), { code: 'EPERM' });
+    const kill = spyOn(process, 'kill')
+        .mockImplementation(() => { throw denied; })
+        .mockImplementationOnce(() => { throw Object.assign(new Error('child exited'), { code: 'ESRCH' }); });
+    try {
+        killFixtureChild(123);
+        expect(() => killFixtureChild(123)).toThrow(denied);
+        expect(kill.mock.calls).toEqual([[123, 'SIGKILL'], [123, 'SIGKILL']]);
+    } finally {
+        kill.mockRestore();
+    }
+});
+
 const serviceFixture = join(import.meta.dirname, 'fixtures/run-service.mjs');
 
 test.skipIf(process.platform === 'win32')('a detached service can change cwd under a relative TMPDIR', async () => {
@@ -182,7 +204,7 @@ test('the deadline releases readers held by an unregistered child', async () => 
         expect(performance.now() - start).toBeLessThan(2500);
     } finally {
         await harness;
-        if (!exited(pid)) process.kill(pid, 'SIGKILL');
+        if (!exited(pid)) killFixtureChild(pid);
     }
 }, 8000);
 
@@ -330,6 +352,6 @@ test.skipIf(process.platform === 'win32')('SIGHUP stops the live runner gate', a
         expect(runner.exitCode).toBe(129);
         await waitFor(() => exited(pid));
     } finally {
-        if (!exited(pid)) process.kill(pid, 'SIGKILL');
+        if (!exited(pid)) killFixtureChild(pid);
     }
 });
