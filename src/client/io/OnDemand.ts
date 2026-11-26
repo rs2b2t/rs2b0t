@@ -143,6 +143,10 @@ export default class OnDemand extends OnDemandProvider {
             this.worker.terminate();
             this.worker = null;
         }
+        this.resolveWorkerAcks();
+    }
+
+    private resolveWorkerAcks() {
         for (const resolve of this.workerAcks.values()) {
             resolve();
         }
@@ -307,8 +311,11 @@ export default class OnDemand extends OnDemandProvider {
         this.worker = worker;
         this.lastIngame = this.app.ingame;
 
+        let loaded = false;
         worker.onmessage = (event: MessageEvent): void => {
+            loaded = true;
             const message = event.data as
+                | { type: 'ready' }
                 | { type: 'completed'; archive: number; file: number; urgent: boolean; data: ArrayBuffer | null }
                 | { type: 'message'; message: string }
                 | { type: 'failCount'; failCount: number }
@@ -333,6 +340,11 @@ export default class OnDemand extends OnDemandProvider {
         };
 
         worker.onerror = (event: ErrorEvent): void => {
+            if (loaded) {
+                console.error(event.message);
+                this.resolveWorkerAcks();
+                return;
+            }
             this.workerError = new Error(event.message || 'Asset worker failed to load');
             console.error(this.workerError);
             this.terminateWorker();

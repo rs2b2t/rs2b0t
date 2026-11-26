@@ -134,3 +134,37 @@ test('priority prefetch resolves on acknowledgement or normal shutdown', async (
     loader.stop();
     await second;
 });
+
+test('a worker error after a prefetch acknowledgement preserves the map diagnostic', async () => {
+    const error = spyOn(console, 'error').mockImplementation(() => {});
+    const diagnostic = spyOn(console, 'log').mockImplementation(() => {});
+    const loader = loaderFixture();
+    const worker = loader.worker!;
+    const post = spyOn(WorkerFixture.prototype, 'postMessage');
+    const first = loader.prefetchPriority(1, 0, 2);
+    worker.onmessage!(new MessageEvent('message', { data: { type: 'ack', id: post.mock.calls[0][0].id } }));
+    await first;
+
+    loader.request(1, 0);
+    worker.onerror!(new ErrorEvent('error', { message: 'Synthetic runtime error' }));
+
+    const client: Client = Object.assign(Object.create(Client.prototype), {
+        onDemand: loader, sceneState: 1, sceneLoadStartTime: performance.now() - 360001
+    });
+    client['checkMinimap']();
+    expect(diagnostic).toHaveBeenCalledTimes(1);
+    expect(error).toHaveBeenCalledWith('Synthetic runtime error');
+    expect(loader.remaining()).toBe(1);
+    expect(loader.worker).toBe(worker);
+});
+
+test('a runtime error after the worker loads releases the first pending prefetch', async () => {
+    spyOn(console, 'error').mockImplementation(() => {});
+    const loader = loaderFixture();
+    const worker = loader.worker!;
+    const pending = loader.prefetchPriority(1, 0, 2);
+    worker.onmessage!(new MessageEvent('message', { data: { type: 'ready' } }));
+    worker.onerror!(new ErrorEvent('error', { message: 'Synthetic runtime error' }));
+    await pending;
+    expect(loader.worker).toBe(worker);
+});
