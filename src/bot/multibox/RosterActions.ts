@@ -2,7 +2,7 @@ import type { WorldNumber } from '../../client/config/worlds.js';
 import { WALK_OPTIONS } from '../api/map/WalkDestinations.js';
 import type { SlotSnapshot } from './types.js';
 import { isRosterScript, type RosterClient } from './RosterTypes.js';
-import { readProfileScript, writeProfileScript, readScriptSettings, replaceScriptSettings, storedScripts } from './RosterStorage.js';
+import { readProfileScript, readProfileScripts, writeProfileScript, readScriptSettings, replaceScriptSettings, storedScripts } from './RosterStorage.js';
 
 export interface RosterProfile {
     username: string;
@@ -59,16 +59,21 @@ export class RosterActions {
     profiles(): RosterProfile[] { return this.hooks.profiles(); }
 
     scripts(): string[] {
-        const profiles = this.profiles();
-        const names = new Set(storedScripts(profiles.map(p => p.username)));
+        return this.scriptCatalog(this.profiles()).scripts;
+    }
+
+    scriptCatalog(profiles: RosterProfile[]) {
+        const usernames = profiles.map(p => p.username);
+        const selections = readProfileScripts(usernames);
+        const names = new Set(storedScripts(usernames, selections));
         for (const profile of profiles) {
             for (const name of this.hooks.client(profile)?.scripts() ?? []) names.add(name);
         }
-        return [...names].filter(isRosterScript).sort();
+        return { scripts: [...names].filter(isRosterScript).sort(), selections };
     }
 
-    selectedScript(profile: RosterProfile): string {
-        return this.hooks.client(profile)?.selectedScript() ?? readProfileScript(profile.username);
+    selectedScript(profile: RosterProfile, selections?: ReadonlyMap<string, string>): string {
+        return this.hooks.client(profile)?.selectedScript() ?? selections?.get(profile.username) ?? readProfileScript(profile.username);
     }
 
     settings(source: string, script: string): Record<string, string> {

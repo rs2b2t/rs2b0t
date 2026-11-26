@@ -213,16 +213,16 @@ export class RosterPanel {
             this.scope = this.options.tabs().includes(active) ? active : null;
             this.selected.clear();
         }
-        const names = new Set(this.visible().map(profile => profile.username));
+        const visible = this.visible(profiles);
+        const names = new Set(visible.map(profile => profile.username));
         for (const name of this.selected) if (!names.has(name)) this.selected.delete(name);
         this.refreshTabs(profiles);
         choices(this.groupNames, this.options.tabs());
-        choices(this.script, this.actions.scripts());
+        const catalog = this.actions.scriptCatalog(profiles);
+        choices(this.script, catalog.scripts);
         choices(this.source, profiles.map(profile => profile.username));
-        const visible = this.visible();
-        const current = new Set(visible.map(profile => profile.username));
-        for (const [name, row] of this.rows) if (!current.has(name)) { row.remove(); this.rows.delete(name); }
-        for (const profile of visible) this.refreshRow(profile);
+        for (const [name, row] of this.rows) if (!names.has(name)) { row.remove(); this.rows.delete(name); }
+        for (const profile of visible) this.refreshRow(profile, this.actions.selectedScript(profile, catalog.selections));
         this.count.textContent = `${this.selected.size} selected`;
         this.targetCount.textContent = `${this.selected.size} profiles will be targeted.`;
         this.selectVisible.textContent = this.search.value.trim() || this.scope === null ? 'Select visible' : 'Select tab';
@@ -261,9 +261,9 @@ export class RosterPanel {
         for (const action of Array.from(this.el.querySelectorAll<HTMLButtonElement>('[data-action]'))) action.setAttribute('aria-pressed', String(action.dataset.action === this.kind));
     }
 
-    private visible(): RosterProfile[] {
+    private visible(profiles = this.actions.profiles()): RosterProfile[] {
         const query = this.search.value.trim().toLowerCase();
-        return this.actions.profiles().filter(profile => (this.scope === null || profile.tab === this.scope) && profile.username.toLowerCase().includes(query));
+        return profiles.filter(profile => (this.scope === null || profile.tab === this.scope) && profile.username.toLowerCase().includes(query));
     }
 
     private changeScope(): void {
@@ -288,7 +288,7 @@ export class RosterPanel {
         });
     }
 
-    private refreshRow(profile: RosterProfile): void {
+    private refreshRow(profile: RosterProfile, script: string): void {
         let row = this.rows.get(profile.username);
         if (!row) {
             row = node('tr');
@@ -307,7 +307,6 @@ export class RosterPanel {
         row.classList.toggle('is-selected', this.selected.has(profile.username));
         row.querySelector('input')!.checked = this.selected.has(profile.username);
         const cells = row.cells;
-        const script = this.actions.selectedScript(profile);
         let values = '';
         try { if (script) values = Object.values(this.actions.settings(profile.username, script)).join(' · '); } catch { values = ''; }
         cells[1].querySelector('small')!.textContent = [profile.tab, values || (profile.slot ? '' : 'Saved profile')].filter(Boolean).join(' · ');

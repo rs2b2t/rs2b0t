@@ -112,13 +112,14 @@ function prepareStorage(app) {
                 }
                 return snapshot;
             }
-            const methods = new Set(['snapshot', 'getItem', 'keys', 'setItem', 'removeItem', 'compareAndSet']);
+            const reads = new Set(['getItem', 'getItems', 'keys']);
+            const methods = new Set([...reads, 'snapshot', 'setItem', 'removeItem', 'compareAndSet']);
             ipcMain.on('rs2b0t-storage', (event, method, ...args) => {
                 try {
                     if (!valid(event.senderFrame) || !methods.has(method)) throw new Error('Invalid storage request');
                     register(event);
-                    const value = method === 'snapshot' ? undefined : store[method](...args);
-                    event.returnValue = { value, snapshot: method === 'getItem' || method === 'keys' ? undefined : refresh(event.senderFrame) };
+                    const value = method === 'snapshot' ? { getItems: true } : store[method](...args);
+                    event.returnValue = { value, snapshot: reads.has(method) ? undefined : refresh(event.senderFrame) };
                 } catch (error) {
                     event.returnValue = { error: error.message };
                 }

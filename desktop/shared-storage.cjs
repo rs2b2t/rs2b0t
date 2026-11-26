@@ -50,6 +50,10 @@ function sharedStorage(dir) {
         initialized: () => read().initialized,
         snapshot: () => read().data,
         getItem: key => (valid(key) ? (read().data[key] ?? null) : null),
+        getItems(keys) {
+            const { data } = read();
+            return keys.map(key => valid(key) ? data[key] ?? null : null);
+        },
         keys: () => Object.keys(read().data),
         setItem(key, value) {
             if (!valid(key) || typeof value !== 'string') throw new Error('Invalid saved setting');
