@@ -882,9 +882,8 @@ export class WorldMapPicker {
             };
 
             // In-picker Settings modal (not Global settings).
-            type BakeEdit = { value: string; expected: string | null };
-            let bakeEdits = new Map<string, BakeEdit>();
-            const failedBakeEdits = new Map<string, BakeEdit>();
+            type BakeEdit = { value: string; expected: string | null; retry?: boolean };
+            const bakeEdits = new Map<string, BakeEdit>();
             const draft = {
                 get: (key: string) => bakeEdits.get(key)?.value,
                 set(key: string, value: string) {
@@ -975,8 +974,10 @@ export class WorldMapPicker {
                     footerButton: rebuildBtn,
                     onClose: () => {
                         toolbar.appendChild(rebuildBtn);
-                        bakeEdits = new Map(failedBakeEdits);
-                        if (rebuildBtn.disabled && rebuildError.isConnected) rebuildBtn.after(rebuildError);
+                        for (const [key, edit] of bakeEdits) {
+                            if (!edit.retry) bakeEdits.delete(key);
+                        }
+                        if ((rebuildBtn.disabled || bakeEdits.size) && rebuildError.isConnected) rebuildBtn.after(rebuildError);
                         else rebuildError.remove();
                     }
                 });
@@ -1038,6 +1039,7 @@ export class WorldMapPicker {
                             return;
                         }
                         const conflicts: string[] = [];
+                        const failed: string[] = [];
                         for (const [key, edit] of submitted) {
                             try {
                                 const saved = await SettingsStore.saveBakePreference(key, edit.value, edit.expected);
@@ -1049,9 +1051,15 @@ export class WorldMapPicker {
                                     current.expected = edit.value;
                                 }
                             } catch {
-                                failedBakeEdits.set(key, edit);
+                                failed.push(MAP_PICKER_SETTINGS[key].label ?? key);
+                                const current = bakeEdits.get(key);
+                                if (!current || current === edit) {
+                                    edit.retry = true;
+                                    bakeEdits.set(key, edit);
+                                }
                             }
                         }
+                        if (closed) return;
                         const installed: LoadedBasemap = { ...next };
                         installBasemapOverride(installed);
                         basemap = installed;
@@ -1059,13 +1067,7 @@ export class WorldMapPicker {
                         status.textContent = `basemap rebuilt (${next.manifest.fingerprint})`;
                         status.style.color = '#8ab4f8';
                         if (conflicts.length) warnings.push(`Kept newer preferences: ${conflicts.join(', ')}.`);
-                        if (failedBakeEdits.size) {
-                            for (const [key, edit] of failedBakeEdits) {
-                                if (!bakeEdits.has(key)) bakeEdits.set(key, edit);
-                            }
-                            const labels = Array.from(failedBakeEdits.keys(), key => MAP_PICKER_SETTINGS[key].label ?? key);
-                            warnings.push(`Could not save: ${labels.join(', ')}. Rebuild to retry.`);
-                        }
+                        if (failed.length) warnings.push(`Could not save: ${failed.join(', ')}. Rebuild to retry.`);
                         settingsModal.refreshCheckboxes(submitted.keys());
                         if (warnings.length) showRebuildError(`Basemap rebuilt. ${warnings.join(' ')}`);
                         requestPaint();
@@ -1077,7 +1079,6 @@ export class WorldMapPicker {
                         const msg = err instanceof Error ? err.message : String(err);
                         showRebuildError([`rebuild failed: ${msg}`, ...warnings].join(' '));
                     } finally {
-                        failedBakeEdits.clear();
                         if (!closed) {
                             rebuildBtn.disabled = false;
                         }

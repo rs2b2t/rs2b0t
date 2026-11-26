@@ -961,7 +961,7 @@ describe('map picker bake settings drafts', () => {
         }
     });
 
-    test('Retry uses the rejected borders draft when Settings closes during the cache write', async () => {
+    test.each(['during', 'after'])('toolbar Retry keeps rejected borders when Settings closes %s the cache write', async timing => {
         SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'skipRebuildConfirm', 'true');
         const pending = Promise.withResolvers<void>();
         const bake = spyOn(basemapRegen, 'regenerateBasemap').mockResolvedValue(rebuiltMap());
@@ -978,10 +978,14 @@ describe('map picker bake settings drafts', () => {
                 clickRebuild(true);
                 await new Promise<void>(resolve => setImmediate(resolve));
                 expect(cache).toHaveBeenCalledTimes(1);
-                escapeSettings();
-                Object.defineProperty(localStorage, 'setItem', { value: setItem });
+                if (timing === 'during') escapeSettings();
                 pending.resolve();
                 await new Promise<void>(resolve => setImmediate(resolve));
+                if (timing === 'after') {
+                    expect(document.querySelector<HTMLButtonElement>('.rs2b0t-walkmap-rebuild')!.disabled).toBe(false);
+                    escapeSettings();
+                }
+                Object.defineProperty(localStorage, 'setItem', { value: setItem });
 
                 expect(document.querySelector('[role="alert"]')?.textContent).toMatch(/Map-square borders.*retry/i);
                 clickRebuild(false);
@@ -990,10 +994,53 @@ describe('map picker bake settings drafts', () => {
                 expect(stored('bakeBorders').local).toBe('true');
             });
         } finally {
+            pending.resolve();
             Object.defineProperty(localStorage, 'setItem', { value: setItem });
             cache.mockRestore();
             crc.mockRestore();
             bake.mockRestore();
+        }
+    });
+
+    test("closing a picker during a preference save keeps the newer picker's cached map", async () => {
+        SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'skipRebuildConfirm', 'true');
+        const held = Promise.withResolvers<void>();
+        const originalSave = SettingsStore.saveBakePreference.bind(SettingsStore);
+        const save = spyOn(SettingsStore, 'saveBakePreference').mockImplementationOnce(async (...args) => {
+            await held.promise;
+            return originalSave(...args);
+        });
+        const bake = spyOn(basemapRegen, 'regenerateBasemap').mockImplementation(async prefs => {
+            const next = rebuiltMap();
+            next.manifest.fingerprint = prefs?.npcs ? 'npcs' : 'borders';
+            return next;
+        });
+        const crc = spyOn(localCache, 'fetchClientCrcKey').mockResolvedValue('test-crc');
+        const cache = spyOn(localCache, 'saveRegeneratedBasemapLocally').mockResolvedValue();
+        try {
+            await withPicker(async () => {
+                openSettings();
+                bakeCheckbox('Map-square borders').click();
+                clickRebuild(true);
+                await new Promise<void>(resolve => setImmediate(resolve));
+                expect(save).toHaveBeenCalledWith('bakeBorders', 'true', null);
+            });
+            await withPicker(async () => {
+                openSettings();
+                bakeCheckbox('NPC dots').click();
+                clickRebuild(true);
+                await new Promise<void>(resolve => setImmediate(resolve));
+                expect(cache).toHaveBeenCalledTimes(1);
+                held.resolve();
+                await new Promise<void>(resolve => setImmediate(resolve));
+                expect(cache.mock.calls.map(([, , manifest]) => manifest.fingerprint)).toEqual(['npcs']);
+            });
+        } finally {
+            held.resolve();
+            save.mockRestore();
+            bake.mockRestore();
+            crc.mockRestore();
+            cache.mockRestore();
         }
     });
 
