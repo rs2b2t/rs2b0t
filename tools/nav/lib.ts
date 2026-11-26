@@ -73,6 +73,7 @@ class JagArchive {
     private readonly data: Uint8Array;
     private readonly compressWhole: boolean;
     private readonly fileHash: number[] = [];
+    private readonly fileUnpackedSize: number[] = [];
     private readonly filePackedSize: number[] = [];
     private readonly filePos: number[] = [];
 
@@ -85,7 +86,7 @@ class JagArchive {
             this.data = src;
             this.compressWhole = false;
         } else {
-            this.data = bunzip2(src.subarray(6));
+            this.data = bunzip2(src.subarray(6), false, false, unpackedSize);
             reader = new Reader(this.data);
             this.compressWhole = true;
         }
@@ -94,7 +95,7 @@ class JagArchive {
         let pos: number = reader.pos + fileCount * 10;
         for (let i: number = 0; i < fileCount; i++) {
             this.fileHash[i] = reader.g4s();
-            reader.g3();
+            this.fileUnpackedSize[i] = reader.g3();
             this.filePackedSize[i] = reader.g3();
             this.filePos[i] = pos;
             pos += this.filePackedSize[i];
@@ -117,7 +118,7 @@ class JagArchive {
             return null;
         }
         const src: Uint8Array = this.data.subarray(this.filePos[index], this.filePos[index] + this.filePackedSize[index]);
-        return this.compressWhole ? src : bunzip2(src);
+        return this.compressWhole ? src : bunzip2(src, false, false, this.fileUnpackedSize[index]);
     }
 }
 

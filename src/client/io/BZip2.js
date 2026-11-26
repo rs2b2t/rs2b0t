@@ -98,7 +98,7 @@ function bwtReverse(src, primary) {
     return ret;
 }
 
-export function bunzip2(bytes, checkMagic = false, checkCRC = false) {
+export function bunzip2(bytes, checkMagic = false, checkCRC = false, unpackedSize = bytes.length * 1.5) {
     let index = 0;
     let bitfield = 0;
     let bits = 0;
@@ -142,7 +142,7 @@ export function bunzip2(bytes, checkMagic = false, checkCRC = false) {
         }
     }
 
-    let out = new Uint8Array(bytes.length * 1.5);
+    let out = new Uint8Array(unpackedSize);
     let outIndex = 0;
     let newCRC = -1;
     while (true) {
@@ -280,9 +280,9 @@ export function bunzip2(bytes, checkMagic = false, checkCRC = false) {
                 } else {
                     i += 1;
                 }
-                if (outIndex + count >= out.length) {
+                if (outIndex + count > out.length) {
                     const old = out;
-                    out = new Uint8Array(old.length * 2);
+                    out = new Uint8Array(Math.max(old.length * 2, outIndex + count));
                     out.set(old);
                 }
                 for (let j = 0; j < count; j += 1) {
