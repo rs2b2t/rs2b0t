@@ -2,30 +2,26 @@ import { expect, test, describe } from 'bun:test';
 import { decide, piratestreasure } from '#/bot/api/ai/quests/defs/piratestreasure/index.js';
 import { PT_ID, PT_STAGE } from '#/bot/api/ai/quests/defs/piratestreasure/areas.js';
 import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
+import { pirateSnapshot } from './piratestreasure-snapshot.fixture.js';
 
 const FUNDED: [number, number][] = [[PT_ID.COINS, 5000]];
 const PORT_SARIM = { x: 3014, z: 3204, level: 0 };
 const PLANTATION = { x: 2943, z: 3151, level: 0 };
 
 const snap = (
-    journal: string,
+    journal: QuestSnapshot['journal'],
     stage: number,
     flags: string[] = [],
     ids: [number, number][] = FUNDED,
     over: Partial<QuestSnapshot> = {}
-): QuestSnapshot => ({
-    journal: journal as QuestSnapshot['journal'],
+): QuestSnapshot => pirateSnapshot({
+    journal,
     inv: new Map(ids.map(([id, n]) => [String(id), n])),
     invIds: new Map(ids),
-    worn: new Set(),
-    wornIds: new Set(),
-    noProgress: 0,
     bankCoins: 100_000,
     stage,
     progress: { stage, flags: new Set(flags) },
     bank: new Map([['coins', 100_000]]),
-    bankIds: new Map(),
-    bankKnown: true,
     tile: PORT_SARIM as QuestSnapshot['tile'],
     ...over
 });
