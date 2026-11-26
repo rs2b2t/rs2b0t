@@ -42,6 +42,7 @@ export class PriceBookPanel {
     private renaming = false;
     private iconTries = 0;
     private iconTimer: ReturnType<typeof setTimeout> | null = null;
+    private importRevision = 0;
     private stagedImport: { filename: string; books: TransferBook[]; conflicts: string[] } | null = null;
     private importError: string | null = null;
 
@@ -312,8 +313,13 @@ export class PriceBookPanel {
             if (file === undefined) {
                 return;
             }
+            const revision = ++this.importRevision;
             try {
-                const books = parseOrderbookFile(await file.text());
+                const contents = await file.text();
+                if (revision !== this.importRevision) {
+                    return;
+                }
+                const books = parseOrderbookFile(contents);
                 this.stagedImport = {
                     filename: file.name,
                     books,
@@ -321,6 +327,9 @@ export class PriceBookPanel {
                 };
                 this.importError = null;
             } catch (error) {
+                if (revision !== this.importRevision) {
+                    return;
+                }
                 this.stagedImport = null;
                 this.importError = `Could not import ${file.name}: ${error instanceof Error ? error.message : String(error)}. Choose a valid orderbook JSON file.`;
             }
