@@ -8,15 +8,13 @@ import QuickGround from '#/client/dash3d/QuickGround.js';
 import Wall from '#/client/dash3d/Wall.js';
 import Decor from '#/client/dash3d/Decor.js';
 
-import { TypedArray1d } from '#/client/util/Arrays.js';
-
 export default class Square extends Linkable {
     level: number;
     readonly x: number;
     readonly z: number;
     readonly originalLevel: number;
-    readonly sprites: (Sprite | null)[] = new TypedArray1d(5, null);
-    readonly spriteSpan: Int32Array = new Int32Array(5);
+    sprites: (Sprite | null)[] | null = null;
+    spriteSpan: Int32Array | null = null;
 
     quickGround: QuickGround | null = null;
     ground: Ground | null = null;
