@@ -278,6 +278,111 @@ test('import and peer refresh retain only the live groups omitted from the backu
     });
 });
 
+test('a roster move queued during replacement uses the imported username', async () => {
+    await withWall('local', async wall => {
+        await importSettings({
+            profiles: [{ username: 'Fixture', password: 'fixture', tab: 'Old' }],
+            tabs: ['Old'], activeTab: 'Old', storage: {}
+        });
+        const [original] = wall.slots();
+        document.getElementById('mbx-manage')!.click();
+        await waitFor(() => !document.getElementById('mbx-roster')!.hidden);
+        document.querySelector<HTMLInputElement>('[aria-label="Select Fixture"]')!.click();
+        const name = document.querySelector<HTMLInputElement>('[aria-label="Profile group name"]')!;
+        name.value = 'Work';
+        name.dispatchEvent(new Event('input'));
+        const move = document.querySelector<HTMLButtonElement>('#mbx-roster-move-group')!;
+        expect(move.disabled).toBe(false);
+        const message = document.getElementById('mbx-roster-message')!;
+        const replaceAll = vault.replaceAll.bind(vault);
+        const replace = spyOn(vault, 'replaceAll').mockImplementationOnce((...args) => {
+            const replacing = replaceAll(...args);
+            move.click();
+            return replacing;
+        });
+        try {
+            const saved = { username: 'fixture', password: 'fixture', tab: 'Fleet' };
+            await importSettings({ profiles: [saved], tabs: ['Fleet'], activeTab: 'Fleet', storage: {} });
+            await waitFor(() => !!message.textContent);
+            expect(message.textContent).toBe('Moved 1 profile to Work.');
+            expect(wall.slots().map(s => [s.id, s.tab])).toEqual([[original.id, 'Work']]);
+            const reopened = new ProfileVault();
+            expect(await reopened.unlock('test-passphrase')).toBe(true);
+            expect(reopened.snapshot()).toEqual({
+                profiles: [{ ...saved, tab: 'Work' }], tabs: ['Fleet', 'Work'], activeTab: 'Fleet'
+            });
+        } finally {
+            replace.mockRestore();
+        }
+    });
+});
+
+test('a storage refresh followed by a queued tab addition updates existing slots', async () => {
+    await withWall('local', async wall => {
+        await importSettings({
+            profiles: [{ username: 'alice', password: 'a', tab: 'Work' }, { username: 'bob', password: 'b', tab: 'Old' }],
+            tabs: ['Old', 'Work'], activeTab: 'Work', storage: {}
+        });
+        const [alice, bob] = wall.slots();
+        const peer = new ProfileVault();
+        expect(await peer.unlock('test-passphrase')).toBe(true);
+        const profiles = [{ username: 'bob', password: 'b', tab: 'Fleet' }];
+        await peer.replaceAll({ profiles, tabs: ['Fleet'], activeTab: 'Fleet' });
+        window.dispatchEvent(new StorageEvent('storage', { key: 'rs2b0t:multibox:profiles' }));
+        expect(wall.addTab('Local')).toBe(true);
+
+        await waitFor(() => vault.tabState().tabs.includes('Local'));
+        expect(await peer.unlock('test-passphrase')).toBe(true);
+        expect(peer.snapshot()).toEqual({ profiles, tabs: ['Fleet', 'Local'], activeTab: 'Fleet' });
+        await waitFor(() => wall.slots().some(slot => slot.id === bob.id && slot.tab === 'Fleet'));
+        expect(wall.slots().map(s => [s.id, s.tab])).toEqual([[alice.id, 'Work'], [bob.id, 'Fleet']]);
+    });
+});
+
+test('retrying a partial settings import clears the omitted profile in both stores', async () => {
+    await withWall('local', async () => {
+        const omitted = 'rs2b0t:alice:selectedScript';
+        const imported = 'rs2b0t:fixture:selectedScript';
+        const file = serializeProfileFile({
+            profiles: [{ username: 'fixture', password: 'fixture' }], tabs: [], activeTab: 'Main',
+            storage: { fixture: { selectedScript: 'Fisher' } }
+        });
+        for (const store of [localStorage, sessionStorage]) store.setItem(omitted, 'Miner');
+        const open = spyOn(SettingsPanel.prototype, 'open');
+        const write = localStorage.setItem;
+        const descriptor = Object.getOwnPropertyDescriptor(localStorage, 'setItem');
+        let fail = true;
+        Object.defineProperty(localStorage, 'setItem', { configurable: true, value(key: string, value: string) {
+            if (key === imported && fail) {
+                fail = false;
+                throw new Error('storage full');
+            }
+            write.call(localStorage, key, value);
+        } });
+        try {
+            document.getElementById('mbx-settings')!.click();
+            const panel = open.mock.contexts[0] as SettingsPanel;
+            await panel.importText(file);
+            expect(panel.el.querySelector('#mbx-settings-error')!.textContent).toBe('storage full');
+            expect(sessionStorage.getItem(omitted)).toBe('Miner');
+            await panel.importText(file);
+            expect(panel.el.hidden).toBe(true);
+            for (const store of [localStorage, sessionStorage]) {
+                expect(store.getItem(omitted)).toBeNull();
+                expect(store.getItem(imported)).toBe('Fisher');
+            }
+        } finally {
+            if (descriptor) Object.defineProperty(localStorage, 'setItem', descriptor);
+            else Reflect.deleteProperty(localStorage, 'setItem');
+            open.mockRestore();
+            for (const store of [localStorage, sessionStorage]) {
+                store.removeItem(omitted);
+                store.removeItem(imported);
+            }
+        }
+    });
+});
+
 test('a tab added during replacement updates the restored wall and vault', async () => {
     await withWall('local', async wall => {
         await importSettings({
@@ -286,8 +391,8 @@ test('a tab added during replacement updates the restored wall and vault', async
         });
         const replace = vault.replaceAll.bind(vault);
         let edit: ReturnType<Wall['addTab']> | undefined;
-        const replacing = spyOn(vault, 'replaceAll').mockImplementationOnce(data => {
-            const pending = replace(data);
+        const replacing = spyOn(vault, 'replaceAll').mockImplementationOnce((...args) => {
+            const pending = replace(...args);
             edit = wall.addTab('During');
             return pending;
         });

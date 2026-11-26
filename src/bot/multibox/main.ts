@@ -25,6 +25,17 @@ import type { Account } from './types.js';
 
 type DesktopWall = Window & { rs2b0tLoginCoordinator?: LoginCoordinationRegistry & { parallelism: number } };
 
+function resolveSavedUsernames(profiles: Profile[]): (username: string) => string {
+    const exact = new Set<string>();
+    const byIdentity = new Map<string, string>();
+    for (const { username } of profiles) {
+        exact.add(username);
+        const identity = normalizeUsername(username);
+        if (identity && !byIdentity.has(identity)) byIdentity.set(identity, username);
+    }
+    return username => exact.has(username) ? username : byIdentity.get(normalizeUsername(username)) ?? username;
+}
+
 if (typeof window !== 'undefined') {
     installVisibilityTableCache(window);
     installWorkerClockHub(window);
@@ -147,11 +158,8 @@ function boot(): void {
             const slot = slots.find(slot => slot.id === id)!;
             renderRail(slots);
             if (vault.status() === 'unlocked') {
-                const name = normalizeUsername(slot.username);
-                const profiles = vault.list();
-                const saved = profiles.find(profile => profile.username === slot.username)
-                    ?? profiles.find(profile => normalizeUsername(profile.username) === name);
-                persistTabState(new Map([[saved?.username ?? slot.username, tab]]));
+                const savedUsername = resolveSavedUsernames(vault.list());
+                persistTabState(new Map([[savedUsername(slot.username), tab]]));
             }
             return true;
         });
@@ -368,7 +376,7 @@ function boot(): void {
                 return;
             }
             if (pendingWrites !== orderWrite) {
-                if (recoveringTabs) refreshSavedAccounts();
+                refreshSavedAccounts();
                 return;
             }
             syncSavedGroups(recoveringTabs ? vault.tabState().activeTab : undefined);
@@ -449,8 +457,10 @@ function boot(): void {
         }),
         replaceAll: data => {
             const write = orderWrite.then(async () => {
-                const previous = await vault.replaceAll(data);
-                applyBoxStorage(data.storage, [...previous, ...data.profiles.map(p => p.username)]);
+                await vault.replaceAll(data, {
+                    usernames: Object.keys(data.storage),
+                    apply: wipe => applyBoxStorage(data.storage, wipe)
+                });
                 syncSavedGroups(data.activeTab, true);
             });
             restoringTabs = orderWrite = write.catch(() => {});
@@ -491,7 +501,8 @@ function boot(): void {
         assignGroup: (usernames, name) => {
             const save = orderWrite.then(() => {
                 if (!groupsReady()) throw new Error('Saved groups changed. Try again after the wall refreshes.');
-                return vault.assignGroup(usernames, name);
+                const savedUsername = resolveSavedUsernames(vault.list());
+                return vault.assignGroup(usernames.map(savedUsername), name);
             });
             orderWrite = save.catch(() => {});
             return save.then(async () => {
