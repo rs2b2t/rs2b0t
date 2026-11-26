@@ -72,29 +72,23 @@ function bwtReverse(src, primary) {
     if (primary < 0 || primary >= src.length) {
         throw RangeError('Out of bound');
     }
-    const unsorted = src.slice();
-    src.sort((a, b) => a - b);
-    const start = {};
-    for (let i = src.length - 1; i >= 0; i -= 1) {
-        start[src[i]] = i;
-    }
-    const links = [];
+    const offsets = new Uint32Array(257);
     for (let i = 0; i < src.length; i += 1) {
-        links.push(start[unsorted[i]]++);  
+        offsets[src[i] + 1] += 1;
     }
-    let i;
-    const first = src[(i = primary)];
-    const ret = [];
-    for (let j = 1; j < src.length; j += 1) {
-        const x = src[(i = links[i])];
-        if (x === undefined) {
-            ret.push(255);
-        } else {
-            ret.push(x);
-        }
+    for (let i = 1; i < offsets.length; i += 1) {
+        offsets[i] += offsets[i - 1];
     }
-    ret.push(first);
-    ret.reverse();
+    const links = new Uint32Array(src.length);
+    for (let i = 0; i < src.length; i += 1) {
+        links[offsets[src[i]]++] = i;
+    }
+    const ret = new Array(src.length);
+    let row = primary;
+    for (let i = 0; i < ret.length; i += 1) {
+        row = links[row];
+        ret[i] = src[row];
+    }
     return ret;
 }
 
@@ -207,7 +201,7 @@ export function bunzip2(bytes, checkMagic = false, checkCRC = false, unpackedSiz
                 tables.push(createOrderedHuffmanTable(lengths));
             }
             const favourites = [];
-            for (let i = 0; i < used.length - 1; i += 1) {
+            for (let i = 0; i < used.length; i += 1) {
                 if (used[i]) {
                     favourites.push(i);
                 }

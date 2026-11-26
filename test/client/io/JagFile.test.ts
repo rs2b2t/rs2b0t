@@ -38,6 +38,13 @@ test('bunzip2 preserves a long run without a declared size', () => {
     expect(data.every(byte => byte === 0x41)).toBe(true);
 });
 
+test('bunzip2 preserves a single 0xff byte in headerless and CRC-checked streams', () => {
+    const stream = Buffer.from('425a6831314159265359000000ff00000000008000a00021184682ee48a70a120000001fe0', 'hex');
+    const expected = Uint8Array.of(0xff);
+    expect(bzip.bunzip2(stream.subarray(4), false, false, 1)).toEqual(expected);
+    expect(bzip.bunzip2(stream, true, true, 1)).toEqual(expected);
+});
+
 test('61 independent member reads each allocate one 64 KiB output', () => {
     const fixture = fixtures[1];
     const input = Buffer.from(fixture.member, 'hex');
