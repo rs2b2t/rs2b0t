@@ -110,8 +110,6 @@ class ScriptRunnerImpl {
     meta: ScriptMeta | null = null;
 
     private changeListeners = new Set<() => void>();
-    /** onStart has returned and established any baselines consumed by onPaint. */
-    private startupComplete = false;
     /** Wall-clock start of the current loop hold (logout / scene load / no tile). */
     private holdSince = 0;
     private holdReason: LoopHoldReason | null = null;
@@ -143,10 +141,10 @@ class ScriptRunnerImpl {
 
     /** The bot that may safely paint this frame, or null while startup/state is incomplete. */
     get paintBot(): AbstractBot | null {
-        const state = this.ctx?.state;
+        const ctx = this.ctx;
         if (
-            !this.startupComplete ||
-            (state !== 'running' && state !== 'paused') ||
+            !ctx?.startupComplete ||
+            (ctx.state !== 'running' && ctx.state !== 'paused') ||
             !loopReadyOrDetached()
         ) {
             return null;
@@ -174,7 +172,6 @@ class ScriptRunnerImpl {
         this.ctx = ctx;
         this.bot = bot;
         this.meta = meta;
-        this.startupComplete = false;
         Scheduler.active = ctx;
 
 
@@ -225,7 +222,7 @@ class ScriptRunnerImpl {
                 if (RecoveryHints.pendingRecovery) {
                     RecoveryHints.clear();
                 }
-                this.startupComplete = true;
+                ctx.startupComplete = true;
                 ctx.nextLoopAt = 0;
                 ctx.progress();
             })
@@ -258,7 +255,7 @@ class ScriptRunnerImpl {
 
         // Why: ctx.resume() re-arms the waiter a parked loop sits on, so that loop comes back by itself; clearing the flag would run a second body through the WalkExecutor singleton the first is still walking.
         // Why: with no waiter the loop is blocked on a promise the scheduler does not own (#580) and nothing will wake it, so the flag is cleared to let the pump start a fresh iteration.
-        if (ctx.waiters.length === 0) {
+        if (ctx.startupComplete && ctx.waiters.length === 0) {
             ctx.loopInFlight = false;
         }
 
@@ -362,6 +359,9 @@ class ScriptRunnerImpl {
     }
 
     private settleFailure(ctx: ScriptContext, err: unknown): void {
+        if (ctx !== this.ctx) {
+            return;
+        }
         ctx.loopInFlight = false;
 
         if (err instanceof ScriptAborted || ctx.state === 'stopping') {
@@ -388,7 +388,6 @@ class ScriptRunnerImpl {
     }
 
     private teardown(ctx: ScriptContext): void {
-        this.startupComplete = false;
         try {
             this.bot?.onStop?.();
         } catch (err) {

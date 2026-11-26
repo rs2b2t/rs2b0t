@@ -2,6 +2,7 @@ import { afterEach, expect, test } from 'bun:test';
 import { reader } from '#/bot/adapter/ClientAdapter.js';
 import { LoopingBot } from '#/bot/api/bot/Bot.js';
 import { Execution } from '#/bot/api/execution/Execution.js';
+import { BotHost } from '#/bot/runtime/BotHost.js';
 import { Scheduler } from '#/bot/runtime/Scheduler.js';
 import { RandomEvents } from '#/bot/runtime/randomevents/RandomEvents.js';
 import { loopReadyOrDetached, ScriptRunner, stopReasonOf } from '#/bot/runtime/ScriptRunner.js';
@@ -43,9 +44,10 @@ class IgnoreSwarmBot extends LoopingBot {
     override loop(): void {}
 }
 
-class AsyncStartPaintProbeBot extends LoopingBot {
+class AsyncStartProbeBot extends LoopingBot {
     starts = 0;
     paints = 0;
+    loops = 0;
     private releaseStart!: () => void;
     private readonly startGate = new Promise<void>(resolve => {
         this.releaseStart = resolve;
@@ -64,7 +66,9 @@ class AsyncStartPaintProbeBot extends LoopingBot {
         this.releaseStart();
     }
 
-    override loop(): void {}
+    override loop(): void {
+        this.loops++;
+    }
 }
 
 async function settle(): Promise<void> {
@@ -151,7 +155,7 @@ test('a stop with a blank reason still says so instead of reading as no reason',
 });
 
 test('onPaint remains hidden until asynchronous onStart establishes its baseline', async () => {
-    const instance = new AsyncStartPaintProbeBot();
+    const instance = new AsyncStartProbeBot();
     ScriptRunner.start({
         name: 'Paint startup probe',
         description: 'runner paint readiness regression fixture',
@@ -169,6 +173,34 @@ test('onPaint remains hidden until asynchronous onStart establishes its baseline
     expect(ScriptRunner.paintBot).toBe(instance);
     ScriptRunner.paintBot?.onPaint?.({} as CanvasRenderingContext2D);
     expect(instance.paints).toBe(1);
+});
+
+test('resuming during asynchronous onStart waits for startup before the first loop', async () => {
+    const instance = new AsyncStartProbeBot();
+    ScriptRunner.start({
+        name: 'Resume during startup',
+        description: 'runner startup regression fixture',
+        create: () => instance
+    });
+
+    try {
+        await settle();
+        expect(instance.starts).toBe(1);
+        BotHost.onFrame();
+        expect(instance.loops).toBe(0);
+
+        ScriptRunner.pause();
+        ScriptRunner.resume();
+        BotHost.onFrame();
+        expect(instance.loops).toBe(0);
+    } finally {
+        instance.finishStart();
+        await settle();
+    }
+
+    expect(instance.loops).toBe(0);
+    BotHost.onFrame();
+    expect(instance.loops).toBe(1);
 });
 
 test('an attached script waits for the login stat snapshot before reading XP', () => {

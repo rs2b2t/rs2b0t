@@ -205,7 +205,7 @@ export default class World {
                 tile.level--;
 
                 for (let i = 0; i < tile.spriteCount; i++) {
-                    const sprite = tile.sprites[i];
+                    const sprite = tile.sprites![i];
                     if (sprite && ((sprite.typecode >> 29) & 0x3) == 2 && sprite.minTileX == stx && sprite.minTileZ == stz) {
                         sprite.level--;
                     }
@@ -331,7 +331,7 @@ export default class World {
         const tile: Square | null = this.squares[level][stx][stz];
         if (tile) {
             for (let l: number = 0; l < tile.spriteCount; l++) {
-                const sprite: Sprite | null = tile.sprites[l];
+                const sprite: Sprite | null = tile.sprites![l];
                 if (!sprite || !sprite.model || !(sprite.model instanceof Model)) {
                     continue;
                 }
@@ -483,7 +483,7 @@ export default class World {
         }
 
         for (let l: number = 0; l < tile.spriteCount; l++) {
-            const loc: Sprite | null = tile.sprites[l];
+            const loc: Sprite | null = tile.sprites![l];
             if (loc && ((loc.typecode >> 29) & 0x3) === 2 && loc.minTileX === x && loc.minTileZ === z) {
                 this.delSprite(loc);
                 return;
@@ -521,7 +521,7 @@ export default class World {
         }
 
         for (let l: number = 0; l < tile.spriteCount; l++) {
-            const sprite: Sprite | null = tile.sprites[l];
+            const sprite: Sprite | null = tile.sprites![l];
             if (sprite && ((sprite.typecode >> 29) & 0x3) === 2 && sprite.minTileX === x && sprite.minTileZ === z) {
                 return sprite;
             }
@@ -556,7 +556,7 @@ export default class World {
         }
 
         for (let l: number = 0; l < tile.spriteCount; l++) {
-            const sprite: Sprite | null = tile.sprites[l];
+            const sprite: Sprite | null = tile.sprites![l];
             if (sprite && ((sprite.typecode >> 29) & 0x3) === 2 && sprite.minTileX === x && sprite.minTileZ === z) {
                 return sprite;
             }
@@ -582,7 +582,7 @@ export default class World {
             return tile.groundDecor.typecode2 & 0xff;
         } else {
             for (let i: number = 0; i < tile.spriteCount; i++) {
-                const sprite: Sprite | null = tile.sprites[i];
+                const sprite: Sprite | null = tile.sprites![i];
                 if (sprite && sprite.typecode === typecode) {
                     return sprite.typecode2 & 0xff;
                 }
@@ -615,7 +615,7 @@ export default class World {
                     }
 
                     for (let i: number = 0; i < tile.spriteCount; i++) {
-                        const sprite: Sprite | null = tile.sprites[i];
+                        const sprite: Sprite | null = tile.sprites![i];
                         if (sprite && sprite.model && sprite.model.pointNormal) {
                             this.shareLightLoc(level, tileX, tileZ, sprite.maxTileX + 1 - sprite.minTileX, sprite.maxTileZ - sprite.minTileZ + 1, sprite.model as Model);
                             (sprite.model as Model).light(ambient, attenuation, lightSrcX, lightSrcY, lightSrcZ);
@@ -706,7 +706,7 @@ export default class World {
                     }
 
                     for (let i: number = 0; i < tile.spriteCount; i++) {
-                        const sprite: Sprite | null = tile.sprites[i];
+                        const sprite: Sprite | null = tile.sprites![i];
                         if (!sprite || !sprite.model || !sprite.model.pointNormal) {
                             continue;
                         }
@@ -1204,6 +1204,8 @@ export default class World {
 
                 const tile: Square | null = this.squares[level][tx][tz];
                 if (tile) {
+                    tile.sprites ??= new TypedArray1d(5, null);
+                    tile.spriteSpan ??= new Int32Array(5);
                     tile.sprites[tile.spriteCount] = sprite;
                     tile.spriteSpan[tile.spriteCount] = spans;
                     tile.spriteSpans |= spans;
@@ -1223,7 +1225,7 @@ export default class World {
         for (let tx: number = sprite.minTileX; tx <= sprite.maxTileX; tx++) {
             for (let tz: number = sprite.minTileZ; tz <= sprite.maxTileZ; tz++) {
                 const tile: Square | null = this.squares[sprite.level][tx][tz];
-                if (!tile) {
+                if (!tile?.sprites || !tile.spriteSpan) {
                     continue;
                 }
 
@@ -1481,7 +1483,7 @@ export default class World {
                     }
 
                     for (let i: number = 0; i < linkedSquare.spriteCount; i++) {
-                        const sprite: Sprite | null = linkedSquare.sprites[i];
+                        const sprite: Sprite | null = linkedSquare.sprites![i];
 
                         if (sprite) {
                             sprite.model?.worldRender(sprite.yaw, World.cameraSinX, World.cameraCosX, World.cameraSinY, World.cameraCosY, sprite.x - World.cx, sprite.y - World.cy, sprite.z - World.cz, sprite.typecode);
@@ -1648,12 +1650,12 @@ export default class World {
             if (tile.cornerSides !== 0) {
                 let draw: boolean = true;
                 for (let i: number = 0; i < tile.spriteCount; i++) {
-                    const sprite: Sprite | null = tile.sprites[i];
+                    const sprite: Sprite | null = tile.sprites![i];
                     if (!sprite) {
                         continue;
                     }
 
-                    if (sprite.cycle !== World.cycleNo && (tile.spriteSpan[i] & tile.cornerSides) === tile.sidesBeforeCorner) {
+                    if (sprite.cycle !== World.cycleNo && (tile.spriteSpan![i] & tile.cornerSides) === tile.sidesBeforeCorner) {
                         draw = false;
                         break;
                     }
@@ -1676,7 +1678,7 @@ export default class World {
                 let spriteBufferSize: number = 0;
 
                 iterate_sprites: for (let i: number = 0; i < spriteCount; i++) {
-                    const sprite: Sprite | null = tile.sprites[i];
+                    const sprite: Sprite | null = tile.sprites![i];
 
                     if (!sprite || sprite.cycle === World.cycleNo) {
                         continue;

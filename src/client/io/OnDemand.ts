@@ -10,6 +10,7 @@ import type JagFile from '#/client/io/JagFile.js';
 import OnDemandProvider from '#/client/io/OnDemandProvider.js';
 import OnDemandRequest from '#/client/io/OnDemandRequest.js';
 import Packet from '#/client/io/Packet.js';
+import { publisherTrafficChannel } from '#/client/io/TrafficChannel.js';
 
 export default class OnDemand extends OnDemandProvider {
     versions: number[][] = [];
@@ -307,7 +308,7 @@ export default class OnDemand extends OnDemandProvider {
             return;
         }
 
-        const worker = new Worker(new URL('./ondemandworker.js', import.meta.url), { type: 'module' });
+        const worker = new Worker(new URL('./ondemandworker.js', import.meta.url), { type: 'module', name: publisherTrafficChannel() });
         this.worker = worker;
         this.lastIngame = this.app.ingame;
 

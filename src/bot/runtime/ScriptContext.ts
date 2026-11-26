@@ -28,6 +28,7 @@ export class ScriptContext {
     state: ScriptState = 'running';
     waiters: Waiter[] = [];
 
+    startupComplete = false;
     loopInFlight = false;
     /** Wall-clock eligibility (0 = no wall-clock gate). */
     nextLoopAt = 0;
