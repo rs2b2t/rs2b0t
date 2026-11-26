@@ -22,6 +22,18 @@ jobs:
 
       - run: bun test
 
+      - name: Build and check client bundles
+        run: |
+          bun run build
+          bun tools/check-bundle-defines.ts out/client.js out/mapview.js out/ondemandworker.js
+
+      - name: Build and check bot bundles
+        env:
+          B0T_OUT_DIR: out/bot
+        run: |
+          bun run build:bot
+          bun tools/check-bundle-defines.ts out/bot/botclient.js out/bot/multibox.js out/bot/ondemandworker.js out/bot/navworker.js
+
       - name: typecheck
         run: bun run typecheck
 
