@@ -1,3 +1,4 @@
+import { carveFlaxPocket, flaxAt, flaxBlocksExit } from '../../api/acquisition/flaxPocket.js';
 import type { Task } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { Game } from '../../api/game/Game.js';
@@ -5,12 +6,9 @@ import { Inventory } from '../../api/inventory/Inventory.js';
 import { Locs, type Loc } from '../../api/locs/Locs.js';
 import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
-import { EventSignal } from '../../api/execution/EventSignal.js';
 import { travelTo } from './walking.js';
 import type FlaxAIO from './flaxaio.js';
 
-const POCKET_CAP = 40;
-const CARVE_DROP = 5;
 
 export function atField(bot: FlaxAIO): boolean {
     const here = Game.tile();
@@ -39,113 +37,23 @@ export function nearestFlax(bot: FlaxAIO): Loc | null {
 }
 
 function flaxLocAt(bot: FlaxAIO, x: number, z: number, level: number): Loc | null {
-    return Locs.query()
-        .name(bot.flaxName())
-        .action(bot.pickOpName())
-        .where(l => l.tile().x === x && l.tile().z === z && l.tile().level === level)
-        .nearest();
-}
-
-function pocketTiles(): { x: number; z: number }[] {
-    const me = Game.tile();
-    if (!me) {
-        return [];
-    }
-    const level = me.level;
-    const key = (x: number, z: number): string => `${x},${z}`;
-    const seen = new Set<string>([key(me.x, me.z)]);
-    const out: { x: number; z: number }[] = [{ x: me.x, z: me.z }];
-    const queue: { x: number; z: number }[] = [{ x: me.x, z: me.z }];
-    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-    while (queue.length > 0 && out.length < POCKET_CAP) {
-        const cur = queue.shift()!;
-        const from = { x: cur.x, z: cur.z, level };
-        for (const [dx, dz] of dirs) {
-            const nx = cur.x + dx, nz = cur.z + dz, k = key(nx, nz);
-            if (seen.has(k) || !Reachability.canStep(from, { x: nx, z: nz, level })) {
-                continue;
-            }
-            seen.add(k);
-            out.push({ x: nx, z: nz });
-            queue.push({ x: nx, z: nz });
-        }
-    }
-    return out;
-}
-
-function boundaryFlax(bot: FlaxAIO, pocket: { x: number; z: number }[]): Loc[] {
-    const level = Game.tile()?.level ?? 0;
-    const inPocket = new Set(pocket.map(t => `${t.x},${t.z}`));
-    const seen = new Set<string>();
-    const walls: Loc[] = [];
-    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-    for (const p of pocket) {
-        for (const [dx, dz] of dirs) {
-            const nx = p.x + dx, nz = p.z + dz, k = `${nx},${nz}`;
-            if (inPocket.has(k) || seen.has(k)) {
-                continue;
-            }
-            seen.add(k);
-            const flax = flaxLocAt(bot, nx, nz, level);
-            if (flax) {
-                walls.push(flax);
-            }
-        }
-    }
-    return walls;
+    return flaxAt(bot.flaxName(), bot.pickOpName(), x, z, level);
 }
 
 export function boxedByFlax(bot: FlaxAIO): boolean {
     if (!Inventory.isFull()) {
         return false;
     }
-    const pocket = pocketTiles();
-    return pocket.length < POCKET_CAP && boundaryFlax(bot, pocket).length > 0;
-}
-
-async function dropFlax(bot: FlaxAIO, n: number): Promise<void> {
-    const isFlax = (name: string | null | undefined): boolean => (name ?? '').toLowerCase().includes(bot.flaxName().toLowerCase());
-    for (let i = 0; i < n; i++) {
-        const flax = Inventory.items().find(it => isFlax(it.name));
-        if (!flax) {
-            return;
-        }
-        const before = bot.flaxCount();
-        if (!(await flax.interact('Drop'))) {
-            return;
-        }
-        await Execution.delayUntil(() => bot.flaxCount() < before, 2000);
-    }
+    return flaxBlocksExit(bot.flaxName(), bot.pickOpName());
 }
 
 export async function carveOut(bot: FlaxAIO): Promise<void> {
     bot.setStatus('boxed in by flax — carving a way out');
     bot.log('boxed in by flax with a full pack — dropping flax to pick a way out');
-    await dropFlax(bot, CARVE_DROP);
-    for (let n = 0; n < 20; n++) {
-        if (ChatDialog.canContinue() || EventSignal.pending()) {
-            return;
-        }
-        const pocket = pocketTiles();
-        if (pocket.length >= POCKET_CAP) {
-            bot.log('carved back out to open ground');
-            return;
-        }
-        const walls = boundaryFlax(bot, pocket);
-        if (walls.length === 0) {
-            return;
-        }
-        if (Inventory.isFull()) {
-            await dropFlax(bot, CARVE_DROP);
-        }
-        const target = walls.sort((a, b) => a.tile().distanceTo(bot.fieldGate()) - b.tile().distanceTo(bot.fieldGate()))[0];
-        const t = target.tile();
-        if (!(await target.interact(bot.pickOpName()))) {
-            await Execution.delayTicks(2);
-            continue;
-        }
-        await Execution.delayUntil(() => flaxLocAt(bot, t.x, t.z, t.level) === null, 4000);
-    }
+    await carveFlaxPocket({
+        name: bot.flaxName(), op: bot.pickOpName(), gate: bot.fieldGate(),
+        timing: 'time', log: m => bot.log(m)
+    });
 }
 
 export class EscapeFlaxTrap implements Task {
