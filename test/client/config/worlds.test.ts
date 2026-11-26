@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { botFrameUrl, resolveNodeId, resolveWorldNumber, worldSwitchUrl } from '#/client/config/worlds.js';
+import { botFrameUrl, resolveNodeId, resolveWorldNumber, WORLDS, worldSwitchUrl } from '#/client/config/worlds.js';
 
 test('hosted node identity follows the actual host despite conflicting or invalid overrides', () => {
     for (const query of ['', '?nodeid=10', '?nodeid=11', '?nodeid=NaN', '?nodeid=11junk', '?nodeid=0']) {
@@ -31,6 +31,7 @@ test('every wall child stays on its wall origin and inherits its true node and m
         const child = botFrameUrl(from, username);
         expect(child.origin).toBe(from.origin);
         expect(child.pathname).toBe('/rs2b0t/bot.html');
+        expect(child.searchParams.has('world')).toBe(false);
         expect(child.searchParams.get('nodeid')).toBe('11');
         expect(child.searchParams.get('box')).toBe(username);
         expect(child.searchParams.get('lowmem')).toBe('0');
@@ -48,12 +49,12 @@ test('explicit frame worlds bind node identity even on a conflicting hosted orig
 });
 
 test('one wall can create same-origin frames for every world without copying credentials', () => {
-    const wall = new URL('http://localhost:8081/multibox.html?lowmem=0&password=secret');
-    for (const number of [1, 2, 3] as const) {
+    const wall = new URL('http://localhost:8081/multibox.html?lowmem=0&password=secret&world=01&world=2');
+    for (const { number, nodeId } of WORLDS) {
         const frame = botFrameUrl(wall, 'alice', number);
         expect(frame.origin).toBe(wall.origin);
         expect(frame.searchParams.get('world')).toBe(String(number));
-        expect(frame.searchParams.get('nodeid')).toBe(String(number + 9));
+        expect(frame.searchParams.get('nodeid')).toBe(String(nodeId));
         expect(frame.searchParams.has('password')).toBe(false);
     }
 });
