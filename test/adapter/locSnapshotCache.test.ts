@@ -1,13 +1,11 @@
-import { afterAll, afterEach, describe, expect, mock, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from 'bun:test';
+import { stubProps } from '../lib/stubSingletons.js';
 
 mock.module('#/client/3rdparty/audio.js', () => ({ playWave: async (): Promise<void> => {}, setWaveVolume: (): void => {} }));
 mock.module('#/client/3rdparty/tinymidipcm.js', () => ({ playMidi: (): void => {}, setMidiVolume: (): void => {}, stopMidi: (): void => {} }));
 
 const { attach, detach, invalidateLocSnapshots, reader } = await import('#/bot/adapter/ClientAdapter.js');
 const { default: LocType } = await import('#/client/config/LocType.js');
-
-// LocType reads the game config cache, which a unit test has no reason to load.
-LocType.list = ((id: number) => ({ name: `loc${id}`, op: ['Mine'], multiloc: [] })) as unknown as typeof LocType.list;
 
 // Why: locs() sweeps 104x104 tiles x 4 typecodes per call (1.4-1.7ms, up to 2289 objects) from predicates that run at frame rate.
 let sceneReads = 0;
@@ -34,12 +32,18 @@ function fakeClient(overrides: Record<string, unknown> = {}) {
 }
 
 describe('locs() snapshot memo', () => {
+    let restoreList: () => void;
+    beforeAll(() => {
+        restoreList = stubProps(LocType, { list: id => Object.assign(new LocType(), { id, name: `loc${id}`, op: ['Mine'] }) });
+    });
+
     afterEach(() => {
         invalidateLocSnapshots();
     });
 
     // Why: `raw` is module-global, so a half-populated fake left attached makes unrelated adapter reads dereference undefined.
     afterAll(() => {
+        restoreList();
         detach();
     });
 

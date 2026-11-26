@@ -1,3 +1,4 @@
+import { loadDefinitions } from '#/client/config/configArchive.js';
 import Model from '#/client/dash3d/Model.js';
 
 import JagFile from '#/client/io/JagFile.js';
@@ -17,18 +18,7 @@ export default class IdkType {
     disable: boolean = false;
 
     static init(config: JagFile): void {
-        const dat: Packet = new Packet(config.read('idk.dat'));
-
-        this.numDefinitions = dat.g2();
-        this.list = new Array(this.numDefinitions);
-
-        for (let id: number = 0; id < this.numDefinitions; id++) {
-            if (!this.list[id]) {
-                this.list[id] = new IdkType();
-            }
-
-            this.list[id].decode(dat);
-        }
+        loadDefinitions(this, config, 'idk.dat');
     }
 
     decode(dat: Packet): void {
