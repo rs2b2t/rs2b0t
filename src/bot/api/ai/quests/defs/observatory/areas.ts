@@ -1,4 +1,5 @@
 import Tile from '../../../../../geometry/Tile.js';
+import { barbarianOutpostPlankSpawns } from '../../data/barbarianOutpost.js';
 import type { NpcStop } from '../../exec/primitives.js';
 import { CATHERBY_RANGE } from '../../../../../data/cookingRanges.js';
 
@@ -100,12 +101,7 @@ export const OBS_TILE = {
     /** The lone `bucket_sand` spawn, 25 tiles east of the reception. */
     SAND_SPAWN: new Tile(2461, 3178, 0),
     // Why: these 2 are Horror from the Deep's, already walked live: 4 plank spawns north-east of the Barbarian Outpost and the 9-spawn seaweed shore.
-    PLANK_SPAWNS: [
-        new Tile(2552, 3574, 0),
-        new Tile(2553, 3575, 0),
-        new Tile(2554, 3574, 0),
-        new Tile(2556, 3573, 0)
-    ],
+    PLANK_SPAWNS: barbarianOutpostPlankSpawns(),
     SEAWEED_SPAWN: new Tile(2708, 3728, 0),
 
     /** Copper and tin in one seam; the stand is clear of the rocks themselves. */

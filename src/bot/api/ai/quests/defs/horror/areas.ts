@@ -1,4 +1,5 @@
 import Tile from '../../../../../geometry/Tile.js';
+import { barbarianOutpostPlankSpawns } from '../../data/barbarianOutpost.js';
 import type { NpcStop } from '../../exec/primitives.js';
 
 export const HD_QUEST = 'Horror from the Deep';
@@ -127,12 +128,7 @@ export const HD_TILE = {
     OUTPOST_PIPE_SOUTH: new Tile(2552, 3558, 0),
     GUNNJORN: new Tile(2540, 3548, 0),
     /** Four `woodplank` ground spawns north-east of the outpost. */
-    PLANK_SPAWNS: [
-        new Tile(2552, 3574, 0),
-        new Tile(2553, 3575, 0),
-        new Tile(2554, 3574, 0),
-        new Tile(2556, 3573, 0)
-    ],
+    PLANK_SPAWNS: barbarianOutpostPlankSpawns(),
 
     /** Lumbridge swamp tar patch, the nearest spawns outside Morytania. */
     SWAMP_TAR: new Tile(3173, 3178, 0),
