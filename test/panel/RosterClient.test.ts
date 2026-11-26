@@ -203,7 +203,8 @@ test('read returns effective registered parameters and copied values remain inde
     expect(client.scripts()).toEqual(expect.arrayContaining(names));
 });
 
-test.each(['loaded', 'unloaded'])('%s target keeps both stores when the second copied setting exceeds quota', async target => {
+for (const start of [false, true]) test.each(['loaded', 'unloaded'])(`%s copy rolls back when ${start ? 'script selection' : 'the second setting'} exceeds quota`, async target => {
+    if (start) client.assignScript('RosterOther');
     Reflect.get(window, 'happyDOM').setURL('http://localhost:8081/bot.html?box=loaded');
     const profiles: RosterProfile[] = [target, 'source', 'good'].map(username => ({ username, tab: 'Main', world: 1 }));
     if (target === 'loaded') profiles[0].slot = {
@@ -222,6 +223,12 @@ test.each(['loaded', 'unloaded'])('%s target keeps both stores when the second c
     const limited = target === 'loaded' ? localStorage : sessionStorage;
     const other = limited === localStorage ? sessionStorage : localStorage;
     other.setItem(prefix + 'obsolete', '');
+    const selection = `rs2b0t:${target}:selectedScript`;
+    if (start) {
+        for (const store of [localStorage, sessionStorage]) store.setItem('rs2b0t:good:selectedScript', 'RosterOther');
+        limited.setItem(prefix + 'mode', 'Auto');
+        other.setItem(selection, 'RosterOther');
+    }
     limited.setItem('padding', '1');
     const capacity = limited.length;
     const setItem = limited.setItem;
@@ -229,17 +236,20 @@ test.each(['loaded', 'unloaded'])('%s target keeps both stores when the second c
         if (limited.getItem(key) === null && limited.length >= capacity) throw new DOMException(key, 'QuotaExceededError');
         setItem.call(limited, key, value);
     } });
-    const command = { kind: 'copy', script: 'RosterDemo', source: 'source' } as const;
+    const command = { kind: 'copy', script: 'RosterDemo', source: 'source', start } as const;
     const changes: string[] = [];
     const unsubscribe = SettingsStore.onChange((_name, key) => changes.push(key));
     try {
         const [good, failed] = await actions.run(['good', target], command);
         expect(good.state).toBe('done');
-        expect(failed).toMatchObject({ state: 'failed', message: prefix + 'mode' });
+        expect(failed).toMatchObject({ state: 'failed', message: start ? selection : prefix + 'mode' });
         expect(changes).toEqual([]);
+        expect(runner.starts).toEqual([]);
+        if (start) expect(client.selectedScript()).toBe('RosterOther');
         for (const store of [localStorage, sessionStorage]) {
             expect(store.getItem(prefix + 'leash')).toBe(store === localStorage ? '17' : '19');
-            expect(store.getItem(prefix + 'mode')).toBeNull();
+            expect(store.getItem(prefix + 'mode')).toBe(start && store === limited ? 'Auto' : null);
+            expect(store.getItem(selection)).toBe(start && store === other ? 'RosterOther' : null);
             expect(store.getItem(prefix + 'obsolete')).toBe(store === other ? '' : null);
             expect(store.getItem('rs2b0t:good:set:RosterDemo:leash')).toBe('12');
             expect(store.getItem('rs2b0t:good:set:RosterDemo:mode')).toBe('None');
@@ -250,6 +260,7 @@ test.each(['loaded', 'unloaded'])('%s target keeps both stores when the second c
         for (const store of [localStorage, sessionStorage]) {
             expect(store.getItem(prefix + 'leash')).toBe('12');
             expect(store.getItem(prefix + 'mode')).toBe('None');
+            expect(store.getItem(selection)).toBe(start ? 'RosterDemo' : null);
             expect(store.getItem(prefix + 'obsolete')).toBeNull();
         }
     } finally {

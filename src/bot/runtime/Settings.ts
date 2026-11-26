@@ -581,10 +581,10 @@ class SettingsStoreImpl {
         this.notifyChange(name, key, rawString);
     }
 
-    replace(name: string, keys: Set<string>, values: Record<string, string>): void {
+    replace(name: string, keys: Set<string>, values: Record<string, string>, select = false): void {
         const scripts = name === 'JiveRC' ? [name, 'NatureCrafter'] : [name];
         const suffixes = scripts.flatMap(script => Array.from(keys, key => `set:${script}:${key}`));
-        replaceBoxSettings([sessionStorage, localStorage], boxId(), name, suffixes, values);
+        replaceBoxSettings([sessionStorage, localStorage], boxId(), name, suffixes, values, select);
         for (const [key, value] of Object.entries(values)) this.notifyChange(name, key, value);
     }
 

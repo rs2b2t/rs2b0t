@@ -1,4 +1,8 @@
+export const commitDesktopSettings = Symbol('commitDesktopSettings');
+type ApplySettings = (changes: Record<string, string | null>) => void;
+
 export interface DesktopStorage {
+    applySettings?: ApplySettings;
     getItem(key: string): string | null;
     setItem(key: string, value: string): void;
     removeItem(key: string): void;
@@ -8,6 +12,9 @@ export interface DesktopStorage {
 }
 
 declare global {
+    interface Storage {
+        [commitDesktopSettings]?: ApplySettings;
+    }
     interface Window {
         rs2b0tDesktopStorage?: DesktopStorage;
     }

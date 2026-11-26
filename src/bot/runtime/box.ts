@@ -1,5 +1,5 @@
 import { botFrameUrl } from '../../client/config/worlds.js';
-import { desktopStorage, isEncodedSettingKey, setProfileMigrationKey, settingsStoragePrefix, storeKeys } from './desktopStorage.js';
+import { commitDesktopSettings, desktopStorage, isEncodedSettingKey, setProfileMigrationKey, settingsStoragePrefix, storeKeys } from './desktopStorage.js';
 
 // docs/decisions/architecture.md#per-instance-storage
 // Why: same-origin multibox frames share sessionStorage, so `?box=<account>` namespaces each bot.
@@ -135,9 +135,15 @@ export function clearBoxItem(store: Storage, suffix: string, id: string, write =
     write(store, key, null);
 }
 
-export function replaceBoxSettings(stores: Storage[], id: string, script: string, clearSuffixes: string[], values: Record<string, string>): void {
+export function replaceBoxSettings(stores: Storage[], id: string, script: string, clearSuffixes: string[], values: Record<string, string>, select = false): void {
+    const commit = localStorage[commitDesktopSettings];
+    const changes: Record<string, string | null> = {};
     const undo: Array<{ store: Storage; key: string; value: string | null }> = [];
     function write(store: Storage, key: string, value: string | null): void {
+        if (commit && store === localStorage) {
+            changes[key] = value;
+            return;
+        }
         const previous = store.getItem(key);
         if (previous === value) return;
         writeItem(store, key, value);
@@ -147,7 +153,9 @@ export function replaceBoxSettings(stores: Storage[], id: string, script: string
         for (const store of stores) {
             for (const suffix of clearSuffixes) clearBoxItem(store, suffix, id, write);
             for (const [key, value] of Object.entries(values)) write(store, boxKey(`set:${script}:${key}`, id), value);
+            if (select) write(store, boxKey('selectedScript', id), script);
         }
+        commit?.(changes);
     } catch (error) {
         for (const { store, key, value } of undo.reverse()) writeItem(store, key, value);
         throw error;

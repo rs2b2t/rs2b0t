@@ -1,7 +1,6 @@
-import { desktopStorage, isEncodedSettingKey, setProfileMigrationKey } from '../runtime/desktopStorage.js';
+import { commitDesktopSettings, desktopStorage, type DesktopStorage, isEncodedSettingKey, setProfileMigrationKey } from '../runtime/desktopStorage.js';
 
-if (desktopStorage) {
-    const shared = desktopStorage;
+export function installDesktopStorage(shared: DesktopStorage): void {
     const native = window.localStorage;
     const isShared = (key: string) => key.startsWith('rs2b0t:');
     const needsCache = (key: string) => isEncodedSettingKey(key) || key === setProfileMigrationKey;
@@ -44,6 +43,18 @@ if (desktopStorage) {
             for (const key of keys()) storage.removeItem(key);
         }
     };
+    if (shared.applySettings) {
+        const apply = shared.applySettings;
+        storage[commitDesktopSettings] = changes => {
+            apply(changes);
+            if (settings) {
+                for (const [key, value] of Object.entries(changes)) {
+                    if (value === null) settings.delete(key);
+                    else if (needsCache(key)) settings.set(key, value);
+                }
+            }
+        };
+    }
     Object.defineProperty(window, 'localStorage', {
         value: new Proxy(storage, {
             ownKeys: keys,
@@ -69,3 +80,5 @@ if (desktopStorage) {
         window.dispatchEvent(new StorageEvent('storage', { key, oldValue, newValue }));
     });
 }
+
+if (desktopStorage) installDesktopStorage(desktopStorage);

@@ -258,12 +258,16 @@ export default class BotPanel {
         this.library.cancelPendingSelection();
     }
 
-    copyScriptSettings(name: string, values: Record<string, string>): void {
+    copyScriptSettings(name: string, values: Record<string, string>, select = false): void {
         this.assertScriptIdle();
         const { name: script, keys } = this.validateSettings(name, values);
         this.paramsModal.close();
-        SettingsStore.replace(script, keys, values);
-        this.renderSettings();
+        SettingsStore.replace(script, keys, values, select);
+        if (select) {
+            this.selectedScript = script;
+            this.renderScriptSelection();
+            this.library.cancelPendingSelection();
+        } else this.renderSettings();
     }
 
     private validateSettings(name: string, values: Record<string, string>): { name: string; keys: Set<string> } {
@@ -291,8 +295,8 @@ export default class BotPanel {
         this.requireScript(name);
         if (values) this.validateSettings(name, values);
         await this.changeScript(() => {
-            if (values) this.copyScriptSettings(name, values);
-            if (!values || start) this.assignScript(name);
+            if (values) this.copyScriptSettings(name, values, start);
+            else this.assignScript(name);
             if (start) this.startRosterScript();
         });
     }
@@ -401,7 +405,11 @@ export default class BotPanel {
         if (typeof localStorage !== 'undefined') {
             localStorage.setItem(selectedScriptKey(), name);
         }
-        this.scriptName.textContent = name;
+        this.renderScriptSelection();
+    }
+
+    private renderScriptSelection(): void {
+        this.scriptName.textContent = this.selectedScript;
         this.renderSettings();
         this.renderScriptControls();
     }

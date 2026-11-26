@@ -167,8 +167,8 @@ export class RosterActions {
             if (client) {
                 await this.withClient(profile, client, () => client.configureScript(command.script, values ? { ...values } : null, !!command.start));
             } else {
-                if (values) replaceScriptSettings(username, command.script, { ...values });
-                if (command.kind === 'assign' || command.start) writeProfileScript(username, command.script);
+                if (values) replaceScriptSettings(username, command.script, values, command.start);
+                else writeProfileScript(username, command.script);
             }
             const message = command.kind === 'assign' ? `Selected ${command.script}.` : `Copied ${command.script} settings.`;
             return done(command.start ? `${message} ${client ? 'Script started.' : 'Load this profile to start.'}` : message);

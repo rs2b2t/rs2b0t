@@ -55,6 +55,19 @@ function sharedStorage(dir) {
             if (!valid(key) || typeof value !== 'string') throw new Error('Invalid saved setting');
             withLockedState(state => setValue(state, key, value));
         },
+        applySettings(changes) {
+            withLockedState(state => {
+                let changed = false;
+                for (const [key, value] of Object.entries(changes)) {
+                    if (!valid(key) || (value !== null && typeof value !== 'string')) throw new Error('Invalid saved setting');
+                    if ((state.data[key] ?? null) === value) continue;
+                    if (value === null) delete state.data[key];
+                    else state.data[key] = value;
+                    changed = true;
+                }
+                if (changed) write(state);
+            });
+        },
         compareAndSet(key, expected, value) {
             if (!valid(key) || typeof value !== 'string') throw new Error('Invalid saved setting');
             return withLockedState(state => {

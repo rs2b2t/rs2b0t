@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from 'bun:test';
+import { afterEach, expect, spyOn, test } from 'bun:test';
 import { EventEmitter } from 'node:events';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import * as fs from 'node:fs';
@@ -6,6 +6,10 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runInNewContext } from 'node:vm';
+
+import { installDesktopStorage } from '#/bot/panel/desktopStorage.js';
+import { replaceScriptSettings } from '#/bot/multibox/RosterStorage.js';
+import type { DesktopStorage } from '#/bot/runtime/desktopStorage.js';
 
 const require = createRequire(import.meta.url);
 const { sharedStorage } = require('../../desktop/shared-storage.cjs');
@@ -121,4 +125,51 @@ test('a frame that leaves the trusted origin loses access and stops receiving sn
     f.request(f.main, 'setItem', key, 'Shrimps');
     expect(f.store.getItem(key)).toBe('Shrimps');
     expect(f.child.received).toEqual([]);
+});
+
+test('failed desktop copy preserves the session value after queued mirrors run', async () => {
+    const f = await fixture();
+    const rock = 'rs2b0t:target:set:Miner:rock';
+    const area = 'rs2b0t:target:set:Miner:area';
+    f.store.setItem(rock, 'iron');
+    f.request(f.child, 'snapshot');
+    const original = Object.getOwnPropertyDescriptor(window, 'localStorage')!;
+    runInNewContext(readFileSync(new URL('../../desktop/preload.cjs', import.meta.url), 'utf8'), {
+        queueMicrotask,
+        require: () => ({
+            contextBridge: { exposeInMainWorld: (_: string, bridge: DesktopStorage) => installDesktopStorage(bridge) },
+            ipcRenderer: { on() {}, sendSync: (_: string, method: string, ...args: unknown[]) => f.request(f.main, method, ...args) }
+        })
+    });
+    cleanups.push(() => {
+        Object.defineProperty(window, 'localStorage', original);
+        sessionStorage.removeItem(rock);
+        sessionStorage.removeItem(area);
+    });
+    sessionStorage.setItem(rock, 'tin');
+    const files: typeof fs = require('node:fs');
+    const write = files.writeFileSync;
+    const quota = spyOn(files, 'writeFileSync').mockImplementation((path, data, options) => {
+        if (typeof data === 'string' && Object.hasOwn(JSON.parse(data).data, area)) throw new Error('quota');
+        write(path, data, options);
+    });
+    const copy = () => replaceScriptSettings('target', 'Miner', { rock: 'coal', area: 'quarry' });
+    try {
+        expect(copy).toThrow('quota');
+    } finally {
+        quota.mockRestore();
+    }
+    await Promise.resolve();
+    expect(localStorage.getItem(rock)).toBe('iron');
+    expect(sessionStorage.getItem(rock)).toBe('tin');
+    expect(localStorage.getItem(area)).toBeNull();
+    expect(sessionStorage.getItem(area)).toBeNull();
+    expect(f.child.received).toEqual([]);
+    copy();
+    await Promise.resolve();
+    for (const store of [localStorage, sessionStorage]) {
+        expect(store.getItem(rock)).toBe('coal');
+        expect(store.getItem(area)).toBe('quarry');
+    }
+    expect(f.child.received.map(snapshot => snapshot.data)).toEqual([{ [rock]: 'coal', [area]: 'quarry' }]);
 });
