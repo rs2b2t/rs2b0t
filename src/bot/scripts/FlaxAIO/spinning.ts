@@ -1,4 +1,5 @@
 import type { Task } from '../../api/bot/Bot.js';
+import { rideSpinningWheel } from '../../api/crafting/rideSpinningWheel.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { Game } from '../../api/game/Game.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
@@ -6,8 +7,6 @@ import { Locs } from '../../api/locs/Locs.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
 import { walkOpening } from '../../event/webwalk/walkOpening.js';
 import type FlaxAIO from './flaxaio.js';
-
-const RESPIN_AFTER_TICKS = 6;
 
 async function climbLadder(bot: FlaxAIO, name: string, op: string): Promise<boolean> {
     const ladder = Locs.query().name(name).action(op).nearest();
@@ -80,25 +79,11 @@ export class SpinTask implements Task {
         await this.ride();
     }
 
-    private async ride(): Promise<void> {
+    private ride(): Promise<void> {
         this.bot.setStatus('spinning');
-        let last = this.bot.fibreCount();
-        let idle = 0;
-        this.bot.log(`riding the wheel with ${last} '${this.bot.flaxName()}'`);
-        while (this.bot.fibreCount() > 0) {
-            if (ChatDialog.canContinue() || !this.bot.onFloor(1)) {
-                return;
-            }
-            await Execution.delayTicks(1);
-            const now = this.bot.fibreCount();
-            if (now < last) {
-                this.bot.recordSpun(last - now);
-                last = now;
-                idle = 0;
-            } else if (++idle >= RESPIN_AFTER_TICKS) {
-                return;
-            }
-        }
+        const initialCount = this.bot.fibreCount();
+        this.bot.log(`riding the wheel with ${initialCount} '${this.bot.flaxName()}'`);
+        return rideSpinningWheel(this.bot, initialCount, () => ChatDialog.canContinue() || !this.bot.onFloor(1));
     }
 }
 

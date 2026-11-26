@@ -1,4 +1,5 @@
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
+import { rideSpinningWheel } from '../../api/crafting/rideSpinningWheel.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import Tile from '../../geometry/Tile.js';
@@ -14,8 +15,6 @@ import { EventSignal } from '../../api/execution/EventSignal.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import type { SettingsSchema } from '../../runtime/Settings.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
-
-const RESPIN_AFTER_TICKS = 6;
 
 const DEFAULT_BANK_STAND = new Tile(2722, 3493, 0);
 const DEFAULT_LADDER_TILE = new Tile(2714, 3471, 0);
@@ -203,17 +202,9 @@ class Spin implements Task {
         await this.ride();
     }
 
-    private async ride(): Promise<void> {
+    private ride(): Promise<void> {
         this.bot.setStatus('spinning');
-        let last = this.bot.fibreCount();
-        let idle = 0;
-        while (this.bot.fibreCount() > 0) {
-            if (ChatDialog.canContinue() || EventSignal.pending() || !this.bot.onFloor(1)) { return; }
-            await Execution.delayTicks(1);
-            const now = this.bot.fibreCount();
-            if (now < last) { this.bot.recordSpun(last - now); last = now; idle = 0; }
-            else if (++idle >= RESPIN_AFTER_TICKS) { return; }
-        }
+        return rideSpinningWheel(this.bot, this.bot.fibreCount(), () => ChatDialog.canContinue() || EventSignal.pending() || !this.bot.onFloor(1));
     }
 }
 
