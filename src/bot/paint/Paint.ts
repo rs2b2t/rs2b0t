@@ -107,6 +107,10 @@ export class PaintFrame {
         this.ctx.fillText(text, r.x + PAD, r.y + r.h / 2 + 1);
         this.ctx.font = FONT;
 
+        this.finishHeader(r);
+    }
+
+    private finishHeader(r: Rect): void {
         const toggle = { x: r.x + r.w - TITLE_H, y: r.y, w: TITLE_H, h: TITLE_H };
         this.ctx.fillStyle = paintState.isHovered(toggle) ? FG : FG_DIM;
         this.ctx.fillText(this.collapsed ? '+' : '-', toggle.x + 7, toggle.y + r.h / 2 + 1);
@@ -520,25 +524,7 @@ export class PaintFrame {
         this.ctx.fillText(brand, r.x + seg.brand.x, mid);
         this.ctx.font = FONT;
 
-        const toggle = { x: r.x + r.w - TITLE_H, y: r.y, w: TITLE_H, h: TITLE_H };
-        this.ctx.fillStyle = paintState.isHovered(toggle) ? FG : FG_DIM;
-        this.ctx.fillText(this.collapsed ? '+' : '-', toggle.x + 7, mid);
-        this.regions.push({ id: 'paint:toggle', ...toggle, kind: 'widget' });
-        if (paintState.consumeClick('paint:toggle')) {
-            this.collapsed = !this.collapsed;
-            paintState.set('paint:collapsed', this.collapsed ? '1' : '0');
-        }
-
-        this.cursorY = r.y + r.h;
-        if (!this.collapsed) {
-            this.regions.push({ id: 'paint:panel', ...this.panel, kind: 'panel' });
-            this.ctx.fillStyle = BG;
-            this.ctx.fillRect(this.panel.x, this.cursorY, this.panel.w, this.panel.y + this.panel.h - this.cursorY);
-            this.ctx.strokeStyle = BORDER;
-            this.ctx.strokeRect(this.panel.x + 0.5, this.cursorY + 0.5, this.panel.w - 1, this.panel.y + this.panel.h - this.cursorY - 1);
-        } else {
-            this.regions.push({ id: 'paint:panel', x: this.panel.x, y: this.panel.y, w: this.panel.w, h: TITLE_H, kind: 'panel' });
-        }
+        this.finishHeader(r);
         return active;
     }
 

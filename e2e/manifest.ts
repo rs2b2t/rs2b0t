@@ -34,6 +34,15 @@ export const CASES: readonly Case[] = [
         note: 'Starts north of the bank and checks the northern staircase ascent during gear bootstrap. Requires ENGINE_DIR for an isolated client deployment.'
     },
     {
+        id: 'gnome-magic-full-pack-fruit-live',
+        harness: 'gnome-fruit-bank-live.ts',
+        covers: { scripts: ['GnomeMagicChopper'] },
+        status: 'unvetted',
+        manual: true,
+        budgetMin: 12,
+        note: 'Seeds a full 28-slot pack with Strange fruit after the first log bank trip; the script must bank the fruit and resume chopping. Requires a local revision-289 engine and per-account cheats.'
+    },
+    {
         id: 'desktop-storage-ipc',
         harness: 'desktop-storage-ipc-test.ts',
         ownsServices: true,
@@ -514,6 +523,16 @@ export const CASES: readonly Case[] = [
         status: 'unvetted'
     },
     {
+        id: 'brimhaven-landing-plank-live',
+        harness: 'brimhaven-landing-plank-live.ts',
+        covers: { scripts: ['BrimhavenAgility'] },
+        status: 'documented',
+        documentedIn: 'docs/how-to/brimhaven-landing-plank.md',
+        manual: true,
+        budgetMin: 12,
+        note: 'Local engine only. Waits at the landing for a plank-route pillar whose intact plank row is not the middle one, then requires the script to cross that row with no fall. EXPECT_MODE=before expects a fall on the broken middle row.'
+    },
+    {
         id: 'brimhaven-mossgiants-live',
         harness: 'brimhaven-mossgiants-live.ts',
         covers: { scripts: ['BrimhavenMossGiants'] },
@@ -762,6 +781,16 @@ export const CASES: readonly Case[] = [
         manual: true,
         budgetMin: 25,
         note: 'Local engine only. A restock that fills the pack, and one dropped Big bones after a 24-food restock, must not bank before the first fight.'
+    },
+    {
+        id: 'firegiant-last-food-live',
+        harness: 'firegiant-last-food-live.ts',
+        covers: { scripts: ['FireGiant'] },
+        status: 'documented',
+        documentedIn: 'docs/how-to/firegiant-last-food.md',
+        manual: true,
+        budgetMin: 20,
+        note: 'Local engine only. Three lobsters at the melee anchor: after the last food the bot must bank at once, not fight on to the panic line. Every target change must be accounted for, and any refused attack must be corrected by a re-pick within 8 seconds.'
     },
     {
         id: 'jivedragons-live',

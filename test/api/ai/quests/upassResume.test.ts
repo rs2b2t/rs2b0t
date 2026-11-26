@@ -5,21 +5,9 @@ import { decide } from '#/bot/api/ai/quests/defs/upass/index.js';
 import { UP_FLAG, UP_STAGE } from '#/bot/api/ai/quests/defs/upass/journal.js';
 import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
 
+import { counts, KIT, type Stack } from './upass.fixture.js';
+
 // Why: sweep every reachable stage and pocket because `decide()` is pure over a snapshot.
-
-type Stack = number | [number, number];
-const counts = (stacks: Stack[]): Map<number, number> =>
-    new Map(stacks.map(s => (Array.isArray(s) ? s : [s, 1])));
-
-const KIT: Stack[] = [
-    [UP_ITEM.ROPE.id, 3],
-    UP_ITEM.SHORTBOW.id,
-    [UP_ITEM.BRONZE_ARROW.id, 50],
-    UP_ITEM.TINDERBOX.id,
-    UP_ITEM.SPADE.id,
-    UP_ITEM.BUCKET.id,
-    [UP_ITEM.LOBSTER.id, 14]
-];
 
 /** One tile from each pocket where the quest can leave the player. */
 const WHERE: Record<string, { x: number; z: number; level: number }> = {

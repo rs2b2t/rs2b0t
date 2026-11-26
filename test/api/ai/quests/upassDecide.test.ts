@@ -5,10 +5,7 @@ import { decide } from '#/bot/api/ai/quests/defs/upass/index.js';
 import { UP_FLAG, UP_STAGE } from '#/bot/api/ai/quests/defs/upass/journal.js';
 import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
 
-// `decide()` is pure over a snapshot, so these tests need no client.
-type Stack = number | [number, number];
-const counts = (stacks: Stack[]): Map<number, number> =>
-    new Map(stacks.map(s => (Array.isArray(s) ? s : [s, 1])));
+import { counts, KIT, type Stack } from './upass.fixture.js';
 
 /** Item IDs used by the bow-family cases. */
 const ITEM_ID = { OAK_SHORTBOW: 843, CROSSBOW: 837 } as const;
@@ -16,17 +13,6 @@ const ITEM_ID = { OAK_SHORTBOW: 843, CROSSBOW: 837 } as const;
 const ARDOUGNE = { x: 2655, z: 3283, level: 0 };
 const WEST_ARDOUGNE = { x: 2500, z: 3300, level: 0 };
 const AREA1 = { x: 2450, z: 9716, level: 0 };
-
-/** Minimum kit for entering the pass. */
-const KIT: Stack[] = [
-    [UP_ITEM.ROPE.id, 3],
-    UP_ITEM.SHORTBOW.id,
-    [UP_ITEM.BRONZE_ARROW.id, 50],
-    UP_ITEM.TINDERBOX.id,
-    UP_ITEM.SPADE.id,
-    UP_ITEM.BUCKET.id,
-    [UP_ITEM.LOBSTER.id, 14]
-];
 
 // Why: melee gear matches by name and defaults to worn in these snapshots.
 const WEAPON = 'rune scimitar';

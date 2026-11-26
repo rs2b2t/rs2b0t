@@ -1,6 +1,5 @@
-import { waitStep } from '../../engine/questSteps.js';
 import Tile from '../../../../../geometry/Tile.js';
-import { gpShort } from '../../engine/provisioning.js';
+import { buyOrWait } from '../../engine/provisioning.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { RG_ITEM, RG_TILE, banked, carried, type RegicideItem } from './areas.js';
 import { FOOD_FLOAT } from '../../food.js';
@@ -65,13 +64,6 @@ export function fromBank(snap: QuestSnapshot, item: RegicideItem, qty: number): 
     }
     const stock = banked(snap, item);
     return stock <= 0 ? null : withdraw([{ name: item.name, id: item.id, qty: Math.min(qty - have, stock) }]);
-}
-
-function buyOrWait(snap: QuestSnapshot, step: Extract<QuestStep, { kind: 'buy' }>): QuestStep {
-    if (gpShort(snap, step.estGp) > 0) {
-        return waitStep(`need ~${step.estGp} gp for ${step.item}`);
-    }
-    return step;
 }
 
 export interface Supply {
