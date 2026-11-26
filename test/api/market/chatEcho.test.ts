@@ -10,13 +10,9 @@ import {
 import { appraise, describeAppraisal } from '#/bot/api/market/appraise.js';
 import { buildCatalog } from '#/bot/api/market/catalog.js';
 import type { PriceBook } from '#/bot/api/market/priceBook.js';
-import type { ObjRecord } from '#/bot/adapter/ClientAdapter.js';
 import Packet from '#/client/io/Packet.js';
 import WordPack from '#/client/wordfilter/WordPack.js';
-
-function rec(id: number, name: string, over: Partial<ObjRecord> = {}): ObjRecord {
-    return { id, name, cost: 1, stackable: false, members: false, equippable: false, certlink: -1, certtemplate: -1, ...over };
-}
+import { rec } from '../../fixtures/obj-record.js';
 
 const CAT = buildCatalog([rec(440, 'Iron ore'), rec(995, 'Coins', { stackable: true }), rec(1127, 'Rune platebody')]);
 const BOOK: PriceBook = {
