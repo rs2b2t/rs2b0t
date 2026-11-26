@@ -16,8 +16,10 @@ function prepareStorage(app, serverUrl) {
     const recover = process.env.B0T_RECOVER_LEGACY_PROFILES === '1';
     const hasLegacy = fs.existsSync(legacy);
     const { initialized, retrySettings } = hasLegacy ? store.migrationStatus() : {};
-    const migrate = hasLegacy && (recover || !initialized || retrySettings);
-    if (migrate) {
+    let copied = false;
+    if (hasLegacy && (recover || !initialized || retrySettings)) {
+        const settingsOnly = initialized && !recover;
+        const destination = join(runtime, 'Local Storage');
         const fingerprint = () => {
             const hash = createHash('sha256');
             for (const name of fs.readdirSync(legacy, { recursive: true }).sort()) {
@@ -26,20 +28,21 @@ function prepareStorage(app, serverUrl) {
             }
             return hash.digest('hex');
         };
-        let copied = false;
         for (let attempt = 0; attempt < 5 && !copied; attempt++) {
             try {
                 const before = fingerprint();
-                fs.rmSync(join(runtime, 'Local Storage'), { recursive: true, force: true });
-                fs.cpSync(legacy, join(runtime, 'Local Storage'), { recursive: true });
+                fs.rmSync(destination, { recursive: true, force: true });
+                fs.cpSync(legacy, destination, { recursive: true });
                 copied = fingerprint() === before;
             } catch (error) {
-                if (error.code !== 'ENOENT') throw error;
+                if (error.code === 'ENOENT') continue;
+                if (settingsOnly) break;
+                throw error;
             }
         }
         if (!copied) {
-            fs.rmSync(runtime, { recursive: true, force: true });
-            throw new Error('Existing saved settings are changing. Close the older app once, then launch again to migrate them.');
+            fs.rmSync(settingsOnly ? destination : runtime, { recursive: true, force: true });
+            if (!settingsOnly) throw new Error('Existing saved settings are changing. Close the older app once, then launch again to migrate them.');
         }
     }
     app.setPath('userData', runtime);
@@ -70,7 +73,7 @@ function prepareStorage(app, serverUrl) {
                     session.defaultSession.protocol.unhandle(scheme);
                 }
             }
-            if (migrate) {
+            if (copied) {
                 let readError;
                 function failed(error) {
                     readError = error;

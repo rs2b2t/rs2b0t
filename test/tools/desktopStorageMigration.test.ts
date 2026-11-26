@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from 'bun:test';
 import { createCipheriv, pbkdf2Sync, randomBytes } from 'node:crypto';
 import { EventEmitter } from 'node:events';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, type CopySyncOptions } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -22,7 +22,11 @@ afterEach(() => {
     for (const dir of directories.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
-function fixture(origins?: Record<string, Record<string, string>>, onLegacyRead?: (origin: string) => void) {
+function fixture(
+    origins?: Record<string, Record<string, string>>,
+    onLegacyRead?: (origin: string) => void,
+    copyLegacy: (src: string, dest: string, options: CopySyncOptions) => void = cpSync
+) {
     const dir = mkdtempSync(join(tmpdir(), 'rs2b0t-migration-'));
     directories.push(dir);
     function saveLegacy(values: Record<string, Record<string, string>>) {
@@ -85,7 +89,10 @@ function fixture(origins?: Record<string, Record<string, string>>, onLegacyRead?
         const env = { B0T_PROFILE_DIR: dir, B0T_RUNTIME_DIR: dir, B0T_RECOVER_LEGACY_PROFILES: recover ? '1' : undefined };
         const context = {
             module, URL, Response, process: { argv: [`--server=${server}/bot.html?fixture=1`], env },
-            require: (name: string) => name === 'electron' ? electron : require(name)
+            require: (name: string) => {
+                if (name === 'node:fs') return { ...require(name), cpSync: copyLegacy };
+                return name === 'electron' ? electron : require(name);
+            }
         };
         runInNewContext(readFileSync(sessionModule, 'utf8'), context);
         try {
@@ -371,6 +378,33 @@ test('an unreadable 8081 opens the configured roster and retries missing setting
     store.removeItem(script);
     expect(await launch(custom)).toEqual([]);
     expect(store.getItem(script)).toBeNull();
+});
+
+test.each(['ENOENT', 'EACCES'])('a settings retry opens the roster after %s during copy and imports settings on relaunch', async code => {
+    const script = 'rs2b0t:fixture-0:selectedScript';
+    let failCopy = false;
+    let unreadable = true;
+    const { launch, store, rendererStorage } = fixture({
+        [custom]: { [accounts]: JSON.stringify(profiles) },
+        [original]: { [script]: 'Fisher' }
+    }, origin => {
+        if (origin === original && unreadable) throw new Error('Unreadable 8081 fixture');
+    }, (src, dest, options) => {
+        if (!failCopy) return cpSync(src, dest, options);
+        mkdirSync(dest);
+        writeFileSync(join(dest, 'fixture.json'), JSON.stringify({ [custom]: { [script]: 'partial' } }));
+        throw Object.assign(new Error('Interrupted fixture copy'), { code });
+    });
+
+    expect(await launch(custom)).toEqual(profiles);
+    unreadable = false;
+    failCopy = true;
+    expect(await launch(custom)).toEqual(profiles);
+    expect(rendererStorage()).toEqual({});
+    expect(store.getItem(script)).toBeNull();
+    failCopy = false;
+    expect(await launch(custom)).toEqual(profiles);
+    expect(store.getItem(script)).toBe('Fisher');
 });
 
 test('a read failure with no usable roster leaves the first migration retryable', async () => {
