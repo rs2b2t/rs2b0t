@@ -37,6 +37,34 @@ const HALF_SQUARE: number = (FULL_SQUARE / 2) | 0;
 const CORNER_SMALL: number = (FULL_SQUARE / 4) | 0;
 const CORNER_BIG: number = ((FULL_SQUARE * 3) / 4) | 0;
 
+type FaceVertices = { a: Int32Array; b: Int32Array; c: Int32Array };
+const faceVerticesByShapeRotation: FaceVertices[] = [];
+
+function getFaceVertices(shape: number, rotation: number): FaceVertices {
+    const key = shape * 4 + rotation;
+    const cacheable = rotation === (rotation & 3);
+    const cached = cacheable && faceVerticesByShapeRotation[key];
+    if (cached) {
+        return cached;
+    }
+
+    const paths = defShapeF[shape];
+    const count = paths.length / 4;
+    const faces = { a: new Int32Array(count), b: new Int32Array(count), c: new Int32Array(count) };
+    for (let t = 0; t < count; t++) {
+        const a = paths[t * 4 + 1];
+        const b = paths[t * 4 + 2];
+        const c = paths[t * 4 + 3];
+        faces.a[t] = a < 4 ? (a - rotation) & 3 : a;
+        faces.b[t] = b < 4 ? (b - rotation) & 3 : b;
+        faces.c[t] = c < 4 ? (c - rotation) & 3 : c;
+    }
+    if (cacheable) {
+        faceVerticesByShapeRotation[key] = faces;
+    }
+    return faces;
+}
+
 export default class Ground {
     static readonly drawVertexX: Int32Array = new Int32Array(6);
     static readonly drawVertexY: Int32Array = new Int32Array(6);
@@ -213,10 +241,11 @@ export default class Ground {
         }
 
         const paths: Int8Array = defShapeF[shape];
-        const faceCount: number = (paths.length / 4) | 0;
-        this.faceVertexA = new Int32Array(faceCount);
-        this.faceVertexB = new Int32Array(faceCount);
-        this.faceVertexC = new Int32Array(faceCount);
+        const faces = getFaceVertices(shape, rotation);
+        const faceCount = faces.a.length;
+        this.faceVertexA = faces.a;
+        this.faceVertexB = faces.b;
+        this.faceVertexC = faces.c;
         this.faceColourA = new Int32Array(faceCount);
         this.faceColourB = new Int32Array(faceCount);
         this.faceColourC = new Int32Array(faceCount);
@@ -227,29 +256,11 @@ export default class Ground {
             this.faceTexture = null;
         }
 
-        let index: number = 0;
         for (let t: number = 0; t < faceCount; t++) {
-            const colour: number = paths[index];
-            let a: number = paths[index + 1];
-            let b: number = paths[index + 2];
-            let c: number = paths[index + 3];
-            index += 4;
-
-            if (a < 4) {
-                a = (a - rotation) & 0x3;
-            }
-
-            if (b < 4) {
-                b = (b - rotation) & 0x3;
-            }
-
-            if (c < 4) {
-                c = (c - rotation) & 0x3;
-            }
-
-            this.faceVertexA[t] = a;
-            this.faceVertexB[t] = b;
-            this.faceVertexC[t] = c;
+            const colour = paths[t * 4];
+            const a = faces.a[t];
+            const b = faces.b[t];
+            const c = faces.c[t];
 
             if (colour === 0) {
                 this.faceColourA[t] = primaryColours[a];

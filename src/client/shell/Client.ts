@@ -5,6 +5,7 @@ import { audioEnabled } from '#/client/config/audio.js';
 import ClientBuild from '#/client/shell/ClientBuild.js';
 import { ClientCode } from '#/client/shell/ClientCode.js';
 import GameShell from '#/client/shell/GameShell.js';
+import { rebaseGroundItems } from '#/client/shell/rebaseGroundItems.js';
 import { MiniMenuAction } from '#/client/shell/MiniMenuAction.js';
 import MobileKeyboard from '#/client/shell/MobileKeyboard.js';
 import MouseTracking from '#/client/shell/MouseTracking.js';
@@ -896,7 +897,9 @@ export class Client extends GameShell {
 
                 while (this.onDemand.remaining() > 0) {
                     await this.onDemandLoop();
-                    await sleep(100);
+                    if (this.onDemand.remaining() > 0) {
+                        await sleep(100);
+                    }
                 }
             }
 
@@ -914,7 +917,9 @@ export class Client extends GameShell {
                 }
 
                 await this.onDemandLoop();
-                await sleep(100);
+                if (this.onDemand.remaining() > 0) {
+                    await sleep(100);
+                }
             }
 
             await this.drawProgress('Requesting models', 70);
@@ -935,7 +940,9 @@ export class Client extends GameShell {
                 }
 
                 await this.onDemandLoop();
-                await sleep(100);
+                if (this.onDemand.remaining() > 0) {
+                    await sleep(100);
+                }
             }
 
             const prefetchAssets = !this.searchParams.has('box');
@@ -968,7 +975,9 @@ export class Client extends GameShell {
                     }
 
                     await this.onDemandLoop();
-                    await sleep(100);
+                    if (this.onDemand.remaining() > 0) {
+                        await sleep(100);
+                    }
                 }
             }
 
@@ -7152,38 +7161,7 @@ export class Client extends GameShell {
 
                 this.awaitingPlayerInfo = true;
 
-                let startTileX: number = 0;
-                let endTileX: number = BuildArea.SIZE;
-                let dirX: number = 1;
-                if (dx < 0) {
-                    startTileX = BuildArea.SIZE - 1;
-                    endTileX = -1;
-                    dirX = -1;
-                }
-
-                let startTileZ: number = 0;
-                let endTileZ: number = BuildArea.SIZE;
-                let dirZ: number = 1;
-                if (dz < 0) {
-                    startTileZ = BuildArea.SIZE - 1;
-                    endTileZ = -1;
-                    dirZ = -1;
-                }
-
-                for (let x: number = startTileX; x !== endTileX; x += dirX) {
-                    for (let z: number = startTileZ; z !== endTileZ; z += dirZ) {
-                        const lastX: number = x + dx;
-                        const lastZ: number = z + dz;
-
-                        for (let level: number = 0; level < BuildArea.LEVELS; level++) {
-                            if (lastX >= 0 && lastZ >= 0 && lastX < BuildArea.SIZE && lastZ < BuildArea.SIZE) {
-                                this.groundObj[level][x][z] = this.groundObj[level][lastX][lastZ];
-                            } else {
-                                this.groundObj[level][x][z] = null;
-                            }
-                        }
-                    }
-                }
+                rebaseGroundItems(this.groundObj, dx, dz);
 
                 for (let loc = this.locChanges.head(); loc !== null; loc = this.locChanges.next()) {
                     loc.x -= dx;
