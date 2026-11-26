@@ -466,8 +466,10 @@ test('renaming and deleting an imported tab move only its members', async () => 
 test.each([
     { edit: 'delete', tabs: ['Fleet'] },
     { edit: 'delete', tabs: ['Fleet', 'Work'] },
+    { edit: 'delete', tabs: ['Fleet', 'Old'] },
+    { edit: 'delete', tabs: ['Fleet', 'Work', 'Old'] },
     { edit: 'rename', tabs: ['Fleet'] }
-])('a stale $edit leaves the replacement tabs $tabs and selection intact', async ({ edit, tabs }) => {
+])('a stale $edit of Old preserves unrelated state after importing $tabs', async ({ edit, tabs }) => {
     await withWall('local', async wall => {
         const profile = { username: 'fixture', password: 'fixture', tab: 'Old' };
         await openSettings().importText(serializeProfileFile({
@@ -485,7 +487,7 @@ test.each([
             await saves.mock.results[0].value;
             const reopened = new ProfileVault();
             expect(await reopened.unlock('test-passphrase')).toBe(true);
-            expect(reopened.snapshot()).toEqual(backup);
+            expect(reopened.snapshot()).toEqual({ ...backup, tabs: tabs.filter(tab => tab !== 'Old') });
         } finally {
             saves.mockRestore();
         }

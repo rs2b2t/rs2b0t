@@ -102,14 +102,16 @@ try {
     assert.equal(await reopened.unlock('fixture-passphrase'), true);
     assert.deepEqual(reopened.snapshot(), { ...second.snapshot(), activeTab: 'Logs' });
     const profile = { username: 'fixture', password: 'fixture', tab: 'Old' };
-    await first.replaceAll({ profiles: [profile], tabs: ['Work', 'Old'], activeTab: 'Old' });
-    await second.refresh();
-    const { tabs } = second.adoptGroupState();
     const backup = { profiles: [{ ...profile, tab: 'Fleet' }], tabs: ['Fleet'], activeTab: 'Fleet' };
-    await first.replaceAll(backup);
-    await second.saveTabState(['Work'], new Map([[profile.username, 'Work']]), 'Work', { from: 'Old' }, tabs);
-    assert.equal(await reopened.unlock('fixture-passphrase'), true);
-    assert.deepEqual(reopened.snapshot(), backup);
+    for (const importedTabs of [['Fleet'], ['Fleet', 'Old']]) {
+        await first.replaceAll({ profiles: [profile], tabs: ['Work', 'Old'], activeTab: 'Old' });
+        await second.refresh();
+        const { tabs } = second.adoptGroupState();
+        await first.replaceAll({ ...backup, tabs: importedTabs });
+        await second.saveTabState(['Work'], new Map([[profile.username, 'Work']]), 'Work', { from: 'Old' }, tabs);
+        assert.equal(await reopened.unlock('fixture-passphrase'), true);
+        assert.deepEqual(reopened.snapshot(), backup);
+    }
     first.reset();
     await second.refresh();
     assert.equal(second.status(), 'empty');

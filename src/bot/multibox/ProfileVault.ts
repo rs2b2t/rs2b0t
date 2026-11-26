@@ -553,7 +553,7 @@ export class ProfileVault {
                     let index = 0;
                     for (let slot = 0; slot < merged.length; slot++) if (ordered.includes(merged[slot])) merged[slot] = ordered[index++];
                 }
-                const assignments = draft.resolveSlotTabs(tabByUser);
+                const assignments = draft.resolveSlotTabs(tabByUser, replaced?.from);
                 const destinations = new Set(assignments.values());
                 for (const [index, tab] of requested.entries()) {
                     if (merged.includes(tab) || (previous.includes(tab) && !destinations.has(tab))) continue;
@@ -563,7 +563,8 @@ export class ProfileVault {
                 for (const tab of tabByUser.values()) {
                     if (tab !== MAIN_TAB && !requested.includes(tab)) throw new Error(`tab '${tab}' is not in the tab list`);
                 }
-                const selected = activeTab === MAIN_TAB || (activeTab && merged.includes(activeTab)) ? activeTab : undefined;
+                const selection = replaced && replaced.to === undefined && replaced.from !== draft.active ? draft.active : activeTab;
+                const selected = selection === MAIN_TAB || (selection && merged.includes(selection)) ? selection : undefined;
                 await draft.applyTabState(merged, assignments, replaced ? 'all' : 'first', selected, replaced);
             };
             await (this.storage ? this.sharedChange(save) : save(this));
@@ -573,13 +574,15 @@ export class ProfileVault {
         return this.applyTabState(requested, new Map(tabByUser), replaced ? 'all' : 'first', activeTab, replaced);
     }
 
-    private resolveSlotTabs(tabByUser: ReadonlyMap<string, string>): Map<string, string> {
+    private resolveSlotTabs(tabByUser: ReadonlyMap<string, string>, from?: string): Map<string, string> {
         const assignments = new Map<string, string>();
         if (!tabByUser.size) return assignments;
-        const saved = indexByUsername(this.assertUnlocked().map(p => [p.username, p.username] as const));
+        const profiles = this.assertUnlocked();
+        const saved = indexByUsername(profiles.map(p => [p.username, p.username] as const));
+        const members = from === undefined ? undefined : new Set(profiles.filter(p => p.tab === from).map(p => p.username));
         for (const [username, tab] of tabByUser) {
             const match = saved.get(username);
-            if (match !== undefined) assignments.set(match, tab);
+            if (match !== undefined && (!members || members.has(match))) assignments.set(match, tab);
         }
         return assignments;
     }
