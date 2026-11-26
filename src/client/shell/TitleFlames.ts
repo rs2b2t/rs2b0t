@@ -17,10 +17,10 @@ export default class TitleFlames {
     private titleRight: PixMap | null = null;
     private flameLeft: Pix32 | null = null;
     private flameRight: Pix32 | null = null;
-    private flameBuffer1: Int32Array | null = null;
-    private flameBuffer0: Int32Array | null = null;
-    private flameBuffer3: Int32Array | null = null;
-    private flameBuffer2: Int32Array | null = null;
+    private flameBuffer1: Uint8Array | null = null;
+    private flameBuffer0: Uint8Array | null = null;
+    private flameBuffer3: Uint8Array | null = null;
+    private flameBuffer2: Uint8Array | null = null;
     private flameGradient: Int32Array | null = null;
     private flameGradient0: Int32Array | null = null;
     private flameGradient1: Int32Array | null = null;
@@ -88,11 +88,11 @@ export default class TitleFlames {
         }
 
         this.flameGradient = new Int32Array(256);
-        this.flameBuffer0 = new Int32Array(32768);
-        this.flameBuffer1 = new Int32Array(32768);
+        this.flameBuffer0 = new Uint8Array(32768);
+        this.flameBuffer1 = new Uint8Array(32768);
         this.generateFlameCoolingMap(null);
-        this.flameBuffer3 = new Int32Array(32768);
-        this.flameBuffer2 = new Int32Array(32768);
+        this.flameBuffer3 = new Uint8Array(32768);
+        this.flameBuffer2 = new Uint8Array(32768);
     }
 
     start(shouldDraw?: (now: number, lastDrawAt: number) => boolean): void {
@@ -228,7 +228,7 @@ export default class TitleFlames {
                 }
             }
 
-            const last: Int32Array = this.flameBuffer0;
+            const last: Uint8Array = this.flameBuffer0;
             this.flameBuffer0 = this.flameBuffer1;
             this.flameBuffer1 = last;
         }
