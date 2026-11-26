@@ -5,6 +5,20 @@ const nativeFetch = globalThis.fetch;
 
 GlobalRegistrator.register();
 
+if (!navigator.locks?.request) {
+    const tails = new Map<string, Promise<void>>();
+    Object.defineProperty(navigator, 'locks', {
+        configurable: true,
+        value: {
+            request<T>(name: string, callback: (lock: Lock) => T) {
+                const result = (tails.get(name) ?? Promise.resolve()).then(() => callback({ name, mode: 'exclusive' }));
+                tails.set(name, result.then(() => {}, () => {}));
+                return result;
+            }
+        }
+    });
+}
+
 // Why: loading child-frame bot.html URLs turns DOM tests into network tests and throws ECONNREFUSED with no dev server up.
 (
     globalThis.window as unknown as {

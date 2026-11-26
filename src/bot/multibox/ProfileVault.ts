@@ -168,12 +168,23 @@ export class ProfileVault {
     private pendingImport: Promise<void> | null = null;
 
     private sharedTail = Promise.resolve();
-    private sharedTabs: { tabs: string[]; assignments: Map<string, string> } | null = null;
+    private sharedTabs: { tabs: string[]; assignments: Map<string, string> } = { tabs: [], assignments: new Map() };
 
     constructor(private storage: VaultStorage | undefined = hasLocal ? localStorage : undefined) {}
 
     private get shared(): boolean {
-        return !!desktopStorage && this.storage === localStorage;
+        return hasLocal && this.storage === localStorage;
+    }
+
+    private async compareAndSet(expected: string | null, value: string): Promise<boolean> {
+        if (desktopStorage) return desktopStorage.compareAndSet(KEY, expected, value);
+        if (!navigator.locks?.request) throw new Error('Saving profiles requires a browser with Web Locks support.');
+        const generation = this.persistGeneration;
+        return navigator.locks.request(KEY, () => {
+            if (generation !== this.persistGeneration || this.storage!.getItem(KEY) !== expected) return false;
+            this.storage!.setItem(KEY, value);
+            return true;
+        });
     }
 
     async refresh(): Promise<void> {
@@ -230,7 +241,8 @@ export class ProfileVault {
                 draft.active = payload.activeTab;
                 await change(draft);
                 if (generation !== this.persistGeneration) throw new Error('Vault changed before the accounts were saved.');
-                if (desktopStorage!.compareAndSet(KEY, expected, values.get(KEY)!)) {
+                if (await this.compareAndSet(expected, values.get(KEY)!)) {
+                    if (generation !== this.persistGeneration) throw new Error('Vault changed before the accounts were saved.');
                     this.cache = draft.cache;
                     this.customTabs = draft.customTabs;
                     this.active = draft.active;
@@ -352,7 +364,11 @@ export class ProfileVault {
     }
 
     async replaceAll(data: VaultPayload): Promise<void> {
-        if (this.shared) return this.sharedChange(draft => draft.replaceAll(data), false);
+        if (this.shared) {
+            await this.sharedChange(draft => draft.replaceAll(data), false);
+            this.adoptGroupState();
+            return;
+        }
         if (this.pendingImport) return this.afterImport(() => this.replaceAll(data));
         this.assertUnlocked();
         const profiles = profilesFrom(data.profiles);
@@ -379,7 +395,15 @@ export class ProfileVault {
     }
 
     async upsert(p: Profile): Promise<void> {
-        if (this.shared) return this.sharedChange(draft => draft.upsert(p));
+        if (this.shared) {
+            const generation = this.persistGeneration;
+            try {
+                await this.sharedChange(draft => draft.upsert(p));
+            } catch (error) {
+                if (desktopStorage || generation === this.persistGeneration || this.status() !== 'empty') throw error;
+            }
+            return;
+        }
         if (this.pendingImport) return this.afterImport(() => this.upsert(p));
         if (p.world !== undefined) {
             assertWorld(p.world);
@@ -446,7 +470,13 @@ export class ProfileVault {
     async assignGroup(usernames: string[], name: string): Promise<void> {
         const tab = name.trim();
         if (!tab || !usernames.length) throw new Error('Choose profiles and enter a group name.');
-        if (this.shared) return this.sharedChange(draft => draft.assignGroup(usernames, tab));
+        if (this.shared) {
+            await this.sharedChange(draft => draft.assignGroup(usernames, tab));
+            const groups = this.sharedTabs;
+            if (tab !== MAIN_TAB && !groups.tabs.includes(tab)) groups.tabs.push(tab);
+            for (const username of usernames) groups.assignments.set(username, tab);
+            return;
+        }
         if (this.pendingImport) return this.afterImport(() => this.assignGroup(usernames, tab));
         const saved = new Set(this.assertUnlocked().map(p => p.username));
         if (usernames.some(username => !saved.has(username))) throw new Error('Only saved profiles can be grouped.');
@@ -497,7 +527,7 @@ export class ProfileVault {
             const requested = tabs.map(tab => tab.trim());
             assertTabStateValid(requested, activeTab, []);
             return this.sharedChange(async draft => {
-                const previous = this.sharedTabs ?? { tabs: [], assignments: new Map<string, string>() };
+                const previous = this.sharedTabs;
                 const removed = new Set(previous.tabs.filter(tab => !requested.includes(tab)));
                 const merged = draft.customTabs.filter(tab => !removed.has(tab));
                 const ordered = requested.filter(tab => previous.tabs.includes(tab) && merged.includes(tab));
@@ -569,7 +599,7 @@ export class ProfileVault {
             const blob: StoredBlob = { v: 1, kdf: 'PBKDF2-SHA256', iter: ITER, salt: b64(salt), iv: b64(iv), ct: b64(new Uint8Array(ct)) };
             const encoded = JSON.stringify(blob);
             if (this.shared) {
-                if (!desktopStorage!.compareAndSet(KEY, expected ?? null, encoded)) throw new Error('Saved accounts changed in another instance; unlock the vault again.');
+                if (!await this.compareAndSet(expected ?? null, encoded)) throw new Error('Saved accounts changed in another instance; unlock the vault again.');
             } else {
                 this.storage!.setItem(KEY, encoded);
             }

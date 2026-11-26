@@ -203,11 +203,19 @@ export class ProfileChooser {
             del.className = 'mbx-profile-del';
             del.type = 'button';
             del.textContent = '✕';
-            del.addEventListener('click', ev => {
+            del.addEventListener('click', async ev => {
                 ev.stopPropagation();
                 if (this.pending) return;
-                void vault.remove(p.username);
-                this.render();
+                this.setPending(true);
+                try {
+                    await vault.remove(p.username);
+                    this.status.textContent = '';
+                    this.render();
+                } catch (error) {
+                    this.status.textContent = error instanceof Error ? error.message : 'Could not delete the profile';
+                } finally {
+                    this.setPending(false);
+                }
             });
             del.disabled = this.pending;
             row.append(name);

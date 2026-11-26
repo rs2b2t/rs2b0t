@@ -81,10 +81,10 @@ describe('ProfileChooser', () => {
         const { chooser, loaded } = make();
         chooser.open();
         (chooser.el.querySelector('.mbx-profile-del') as HTMLElement).click();
+        await waitFor(() => chooser.el.querySelector('.mbx-chooser-empty') !== null);
         expect(vault.list()).toEqual([]);
         expect(loaded).toEqual([]);
         expect(chooser.el.hidden).toBe(false);
-        expect(chooser.el.querySelector('.mbx-chooser-empty')).not.toBeNull();
     });
 
     test('create-new trims, saves and loads the profile', async () => {

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { ProfileVault, type Profile } from '#/bot/multibox/ProfileVault.js';
 
 const KEY = 'rs2b0t:multibox:profiles';
@@ -43,6 +43,55 @@ describe('ProfileVault', () => {
         const raw = localStorage.getItem(KEY)!;
         expect(raw).not.toContain('alice');
         expect(raw).not.toContain('hunter2');
+    });
+
+    test('a world edit after a storage refresh preserves all 61 profiles', async () => {
+        const profiles = Array.from({ length: 61 }, (_, i) => ({ username: `profile-${i}`, password: 'fixture' }));
+        const first = new ProfileVault();
+        await first.setup('pw');
+        await first.replaceAll({ profiles: profiles.slice(0, 30), tabs: [], activeTab: 'Main' });
+        const second = new ProfileVault();
+        expect(await second.unlock('pw')).toBe(true);
+        expect(second.list()).toHaveLength(30);
+        for (const profile of profiles.slice(30)) await first.upsert(profile);
+
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('pw')).toBe(true);
+        expect(reopened.list()).toHaveLength(61);
+        await second.refresh();
+        expect(second.list()).toEqual(reopened.list());
+        await second.setWorld('profile-0', 3);
+        expect(await reopened.unlock('pw')).toBe(true);
+        expect(reopened.list()).toHaveLength(61);
+        expect(reopened.list()).toEqual(profiles.map((p, i) => ({ ...p, tab: 'Main', ...(i === 0 ? { world: 3 } : {}) })));
+    });
+
+    test('overlapping edits from two browser tabs survive without a storage event', async () => {
+        const first = new ProfileVault();
+        await first.setup('pw');
+        await first.upsert({ username: 'alice', password: 'old' });
+        const second = new ProfileVault();
+        expect(await second.unlock('pw')).toBe(true);
+        await Promise.all([first.upsert({ username: 'alice', password: 'new' }), second.setWorld('alice', 2)]);
+
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('pw')).toBe(true);
+        expect(reopened.list()).toEqual([{ username: 'alice', password: 'new', world: 2, tab: 'Main' }]);
+    });
+
+    test('a browser edit leaves the saved vault intact when the write lock is denied', async () => {
+        const v = new ProfileVault();
+        await v.setup('pw');
+        await v.upsert({ username: 'alice', password: 'a', world: 1 });
+        const stored = localStorage.getItem(KEY);
+        const lock = spyOn(navigator.locks, 'request').mockRejectedValue(new Error('lock denied'));
+        try {
+            await expect(v.setWorld('alice', 2)).rejects.toThrow('lock denied');
+            expect(localStorage.getItem(KEY)).toBe(stored);
+            expect(v.list()[0].world).toBe(1);
+        } finally {
+            lock.mockRestore();
+        }
     });
 
     test('reorder is encrypted and survives locking and unlocking', async () => {
@@ -326,6 +375,18 @@ describe('ProfileVault tabs', () => {
             tabs: [],
             activeTab: 'Main'
         })).rejects.toThrow(/ghost/);
+    });
+
+    test('a tab edit can remove groups created by an import or assignment', async () => {
+        const v = new ProfileVault();
+        await v.setup('pw');
+        await v.replaceAll({ profiles: [{ username: 'alice', password: 'a' }], tabs: ['Imported'], activeTab: 'Imported' });
+        await v.assignGroup(['alice'], 'Assigned');
+        await v.saveTabState([], new Map(), 'Main');
+
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('pw')).toBe(true);
+        expect(reopened.snapshot()).toEqual({ profiles: [{ username: 'alice', password: 'a', tab: 'Main' }], tabs: [], activeTab: 'Main' });
     });
 
     for (const fail of [true, false]) {

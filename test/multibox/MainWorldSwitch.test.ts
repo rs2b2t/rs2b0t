@@ -71,6 +71,7 @@ async function withWall(mode: 'local' | 'proxy', check: (wall: Wall) => Promise<
         if (!Reflect.get(globalThis, 'multibox')) document.dispatchEvent(new Event('DOMContentLoaded'));
         wall = Reflect.get(globalThis, 'multibox') as Wall;
         await check(wall);
+        await vault.refresh();
     } finally {
         for (const slot of wall?.slots() ?? []) {
             wall!.controller.cancelSlotWorldSwitch(slot.id);
