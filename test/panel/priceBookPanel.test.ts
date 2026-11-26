@@ -253,6 +253,24 @@ describe('editing a row', () => {
         expect(table(panel).scrollTop).toBe(140);
     });
 
+    test.each(['buying', 'selling'] as const)('turning off %s in two open panels keeps it off', side => {
+        const first = openPanel();
+        const second = new PriceBookPanel();
+        document.body.appendChild(second.root);
+        second.open('seers');
+        const toggle = (panel: PriceBookPanel) => panel.root.querySelector<HTMLButtonElement>(`[data-item="440"] [data-role="${side}"]`)!;
+
+        toggle(first).click();
+        expect(toggle(first).dataset.on).toBe('false');
+        expect(toggle(second).dataset.on).toBe('true');
+        toggle(second).click();
+
+        expect(PriceBooks.byName('seers')!.rows.find(row => row.id === 440)![side]).toBe(false);
+        expect(toggle(second).dataset.on).toBe('false');
+        first.close();
+        second.close();
+    });
+
     test('a toggle keeps the scroll too', () => {
         const panel = openPanel();
         table(panel).scrollTop = 90;

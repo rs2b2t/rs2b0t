@@ -6,7 +6,7 @@ import { DEFAULT_MARGIN, DEFAULT_MAX_TRADE, removeBook, rowOf, uniqueBookName, u
 import { CATEGORIES, shelves, type Category } from '../api/market/categories.js';
 import { el } from './dom.js';
 import { itemIconDataUrl } from './itemIcon.js';
-import { addRow, addRows, displayRows, dropRow, formatPrice, nextSort, parseAmount, parsePrice, pickerRows, setField, setMargin, setMaxTradeValue, toggleSide, viewRows, type DisplayRow, type SortDir, type SortKey } from './priceBookPanelLogic.js';
+import { addRow, addRows, displayRows, dropRow, formatPrice, nextSort, parseAmount, parsePrice, pickerRows, setField, setMargin, setMaxTradeValue, setSide, viewRows, type DisplayRow, type SortDir, type SortKey } from './priceBookPanelLogic.js';
 
 const ICON_FILL_MS = 500;
 const ICON_FILL_TRIES = 12;
@@ -704,8 +704,8 @@ export class PriceBookPanel {
         line.appendChild(this.priceCell(row, 'sell', row.pinnedSell));
         line.appendChild(this.priceCell(row, 'cap'));
 
-        line.appendChild(this.sideToggle('buying', row.buying, () => this.editCurrent(book => toggleSide(book, row.id, 'buying'))));
-        line.appendChild(this.sideToggle('selling', row.selling, () => this.editCurrent(book => toggleSide(book, row.id, 'selling'))));
+        line.appendChild(this.sideToggle(row, 'buying'));
+        line.appendChild(this.sideToggle(row, 'selling'));
 
         line.appendChild(this.action('drop', '✕', () => this.editCurrent(book => dropRow(book, row.id))));
         return line;
@@ -753,14 +753,15 @@ export class PriceBookPanel {
         return cell;
     }
 
-    private sideToggle(side: 'buying' | 'selling', on: boolean, onClick: () => void): HTMLElement {
+    private sideToggle(row: DisplayRow, side: 'buying' | 'selling'): HTMLElement {
+        const on = row[side];
         const cell = el('span', 'rs2b0t-pricebook-cell');
         const btn = el('button', 'rs2b0t-button rs2b0t-pricebook-toggle');
         btn.dataset.role = side;
         btn.dataset.on = String(on);
         btn.textContent = on ? '✓' : '–';
         btn.title = `${side} is ${on ? 'on' : 'off'}`;
-        btn.addEventListener('click', onClick);
+        btn.addEventListener('click', () => this.editCurrent(book => setSide(book, row.id, side, !on)));
         cell.appendChild(btn);
         return cell;
     }
