@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
+import { argv } from 'node:process';
 import { pathToFileURL } from 'node:url';
 
-const [before, after] = await Promise.all(process.argv.slice(2).map(async path => (await import(pathToFileURL(path))).default));
+const [before, after] = await Promise.all(argv.slice(2).map(async path => (await import(pathToFileURL(path))).default));
 const seed = 0x123456;
 
 function checkBounds(renderer, width, height, cleared) {
