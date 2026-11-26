@@ -52,6 +52,34 @@ if (process.argv.includes('--migrate')) {
     localStorage.setItem('rs2b0t:set:set:Global:runEnergyMin', '42');
 }
 await import('../../src/bot/panel/desktopStorage.js');
+if (process.argv.includes('--full-session')) {
+    const { boxKey } = await import('../../src/bot/runtime/box.js');
+    const { collectBoxStorage } = await import('../../src/bot/multibox/ProfileTransfer.js');
+    const first = boxKey('set:Miner:rock', '');
+    const threshold = boxKey('set:Global:runEnergyMin', 'set');
+    localStorage.setItem(first, 'iron');
+    localStorage.setItem(threshold, '42');
+    await Promise.resolve();
+    assert.equal(localStorage.getItem(threshold), '42');
+
+    const events: (string | null)[] = [];
+    window.addEventListener('storage', event => { if (event.storageArea === null) events.push(event.key); });
+    const setItem = sessionStorage.setItem;
+    Object.defineProperty(sessionStorage, 'setItem', { configurable: true, value() {
+        Object.defineProperty(sessionStorage, 'setItem', { value: setItem });
+        throw new DOMException('storage full', 'QuotaExceededError');
+    } });
+    data[first] = 'coal';
+    data[threshold] = '73';
+    receiveSnapshot(null, { version: version++, data: { ...data } });
+    await Promise.resolve();
+    assert.equal(localStorage.getItem(threshold), '73');
+    assert.deepEqual(collectBoxStorage(['set']), { set: { 'set:Global:runEnergyMin': '73' } });
+    assert.deepEqual(events, [first, threshold]);
+    assert.equal(sessionStorage.getItem(first), 'iron');
+    assert.equal(sessionStorage.getItem(threshold), '73');
+    process.exit(0);
+}
 if (process.argv.includes('--warm-cache')) {
     const { SettingsStore, GLOBAL_SETTINGS } = await import('../../src/bot/runtime/Settings.js');
     const browser = Reflect.get(window, 'happyDOM') as { setURL(url: string): void };

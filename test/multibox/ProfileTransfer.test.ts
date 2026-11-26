@@ -132,6 +132,11 @@ describe('ProfileTransfer', () => {
         expect(JSON.parse(result.stdout.toString())).toEqual({ syncReads: 0, keyReads: 0 });
     });
 
+    test('desktop export sees later snapshot changes when a session mirror write fails', () => {
+        const result = Bun.spawnSync(['bun', 'test/fixtures/profile-transfer-desktop.ts', '--full-session']);
+        expect(result.exitCode, result.stderr.toString()).toBe(0);
+    });
+
     test('migrating native storage keeps the durable marker for cleared set settings', () => {
         const result = Bun.spawnSync(['bun', 'test/fixtures/profile-transfer-desktop.ts', '--settings', '--migrate']);
         expect(result.exitCode, result.stderr.toString()).toBe(0);

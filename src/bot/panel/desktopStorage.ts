@@ -59,8 +59,12 @@ if (desktopStorage) {
             else settings.set(key, undefined);
         }
         if (isSetting(key)) {
-            if (newValue === null) sessionStorage.removeItem(key);
-            else sessionStorage.setItem(key, newValue);
+            try {
+                if (newValue === null) sessionStorage.removeItem(key);
+                else sessionStorage.setItem(key, newValue);
+            } catch {
+                // Why: a failed session mirror must let preload deliver the rest of the durable snapshot.
+            }
         }
         window.dispatchEvent(new StorageEvent('storage', { key, oldValue, newValue }));
     });
