@@ -24,6 +24,10 @@ export function oresPerBar(recipe: Recipe): number {
     return recipe.ingredients.reduce((sum, i) => sum + i.perBar, 0);
 }
 
+export function oreQuantities(recipe: Recipe, bars: number): { ore: string; count: number }[] {
+    return recipe.ingredients.map(({ ore, perBar }) => ({ ore, count: bars * perBar }));
+}
+
 export function primaryOre(recipe: Recipe): string {
     return recipe.ingredients[0].ore;
 }
