@@ -237,7 +237,7 @@ function paintYouAreHere(
 /** Load the basemap once per page without running MapView: an IndexedDB hit on matching CRC + bake prefs wins, then the local copy marked `crc-unverified` when `/crc` is unavailable, then the deploy PNG with a Rebuild hint when CRC or prefs mismatch. Manual Rebuild always regenerates and overwrites the local entry. */
 async function loadBasemap(): Promise<LoadedBasemap | null> {
     if (!basemapPromise) {
-        basemapPromise = (async () => {
+        const pending = (async () => {
             const crcKey = await fetchClientCrcKey();
             const local = await readBasemapLocalCache();
             const prefsKey = prefsKeyFromBakePrefs(resolveBasemapBakePrefs());
@@ -294,9 +294,12 @@ async function loadBasemap(): Promise<LoadedBasemap | null> {
 
             return null;
         })().catch(() => {
-            basemapPromise = null;
+            if (basemapPromise === pending) {
+                basemapPromise = null;
+            }
             return null;
         });
+        basemapPromise = pending;
     }
     return basemapPromise;
 }
@@ -1154,7 +1157,7 @@ export class WorldMapPicker {
             // Cache or deploy PNG only, never MapView on open; fetch even when the basemap is hidden so enabling it mid-session is free.
             void loadBasemap()
                 .then(bm => {
-                    if (closed) {
+                    if (closed || basemap) {
                         return;
                     }
                     if (bm) {
@@ -1169,7 +1172,7 @@ export class WorldMapPicker {
                     requestPaint();
                 })
                 .catch(() => {
-                    if (closed) {
+                    if (closed || basemap) {
                         return;
                     }
                     basemapState = 'error';
