@@ -1,4 +1,5 @@
 import Tile from '../../geometry/Tile.js';
+import { RUNES as altarCatalog, type RuneRoute } from '../../data/runeCraftLocations.js';
 import type { WorldTile } from '../../adapter/ClientAdapter.js';
 import type { BankNpcAccess } from '../../api/bank/BankLocations.js';
 
@@ -32,34 +33,34 @@ export interface RuneType {
     unnote: { npc: string; tile: Tile } | null;
 }
 
+function altarFields({ talisman, rune, level, ruins }: RuneRoute) {
+    return { talisman, rune, level, ruins: Tile.from(ruins) };
+}
+
 export const RUNES: Record<string, RuneType> = {
     'Nature runes': {
-        talisman: 'Nature talisman', rune: 'Nature rune', level: 44,
-        ruins: new Tile(2865, 3022, 0),
+        ...altarFields(altarCatalog['Nature rune']),
         runnerBank: new Tile(2655, 3283, 0), // Ardougne East, by Captain Barnaby's pier
         masterBank: new Tile(2852, 2954, 0), // Shilo Village (needs the Shilo Village quest)
         templeMapX: 37,
         unnote: { npc: 'Jiminua', tile: new Tile(2767, 3122, 0) } // Jiminua's Jungle Store, Karamja
     },
     'Air runes': {
-        talisman: 'Air talisman', rune: 'Air rune', level: 1,
-        ruins: new Tile(2983, 3288, 0), // south of Falador
+        ...altarFields(altarCatalog['Air rune']),
         runnerBank: new Tile(3013, 3355, 0), // Falador East
         masterBank: new Tile(3013, 3355, 0),
         templeMapX: 44,
         unnote: null
     },
     'Law runes': {
-        talisman: 'Law talisman', rune: 'Law rune', level: 54,
-        ruins: new Tile(2858, 3378, 0),
+        ...altarFields(altarCatalog['Law rune']),
         runnerBank: new Tile(3093, 3243, 0),
         masterBank: new Tile(3093, 3243, 0),
         templeMapX: 38,
         unnote: null
     },
     'Cosmic runes': {
-        talisman: 'Cosmic talisman', rune: 'Cosmic rune', level: 27,
-        ruins: new Tile(3173, 9501, 0),
+        ...altarFields(altarCatalog['Cosmic rune']),
         runnerBank: new Tile(3152, 9575, 0),
         masterBank: new Tile(3152, 9575, 0),
         templeMapX: 33,
