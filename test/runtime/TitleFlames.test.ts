@@ -6,9 +6,9 @@ import { RenderGate } from '#/bot/runtime/RenderGate.js';
 import Pix8 from '#/client/graphics/Pix8.js';
 import PixMap from '#/client/graphics/PixMap.js';
 import { Client } from '#/client/shell/Client.js';
-import type TitleFlames from '#/client/shell/TitleFlames.js';
+import TitleFlames from '#/client/shell/TitleFlames.js';
 
-const clock = jest as typeof jest & { advanceTimersByTime(ms: number): void; getTimerCount(): number };
+const clock = jest as typeof jest & { advanceTimersByTime(ms: number): void; advanceTimersToNextTimer(): void; getTimerCount(): number };
 
 function titleScreen(prototype: Client = BotClient.prototype) {
     const putImageData = mock(() => {});
@@ -53,6 +53,7 @@ test.each(['hidden', 'renderer off'])('%s pauses flame updates and canvas writes
 
     if (state === 'hidden') RenderGate.setMode('hidden');
     else RenderGate.setEnabled(false);
+    expect(clock.getTimerCount()).toBe(0);
     clock.advanceTimersByTime(1000);
     expect(putImageData).toHaveBeenCalledTimes(0);
     expect(flames.coolingCycle).toBe(cooling);
@@ -68,6 +69,45 @@ test.each(['hidden', 'renderer off'])('%s pauses flame updates and canvas writes
     expect(putImageData).toHaveBeenCalledTimes(2);
 });
 
+test.each([30, 61])('a %i-slot title wall wakes only on draw ticks', size => {
+    let callbacks = 0;
+    let draws = 0;
+    RenderGate.backgroundIntervalMs = 1000;
+    for (let slot = 0; slot < size; slot++) {
+        RenderGate.setMode(slot === 0 ? 'focused' : 'background');
+        const flames = new TitleFlames([]);
+        const start = performance.now();
+        const timestamps: number[] = [];
+        flames.renderFlames = () => timestamps.push(performance.now() - start);
+        BotClient.prototype['startTitleFlames'](flames);
+        let finished = false;
+        setTimeout(() => { finished = true; }, 60_000);
+        while (!finished) {
+            clock.advanceTimersToNextTimer();
+            if (!finished) callbacks++;
+        }
+        flames.close();
+        const expected = [];
+        for (let ms = 35; ms <= 60_000; ms += slot === 0 ? 35 : 1015) expected.push(ms);
+        expect(timestamps).toEqual(expected);
+        draws += timestamps.length;
+    }
+    expect({ callbacks, draws }).toEqual({ callbacks: draws, draws: 1714 + (size - 1) * 60 });
+});
+
+test('unloading a parked title detaches it from the gate', async () => {
+    RenderGate.setEnabled(false);
+    const { client, putImageData } = titleScreen();
+    await Promise.resolve();
+    expect(client.titleFlames?.active).toBe(true);
+    expect(clock.getTimerCount()).toBe(0);
+    client.unloadTitle();
+    RenderGate.setEnabled(true);
+    expect(clock.getTimerCount()).toBe(0);
+    clock.advanceTimersByTime(70);
+    expect(putImageData).toHaveBeenCalledTimes(0);
+});
+
 test('background flames follow the configured draw interval', async () => {
     const { client, putImageData } = titleScreen();
     await Promise.resolve();
@@ -81,6 +121,30 @@ test('background flames follow the configured draw interval', async () => {
     clock.advanceTimersByTime(1);
     expect(putImageData).toHaveBeenCalledTimes(4);
     client.unloadTitle();
+});
+
+test('rail interval and focus changes use the original flame tick phase', async () => {
+    RenderGate.setMode('background');
+    RenderGate.backgroundIntervalMs = 1000;
+    const { client, putImageData } = titleScreen();
+    await Promise.resolve();
+    clock.advanceTimersByTime(236);
+    expect(putImageData).toHaveBeenCalledTimes(2);
+    RenderGate.backgroundIntervalMs = 120;
+    clock.advanceTimersByTime(8);
+    expect(putImageData).toHaveBeenCalledTimes(2);
+    clock.advanceTimersByTime(1);
+    expect(putImageData).toHaveBeenCalledTimes(4);
+    RenderGate.backgroundIntervalMs = 1000;
+    clock.advanceTimersByTime(200);
+    expect(putImageData).toHaveBeenCalledTimes(4);
+    RenderGate.setMode('focused');
+    clock.advanceTimersByTime(10);
+    expect(putImageData).toHaveBeenCalledTimes(6);
+    client.unloadTitle();
+    RenderGate.setMode('hidden');
+    RenderGate.setMode('focused');
+    expect(clock.getTimerCount()).toBe(0);
 });
 
 test('standalone client keeps its 35 ms title animation', async () => {

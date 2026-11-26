@@ -5,6 +5,12 @@ import Pix8 from '#/client/graphics/Pix8.js';
 import Pix32 from '#/client/graphics/Pix32.js';
 import PixMap from '#/client/graphics/PixMap.js';
 
+interface FlameRenderGate {
+    delayUntilDraw(now: number, lastDrawAt: number): number;
+    onChange(listener: () => void): () => void;
+}
+
+const FLAME_TICK_MS = 35;
 const FLAME_WIDTH = 128;
 const FLAME_HEIGHT = 256;
 const TITLE_FLAME_PIXELS = 33920;
@@ -30,7 +36,7 @@ export default class TitleFlames {
     coolingCycle: number = 0;
     private flameGradientCycle0: number = 0;
     private flameGradientCycle1: number = 0;
-    private flamesInterval: ReturnType<typeof setInterval> | null = null;
+    private stopPlayback: (() => void) | null = null;
 
     constructor(runes: Pix8[]) {
         this.runes = runes;
@@ -95,30 +101,58 @@ export default class TitleFlames {
         this.flameBuffer2 = new Uint8Array(32768);
     }
 
-    start(shouldDraw?: (now: number, lastDrawAt: number) => boolean): void {
-        if (this.active) {
+    start(gate?: FlameRenderGate | ((now: number, lastDrawAt: number) => boolean)): void {
+        if (this.active) return;
+        this.active = true;
+        let lastDrawAt = -Infinity;
+
+        if (!gate || typeof gate === 'function') {
+            const timer = setInterval(() => {
+                if (gate) {
+                    const now = performance.now();
+                    if (!gate(now, lastDrawAt)) return;
+                    lastDrawAt = now;
+                }
+                this.renderFlames();
+            }, FLAME_TICK_MS);
+            this.stopPlayback = () => clearInterval(timer);
             return;
         }
 
-        this.active = true;
-        let lastDrawAt = -Infinity;
-        this.flamesInterval = setInterval((): void => {
-            if (shouldDraw) {
-                const now = performance.now();
-                if (!shouldDraw(now, lastDrawAt)) return;
+        let nextTickAt = performance.now() + FLAME_TICK_MS;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const schedule = () => {
+            clearTimeout(timer);
+            const now = performance.now();
+            const delay = gate.delayUntilDraw(now, lastDrawAt);
+            if (!Number.isFinite(delay)) return;
+            const skippedTicks = Math.max(0, Math.ceil((now + delay - nextTickAt) / FLAME_TICK_MS));
+            const wait = nextTickAt + skippedTicks * FLAME_TICK_MS - now;
+            timer = setTimeout(tick, Math.min(0x7fffffff, Math.ceil(wait)));
+        };
+        const tick = () => {
+            const now = performance.now();
+            if (gate.delayUntilDraw(now, lastDrawAt) === 0) {
                 lastDrawAt = now;
+                nextTickAt = now + FLAME_TICK_MS;
+                schedule();
+                this.renderFlames();
+            } else {
+                schedule();
             }
-            this.renderFlames();
-        }, 35);
+        };
+        const unsubscribe = gate.onChange(schedule);
+        this.stopPlayback = () => {
+            unsubscribe();
+            clearTimeout(timer);
+        };
+        schedule();
     }
 
     close(): void {
         this.active = false;
-
-        if (this.flamesInterval) {
-            clearInterval(this.flamesInterval);
-            this.flamesInterval = null;
-        }
+        this.stopPlayback?.();
+        this.stopPlayback = null;
 
         this.titleLeft = null;
         this.titleRight = null;
