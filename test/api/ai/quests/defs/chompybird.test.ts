@@ -6,54 +6,16 @@ import { ChestState } from '#/bot/api/ai/quests/defs/chompybird/hunt.js';
 import { chompybird, decide } from '#/bot/api/ai/quests/defs/chompybird/index.js';
 import { ARROW_TARGET } from '#/bot/api/ai/quests/defs/chompybird/supplies.js';
 import { QUEST_DEFS } from '#/bot/api/ai/quests/defs/index.js';
-import type { QuestSnapshot, QuestStep } from '#/bot/api/ai/quests/engine/types.js';
+import type { QuestStep } from '#/bot/api/ai/quests/engine/types.js';
 
-const RANTZ = { x: 2630, z: 2981, level: 0 };
+import { snap, type SnapshotOptions } from './chompybird.fixture.js';
 
 const SEASONINGS: [number, number][] = [
     [CB_ID.POTATO, 1], [CB_ID.ONION, 1], [CB_ID.CABBAGE, 1],
     [CB_ID.TOMATO, 1], [CB_ID.EQUA, 1], [CB_ID.DOOGLE, 1]
 ];
 
-interface Options {
-    journal?: QuestSnapshot['journal'];
-    stage?: number;
-    invIds?: [number, number][];
-    inv?: [string, number][];
-    bank?: [string, number][];
-    bankIds?: [number, number][];
-    bankKnown?: boolean;
-    wornIds?: number[];
-}
-
-/** A pack that has already been through the bank: coins, food and an axe. */
-function snap(options: Options = {}): QuestSnapshot {
-    const stage = options.stage ?? CB_STAGE.NOT_STARTED;
-    const inv = new Map<string, number>([
-        ['coins', 2000],
-        ['trout', 6],
-        ['bronze axe', 1],
-        ...(options.inv ?? [])
-    ]);
-    return {
-        journal: options.journal ?? (stage === CB_STAGE.NOT_STARTED ? 'notStarted' : 'inProgress'),
-        inv,
-        invIds: new Map([[CB_ID.FEATHER, ARROW_TARGET * 4], ...(options.invIds ?? [])]),
-        worn: new Set(),
-        wornIds: new Set(options.wornIds ?? []),
-        noProgress: 0,
-        bankCoins: 2_000_000,
-        stage,
-        progress: { stage, flags: new Set<string>() },
-        bank: new Map(options.bank ?? [['coins', 2_000_000]]),
-        bankIds: new Map(options.bankIds ?? []),
-        bankKnown: options.bankKnown ?? true,
-        tile: RANTZ,
-        freeSlots: 20
-    };
-}
-
-const step = (options: Options = {}): QuestStep => decide(snap(options));
+const step = (options: SnapshotOptions = {}): QuestStep => decide(snap(options));
 const named = (s: QuestStep): string => (s.kind === 'custom' ? s.name : s.kind);
 
 /** Tools bought from Bugs, so the arrow leg is past its shopping. */
