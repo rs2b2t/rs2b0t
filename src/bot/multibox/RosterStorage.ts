@@ -1,5 +1,5 @@
 import { isRosterScript } from './RosterTypes.js';
-import { boxKey, clearBoxItem, profileStorageKeys, readBoxItem } from '../runtime/box.js';
+import { boxKey, boxKeyTail, clearBoxItem, profileStorageKeys, readBoxItem } from '../runtime/box.js';
 
 function canonicalScript(script: string): string {
     return script === 'NatureCrafter' ? 'JiveRC' : script;
@@ -14,9 +14,9 @@ function stores(): Storage[] {
     return [localStorage, sessionStorage];
 }
 
-function keys(prefix: string, id?: string): string[] {
+function keys(id?: string): string[] {
     const saved = stores().flatMap(store => profileStorageKeys(store, id));
-    return [...new Set(saved.filter(key => key.startsWith(prefix)))];
+    return [...new Set(saved)];
 }
 
 export function readProfileScript(username: string): string {
@@ -30,13 +30,16 @@ export function writeProfileScript(username: string, script: string): void {
 
 function scriptEntries(username: string, script: string) {
     const names = script === 'JiveRC' ? ['NatureCrafter', script] : [script];
-    return names.flatMap(name => {
+    const saved = keys(username);
+    const entries = [];
+    for (const name of names) {
         const prefix = boxKey(`set:${name}:`, username);
-        return keys(prefix, username).map(key => {
-            const setting = key.slice(prefix.length);
-            return { suffix: `set:${name}:${setting}`, setting };
-        });
-    });
+        for (const key of saved) {
+            const setting = boxKeyTail(key, prefix);
+            if (setting !== null) entries.push({ suffix: `set:${name}:${setting}`, setting });
+        }
+    }
+    return entries;
 }
 
 export function readScriptSettings(username: string, script: string): Record<string, string> {
@@ -58,14 +61,14 @@ export function replaceScriptSettings(username: string, script: string, values: 
 
 export function storedScripts(usernames: string[]): string[] {
     const scripts = new Set<string>();
-    const savedKeys = keys('', usernames.includes('set') ? 'set' : undefined);
+    const savedKeys = keys(usernames.includes('set') ? 'set' : undefined);
     for (const username of usernames) {
         const selected = readProfileScript(username);
         if (selected) scripts.add(selected);
         const prefix = boxKey('set:', username);
         for (const key of savedKeys) {
-            if (!key.startsWith(prefix)) continue;
-            const suffix = key.slice(prefix.length);
+            const suffix = boxKeyTail(key, prefix);
+            if (suffix === null) continue;
             const end = suffix.indexOf(':');
             if (end > 0) scripts.add(canonicalScript(suffix.slice(0, end)));
         }

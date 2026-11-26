@@ -7,13 +7,37 @@ let keyReads = 0;
 let notify: Parameters<DesktopStorage['subscribe']>[0];
 Reflect.set(globalThis, 'rs2b0tDesktopStorage', {
     getItem: (key: string) => data.get(key) ?? null,
-    setItem: (key: string, value: string) => { data.set(key, value); },
+    setItem: (key: string, value: string) => {
+        if (!key.startsWith('rs2b0t:')) throw new Error('Invalid saved setting');
+        data.set(key, value);
+    },
     removeItem: (key: string) => { data.delete(key); },
     keys: () => { keyReads++; return [...data.keys()]; },
     compareAndSet: () => false,
     subscribe: listener => { notify = listener; }
 } satisfies DesktopStorage);
 await import('../../src/bot/panel/desktopStorage.js');
+if (process.argv.includes('--installed-shell')) {
+    const { SettingsStore } = await import('../../src/bot/runtime/Settings.js');
+    const { applyBoxStorage, collectBoxStorage } = await import('../../src/bot/multibox/ProfileTransfer.js');
+    const browser = Reflect.get(window, 'happyDOM') as { setURL(url: string): void };
+    SettingsStore.save('Global', 'runEnergyMin', '73');
+    browser.setURL('http://localhost/bot.html?box=set');
+    localStorage.setItem('rs2b0t:set:set:Global:runEnergyMin', '42');
+    SettingsStore.save('Global', 'runEnergyMin', '65');
+    sessionStorage.clear();
+    assert.equal(SettingsStore.globalBag().num('runEnergyMin'), 65);
+    const backup = collectBoxStorage(['set']);
+    assert.deepEqual(backup, { set: { 'set:Global:runEnergyMin': '65' } });
+    SettingsStore.clear('Global', 'runEnergyMin');
+    assert.equal(SettingsStore.globalBag().num('runEnergyMin'), 20);
+    applyBoxStorage(backup, ['set']);
+    sessionStorage.clear();
+    assert.equal(SettingsStore.globalBag().num('runEnergyMin'), 65);
+    browser.setURL('http://localhost/bot.html');
+    assert.equal(SettingsStore.globalBag().num('runEnergyMin'), 73);
+    process.exit(0);
+}
 if (process.argv.includes('--export-cleared')) {
     const { SettingsStore } = await import('../../src/bot/runtime/Settings.js');
     const { applyBoxStorage, collectBoxStorage } = await import('../../src/bot/multibox/ProfileTransfer.js');

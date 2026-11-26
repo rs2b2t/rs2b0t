@@ -24,7 +24,7 @@ function resolveDesktopStorage(): DesktopStorage | undefined {
             ...shared,
             subscribe(callback) {
                 const listener = (event: StorageEvent) => {
-                    if (event.storageArea === null && event.key && isSharedStorageKey(event.key)) callback(event.key, event.oldValue, event.newValue);
+                    if (event.storageArea === null && event.key?.startsWith('rs2b0t:')) callback(event.key, event.oldValue, event.newValue);
                 };
                 parent.addEventListener('storage', listener);
                 addEventListener('pagehide', () => parent.removeEventListener('storage', listener), { once: true });
@@ -37,10 +37,10 @@ function resolveDesktopStorage(): DesktopStorage | undefined {
 
 export const desktopStorage = resolveDesktopStorage();
 
-export const settingsStoragePrefix = 'rs2b0t-settings:';
+export const settingsStoragePrefix = 'rs2b0t::';
 
-export function isSharedStorageKey(key: string): boolean {
-    return key.startsWith('rs2b0t:') || key.startsWith(settingsStoragePrefix);
+export function isEncodedSettingKey(key: string): boolean {
+    return key.startsWith(settingsStoragePrefix) && !key.includes(':', settingsStoragePrefix.length);
 }
 
 export function storeKeys(store: Storage): string[] {

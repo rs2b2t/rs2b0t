@@ -1,5 +1,5 @@
 import { botFrameUrl } from '../../client/config/worlds.js';
-import { desktopStorage, settingsStoragePrefix, storeKeys } from './desktopStorage.js';
+import { desktopStorage, isEncodedSettingKey, settingsStoragePrefix, storeKeys } from './desktopStorage.js';
 
 // docs/decisions/architecture.md#per-instance-storage
 // Why: same-origin multibox frames share sessionStorage, so `?box=<account>` namespaces each bot.
@@ -11,16 +11,28 @@ export function boxId(): string {
     return new URLSearchParams(location.search).get('box') ?? '';
 }
 
-const setProfilePrefix = settingsStoragePrefix + 'profile:set:';
+const setProfilePrefix = settingsStoragePrefix + 'profile/';
+
+// Why: a colon after the empty username could make this key belong to a colon-prefixed profile.
+function encodeSuffix(suffix: string): string {
+    return suffix.replaceAll('%', '%25').replaceAll(':', '%3A');
+}
 
 export function boxKey(suffix: string, id = boxId()): string {
-    if (id === 'set' && suffix.includes(':')) return setProfilePrefix + suffix;
-    if (!id && suffix.startsWith('set:set:')) return `${settingsStoragePrefix}standalone:${suffix}`;
+    if (id === 'set' && suffix.includes(':')) return setProfilePrefix + encodeSuffix(suffix);
+    if (!id && suffix.startsWith('set:set:')) return settingsStoragePrefix + 'standalone/' + encodeSuffix(suffix);
     return id ? `rs2b0t:${id}:${suffix}` : `rs2b0t:${suffix}`;
 }
 
+export function boxKeyTail(key: string, prefix: string): string | null {
+    if (!key.startsWith(prefix)) return null;
+    const tail = key.slice(prefix.length);
+    if (!isEncodedSettingKey(prefix)) return tail;
+    return isEncodedSettingKey(key) ? tail.replaceAll('%3A', ':').replaceAll('%25', '%') : null;
+}
+
 export function boxSuffix(key: string, prefix: string, id: string): string | null {
-    if (id === 'set' && key.startsWith(setProfilePrefix)) return key.slice(setProfilePrefix.length);
+    if (id === 'set' && key.startsWith(setProfilePrefix)) return boxKeyTail(key, setProfilePrefix);
     if (!key.startsWith(prefix) || (id === 'set' && key.includes(':', prefix.length))) return null;
     return key.slice(prefix.length);
 }
@@ -41,8 +53,12 @@ function legacyKey(suffix: string, id: string): string | null {
     return null;
 }
 
+function clearedKey(key: string): string {
+    return settingsStoragePrefix + 'cleared/' + key.slice(settingsStoragePrefix.length);
+}
+
 function allowsLegacy(store: Storage, key: string, id: string): boolean {
-    const cleared = `${settingsStoragePrefix}cleared:${key}`;
+    const cleared = clearedKey(key);
     if (id === 'set') {
         if (store.getItem(setProfileMigrationKey) !== null) return false;
         if (typeof localStorage !== 'undefined' && store !== localStorage) {
@@ -74,7 +90,7 @@ export function clearBoxItem(store: Storage, suffix: string, id: string): void {
     const key = boxKey(suffix, id);
     const legacy = legacyKey(suffix, id);
     if (legacy && allowsLegacy(store, key, id) && store.getItem(legacy) !== null) {
-        store.setItem(`${settingsStoragePrefix}cleared:${key}`, '1');
+        store.setItem(clearedKey(key), '1');
     }
     store.removeItem(key);
 }

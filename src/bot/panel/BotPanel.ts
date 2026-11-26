@@ -5,7 +5,7 @@ import { reader } from '../adapter/ClientAdapter.js';
 import type { BotHostImpl } from '../runtime/BotHost.js';
 import type { LogLine, ScriptContext } from '../runtime/ScriptContext.js';
 import { AutoRelogin } from '../runtime/AutoRelogin.js';
-import { boxId, boxKey, profileStorageKeys, wallLinkHref } from '../runtime/box.js';
+import { boxId, boxKey, boxKeyTail, profileStorageKeys, wallLinkHref } from '../runtime/box.js';
 import { Credentials } from '../runtime/Credentials.js';
 import { ScriptRegistry, type ScriptMeta } from '../runtime/ScriptRegistry.js';
 import { resolveDestination } from '../api/map/WalkDestinations.js';
@@ -280,8 +280,10 @@ export default class BotPanel {
         const prefixes = (name === 'JiveRC' ? ['NatureCrafter', name] : [name]).map(script => boxKey(`set:${script}:`, box));
         const savedKeys = [localStorage, sessionStorage].flatMap(store => profileStorageKeys(store, box));
         for (const key of savedKeys) {
-            const prefix = prefixes.find(prefix => key.startsWith(prefix));
-            if (prefix) keys.add(key.slice(prefix.length));
+            for (const prefix of prefixes) {
+                const setting = boxKeyTail(key, prefix);
+                if (setting !== null) keys.add(setting);
+            }
         }
         this.assertNoUrlOverrides(name, keys);
         return { name, keys };

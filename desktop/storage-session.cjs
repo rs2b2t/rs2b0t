@@ -53,7 +53,7 @@ function prepareStorage(app) {
                 const hidden = new BrowserWindow({ show: false });
                 try {
                     await hidden.loadURL(migrationUrl);
-                    const entries = await hidden.webContents.executeJavaScript('Object.fromEntries(Object.entries(localStorage).filter(([key]) => key.startsWith("rs2b0t:") || key.startsWith("rs2b0t-settings:")))');
+                    const entries = await hidden.webContents.executeJavaScript('Object.fromEntries(Object.entries(localStorage).filter(([key]) => key.startsWith("rs2b0t:")))');
                     store.seed(entries);
                 } finally {
                     hidden.destroy();

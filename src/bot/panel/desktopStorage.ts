@@ -1,10 +1,12 @@
-import { desktopStorage, isSharedStorageKey as isShared } from '../runtime/desktopStorage.js';
+import { desktopStorage, isEncodedSettingKey } from '../runtime/desktopStorage.js';
 
 if (desktopStorage) {
     const shared = desktopStorage;
     const native = window.localStorage;
+    const isShared = (key: string) => key.startsWith('rs2b0t:');
+    const isSetting = (key: string) => key.includes(':set:') || isEncodedSettingKey(key);
     for (const key of Object.keys(native)) {
-        if (!isShared(key) || (!key.includes(':set:') && !key.endsWith(':selectedScript'))) continue;
+        if (!isShared(key) || (!isSetting(key) && !key.endsWith(':selectedScript'))) continue;
         const value = native.getItem(key);
         if (value !== null && shared.getItem(key) === null) shared.setItem(key, value);
         native.removeItem(key);
@@ -32,7 +34,7 @@ if (desktopStorage) {
         })
     });
     shared.subscribe((key, oldValue, newValue) => {
-        if (key.includes(':set:')) {
+        if (isSetting(key)) {
             if (newValue === null) sessionStorage.removeItem(key);
             else sessionStorage.setItem(key, newValue);
         }

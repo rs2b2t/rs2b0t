@@ -30,7 +30,7 @@ const browser = Reflect.get(window, 'happyDOM') as { setURL(url: string): void }
 
 function inBox<T>(box: string, run: () => T): T {
     const previous = location.href;
-    browser.setURL('http://localhost/bot.html?box=' + box);
+    browser.setURL('http://localhost/bot.html?box=' + encodeURIComponent(box));
     try {
         return run();
     } finally {
@@ -113,6 +113,11 @@ describe('ProfileTransfer', () => {
         expect(JSON.parse(result.stdout.toString())).toEqual({
             before: { set: { 'set:Miner:rock': 'coal', 'set:Global:runEnergyMin': '73' } }, offered: [], after: {}
         });
+    });
+
+    test('an installed desktop shell can save and restore settings for set', () => {
+        const result = Bun.spawnSync(['bun', 'test/fixtures/roster-desktop-storage.ts', '--installed-shell']);
+        expect(result.exitCode, result.stderr.toString()).toBe(0);
     });
 
     test('reading missing global settings for set uses the desktop snapshot', () => {
@@ -287,20 +292,26 @@ describe('ProfileTransfer', () => {
         });
     });
 
-    test('round-trips distinct v1 settings for set and :profile:set after a fresh session', () => {
-        const names = ['set', ':profile:set'];
+    test('round-trips distinct v1 settings for set and colon-prefixed profiles after a fresh session', () => {
+        const neighbour = ':profile/set%3AMiner%3A';
+        const names = ['set', ':profile:set', neighbour];
         const profiles = names.map(username => ({ username, password: '' }));
-        const storage = { set: { 'set:Global:runEnergyMin': '42' }, ':profile:set': { 'set:Global:runEnergyMin': '73' } };
+        const storage = {
+            set: { 'set:Global:runEnergyMin': '42' },
+            ':profile:set': { 'set:Global:runEnergyMin': '73' },
+            [neighbour]: { 'set:Global:runEnergyMin': '61' }
+        };
         const file = JSON.stringify({ ...snap, profiles, storage, kind: PROFILE_FILE_KIND, v: 1 });
         applyBoxStorage(parseProfileFile(file).storage, names);
         sessionStorage.clear();
 
-        expect(names.map(name => inBox(name, () => SettingsStore.globalBag().num('runEnergyMin')))).toEqual([42, 73]);
+        expect(names.map(name => inBox(name, () => SettingsStore.globalBag().num('runEnergyMin')))).toEqual([42, 73, 61]);
+        expect(storedScripts(['set'])).toEqual([]);
         const exported = serializeProfileFile({ ...snap, profiles, storage: collectBoxStorage(names) });
         expect(parseProfileFile(exported).storage).toEqual(storage);
         applyBoxStorage({}, ['set']);
         sessionStorage.clear();
-        expect(collectBoxStorage(names)).toEqual({ ':profile:set': storage[':profile:set'] });
+        expect(collectBoxStorage(names)).toEqual({ ':profile:set': storage[':profile:set'], [neighbour]: storage[neighbour] });
     });
 
     test('restoring colon-prefixed profiles preserves standalone settings and clears', () => {

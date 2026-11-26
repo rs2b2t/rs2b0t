@@ -32,7 +32,8 @@ call('snapshot');
 
 contextBridge.exposeInMainWorld('rs2b0tDesktopStorage', {
     getItem: key => {
-        const setting = key === 'rs2b0t:set-profile-settings-v1' || key.startsWith('rs2b0t-settings:') || (key.startsWith('rs2b0t:') && key.includes(':set:'));
+        const encoded = key.startsWith('rs2b0t::') && !key.includes(':', 'rs2b0t::'.length);
+        const setting = encoded || key === 'rs2b0t:set-profile-settings-v1' || (key.startsWith('rs2b0t:') && key.includes(':set:'));
         return snapshot.version >= 0 && setting ? snapshot.data[key] ?? null : call('getItem', key);
     },
     setItem: (key, value) => call('setItem', key, value),
