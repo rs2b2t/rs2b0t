@@ -1,4 +1,5 @@
 export const commitDesktopSettings = Symbol('commitDesktopSettings');
+export const beginLegacySettingsCopy = Symbol.for('rs2b0t:beginLegacySettingsCopy');
 type ApplySettings = (changes: Record<string, string | null>) => void;
 
 export interface DesktopStorage {
@@ -13,6 +14,7 @@ export interface DesktopStorage {
 
 declare global {
     interface Storage {
+        [beginLegacySettingsCopy]?(): (restoredKeys: string[]) => void;
         [commitDesktopSettings]?: ApplySettings;
     }
     interface Window {
@@ -20,13 +22,25 @@ declare global {
     }
 }
 
+export function legacyStorageHost(): Window | undefined {
+    try {
+        const top = globalThis.window?.top;
+        if (top && top !== window && top.localStorage[beginLegacySettingsCopy]) return top;
+    } catch {
+        return undefined;
+    }
+}
+
 function resolveDesktopStorage(): DesktopStorage | undefined {
     const host = globalThis as { rs2b0tDesktopStorage?: DesktopStorage; parent?: Window };
-    if (host.rs2b0tDesktopStorage) return host.rs2b0tDesktopStorage;
+    const own = host.rs2b0tDesktopStorage;
+    if (own?.applySettings) return own;
+    const wall = legacyStorageHost();
+    if (own && !wall) return own;
     try {
-        const parent = host.parent;
+        const parent = wall ?? host.parent;
         const shared = parent?.rs2b0tDesktopStorage;
-        if (!shared) return undefined;
+        if (!shared) return own;
         return {
             ...shared,
             subscribe(callback) {
@@ -38,7 +52,7 @@ function resolveDesktopStorage(): DesktopStorage | undefined {
             }
         };
     } catch {
-        return undefined;
+        return own;
     }
 }
 

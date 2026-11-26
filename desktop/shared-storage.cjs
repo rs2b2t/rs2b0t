@@ -56,7 +56,7 @@ function sharedStorage(dir) {
             withLockedState(state => setValue(state, key, value));
         },
         applySettings(changes) {
-            withLockedState(state => {
+            return withLockedState(state => {
                 let changed = false;
                 for (const [key, value] of Object.entries(changes)) {
                     if (!valid(key) || (value !== null && typeof value !== 'string')) throw new Error('Invalid saved setting');
@@ -66,6 +66,7 @@ function sharedStorage(dir) {
                     changed = true;
                 }
                 if (changed) write(state);
+                return state.data;
             });
         },
         compareAndSet(key, expected, value) {

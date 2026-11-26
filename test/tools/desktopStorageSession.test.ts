@@ -47,7 +47,7 @@ async function fixture() {
         module, URL, process: { env: { B0T_PROFILE_DIR: directory, B0T_RUNTIME_DIR: directory } },
         require: (name: string) => name === 'electron' ? { ipcMain, webContents: { getAllWebContents: () => [contents] } }
             : name === 'node:fs' ? { ...fs, watch: (_dir: string, callback: typeof watch) => { watch = callback; return { close() {} }; } }
-                : name === './shared-storage.cjs' ? { sharedStorage } : require(name)
+                : name === './shared-storage.cjs' ? { sharedStorage: () => store } : require(name)
     });
     await module.exports.prepareStorage(app).start('http://localhost:8081');
     cleanups.push(() => app.emit('quit'));
@@ -127,33 +127,64 @@ test('a frame that leaves the trusted origin loses access and stops receiving sn
     expect(f.child.received).toEqual([]);
 });
 
-test('failed desktop copy preserves the session value after queued mirrors run', async () => {
-    const f = await fixture();
-    const rock = 'rs2b0t:target:set:Miner:rock';
-    const area = 'rs2b0t:target:set:Miner:area';
-    f.store.setItem(rock, 'iron');
-    f.request(f.child, 'snapshot');
-    const original = Object.getOwnPropertyDescriptor(window, 'localStorage')!;
+const rock = 'rs2b0t:target:set:Miner:rock';
+const area = 'rs2b0t:target:set:Miner:area';
+const copy = () => replaceScriptSettings('target', 'Miner', { rock: 'coal', area: 'quarry' });
+
+function failSecondWrite(store: Pick<Storage, 'setItem'>) {
+    const set = store.setItem;
+    Object.defineProperty(store, 'setItem', { configurable: true, value(key: string, value: string) {
+        if (key === area) throw new Error('quota');
+        set.call(store, key, value);
+    } });
+    try {
+        expect(copy).toThrow('quota');
+    } finally {
+        Object.defineProperty(store, 'setItem', { configurable: true, writable: true, value: set });
+    }
+}
+
+function installBridge(f: Awaited<ReturnType<typeof fixture>>, frame: Frame, batch: boolean) {
+    let deliver!: (channel: unknown, snapshot: Frame['received'][number]) => void;
     runInNewContext(readFileSync(new URL('../../desktop/preload.cjs', import.meta.url), 'utf8'), {
         queueMicrotask,
         require: () => ({
             contextBridge: { exposeInMainWorld: (_: string, bridge: DesktopStorage) => installDesktopStorage(bridge) },
-            ipcRenderer: { on() {}, sendSync: (_: string, method: string, ...args: unknown[]) => f.request(f.main, method, ...args) }
+            ipcRenderer: {
+                on: (_: string, callback: typeof deliver) => { deliver = callback; },
+                sendSync: (_: string, method: string, ...args: unknown[]) => {
+                    const response = f.request(frame, method, ...args);
+                    return !batch && method === 'snapshot' ? { snapshot: response.snapshot } : response;
+                }
+            }
         })
     });
+    return deliver;
+}
+
+async function copyFixture(batch = true) {
+    const f = await fixture();
+    f.store.setItem(rock, 'iron');
+    f.request(f.child, 'snapshot');
+    const original = Object.getOwnPropertyDescriptor(window, 'localStorage')!;
+    const deliverToWall = installBridge(f, f.main, batch);
     cleanups.push(() => {
         Object.defineProperty(window, 'localStorage', original);
         sessionStorage.removeItem(rock);
         sessionStorage.removeItem(area);
     });
     sessionStorage.setItem(rock, 'tin');
+    return { ...f, deliverToWall, nativeStorage: original };
+}
+
+test('failed desktop copy preserves the session value after queued mirrors run', async () => {
+    const f = await copyFixture();
     const files: typeof fs = require('node:fs');
     const write = files.writeFileSync;
     const quota = spyOn(files, 'writeFileSync').mockImplementation((path, data, options) => {
         if (typeof data === 'string' && Object.hasOwn(JSON.parse(data).data, area)) throw new Error('quota');
         write(path, data, options);
     });
-    const copy = () => replaceScriptSettings('target', 'Miner', { rock: 'coal', area: 'quarry' });
     try {
         expect(copy).toThrow('quota');
     } finally {
@@ -172,4 +203,60 @@ test('failed desktop copy preserves the session value after queued mirrors run',
         expect(store.getItem(area)).toBe('quarry');
     }
     expect(f.child.received.map(snapshot => snapshot.data)).toEqual([{ [rock]: 'coal', [area]: 'quarry' }]);
+});
+
+test.each(['session', 'durable'])('legacy desktop copy preserves both stores after a %s failure and notifications in both frames', async limited => {
+    const f = await copyFixture(false);
+    const wallStore = localStorage;
+    const top = Object.getOwnPropertyDescriptor(window, 'top')!;
+    Object.defineProperty(window, 'top', { configurable: true, value: { localStorage: wallStore } });
+    cleanups.push(() => Object.defineProperty(window, 'top', top));
+    Object.defineProperty(window, 'localStorage', f.nativeStorage);
+    const deliverToChild = installBridge(f, f.child, false);
+    failSecondWrite(limited === 'session' ? sessionStorage : f.store);
+    await Promise.resolve();
+    for (const [frame, deliver] of [[f.main, f.deliverToWall], [f.child, deliverToChild]] as const) {
+        for (const snapshot of frame.received) {
+            deliver(null, snapshot);
+            await Promise.resolve();
+        }
+    }
+    if (limited === 'session') expect(f.child.received).toEqual([]);
+    expect(f.store.snapshot()).toEqual({ [rock]: 'iron' });
+    expect(localStorage.getItem(rock)).toBe('iron');
+    expect(localStorage.getItem(area)).toBeNull();
+    expect(sessionStorage.getItem(rock)).toBe('tin');
+    expect(sessionStorage.getItem(area)).toBeNull();
+    copy();
+    await Promise.resolve();
+    expect(f.store.snapshot()).toEqual({ [rock]: 'coal', [area]: 'quarry' });
+    expect(sessionStorage.getItem(rock)).toBe('coal');
+    expect(sessionStorage.getItem(area)).toBe('quarry');
+});
+
+test('desktop copy publishes the committed snapshot when the file cannot be reread', async () => {
+    const f = await copyFixture();
+    const snapshot = spyOn(f.store, 'snapshot').mockImplementation(() => { throw new Error('reread failed'); });
+    try {
+        copy();
+    } finally {
+        snapshot.mockRestore();
+    }
+    await Promise.resolve();
+    const expected = { [rock]: 'coal', [area]: 'quarry' };
+    expect(f.store.snapshot()).toEqual(expected);
+    expect(f.child.received.map(change => change.data)).toEqual([expected]);
+    expect(localStorage.getItem(rock)).toBe('coal');
+    expect(sessionStorage.getItem(rock)).toBe('coal');
+    expect(localStorage.getItem(area)).toBe('quarry');
+    expect(sessionStorage.getItem(area)).toBe('quarry');
+});
+
+test('legacy desktop mirrors ordinary writes queued immediately after a failed copy', async () => {
+    const f = await copyFixture(false);
+    failSecondWrite(f.store);
+    localStorage.setItem(rock, 'copper');
+    localStorage.setItem(rock, 'iron');
+    await Promise.resolve();
+    expect(sessionStorage.getItem(rock)).toBe('iron');
 });

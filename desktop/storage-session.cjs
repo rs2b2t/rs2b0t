@@ -82,8 +82,7 @@ function prepareStorage(app) {
                 clients.set(event.senderFrame, contents);
             }
             let snapshot = { version: 0, data: store.snapshot() };
-            function refresh(sender) {
-                const next = store.snapshot();
+            function refresh(sender, next = store.snapshot()) {
                 if ([...new Set([...Object.keys(snapshot.data), ...Object.keys(next)])].some(key => snapshot.data[key] !== next[key])) {
                     snapshot = { version: snapshot.version + 1, data: next };
                     for (const frame of clients.keys()) {
@@ -102,6 +101,10 @@ function prepareStorage(app) {
                 try {
                     if (!valid(event.senderFrame) || !methods.has(method)) throw new Error('Invalid storage request');
                     register(event);
+                    if (method === 'applySettings') {
+                        event.returnValue = { snapshot: refresh(event.senderFrame, store.applySettings(...args)) };
+                        return;
+                    }
                     const value = method === 'snapshot' ? { applySettings: true } : store[method](...args);
                     event.returnValue = { value, snapshot: method === 'getItem' || method === 'keys' ? undefined : refresh(event.senderFrame) };
                 } catch (error) {

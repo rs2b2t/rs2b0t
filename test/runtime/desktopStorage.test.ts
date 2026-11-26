@@ -1,8 +1,9 @@
 import { expect, test } from 'bun:test';
-import type { DesktopStorage } from '#/bot/runtime/desktopStorage.js';
+import { beginLegacySettingsCopy, type DesktopStorage } from '#/bot/runtime/desktopStorage.js';
 
-test('frames without preload use parent storage and release listeners when removed', async () => {
+test.each(['missing', 'legacy'])('frames with %s preload use parent storage and release listeners when removed', async preload => {
     const originalParent = Object.getOwnPropertyDescriptor(globalThis, 'parent');
+    const originalTop = Object.getOwnPropertyDescriptor(window, 'top')!;
     const originalBridge = Object.getOwnPropertyDescriptor(globalThis, 'rs2b0tDesktopStorage');
     const parent = new EventTarget();
     const data = new Map<string, string>([['rs2b0t:alice:set:Fisher:fishMethod', 'Lobster']]);
@@ -14,11 +15,13 @@ test('frames without preload use parent storage and release listeners when remov
         compareAndSet: () => false,
         subscribe: () => { throw new Error('Parent bridge must not retain the frame'); }
     };
-    Object.assign(parent, { rs2b0tDesktopStorage: shared });
+    Object.assign(parent, { rs2b0tDesktopStorage: shared, localStorage: { [beginLegacySettingsCopy]: () => {} } });
+    if (preload === 'legacy') Object.defineProperty(window, 'top', { configurable: true, value: parent });
     Object.defineProperty(globalThis, 'parent', { configurable: true, value: parent });
-    Object.defineProperty(globalThis, 'rs2b0tDesktopStorage', { configurable: true, value: undefined });
+    const childBridge = preload === 'legacy' ? { ...shared, getItem: () => 'stale' } : undefined;
+    Object.defineProperty(globalThis, 'rs2b0tDesktopStorage', { configurable: true, value: childBridge });
     try {
-        const module = '../../src/bot/runtime/desktopStorage.ts?parent-fixture';
+        const module = '../../src/bot/runtime/desktopStorage.ts?parent-fixture-' + preload;
         const { desktopStorage } = await import(module) as { desktopStorage: DesktopStorage };
         expect(desktopStorage.getItem('rs2b0t:alice:set:Fisher:fishMethod')).toBe('Lobster');
         const changes: (string | null)[] = [];
@@ -36,6 +39,7 @@ test('frames without preload use parent storage and release listeners when remov
         parent.dispatchEvent(new StorageEvent('storage', { key: 'rs2b0t:alice:set:Fisher:fishMethod', newValue: 'Lobster' }));
         expect(changes).toEqual(['Shark', null]);
     } finally {
+        Object.defineProperty(window, 'top', originalTop);
         if (originalParent) Object.defineProperty(globalThis, 'parent', originalParent);
         else Reflect.deleteProperty(globalThis, 'parent');
         if (originalBridge) Object.defineProperty(globalThis, 'rs2b0tDesktopStorage', originalBridge);

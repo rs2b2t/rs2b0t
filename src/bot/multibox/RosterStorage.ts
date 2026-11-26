@@ -54,7 +54,7 @@ export function readScriptSettings(username: string, script: string): Record<str
 export function replaceScriptSettings(username: string, script: string, values: Record<string, string>, select = false): void {
     script = requireScript(script);
     const previous = scriptEntries(username, script).map(({ suffix }) => suffix);
-    replaceBoxSettings(stores(), username, script, previous, values, select);
+    replaceBoxSettings(username, script, previous, values, select);
 }
 
 export function storedScripts(usernames: string[]): string[] {

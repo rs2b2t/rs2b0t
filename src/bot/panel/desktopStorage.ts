@@ -1,6 +1,16 @@
-import { commitDesktopSettings, desktopStorage, type DesktopStorage, isEncodedSettingKey, setProfileMigrationKey } from '../runtime/desktopStorage.js';
+import { beginLegacySettingsCopy, commitDesktopSettings, desktopStorage, type DesktopStorage, isEncodedSettingKey, legacyStorageHost, setProfileMigrationKey } from '../runtime/desktopStorage.js';
+
+function dispatchChange(key: string, oldValue: string | null, newValue: string | null): void {
+    window.dispatchEvent(new StorageEvent('storage', { key, oldValue, newValue }));
+}
 
 export function installDesktopStorage(shared: DesktopStorage): void {
+    const wall = !shared.applySettings && legacyStorageHost();
+    if (wall) {
+        Object.defineProperty(window, 'localStorage', { value: wall.localStorage });
+        shared.subscribe(dispatchChange);
+        return;
+    }
     const native = window.localStorage;
     const isShared = (key: string) => key.startsWith('rs2b0t:');
     const needsCache = (key: string) => isEncodedSettingKey(key) || key === setProfileMigrationKey;
@@ -43,6 +53,7 @@ export function installDesktopStorage(shared: DesktopStorage): void {
             for (const key of keys()) storage.removeItem(key);
         }
     };
+    let rolledBack: Set<string> | undefined;
     if (shared.applySettings) {
         const apply = shared.applySettings;
         storage[commitDesktopSettings] = changes => {
@@ -53,6 +64,16 @@ export function installDesktopStorage(shared: DesktopStorage): void {
                     else if (needsCache(key)) settings.set(key, value);
                 }
             }
+        };
+    } else {
+        storage[beginLegacySettingsCopy] = () => {
+            let keys: Set<string> | undefined;
+            // Why: preload queues each write's mirror between these two microtasks.
+            queueMicrotask(() => { rolledBack = keys; });
+            return restoredKeys => {
+                keys = new Set(restoredKeys);
+                queueMicrotask(() => { rolledBack = undefined; });
+            };
         };
     }
     Object.defineProperty(window, 'localStorage', {
@@ -69,7 +90,7 @@ export function installDesktopStorage(shared: DesktopStorage): void {
             if (newValue === null) settings.delete(key);
             else settings.set(key, undefined);
         }
-        if (isSetting(key)) {
+        if (isSetting(key) && !rolledBack?.has(key)) {
             try {
                 if (newValue === null) sessionStorage.removeItem(key);
                 else sessionStorage.setItem(key, newValue);
@@ -77,7 +98,7 @@ export function installDesktopStorage(shared: DesktopStorage): void {
                 // Why: a failed session mirror must let preload deliver the rest of the durable snapshot.
             }
         }
-        window.dispatchEvent(new StorageEvent('storage', { key, oldValue, newValue }));
+        dispatchChange(key, oldValue, newValue);
     });
 }
 
