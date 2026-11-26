@@ -1,5 +1,5 @@
-import { describe, expect, test } from 'bun:test';
-import { installWallTrafficChannel, publisherTrafficChannel } from '#/client/io/TrafficChannel.js';
+import { describe, expect, mock, test } from 'bun:test';
+import { openFrameTrafficPort } from '#/client/io/TrafficChannel.js';
 import { TrafficMeter } from '#/client/io/TrafficMeter.js';
 import { TrafficCollector } from '#/bot/adapter/TrafficAdapter.js';
 
@@ -16,60 +16,99 @@ class FakeChannel {
     }
 }
 
-function flushChannel(channel: BroadcastChannel): Promise<void> {
-    const sender = new BroadcastChannel(channel.name);
-    return new Promise(resolve => {
-        function onMessage(event: MessageEvent): void {
-            if (event.data !== 'flush') return;
-            channel.removeEventListener('message', onMessage);
-            sender.close();
-            resolve();
-        }
-        channel.addEventListener('message', onMessage);
-        sender.postMessage('flush');
-    });
+function frameFor(wall: Document) {
+    return Object.assign(new EventTarget(), { frameElement: wall.createElement('iframe') }) as unknown as Window;
 }
 
 describe('TrafficCollector', () => {
-    test('counts only the frame and cache worker publishers on each wall', async () => {
+    test('delivers one heartbeat per publisher only to its wall, including idle rounds', async () => {
         let now = 0;
-        const channels: BroadcastChannel[] = [];
         const walls = Array.from({ length: 3 }, () => document.implementation.createHTMLDocument());
-        const collectors = walls.map(wall => new TrafficCollector({
-            channelName: installWallTrafficChannel(wall),
-            channelFactory: name => {
-                const channel = new BroadcastChannel(name);
-                channels.push(channel);
-                return channel;
-            },
-            now: () => now,
-            publisherTimeoutMs: 1000
-        }));
+        const clocks = walls.map(() => mock(() => now));
+        const collectors = walls.map((wall, i) => new TrafficCollector({ wall, now: clocks[i] }));
+        const frames: Window[] = [];
         const meters: TrafficMeter[] = [];
+        const ticks: ((active: boolean) => Promise<void>)[] = [];
+        let peers = 0;
         try {
-            for (const [wall, count, received, sent] of [[walls[0], 30, 100, 3], [walls[1], 31, 200, 7]] as const) {
-                for (let i = 0; i < count; i++) {
-                    const name = publisherTrafficChannel({ frameElement: wall.createElement('iframe') });
-                    const frame = new TrafficMeter({ channelName: name });
-                    const worker = new TrafficMeter({ channelName: publisherTrafficChannel({ name }) });
-                    frame.addReceived(received);
-                    worker.addSent(sent);
-                    meters.push(frame, worker);
+            for (const [wall, profiles, received, sent] of [[0, 30, 100, 3], [1, 31, 200, 7]]) {
+                for (let i = 0; i < profiles; i++) {
+                    const frame = frameFor(walls[wall]);
+                    frames.push(frame);
+                    for (const worker of [false, true]) {
+                        const { port } = openFrameTrafficPort(frame)!;
+                        const channel = worker ? structuredClone(port, { transfer: [port] }) : port;
+                        channel.onmessage = () => { peers++; };
+                        let heartbeat: () => void;
+                        const meter = new TrafficMeter({
+                            channel,
+                            setTimeout(callback) {
+                                heartbeat = callback;
+                                return 1 as unknown as ReturnType<typeof setTimeout>;
+                            },
+                            clearTimeout: () => {}
+                        });
+                        meters.push(meter);
+                        ticks.push(async active => {
+                            if (active) {
+                                if (worker) meter.addSent(sent);
+                                else meter.addReceived(received);
+                            }
+                            const deliveries = clocks[wall].mock.calls.length;
+                            heartbeat();
+                            await new Promise<void>(resolve => setImmediate(resolve));
+                            expect(clocks[wall].mock.calls.length - deliveries).toBe(1);
+                        });
+                    }
                 }
             }
-            for (const meter of meters) meter.publish();
-            await Promise.all(channels.map(flushChannel));
-            now = 1001;
-            for (const meter of meters) meter.publish();
-            await Promise.all(channels.map(flushChannel));
-            expect(collectors.map(collector => collector.snapshot())).toEqual([
-                { status: 'available', receivedBytes: 3000, sentBytes: 90 },
-                { status: 'available', receivedBytes: 6200, sentBytes: 217 },
-                { status: 'unavailable', reason: 'browser traffic publisher did not appear' }
-            ]);
+            for (let round = 1; round <= 6; round++) {
+                now += 1000;
+                for (const tick of ticks) await tick(round === 1 || round === 4);
+                const batches = round < 4 ? 1 : 2;
+                expect(collectors.map(c => c.snapshot())).toEqual([
+                    { status: 'available', receivedBytes: 3000 * batches, sentBytes: 90 * batches },
+                    { status: 'available', receivedBytes: 6200 * batches, sentBytes: 217 * batches },
+                    round < 3 ? { status: 'measuring' } : { status: 'unavailable', reason: 'browser traffic publisher did not appear' }
+                ]);
+                expect(peers).toBe(0);
+            }
+            now += 3000;
+            expect(collectors[0].snapshot()).toEqual({ status: 'unavailable', reason: 'browser traffic publisher timed out' });
         } finally {
-            for (const meter of meters) meter.close();
-            for (const collector of collectors) collector.close();
+            meters.forEach(meter => meter.close());
+            frames.forEach(frame => frame.dispatchEvent(new Event('pagehide')));
+            collectors.forEach(collector => collector.close());
+        }
+    });
+
+    test('a reload drains the queued delta and counts its replacement once', async () => {
+        const wall = document.implementation.createHTMLDocument();
+        const collector = new TrafficCollector({ wall });
+        const frame = frameFor(wall);
+        const originalSelf = globalThis.self;
+        Reflect.set(globalThis, 'self', frame);
+        const original = new TrafficMeter();
+        let replacement: TrafficMeter | undefined;
+        try {
+            original.addReceived(11);
+            original.publish();
+            frame.dispatchEvent(new Event('pagehide'));
+            original.addReceived(100);
+            original.publish();
+            replacement = new TrafficMeter();
+            replacement.addReceived(7);
+            replacement.publish();
+            await new Promise<void>(resolve => setImmediate(resolve));
+            expect(collector.snapshot()).toEqual({ status: 'available', receivedBytes: 18, sentBytes: 0 });
+            collector.close();
+            expect(openFrameTrafficPort(frame)).toBeNull();
+            expect(collector.snapshot()).toEqual({ status: 'unavailable', reason: 'browser traffic collector is closed' });
+        } finally {
+            original.close();
+            replacement?.close();
+            collector.close();
+            Reflect.set(globalThis, 'self', originalSelf);
         }
     });
 

@@ -20,8 +20,8 @@ async function message(data: object) {
     await setImmediate();
 }
 
-async function init(dbEnabled = true) {
-    await message({ type: 'init', versions: [[1, 1], [], [], []], crcs: [[0, 0], [], [], []], dbEnabled, ingame: true, host: 'fixture.invalid', secured: false });
+async function init(dbEnabled = true, trafficPort: MessagePort | null = null) {
+    await message({ type: 'init', trafficPort, versions: [[1, 1], [], [], []], crcs: [[0, 0], [], [], []], dbEnabled, ingame: true, host: 'fixture.invalid', secured: false });
 }
 
 async function advance(ms: number) {
@@ -54,6 +54,20 @@ afterEach(async () => {
     else Reflect.deleteProperty(globalThis, 'indexedDB');
     mock.restore();
     jest.useRealTimers();
+});
+
+test('the worker publishes idle heartbeats on its transferred init port and stops on shutdown', async () => {
+    const { port1, port2 } = new MessageChannel();
+    const first = new Promise(resolve => { port1.onmessage = event => resolve(event.data); });
+    try {
+        await message({ type: 'init', trafficPort: structuredClone(port2, { transfer: [port2] }), versions: [], crcs: [] });
+        await advance(1000);
+        expect(await first).toEqual({ type: 'rs2b0t:traffic', status: 'available', receivedBytes: 0, sentBytes: 0 });
+        await message({ type: 'stop' });
+        expect(clock.getTimerCount()).toBe(0);
+    } finally {
+        port1.close();
+    }
 });
 
 test('each cached request completes once and leaves the worker idle', async () => {
@@ -92,11 +106,15 @@ test('pending requests retry and the in-game stream keeps its keepalive cadence'
         }
     };
     spyOn(ClientStream, 'openSocket').mockResolvedValue(socket as unknown as WebSocket);
-    await init(false);
+    const { port1, port2 } = new MessageChannel();
+    const firstHeartbeat = new Promise(resolve => { port1.onmessage = event => resolve(event.data); });
+    await init(false, port2);
     await message({ type: 'request', archive: 0, file: 1 });
     for (let tick = 0; tick < 50; tick++) await advance(20);
     const request = [0, 0, 1, 2];
     expect(writes).toEqual([[15], request]);
+    expect(await firstHeartbeat).toEqual({ type: 'rs2b0t:traffic', status: 'available', receivedBytes: 8, sentBytes: 5 });
+    port1.close();
     await advance(20);
     expect(writes).toEqual([[15], request, request]);
 

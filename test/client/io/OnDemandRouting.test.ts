@@ -7,7 +7,7 @@ import PixFont from '#/client/graphics/PixFont.js';
 import Database from '#/client/io/Database.js';
 import type JagFile from '#/client/io/JagFile.js';
 import OnDemand from '#/client/io/OnDemand.js';
-import { installWallTrafficChannel } from '#/client/io/TrafficChannel.js';
+import { TrafficCollector } from '#/bot/adapter/TrafficAdapter.js';
 import { Client } from '#/client/shell/Client.js';
 import ClientBuild from '#/client/shell/ClientBuild.js';
 import * as JsUtil from '#/client/util/JsUtil.js';
@@ -32,7 +32,7 @@ const versionlist = {
 
 class WorkerFixture {
     constructor(_url: URL, readonly options: WorkerOptions) {}
-    postMessage(_message: { type: string; id?: number; archive?: number; file?: number }) {}
+    postMessage(_message: { type: string; id?: number; archive?: number; file?: number; trafficPort?: MessagePort }, _transfer?: Transferable[]) {}
     terminate() {}
 }
 
@@ -56,15 +56,54 @@ function completeFile(loader: OnDemand, archive: number, file: number, data: Uin
     loader.worker!.onmessage!(new MessageEvent('message', { data: { type: 'completed', archive, file, urgent: true, data: buffer } }));
 }
 
-test('cache workers inherit the traffic channel of the frame that starts them', () => {
+test('cache workers transfer their wall port in init and release it on termination', async () => {
     const wall = document.implementation.createHTMLDocument();
+    const collector = new TrafficCollector({ wall });
     const frame = wall.createElement('iframe');
-    const name = installWallTrafficChannel(wall);
+    let workerPort: MessagePort | undefined;
+    spyOn(WorkerFixture.prototype, 'postMessage').mockImplementation((message, ports) => {
+        if (message.type !== 'init') return;
+        workerPort = structuredClone(message, { transfer: ports }).trafficPort;
+    });
+    spyOn(WorkerFixture.prototype, 'terminate').mockImplementation(() => workerPort?.close());
     Object.defineProperty(window, 'frameElement', { configurable: true, value: frame });
     try {
-        expect(loaderFixture().worker).toMatchObject({ options: { type: 'module', name } });
+        const message = { type: 'rs2b0t:traffic', status: 'available', receivedBytes: 0, sentBytes: 3 };
+        for (let i = 1; i <= 2; i++) {
+            const loader = loaderFixture();
+            const port = workerPort!;
+            port.postMessage(message);
+            loader.stop();
+            port.postMessage(message);
+            await new Promise<void>(resolve => setImmediate(resolve));
+            expect(collector.snapshot()).toEqual({ status: 'available', receivedBytes: 0, sentBytes: 3 * i });
+        }
+        const remaining = loaderFixture();
+        const close = spyOn(Object.getPrototypeOf(workerPort!) as MessagePort, 'close');
+        collector.close();
+        expect(close).toHaveBeenCalledTimes(1);
+        remaining.stop();
     } finally {
         Reflect.deleteProperty(window, 'frameElement');
+        collector.close();
+    }
+});
+
+test('a failed traffic port transfer still initializes the asset worker', () => {
+    const wall = document.implementation.createHTMLDocument();
+    const collector = new TrafficCollector({ wall });
+    const post = spyOn(WorkerFixture.prototype, 'postMessage').mockImplementationOnce(() => {
+        throw new DOMException('synthetic transfer failure', 'DataCloneError');
+    });
+    Object.defineProperty(window, 'frameElement', { configurable: true, value: wall.createElement('iframe') });
+    try {
+        const loader = loaderFixture();
+        expect(post.mock.calls.map(([message]) => message.type)).toEqual(['init', 'init']);
+        expect(post.mock.calls[1][0].trafficPort).toBeNull();
+        loader.stop();
+    } finally {
+        Reflect.deleteProperty(window, 'frameElement');
+        collector.close();
     }
 });
 

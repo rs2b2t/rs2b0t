@@ -10,7 +10,7 @@ import type JagFile from '#/client/io/JagFile.js';
 import OnDemandProvider from '#/client/io/OnDemandProvider.js';
 import OnDemandRequest from '#/client/io/OnDemandRequest.js';
 import Packet from '#/client/io/Packet.js';
-import { publisherTrafficChannel } from '#/client/io/TrafficChannel.js';
+import { openFrameTrafficPort } from '#/client/io/TrafficChannel.js';
 
 declare const ONDEMAND_WORKER_URL: string;
 
@@ -32,6 +32,7 @@ export default class OnDemand extends OnDemandProvider {
     cycle: number = 0;
     failCount: number = 0;
     worker: Worker | null = null;
+    private releaseWorkerPort?: () => void;
     private workerError: Error | null = null;
     private lastIngame: boolean = false;
     private workerMessageId: number = 0;
@@ -146,6 +147,8 @@ export default class OnDemand extends OnDemandProvider {
             this.worker.terminate();
             this.worker = null;
         }
+        this.releaseWorkerPort?.();
+        this.releaseWorkerPort = undefined;
         this.resolveWorkerAcks();
     }
 
@@ -311,7 +314,7 @@ export default class OnDemand extends OnDemandProvider {
         }
 
         const url = new URL(typeof ONDEMAND_WORKER_URL === 'undefined' ? './ondemandworker.js' : ONDEMAND_WORKER_URL, import.meta.url);
-        const worker = new Worker(url, { type: 'module', name: publisherTrafficChannel() });
+        const worker = new Worker(url, { type: 'module' });
         this.worker = worker;
         this.lastIngame = this.app.ingame;
 
@@ -356,7 +359,8 @@ export default class OnDemand extends OnDemandProvider {
             this.completed.clear();
         };
 
-        worker.postMessage({
+        const traffic = openFrameTrafficPort();
+        const init = {
             type: 'init',
             versions: this.versions,
             crcs: this.crcs,
@@ -364,7 +368,17 @@ export default class OnDemand extends OnDemandProvider {
             secured: TARGET.tls,
             ingame: this.app.ingame,
             dbEnabled: !!this.app.db
-        });
+        };
+        if (traffic) {
+            try {
+                worker.postMessage({ ...init, trafficPort: traffic.port }, [traffic.port]);
+                this.releaseWorkerPort = traffic.close;
+                return;
+            } catch {
+                traffic.close();
+            }
+        }
+        worker.postMessage(traffic === undefined ? init : { ...init, trafficPort: null });
     }
 
     private postWorker(message: unknown): void {

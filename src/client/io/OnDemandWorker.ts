@@ -1,3 +1,4 @@
+import { TrafficMeter } from '#/client/io/TrafficMeter.js';
 import ClientStream from '#/client/io/ClientStream.js';
 
 type WorkerRequest = {
@@ -10,6 +11,7 @@ type WorkerRequest = {
 
 type InitMessage = {
     type: 'init';
+    trafficPort?: MessagePort | null;
     versions: number[][];
     crcs: number[][];
     host: string;
@@ -171,6 +173,8 @@ class WorkerOnDemand {
     loopBusy: boolean = false;
     dbReady: Promise<void>;
 
+    private readonly meter: TrafficMeter;
+
     constructor(message: InitMessage) {
         this.versions = message.versions;
         this.crcs = message.crcs;
@@ -178,6 +182,7 @@ class WorkerOnDemand {
         this.host = message.host;
         this.secured = message.secured;
         this.ingame = message.ingame;
+        this.meter = new TrafficMeter({ channel: message.trafficPort });
 
         if (message.dbEnabled) {
             this.dbReady = openDatabase().then((db) => {
@@ -190,6 +195,7 @@ class WorkerOnDemand {
 
     stop(): void {
         this.running = false;
+        this.meter.close();
         this.stream?.close();
         this.stream = null;
         this.db?.close();
@@ -599,7 +605,7 @@ class WorkerOnDemand {
                 }
 
                 this.socketOpenTime = now;
-                this.stream = new ClientStream(await ClientStream.openSocket(this.host, this.secured));
+                this.stream = new ClientStream(await ClientStream.openSocket(this.host, this.secured), this.meter);
 
                 this.buf[0] = 15;
                 this.stream.write(this.buf, 1);
