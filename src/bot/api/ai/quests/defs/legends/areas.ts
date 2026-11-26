@@ -1,3 +1,4 @@
+import { DIAMOND, EMERALD, JADE, OPAL, RED_TOPAZ, RUBY, SAPPHIRE } from '../../../../../data/gems.js';
 import Tile from '../../../../../geometry/Tile.js';
 import { ARDRIGAL, SNAKE_WEED } from '../../data/jungleHerbs.js';
 import type { QuestSnapshot } from '../../engine/types.js';
@@ -124,20 +125,20 @@ export const LQ_ID = {
     FIRE_RUNE: 554,
     DEATH_RUNE: 560,
 
-    OPAL: 1609,
-    JADE: 1611,
-    RED_TOPAZ: 1613,
-    SAPPHIRE: 1607,
-    EMERALD: 1605,
-    RUBY: 1603,
-    DIAMOND: 1601,
-    UNCUT_OPAL: 1625,
-    UNCUT_JADE: 1627,
-    UNCUT_RED_TOPAZ: 1629,
-    UNCUT_SAPPHIRE: 1623,
-    UNCUT_EMERALD: 1621,
-    UNCUT_RUBY: 1619,
-    UNCUT_DIAMOND: 1617,
+    OPAL: OPAL.cutId,
+    JADE: JADE.cutId,
+    RED_TOPAZ: RED_TOPAZ.cutId,
+    SAPPHIRE: SAPPHIRE.cutId,
+    EMERALD: EMERALD.cutId,
+    RUBY: RUBY.cutId,
+    DIAMOND: DIAMOND.cutId,
+    UNCUT_OPAL: OPAL.uncutId,
+    UNCUT_JADE: JADE.uncutId,
+    UNCUT_RED_TOPAZ: RED_TOPAZ.uncutId,
+    UNCUT_SAPPHIRE: SAPPHIRE.uncutId,
+    UNCUT_EMERALD: EMERALD.uncutId,
+    UNCUT_RUBY: RUBY.uncutId,
+    UNCUT_DIAMOND: DIAMOND.uncutId,
 
     RUNE_SCIMITAR: 1333,
     LOBSTER: 379,
@@ -203,13 +204,13 @@ export const LQ_ITEM = {
     FIRE_RUNE: 'Fire rune',
     DEATH_RUNE: 'Death rune',
 
-    OPAL: 'Opal',
-    JADE: 'Jade',
-    RED_TOPAZ: 'Red topaz',
-    SAPPHIRE: 'Sapphire',
-    EMERALD: 'Emerald',
-    RUBY: 'Ruby',
-    DIAMOND: 'Diamond',
+    OPAL: OPAL.name,
+    JADE: JADE.name,
+    RED_TOPAZ: RED_TOPAZ.name,
+    SAPPHIRE: SAPPHIRE.name,
+    EMERALD: EMERALD.name,
+    RUBY: RUBY.name,
+    DIAMOND: DIAMOND.name,
 
     RUNE_SCIMITAR: 'Rune scimitar',
     LOBSTER: 'Lobster',
@@ -447,14 +448,13 @@ export const GEM_ROCKS: readonly { id: number; name: string; rock: Tile }[] = [
 
 /** Uncut gem to its cut form, for the chisel leg. */
 export const GEM_CUTS: readonly { uncut: number; uncutName: string; cut: number; name: string }[] = [
-    { uncut: LQ_ID.UNCUT_OPAL, uncutName: 'Uncut opal', cut: LQ_ID.OPAL, name: LQ_ITEM.OPAL },
-    { uncut: LQ_ID.UNCUT_JADE, uncutName: 'Uncut jade', cut: LQ_ID.JADE, name: LQ_ITEM.JADE },
-    { uncut: LQ_ID.UNCUT_RED_TOPAZ, uncutName: 'Uncut red topaz', cut: LQ_ID.RED_TOPAZ, name: LQ_ITEM.RED_TOPAZ },
-    { uncut: LQ_ID.UNCUT_SAPPHIRE, uncutName: 'Uncut sapphire', cut: LQ_ID.SAPPHIRE, name: LQ_ITEM.SAPPHIRE },
-    { uncut: LQ_ID.UNCUT_EMERALD, uncutName: 'Uncut emerald', cut: LQ_ID.EMERALD, name: LQ_ITEM.EMERALD },
-    { uncut: LQ_ID.UNCUT_RUBY, uncutName: 'Uncut ruby', cut: LQ_ID.RUBY, name: LQ_ITEM.RUBY },
-    { uncut: LQ_ID.UNCUT_DIAMOND, uncutName: 'Uncut diamond', cut: LQ_ID.DIAMOND, name: LQ_ITEM.DIAMOND }
-];
+    OPAL, JADE, RED_TOPAZ, SAPPHIRE, EMERALD, RUBY, DIAMOND
+].map(gem => ({
+    uncut: gem.uncutId,
+    uncutName: `Uncut ${gem.name.toLowerCase()}`,
+    cut: gem.cutId,
+    name: gem.name
+}));
 
 /** The 5 runes the marked wall wants, in the only order it accepts. */
 export const WALL_RUNES: readonly { id: number; name: string }[] = [
