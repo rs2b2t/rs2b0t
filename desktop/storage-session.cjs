@@ -84,15 +84,30 @@ function prepareStorage(app) {
             let snapshot = { version: 0, data: store.snapshot() };
             function refresh(sender) {
                 const next = store.snapshot();
-                if ([...new Set([...Object.keys(snapshot.data), ...Object.keys(next)])].some(key => snapshot.data[key] !== next[key])) {
-                    snapshot = { version: snapshot.version + 1, data: next };
-                    for (const frame of clients.keys()) {
-                        try {
-                            if (!valid(frame)) clients.delete(frame);
-                            else if (frame !== sender) frame.send('rs2b0t-storage-changed', snapshot);
-                        } catch {
-                            clients.delete(frame);
-                        }
+                const previous = snapshot.data;
+                const keys = Object.keys(next);
+                const changes = {};
+                // Why: coalesced remove/reinsert writes can move keys even when their values match.
+                let orderedPrefix = 0;
+                for (const key of Object.keys(previous)) {
+                    if (previous[key] !== next[key]) changes[key] = next[key] ?? null;
+                    if (key === keys[orderedPrefix]) orderedPrefix++;
+                }
+                for (const key of keys) {
+                    if (Object.hasOwn(previous, key)) continue;
+                    changes[key] = next[key];
+                    if (key === keys[orderedPrefix]) orderedPrefix++;
+                }
+                if (!Object.keys(changes).length) return snapshot;
+                snapshot = { version: snapshot.version + 1, data: next };
+                const update = { version: snapshot.version, changes };
+                if (orderedPrefix < keys.length) update.append = keys.slice(orderedPrefix);
+                for (const frame of clients.keys()) {
+                    try {
+                        if (!valid(frame)) clients.delete(frame);
+                        else if (frame !== sender) frame.send('rs2b0t-storage-changed', update);
+                    } catch {
+                        clients.delete(frame);
                     }
                 }
                 return snapshot;
