@@ -1,3 +1,4 @@
+import { shopBuyPrice } from '#/bot/api/shop/shopPrice.js';
 import type { BuyPolicy, Seen, ShopItemDef } from '#/bot/api/shop/types.js';
 
 export const TICK_MS = 600;
@@ -14,10 +15,7 @@ export function expectedStock(item: ShopItemDef, seen: Seen | undefined, nowMs: 
 }
 
 export function unitPrice(item: ShopItemDef, shop: { sell: number; delta: number }, stock: number): number {
-    const d = stock - item.baseline;
-    const haggle = Math.min(1000, Math.max(-5000, d * shop.delta));
-    const pct = Math.max(100, shop.sell - haggle);
-    return Math.max(1, Math.floor((pct * item.cost) / 1000));
+    return shopBuyPrice(item.cost, item.baseline - stock, shop.sell, shop.delta);
 }
 
 export function unitsUnderPolicy(policy: BuyPolicy, stock: number, baseline: number): number {
