@@ -5,6 +5,12 @@ import Pix8 from '#/client/graphics/Pix8.js';
 import Pix32 from '#/client/graphics/Pix32.js';
 import PixMap from '#/client/graphics/PixMap.js';
 
+interface FlameRenderGate {
+    delayUntilDraw(now: number, lastDrawAt: number): number;
+    onChange(listener: () => void): () => void;
+}
+
+const FLAME_TICK_MS = 35;
 const FLAME_WIDTH = 128;
 const FLAME_HEIGHT = 256;
 const TITLE_FLAME_PIXELS = 33920;
@@ -30,7 +36,7 @@ export default class TitleFlames {
     coolingCycle: number = 0;
     private flameGradientCycle0: number = 0;
     private flameGradientCycle1: number = 0;
-    private flamesInterval: ReturnType<typeof setInterval> | null = null;
+    private stopPlayback: (() => void) | null = null;
 
     constructor(runes: Pix8[]) {
         this.runes = runes;
@@ -95,30 +101,74 @@ export default class TitleFlames {
         this.flameBuffer2 = new Uint8Array(32768);
     }
 
-    start(shouldDraw?: (now: number, lastDrawAt: number) => boolean): void {
-        if (this.active) {
+    start(gate?: FlameRenderGate | ((now: number, lastDrawAt: number) => boolean)): void {
+        if (this.active) return;
+        this.active = true;
+        let lastDrawAt = -Infinity;
+
+        if (!gate || typeof gate === 'function') {
+            const timer = setInterval(() => {
+                if (gate) {
+                    const now = performance.now();
+                    if (!gate(now, lastDrawAt)) return;
+                    lastDrawAt = now;
+                }
+                this.renderFlames();
+            }, FLAME_TICK_MS);
+            this.stopPlayback = () => clearInterval(timer);
             return;
         }
 
-        this.active = true;
-        let lastDrawAt = -Infinity;
-        this.flamesInterval = setInterval((): void => {
-            if (shouldDraw) {
-                const now = performance.now();
-                if (!shouldDraw(now, lastDrawAt)) return;
+        const startedAt = performance.now();
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        let dueAt = Infinity;
+        let coalesced = false;
+        const schedule = (now: number, delay: number) => {
+            dueAt = Infinity;
+            if (!Number.isFinite(delay)) return;
+            const elapsed = now - startedAt;
+            const nextTick = Math.floor(elapsed / FLAME_TICK_MS) + 1;
+            const deadline = (elapsed + delay) / FLAME_TICK_MS;
+            // Why: a coalesced timer can deliver the preceding tick at the rail deadline.
+            const eligibleTick = coalesced ? Math.floor(deadline) : Math.ceil(deadline);
+            dueAt = startedAt + Math.max(nextTick, eligibleTick) * FLAME_TICK_MS;
+            timer = setTimeout(tick, Math.min(0x7fffffff, Math.ceil(dueAt - now)));
+        };
+        const tick = () => {
+            const now = performance.now();
+            const delay = gate.delayUntilDraw(now, lastDrawAt);
+            if (delay === 0) {
+                coalesced ||= now > dueAt;
                 lastDrawAt = now;
+                schedule(now, gate.delayUntilDraw(now, lastDrawAt));
+                this.renderFlames();
+            } else {
+                coalesced = false;
+                schedule(now, delay);
             }
-            this.renderFlames();
-        }, 35);
+        };
+        const reschedule = () => {
+            const now = performance.now();
+            const delay = gate.delayUntilDraw(now, lastDrawAt);
+            if (delay === 0 && now >= dueAt) return;
+            clearTimeout(timer);
+            const elapsed = now - startedAt;
+            const onTick = elapsed >= FLAME_TICK_MS && elapsed % FLAME_TICK_MS === 0;
+            if (delay === 0 && Number.isFinite(dueAt) && onTick && now > lastDrawAt) tick();
+            else schedule(now, delay);
+        };
+        const unsubscribe = gate.onChange(reschedule);
+        this.stopPlayback = () => {
+            unsubscribe();
+            clearTimeout(timer);
+        };
+        reschedule();
     }
 
     close(): void {
         this.active = false;
-
-        if (this.flamesInterval) {
-            clearInterval(this.flamesInterval);
-            this.flamesInterval = null;
-        }
+        this.stopPlayback?.();
+        this.stopPlayback = null;
 
         this.titleLeft = null;
         this.titleRight = null;

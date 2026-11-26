@@ -63,7 +63,7 @@ export default class BotClient extends Client {
     }
 
     protected override startTitleFlames(flames: TitleFlames): void {
-        flames.start((now, lastDrawAt) => RenderGate.shouldDraw(now, lastDrawAt));
+        flames.start(RenderGate);
     }
 
     override async mainredraw(): Promise<void> {
