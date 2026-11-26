@@ -31,24 +31,36 @@ export default class PixFont extends Linkable2 {
         }
 
         const font: PixFont = new PixFont();
+        const pixelOrders = new Uint8Array(256);
+        let maskBytes = 0;
         for (let c: number = 0; c < 256; c++) {
-            font.charOffsetX[c] = idx.g1();
+            idx.g1();
             font.charOffsetY[c] = idx.g1();
-            const wi: number = (font.charMaskWidth[c] = idx.g2());
-            const hi: number = (font.charMaskHeight[c] = idx.g2());
-            const pixelOrder: number = idx.g1();
+            font.charMaskWidth[c] = idx.g2();
+            font.charMaskHeight[c] = idx.g2();
+            pixelOrders[c] = idx.g1();
+            maskBytes += font.charMaskWidth[c] * font.charMaskHeight[c];
+        }
 
+        const buffer = new ArrayBuffer(maskBytes);
+        let offset = 0;
+        for (let c: number = 0; c < 256; c++) {
+            const wi = font.charMaskWidth[c];
+            const hi = font.charMaskHeight[c];
+            const pixelOrder = pixelOrders[c];
             const len: number = wi * hi;
-            font.charMask[c] = new Int8Array(len);
+            const mask = new Int8Array(buffer, offset, len);
+            font.charMask[c] = mask;
+            offset += len;
 
             if (pixelOrder === 0) {
-                for (let j: number = 0; j < wi * hi; j++) {
-                    font.charMask[c][j] = dat.g1b();
+                for (let j: number = 0; j < len; j++) {
+                    mask[j] = dat.g1b();
                 }
             } else if (pixelOrder === 1) {
                 for (let x: number = 0; x < wi; x++) {
                     for (let y: number = 0; y < hi; y++) {
-                        font.charMask[c][x + y * wi] = dat.g1b();
+                        mask[x + y * wi] = dat.g1b();
                     }
                 }
             }
@@ -63,7 +75,7 @@ export default class PixFont extends Linkable2 {
             {
                 let space: number = 0;
                 for (let y: number = (hi / 7) | 0; y < hi; y++) {
-                    space += font.charMask[c][y * wi];
+                    space += mask[y * wi];
                 }
 
                 if (space <= ((hi / 7) | 0)) {
@@ -75,7 +87,7 @@ export default class PixFont extends Linkable2 {
             {
                 let space: number = 0;
                 for (let y: number = (hi / 7) | 0; y < hi; y++) {
-                    space += font.charMask[c][wi + y * wi - 1];
+                    space += mask[wi + y * wi - 1];
                 }
 
                 if (space <= ((hi / 7) | 0)) {
