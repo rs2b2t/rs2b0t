@@ -44,6 +44,7 @@ export default class BotPanel {
     private scriptStatus: HTMLElement;
     private logBox: HTMLElement;
     private logContext: ScriptContext | null = null;
+    private logScroll: { requested: number; actual: number } | null = null;
     private unsubLog: (() => void) | null = null;
     private settingsBox: HTMLElement;
     private paramsModal!: ParamsModal;
@@ -598,6 +599,7 @@ export default class BotPanel {
         if (ctx === this.logContext) return;
         this.unsubLog?.();
         this.logContext = ctx;
+        this.logScroll = null;
         this.logBox.replaceChildren();
         if (ctx) {
             for (const line of ctx.log.slice(-VISIBLE_LOG_LINES)) this.appendLogRow(line);
@@ -615,9 +617,14 @@ export default class BotPanel {
         oldest?.remove();
         this.appendLogRow(line);
         if (atBottom) {
+            this.logScroll = null;
             box.scrollTop = box.scrollHeight;
         } else if (oldest) {
-            box.scrollTop = Math.max(0, top - removedHeight);
+            const previous = this.logScroll;
+            const start = previous?.actual === top ? previous.requested : top;
+            const requested = Math.max(0, start - removedHeight);
+            box.scrollTop = requested;
+            this.logScroll = { requested, actual: box.scrollTop };
         }
     }
 

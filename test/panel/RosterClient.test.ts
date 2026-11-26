@@ -148,6 +148,32 @@ test('script logs follow the bottom and compensate for a wrapped row evicted abo
     expect(box.scrollTop).toBe(67.5);
 });
 
+test('repeated fractional row evictions keep the reader in place on a whole-pixel scroller', () => {
+    const ctx = runner.ctx = new ScriptContext();
+    for (let i = 0; i < 200; i++) ctx.addLog('info', `line ${i}`);
+    client.startScript();
+    const box = root.querySelector<HTMLElement>('.rs2b0t-log')!;
+    const rowHeight = 16.5;
+    const rect = new DOMRect(0, 0, 300, rowHeight);
+    for (const row of Array.from(box.children)) spyOn(row, 'getBoundingClientRect').mockReturnValue(rect);
+    let top = 2000;
+    Object.defineProperties(box, {
+        clientHeight: { value: 150 },
+        scrollHeight: { get: () => box.childElementCount * rowHeight },
+        scrollTop: { get: () => top, set: (value: number) => { top = Math.round(value); } }
+    });
+    const anchor = box.children[123];
+    const anchorOffset = () => Array.from(box.children).indexOf(anchor) * rowHeight - box.scrollTop;
+    expect(anchorOffset()).toBe(29.5);
+    for (let i = 0; i < 80; i++) ctx.addLog('info', `next ${i}`);
+    expect(anchorOffset()).toBe(29.5);
+
+    ctx.addLog('info', 'one more eviction');
+    box.scrollTop = 550;
+    ctx.addLog('info', 'after scrolling');
+    expect(box.scrollTop).toBe(534);
+});
+
 test('copy replaces one namespace including stale parameters and refreshes its panel', () => {
     SettingsStore.save('RosterDemo', 'leash', '15');
     SettingsStore.save('RosterDemo', 'stale', 'old');
