@@ -23,7 +23,9 @@ export const SHOP_PRESETS: ShopPreset[] = [
     { label: "Fernahei's fishing — Shilo Village (Shilo bank)", keeper: 'Fernahei', shopStand: new Tile(2870, 2971, 0), bankStand: new Tile(2852, 2954, 0), banker: 'Banker' },
     { label: "Bob's axes — Lumbridge (Draynor bank)", keeper: 'Bob', shopStand: new Tile(3231, 3203, 0), bankStand: new Tile(3093, 3243, 0) },
     { label: "Nurmof's pickaxes — Dwarven Mine (Falador East bank)", keeper: 'Nurmof', shopStand: new Tile(2997, 9844, 0), bankStand: new Tile(3013, 3355, 0) },
-    { label: 'Wizard Guild runes — Yanille (Yanille bank)', keeper: 'Magic Store owner', shopStand: new Tile(2594, 3090, 1), bankStand: new Tile(2613, 3092, 0) }
+    { label: 'Wizard Guild runes — Yanille (Yanille bank)', keeper: 'Magic Store owner', shopStand: new Tile(2594, 3090, 1), bankStand: new Tile(2613, 3092, 0) },
+    { label: "Zaff's staffs — Varrock (Varrock West bank)", keeper: 'Zaff', shopStand: new Tile(3203, 3433, 0), bankStand: new Tile(3185, 3440, 0) },
+    { label: "Scavvo's runes — Champions' Guild (Varrock West bank)", keeper: 'Scavvo', shopStand: new Tile(3191, 3352, 1), bankStand: new Tile(3185, 3440, 0) }
 ];
 
 export function presetByLabel(label: string): ShopPreset | undefined {

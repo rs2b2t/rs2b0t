@@ -7,11 +7,26 @@ import { joinShopDb, parseInvShops, parseNpcKeepers, parseObjDefs, type ParsedIn
 const CONTENT = process.env.CONTENT_DIR ?? join(homedir(), 'code', 'rs2b2t-engine', '..', 'rs2b2t-content');
 const OUT = 'src/bot/data/shopdb.ts';
 
+/** Why: a keeper whose `Trade` op opens the shop from an npc script has no `owned_shop` param, so the content scan cannot see the shop; this is the same openshop() argument set. */
+const SCRIPT_KEEPERS: readonly ParsedKeeper[] = [
+    {
+        npc: 'zaff',
+        name: 'Zaff',
+        ownedShops: ['memberstaffshop', 'staffshop'],
+        sell: 1000,
+        buy: 550,
+        delta: 20,
+        title: "Zaff's Superior Staffs!"
+    }
+];
 
 function generate(): string {
     const scripts = join(CONTENT, 'scripts');
     const invs: ParsedInv[] = filesUnder(scripts, '.inv').flatMap(f => parseInvShops(readFileSync(f, 'utf8')));
-    const keepers: ParsedKeeper[] = filesUnder(scripts, '.npc').flatMap(f => parseNpcKeepers(readFileSync(f, 'utf8')));
+    const keepers: ParsedKeeper[] = [
+        ...filesUnder(scripts, '.npc').flatMap(f => parseNpcKeepers(readFileSync(f, 'utf8'))),
+        ...SCRIPT_KEEPERS
+    ];
     const objs: Record<string, ParsedObj> = {};
     for (const f of filesUnder(scripts, '.obj')) {
         Object.assign(objs, parseObjDefs(readFileSync(f, 'utf8')));

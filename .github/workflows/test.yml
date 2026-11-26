@@ -18,7 +18,18 @@ jobs:
         with:
           bun-version: 1.3.14
 
-      - run: bun install --frozen-lockfile
+      # Why: @vvago/vale downloads the Vale binary from GitHub releases, where transient
+      # failures should retry dependency installation rather than rerunning the tests.
+      - name: install dependencies
+        run: |
+          for attempt in 1 2 3 4; do
+            bun install --frozen-lockfile && exit 0
+            if [ "$attempt" -lt 4 ]; then
+              echo "bun install failed (attempt $attempt); retrying in $((attempt * 30)) s"
+              sleep $((attempt * 30))
+            fi
+          done
+          exit 1
 
       - run: bun test
 

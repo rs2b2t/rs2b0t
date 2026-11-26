@@ -1,4 +1,5 @@
 // docs/reference/quest-provisioning.md
+import { planItemFromBank } from '../../engine/provisioning.js';
 import { waitStep } from '../../engine/questSteps.js';
 import type Tile from '../../../../../geometry/Tile.js';
 import { Inventory, type InvItem } from '../../../../inventory/Inventory.js';
@@ -33,15 +34,9 @@ export function withdrawFrom(items: { name: string; id: number; qty: number }[])
 
 /** Pack, then bank, then nothing, for anything the caller makes itself. */
 export function fromBank(snap: QuestSnapshot, item: PrinceItem, qty = 1): QuestStep | null {
-    const short = qty - held(snap, item.id);
-    if (short <= 0) {
-        return null;
-    }
-    if (!snap.bankKnown) {
-        return scanBank();
-    }
-    const inBank = banked(snap, item.id);
-    return inBank > 0 ? withdrawFrom([{ name: item.name, id: item.id, qty: Math.min(short, inBank) }]) : null;
+    const plan = planItemFromBank(snap, item, qty);
+    if (plan === 'scanBank') return scanBank();
+    return plan ? withdrawFrom([plan]) : null;
 }
 
 export function buyItem(

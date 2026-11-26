@@ -57,6 +57,9 @@ import {
     onBrimhavenSurface,
     pillarFromHint,
     pillarTagged,
+    plankBridgeOf,
+    intactPlankRows,
+    isPlankEntry,
     platformAt,
     restockShortfall,
     shouldBank,
@@ -64,7 +67,8 @@ import {
     ticketInventoryGain,
     walkTrapStand,
     wantRunForGoal,
-    type ArenaEdge
+    type ArenaEdge,
+    type PlankBridge
 } from './BrimhavenAgilityLogic.js';
 import { scriptFood } from '../../api/loadout/loadoutPlan.js';
 import { LOADOUT_SETTING } from '../../api/loadout/loadoutSetting.js';
@@ -1138,7 +1142,11 @@ async function crossEdge(bot: BrimhavenAgility, edge: ArenaEdge, from: number, t
 
     const loc = findEdgeLoc(edge, from, to);
     if (!loc) {
-        bot.log(`no ${edge.locName ?? edge.kind} loc for edge ${from}->${to}`);
+        bot.log(
+            edge.kind === 'plank'
+                ? `no plank row with intact outer planks in view for edge ${from}->${to}`
+                : `no ${edge.locName ?? edge.kind} loc for edge ${from}->${to}`
+        );
         return;
     }
     const op =
@@ -1167,7 +1175,8 @@ async function crossEdge(bot: BrimhavenAgility, edge: ArenaEdge, from: number, t
         }
     }
 
-    bot.log(`  ${op} ${edge.locName} @ ${lt.x},${lt.z}`);
+    const bridge = plankBridgeOf(edge);
+    bot.log(`  ${op} ${edge.locName} @ ${lt.x},${lt.z}${bridge ? ` (rows with intact outer planks: ${visibleIntactRows(bridge).join(',') || 'none'})` : ''}`);
     // Click immediately (even mid residual anim). Re-click while still on start
     // until the obstacle engages, no long dead wait after rope/pillar/monkey.
     for (let attempt = 0; attempt < 5; attempt++) {
@@ -1177,7 +1186,12 @@ async function crossEdge(bot: BrimhavenAgility, edge: ArenaEdge, from: number, t
         if (bot.platform() >= 0 && bot.platform() !== from) {
             break;
         }
-        const live = findEdgeLoc(edge, from, to) ?? loc;
+        // Why: a plank row is re-read before every click, because a stale row may have been rebuilt into a broken one.
+        const live = findEdgeLoc(edge, from, to) ?? (edge.kind === 'plank' ? null : loc);
+        if (!live) {
+            bot.log(`  no plank row with intact outer planks in view (attempt ${attempt + 1})`);
+            break;
+        }
         if (!(await live.interact(op))) {
             bot.log(`  interact failed (attempt ${attempt + 1})`);
         }
@@ -1206,12 +1220,20 @@ function findEdgeLoc(edge: ArenaEdge, from: number, to: number): Loc | null {
     const midX = (a.x + b.x) / 2;
     const midZ = (a.z + b.z) / 2;
     // Prefer the from-side candidate so rope swings face the right way.
-    const candidates = Locs.query()
+    let candidates = Locs.query()
         .name(edge.locName)
         .within(16)
         .where(l => l.actions().length > 0)
         .results();
-    if (candidates.length === 0) {
+    if (edge.kind === 'plank') {
+        // Why: only the entry planks carry Walk-on. The row planks, intact or broken, share the name but have no op, so they never reach the candidates above. visibleIntactRows reads them by loc type id apart from that list, and the entry candidates keep only the intact rows.
+        const bridge = plankBridgeOf(edge);
+        if (bridge === null) {
+            return null;
+        }
+        const rows = visibleIntactRows(bridge);
+        candidates = candidates.filter(l => rows.includes(l.tile().z) && isPlankEntry(bridge, l.tile().x, l.tile().z));
+    } else if (candidates.length === 0) {
         return Locs.query().name(edge.locName).within(16).nearest();
     }
     let best: Loc | null = null;
@@ -1227,4 +1249,14 @@ function findEdgeLoc(edge: ArenaEdge, from: number, to: number): Loc | null {
         }
     }
     return best;
+}
+
+function visibleIntactRows(bridge: PlankBridge): number[] {
+    return intactPlankRows(
+        bridge,
+        Locs.query()
+            .name('Plank')
+            .results()
+            .map(l => ({ id: l.id, x: l.tile().x, z: l.tile().z }))
+    );
 }

@@ -102,7 +102,7 @@ Fights East Ardougne market guards, feeds itself from the Baker's stall, loots r
 | `anchor` | tile | `{"x":2661,"z":3306,"level":0}` | Market anchor (x,z) |
 | `leashRadius` | number (5–25) | `12` | Leash radius (tiles) |
 | `target` | string | `"Guard"` | NPC to fight (name) |
-| `combatStyle` | string | `"strength"` | Combat style — one of: attack, strength, controlled, defence |
+| `combatStyle` | string | `"strength"` | Combat style — one of: attack, strength, controlled, defence, minimum |
 | `bankStand` | tile | `{"x":2655,"z":3286,"level":0}` | Bank stand tile (x,z) |
 | `loadout` | string | `""` | Loadout — one of:  |
 | `panicHp` | number (0–100) | `25` | Panic below HP% (no food) |
@@ -129,7 +129,7 @@ Start-or-coordinate fighter — kills any named NPC in its leash, loots selected
 | `coordinates` | tile | `{"x":3273,"z":3427,"level":0}` | Killing coordinates (x,z) |
 | `leashRadius` | number (2–30) | `8` | Leash radius (tiles) |
 | `combatStyle` | string | `"melee"` | Combat style — one of: melee, mage, range |
-| `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence |
+| `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence, minimum |
 | `useSpecial` | boolean | `true` | Use special attacks |
 | `spell` | string | `"Fire Strike"` | Autocast spell — one of: Wind Strike, Water Strike, Earth Strike, Fire Strike, Wind Bolt, Water Bolt, Earth Bolt, Fire Bolt, Wind Blast, Water Blast, Earth Blast, Fire Blast, Wind Wave, Water Wave, Earth Wave, Fire Wave |
 | `runesWithdraw` | number (1–1000) | `150` | Casts of runes per bank trip |
@@ -172,7 +172,7 @@ Brimhaven moss giant island: range/mage/melee walk-and-fight (multicombat, safes
 | Setting | Type | Default | Notes |
 |---|---|---|---|
 | `combatStyle` | string | `"melee"` | Combat style — one of: melee, mage, range |
-| `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence |
+| `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence, minimum |
 | `staff` | string | `"Staff of air"` | Staff — one of: Staff, Magic staff, Staff of air, Staff of water, Staff of earth, Staff of fire, Battlestaff, Air battlestaff, Water battlestaff, Earth battlestaff, Fire battlestaff, Mystic air staff, Mystic water staff, Mystic earth staff, Mystic fire staff |
 | `spell` | string | `"Wind Strike"` | Autocast spell — one of: Wind Strike, Water Strike, Earth Strike, Fire Strike, Wind Bolt, Water Bolt, Earth Bolt, Fire Bolt, Wind Blast, Water Blast, Earth Blast, Fire Blast, Wind Wave, Water Wave, Earth Wave, Fire Wave |
 | `runesWithdraw` | number (1–1000) | `150` | Casts of runes per bank trip |
@@ -222,7 +222,7 @@ Kills chickens, loots and buries bones (anchor = start tile)
 | `lootMatch` | string | `"bones"` | Loot name match (\| = OR) |
 | `buryBones` | boolean | `true` | Bury bones? |
 | `combatStyle` | string | `"melee"` | Combat style — one of: melee, mage, range |
-| `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence |
+| `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence, minimum |
 | `spell` | string | `"Wind Strike"` | Autocast spell — one of: Wind Strike, Water Strike, Earth Strike, Fire Strike, Wind Bolt, Water Bolt, Earth Bolt, Fire Bolt, Wind Blast, Water Blast, Earth Blast, Fire Blast, Wind Wave, Water Wave, Earth Wave, Fire Wave |
 | `runesWithdraw` | number (1–1000) | `100` | Casts of runes per bank trip |
 | `rangeStyle` | string | `"rapid"` | Ranged style — one of: accurate, rapid, longrange |
@@ -250,7 +250,7 @@ Walks to the Lumbridge, north-west Lumbridge, south-Falador, or East Ardougne co
 | `lootMatch` | string | `"Cowhide"` | Loot name match (\| = OR) |
 | `buryBones` | boolean | `false` | Bury bones? |
 | `combatStyle` | string | `"melee"` | Combat style — one of: melee, mage, range |
-| `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence |
+| `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence, minimum |
 | `spell` | string | `"Wind Strike"` | Autocast spell — one of: Wind Strike, Water Strike, Earth Strike, Fire Strike, Wind Bolt, Water Bolt, Earth Bolt, Fire Bolt, Wind Blast, Water Blast, Earth Blast, Fire Blast, Wind Wave, Water Wave, Earth Wave, Fire Wave |
 | `runesWithdraw` | number (1–1000) | `100` | Casts of runes per bank trip |
 | `rangeStyle` | string | `"rapid"` | Ranged style — one of: accurate, rapid, longrange |
@@ -284,7 +284,7 @@ Waterfall Dungeon fire giants: range/mage safespot or melee, enters by raft + ro
 | Setting | Type | Default | Notes |
 |---|---|---|---|
 | `combatStyle` | string | `"melee"` | Combat style — one of: melee, mage, range |
-| `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence |
+| `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence, minimum |
 | `staff` | string | `"Staff of air"` | Staff — one of: Staff, Magic staff, Staff of air, Staff of water, Staff of earth, Staff of fire, Battlestaff, Air battlestaff, Water battlestaff, Earth battlestaff, Fire battlestaff, Mystic air staff, Mystic water staff, Mystic earth staff, Mystic fire staff |
 | `spell` | string | `"Wind Strike"` | Autocast spell — one of: Wind Strike, Water Strike, Earth Strike, Fire Strike, Wind Bolt, Water Bolt, Earth Bolt, Fire Bolt, Wind Blast, Water Blast, Earth Blast, Fire Blast, Wind Wave, Water Wave, Earth Wave, Fire Wave |
 | `runesWithdraw` | number (1–2000) | `150` | Casts of runes per bank trip |
@@ -317,7 +317,7 @@ Wilderness green dragons N of Edgeville: melee/mage w/ anti-dragon shield, banks
 | Setting | Type | Default | Notes |
 |---|---|---|---|
 | `combatStyle` | string | `"melee"` | Combat style — one of: melee, mage |
-| `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence |
+| `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence, minimum |
 | `useSpecial` | boolean | `true` | Use special attacks |
 | `weapon` | string | `"Rune scimitar"` | Weapon — one of: Bronze scimitar, Iron scimitar, Steel scimitar, Black scimitar, Mithril scimitar, Adamant scimitar, Rune scimitar, Bronze sword, Iron sword, Steel sword, Black sword, Mithril sword, Adamant sword, Rune sword, Bronze longsword, Iron longsword, Steel longsword, Black longsword, Mithril longsword, Adamant longsword, Rune longsword, Dragon longsword, Bronze dagger, Iron dagger, Steel dagger, Black dagger, Mithril dagger, Adamant dagger, Rune dagger, Dragon dagger, Dragon dagger(p), Dragon battleaxe, Rune mace, Dragon mace |
 | `staff` | string | `"Staff of fire"` | Staff — one of: Staff, Magic staff, Staff of air, Staff of water, Staff of earth, Staff of fire, Battlestaff, Air battlestaff, Water battlestaff, Earth battlestaff, Fire battlestaff, Mystic air staff, Mystic water staff, Mystic earth staff, Mystic fire staff |
@@ -348,7 +348,7 @@ Edgeville dungeon hill giants — enters through the public trapdoor and banks l
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
-| `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence |
+| `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence, minimum |
 | `weapon` | string | `""` | Weapon to wield |
 | `loadout` | string | `""` | Loadout — one of:  |
 | `foodWithdraw` | number (1–27) | `12` | Food per trip |
@@ -401,7 +401,7 @@ Taverley Dungeon blue or black dragons, or the Heroes' Guild dragon fought throu
 |---|---|---|---|
 | `enclaveTargets` | string | `"both"` | Gu'Tanoth targets — one of: both, dragons, demons |
 | `combatStyle` | string | `"range"` | Combat style — one of: melee, mage, range |
-| `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence |
+| `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence, minimum |
 | `weapon` | string | `"Best available"` | Weapon — one of: Best available, Bronze scimitar, Iron scimitar, Steel scimitar, Black scimitar, Mithril scimitar, Adamant scimitar, Rune scimitar, Bronze sword, Iron sword, Steel sword, Black sword, Mithril sword, Adamant sword, Rune sword, Bronze longsword, Iron longsword, Steel longsword, Black longsword, Mithril longsword, Adamant longsword, Rune longsword, Dragon longsword, Bronze dagger, Iron dagger, Steel dagger, Black dagger, Mithril dagger, Adamant dagger, Rune dagger, Dragon dagger, Dragon dagger(p), Dragon battleaxe, Rune mace, Dragon mace |
 | `staff` | string | `"Staff of fire"` | Staff — one of: Staff, Magic staff, Staff of air, Staff of water, Staff of earth, Staff of fire, Battlestaff, Air battlestaff, Water battlestaff, Earth battlestaff, Fire battlestaff, Mystic air staff, Mystic water staff, Mystic earth staff, Mystic fire staff |
 | `spell` | string | `"Fire Strike"` | Autocast spell — one of: Wind Strike, Water Strike, Earth Strike, Fire Strike, Wind Bolt, Water Bolt, Earth Bolt, Fire Bolt, Wind Blast, Water Blast, Earth Blast, Fire Blast, Wind Wave, Water Wave, Earth Wave, Fire Wave |
@@ -493,7 +493,7 @@ Moss giants N of Ardougne: range/mage safespot or melee, banks all loot
 | Setting | Type | Default | Notes |
 |---|---|---|---|
 | `combatStyle` | string | `"melee"` | Combat style — one of: melee, mage, range |
-| `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence |
+| `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence, minimum |
 | `staff` | string | `"Staff of air"` | Staff — one of: Staff, Magic staff, Staff of air, Staff of water, Staff of earth, Staff of fire, Battlestaff, Air battlestaff, Water battlestaff, Earth battlestaff, Fire battlestaff, Mystic air staff, Mystic water staff, Mystic earth staff, Mystic fire staff |
 | `spell` | string | `"Wind Strike"` | Autocast spell — one of: Wind Strike, Water Strike, Earth Strike, Fire Strike, Wind Bolt, Water Bolt, Earth Bolt, Fire Bolt, Wind Blast, Water Blast, Earth Blast, Fire Blast, Wind Wave, Water Wave, Earth Wave, Fire Wave |
 | `runesWithdraw` | number (1–1000) | `150` | Casts of runes per bank trip |
@@ -521,7 +521,7 @@ Rellekka rock crabs: aggro-stack-kill-reset, loots key halves
 | Setting | Type | Default | Notes |
 |---|---|---|---|
 | `combatStyle` | string | `"melee"` | Combat style — one of: melee, mage, range |
-| `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence |
+| `meleeStyle` | string | `"strength"` | Melee style — one of: attack, strength, controlled, defence, minimum |
 | `rangeStyle` | string | `"rapid"` | Ranged style — one of: accurate, rapid, longrange |
 | `staff` | string | `"Staff of air"` | Staff — one of: Staff, Magic staff, Staff of air, Staff of water, Staff of earth, Staff of fire, Battlestaff, Air battlestaff, Water battlestaff, Earth battlestaff, Fire battlestaff, Mystic air staff, Mystic water staff, Mystic earth staff, Mystic fire staff |
 | `bow` | string | `"Maple shortbow"` | Ranged weapon — one of: Shortbow, Longbow, Oak shortbow, Oak longbow, Willow shortbow, Willow longbow, Maple shortbow, Maple longbow, Yew shortbow, Yew longbow, Magic shortbow, Magic longbow, Bronze dart, Iron dart, Steel dart, Black dart, Mithril dart, Adamant dart, Rune dart, Other |
@@ -1017,11 +1017,11 @@ Parks at ONE shop and buys it out repeatedly on a total gp budget — no routing
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
-| `shop` | string | `"Aemad's vials — East Ardougne (Ardougne East bank)"` | Shop — one of: Aemad's vials — East Ardougne (Ardougne East bank), Mage Arena runes — Lundail (Gundai bank), Betty's runes — Port Sarim (Falador West bank), Aubury's runes — Varrock (Varrock East bank), Lowe's arrows — Varrock (Varrock East bank), Hickton's arrows — Catherby (Catherby bank), Gerrant's feathers — Port Sarim (Draynor bank), Harry's fishing — Catherby (Catherby bank), Fernahei's fishing — Shilo Village (Shilo bank), Bob's axes — Lumbridge (Draynor bank), Nurmof's pickaxes — Dwarven Mine (Falador East bank), Wizard Guild runes — Yanille (Yanille bank) |
+| `shop` | string | `"Aemad's vials — East Ardougne (Ardougne East bank)"` | Shop — one of: Aemad's vials — East Ardougne (Ardougne East bank), Mage Arena runes — Lundail (Gundai bank), Betty's runes — Port Sarim (Falador West bank), Aubury's runes — Varrock (Varrock East bank), Lowe's arrows — Varrock (Varrock East bank), Hickton's arrows — Catherby (Catherby bank), Gerrant's feathers — Port Sarim (Draynor bank), Harry's fishing — Catherby (Catherby bank), Fernahei's fishing — Shilo Village (Shilo bank), Bob's axes — Lumbridge (Draynor bank), Nurmof's pickaxes — Dwarven Mine (Falador East bank), Wizard Guild runes — Yanille (Yanille bank), Zaff's staffs — Varrock (Varrock West bank), Scavvo's runes — Champions' Guild (Varrock West bank) |
 | `budgetGp` | number (100–) | `250000` | Total gp to spend |
 | `perTripGp` | number (100–) | `100000` | Gp per bank trip |
 | `stopFloorGp` | number (0–) | `5000` | Stop below bank gp |
-| `buyItems` | string[] | `[]` | Items to buy (empty = all stock) — one of: Adamant arrow, Adamant arrowtips, Adamant pickaxe, Air rune, Ball of wool, Battlestaff, Big fishing net, Blood rune, Body rune, Bolts, Bronze arrow, Bronze arrowtips, Bronze axe, Bronze pickaxe, Chaos rune, Cooked meat, Cosmic rune, Crossbow, Death rune, Earth rune, Eye of newt, Feather, Fire rune, Fishing bait, Fishing rod, Fly fishing rod, Harpoon, Iron arrow, Iron arrowtips, Iron axe, Iron battleaxe, Iron pickaxe, Law rune, Lobster pot, Longbow, Mind rune, Mithril arrow, Mithril arrowtips, Mithril battleaxe, Mithril pickaxe, Nature rune, Oak longbow, Oak shortbow, Papyrus, Raw anchovies, Raw bass, Raw cod, Raw herring, Raw lobster, Raw mackerel, Raw pike, Raw salmon, Raw sardine, Raw shark, Raw shrimps, Raw swordfish, Raw trout, Raw tuna, Rope, Rune arrow, Rune arrowtips, Rune pickaxe, Shortbow, Small fishing net, Soul rune, Staff of air, Staff of earth, Staff of fire, Staff of water, Steel arrow, Steel arrowtips, Steel axe, Steel battleaxe, Steel pickaxe, Studded body, Studded chaps, Tinderbox, Vial of water, Water rune, Wizards hat |
+| `buyItems` | string[] | `[]` | Items to buy (empty = all stock) — one of: Adamant arrow, Adamant arrowtips, Adamant pickaxe, Air rune, Ball of wool, Battlestaff, Big fishing net, Blood rune, Body rune, Bolts, Bronze arrow, Bronze arrowtips, Bronze axe, Bronze pickaxe, Chaos rune, Coif, Cooked meat, Cosmic rune, Crossbow, Death rune, Dragon vambraces, Dragonhide chaps, Earth rune, Eye of newt, Feather, Fire rune, Fishing bait, Fishing rod, Fly fishing rod, Harpoon, Iron arrow, Iron arrowtips, Iron axe, Iron battleaxe, Iron pickaxe, Law rune, Lobster pot, Longbow, Magic staff, Mind rune, Mithril arrow, Mithril arrowtips, Mithril battleaxe, Mithril pickaxe, Nature rune, Oak longbow, Oak shortbow, Papyrus, Raw anchovies, Raw bass, Raw cod, Raw herring, Raw lobster, Raw mackerel, Raw pike, Raw salmon, Raw sardine, Raw shark, Raw shrimps, Raw swordfish, Raw trout, Raw tuna, Rope, Rune arrow, Rune arrowtips, Rune chainbody, Rune longsword, Rune mace, Rune pickaxe, Rune platelegs, Rune plateskirt, Rune sword, Shortbow, Small fishing net, Soul rune, Staff, Staff of air, Staff of earth, Staff of fire, Staff of water, Steel arrow, Steel arrowtips, Steel axe, Steel battleaxe, Steel pickaxe, Studded body, Studded chaps, Tinderbox, Vial of water, Water rune, Wizards hat |
 | `recheckSeconds` | number (5–600) | `60` | Restock recheck (s) |
 
 ### ShopRunner
