@@ -1,6 +1,8 @@
 import { expect, spyOn, test } from 'bun:test';
 import { VaultPrompt } from '#/bot/multibox/VaultPrompt.js';
-import { vault } from '#/bot/multibox/ProfileVault.js';
+import { ProfileVault, vault } from '#/bot/multibox/ProfileVault.js';
+import { serializeProfileFile } from '#/bot/multibox/ProfileTransfer.js';
+import { SettingsPanel } from '#/bot/multibox/SettingsPanel.js';
 import { ResourcePanel } from '#/bot/multibox/ResourcePanel.js';
 import { DiagSampler } from '#/bot/multibox/DiagSampler.js';
 import { FreezeWatch } from '#/bot/runtime/diag/FreezeWatch.js';
@@ -92,6 +94,40 @@ async function withWall(mode: 'local' | 'proxy', check: (wall: Wall) => Promise<
         else process.env.RS2B0T_TARGET = previousMode;
     }
 }
+
+test('overlapping settings imports remove the superseded profile settings from both stores', async () => {
+    await withWall('local', async () => {
+        const open = spyOn(SettingsPanel.prototype, 'open');
+        const profileFile = (username: string, selectedScript: string) => serializeProfileFile({
+            profiles: [{ username, password: 'fixture' }], tabs: [], activeTab: 'Main',
+            storage: { [username]: { selectedScript } }
+        });
+        const firstKey = 'rs2b0t:first:selectedScript';
+        const secondKey = 'rs2b0t:second:selectedScript';
+        try {
+            document.getElementById('mbx-settings')!.click();
+            const panel = open.mock.contexts[0] as SettingsPanel;
+            await Promise.all([
+                panel.importText(profileFile('first', 'Miner')),
+                panel.importText(profileFile('second', 'Fisher'))
+            ]);
+
+            const reopened = new ProfileVault();
+            expect(await reopened.unlock('test-passphrase')).toBe(true);
+            expect(reopened.list().map(p => p.username)).toEqual(['second']);
+            for (const store of [localStorage, sessionStorage]) {
+                expect(store.getItem(firstKey)).toBeNull();
+                expect(store.getItem(secondKey)).toBe('Fisher');
+            }
+        } finally {
+            open.mockRestore();
+            for (const store of [localStorage, sessionStorage]) {
+                store.removeItem(firstKey);
+                store.removeItem(secondKey);
+            }
+        }
+    });
+});
 
 test('a shared import can load from the open chooser and reveal its tile', async () => {
     await withWall('proxy', async wall => {

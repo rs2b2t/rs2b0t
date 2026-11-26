@@ -25,6 +25,7 @@ export class SettingsPanel {
     readonly fileInput: HTMLInputElement;
 
     private err: HTMLDivElement;
+    private importTail = Promise.resolve();
 
     constructor(private hooks: SettingsPanelHooks) {
         this.el = document.createElement('div');
@@ -115,13 +116,14 @@ export class SettingsPanel {
         if (!(await this.hooks.ensureUnlocked())) {
             return;
         }
-        try {
+        this.importTail = this.importTail.then(async () => {
             const data = parseProfileFile(text);
             await this.hooks.replaceAll(data);
             this.hooks.onImported?.(data);
             this.close();
-        } catch (e) {
+        }).catch(e => {
             this.err.textContent = e instanceof Error ? e.message : String(e);
-        }
+        });
+        return this.importTail;
     }
 }
