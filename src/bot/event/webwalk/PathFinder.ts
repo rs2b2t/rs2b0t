@@ -21,10 +21,10 @@ import { DEFAULT_EDGE_COST, edgeCostForKind, teleportEdgeCost } from './geometry
 // Why: multiply instead of bit-shifting so the 0-15 essence return index survives JS's 32-bit wrap.
 const TILE_KEY_MASK = 0x3fffffff;
 const ESSENCE_STATE_SLOTS = 16;
-const STAIR_ORIGIN_STRIDE = (TILE_KEY_MASK + 1) * ESSENCE_STATE_SLOTS;
-function packSearchKey(tileId: number, essenceReturnIdx: number, stairOriginLevel = -1): number {
+const STAIR_ARRIVAL_STRIDE = (TILE_KEY_MASK + 1) * ESSENCE_STATE_SLOTS;
+function packSearchKey(tileId: number, essenceReturnIdx: number, stairArrival = 0): number {
     const tileAndEssence = (tileId & TILE_KEY_MASK) * ESSENCE_STATE_SLOTS + (essenceReturnIdx & 0xf);
-    return (stairOriginLevel + 1) * STAIR_ORIGIN_STRIDE + tileAndEssence;
+    return stairArrival * STAIR_ARRIVAL_STRIDE + tileAndEssence;
 }
 function searchTileId(key: number): number {
     return (key / ESSENCE_STATE_SLOTS) & TILE_KEY_MASK;
@@ -258,6 +258,8 @@ export class PathFinder {
     readonly members: boolean;
 
     private readonly edges = new Map<number, CompiledEdge[]>();
+    private readonly stairExits = new Map<number, number>();
+    private hasEssenceEntries = false;
     private readonly longRangeEdges: { from: number; edge: CompiledEdge }[] = [];
     doorEdges = 0;
     transportEdges = 0;
@@ -438,6 +440,13 @@ export class PathFinder {
         teleportId?: string
     ): void {
         const edge = { to, cost, transport, requires, kind, teleportId };
+        if (requires?.essenceEntrySetsReturn !== undefined) this.hasEssenceEntries = true;
+        if (kind === 'stair') {
+            const exit = from * 4 + nodeLevel(to);
+            if (!this.stairExits.has(exit)) {
+                this.stairExits.set(exit, this.stairExits.size + 1);
+            }
+        }
         const span = Math.max(Math.abs(nodeX(to) - nodeX(from)), Math.abs(nodeZ(to) - nodeZ(from)));
         if (span > cost) {
             this.longRangeEdges.push({ from, edge });
@@ -605,6 +614,17 @@ export class PathFinder {
             };
         }
 
+        const { x, z, level } = toRaw;
+        const dx = x - from.x;
+        const dz = z - from.z;
+        if (level === from.level && Math.max(Math.abs(dx), Math.abs(dz)) === 1 && !opts.avoidZones?.length && maxExpansions >= 1) {
+            const mask = this.exitMask(from.x, from.z, level);
+            const canStep = DX.some((step, dir) => step === dx && DZ[dir] === dz && (mask & (1 << dir)) !== 0);
+            if (canStep && this.walkable(x, z, level)) {
+                return { ok: true, cost: 1, expanded: 1, waypoints: [from, { x, z, level }], hops: [] };
+            }
+        }
+
         const ctx = this.buildSearchContext(from, toRaw, opts);
 
         const cardinal = this.cardinalGoals(toRaw);
@@ -751,8 +771,11 @@ export class PathFinder {
         }
         const walk = (x: number, z: number): number =>
             Math.max(0, Math.max(Math.abs(x - goal.x), Math.abs(z - goal.z)) - slack);
-        const pending = this.longRangeEdges
-            .concat(ctx.teleFromStart.map(edge => ({ from: ctx.startId, edge })))
+        // Why: returning to the start can only improve a cast if the path changed its essence return.
+        const shortcuts = this.hasEssenceEntries
+            ? this.longRangeEdges.concat(ctx.teleFromStart.map(edge => ({ from: ctx.startId, edge })))
+            : this.longRangeEdges;
+        const pending = shortcuts
             .filter(({ edge }) => this.edgeAllowedOnPath(edge, ctx, 0))
             .map(({ from, edge }) => ({
                 x: nodeX(from),
@@ -810,7 +833,7 @@ export class PathFinder {
         const heuristic = this.buildHeuristic(toRaw, goals, ctx);
 
         gScore.set(start, 0);
-        open.push(heuristic(from.x, from.z) * 1048576, start);
+        open.push(0, start);
 
         let expanded = 0;
         while (open.size > 0) {
@@ -821,7 +844,11 @@ export class PathFinder {
             closed.add(current);
 
             const curTile = searchTileId(current);
+            const stairArrival = Math.floor(current / STAIR_ARRIVAL_STRIDE);
             const curEssence = searchEssenceIdx(current);
+            const g = gScore.get(current)!;
+            // Why: a cheaper unrestricted arrival at this tile can take every exit.
+            if (stairArrival && (gScore.get(current % STAIR_ARRIVAL_STRIDE) ?? Infinity) <= g) continue;
 
             if (goals.has(curTile)) {
                 return this.reconstruct(start, current, gScore.get(current)!, expanded, cameFrom, viaEdge);
@@ -838,7 +865,6 @@ export class PathFinder {
             const x = nodeX(curTile);
             const z = nodeZ(curTile);
             const level = nodeLevel(curTile);
-            const g = gScore.get(current)!;
             const escapingDangerZone = ctx.avoidZones ? tileInDangerZones(x, z, level, ctx.avoidZones) : false;
 
             const mask = this.exitMask(x, z, level);
@@ -853,7 +879,9 @@ export class PathFinder {
                     continue;
                 }
                 const neighborTile = nodeId(nx, nz, level);
-                const neighbor = packSearchKey(neighborTile, curEssence);
+                const walkKey = packSearchKey(neighborTile, curEssence);
+                if (stairArrival && (gScore.get(walkKey) ?? Infinity) <= g + 1) continue;
+                const neighbor = walkKey + stairArrival * STAIR_ARRIVAL_STRIDE;
                 if (closed.has(neighbor)) {
                     continue;
                 }
@@ -868,16 +896,13 @@ export class PathFinder {
                 open.push((tentative + heuristic(nx, nz)) * 1048576 - tentative, neighbor);
             }
 
-            const extras: CompiledEdge[] = [...(this.edges.get(curTile) ?? [])];
-            if (curTile === ctx.startId) {
-                extras.push(...ctx.teleFromStart);
+            let extras = this.edges.get(curTile);
+            if (curTile === ctx.startId && (current === start || curEssence !== ctx.startEssenceIdx)) {
+                extras = extras ? extras.concat(ctx.teleFromStart) : ctx.teleFromStart;
             }
-            // Why: a staircase with 2 ground-floor stand tiles is baked as one edge per combination, so up-then-back-down composes into a same-level teleport through the wall between them.
-            // Why: the server lands you on one tile only, so the walker climbs down on the wrong side and bounces; a stair hop back to the level it came from is refused.
-            // Why: a multi-storey climb keeps going the same way and is unaffected.
-            const cameFromLevel = Math.floor(current / STAIR_ORIGIN_STRIDE) - 1;
+            if (!extras) continue;
             for (const edge of extras) {
-                if (edge.kind === 'stair' && nodeLevel(edge.to) === cameFromLevel) {
+                if (stairArrival && edge.kind === 'stair' && stairArrival === this.stairExits.get(curTile * 4 + nodeLevel(edge.to))) {
                     continue;
                 }
                 if (avoidDoors && avoidDoors.has(`${edge.transport.locX}|${edge.transport.locZ}`)) {
@@ -897,7 +922,8 @@ export class PathFinder {
                 // Entry hop updates path session return (content sets exit_essence_mine_coord).
                 const sets = edge.requires?.essenceEntrySetsReturn;
                 const nextEssence = sets !== undefined ? essenceReturnStateIndex(sets) : curEssence;
-                const neighbor = packSearchKey(edge.to, nextEssence, edge.kind === 'stair' ? level : -1);
+                const arrival = edge.kind === 'stair' ? this.stairExits.get(edge.to * 4 + level) : 0;
+                const neighbor = packSearchKey(edge.to, nextEssence, arrival);
                 if (closed.has(neighbor)) {
                     continue;
                 }

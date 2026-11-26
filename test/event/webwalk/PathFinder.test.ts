@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import stairs from '#/bot/event/webwalk/data/stairEdges.json';
+import { loadDefaultNavEdges } from '#/bot/event/webwalk/loadTransportGraph.js';
 import { PathFinder, type TransportEdgeData } from '#/bot/event/webwalk/PathFinder.js';
 import { isolatedLandingFinder } from '../../lib/navCollision.js';
 
@@ -65,6 +66,21 @@ describe('PathFinder A* heuristic with transport shortcuts (#335)', () => {
         }
     });
 
+    test('an adjacent walk still respects its exit, expansion budget and danger zones', () => {
+        const start = { x: 12, z: 10, level: 0 };
+        const goal = { ...start, x: 13 };
+        const zone = { minX: 13, maxX: 13, minZ: 10, maxZ: 10 };
+        const finder = new PathFinder(fullyWalkablePack(0));
+        expect(finder.findPath(start, goal)).toMatchObject({ ok: false, reason: 'unreachable' });
+
+        const open = new PathFinder(v2Pack().bytes);
+        expect(open.findPath(start, goal, { maxExpansions: 0 })).toMatchObject({ ok: false, expanded: 1 });
+        expect(open.findPath(start, goal, { avoidZones: [zone], maxExpansions: 1 })).toMatchObject({ ok: false });
+        expect(open.findPath(start, goal, { maxExpansions: 1 })).toEqual({
+            ok: true, cost: 1, expanded: 1, waypoints: [start, goal], hops: []
+        });
+    });
+
     test('follows chained shortcuts when the first landing is farther from the goal', () => {
         const finder = new PathFinder(fullyWalkablePack());
         const from = { x: 5, z: 5, level: 0 };
@@ -78,6 +94,29 @@ describe('PathFinder A* heuristic with transport shortcuts (#335)', () => {
         expect(finder.findPath(from, to, { maxExpansions: 10 })).toMatchObject({ ok: true, cost: 22 });
     });
 
+    const caster = {
+        members: true, skills: { magic: 25 }, quests: {}, freeSlots: 25,
+        items: { 'Law rune': 1, 'Fire rune': 1, 'Air rune': 3 }
+    };
+
+    test('can return to the start and cast after an essence entry changes the available exit', () => {
+        const from = { x: 3201, z: 3430, level: 0 };
+        const entry = { ...from, x: 3202 };
+        const varrock = { x: 3213, z: 3424, level: 0 };
+        const goal = { ...varrock, x: 3243 };
+        const pack = fullyWalkablePack(0, 50, 53);
+        pack[13 + (entry.x & 63) * 64 + (entry.z & 63)] = 1 << 3;
+        const finder = new PathFinder(pack);
+        const tunnel = { kind: 'dungeon', locName: 'Tunnel', action: 'Enter' };
+        finder.addEdges([], [
+            { ...tunnel, from, to: entry, requires: { essenceEntrySetsReturn: 'sedridor' } },
+            { ...tunnel, from: varrock, to: goal, requires: { essenceExitReturn: 'sedridor' } }
+        ]);
+        expect(finder.findPath(from, goal, {
+            useTeleportCatalog: true, state: { ...caster, essenceExitReturn: 'aubury' }
+        })).toMatchObject({ ok: true, cost: 27, hops: [{ kind: 'dungeon' }, { kind: 'teleport' }, { kind: 'dungeon' }] });
+    });
+
     test.each([
         { useShortcuts: true, maxExpansions: 10, cost: 11, transport: { kind: 'shortcut' } },
         { useShortcuts: false, maxExpansions: 100, cost: 40, transport: { teleportId: 'varrock' } }
@@ -88,13 +127,7 @@ describe('PathFinder A* heuristic with transport shortcuts (#335)', () => {
         finder.addEdges([], [{ from: { ...from, x: 3202 }, to, locName: 'Tunnel', action: 'Enter', kind: 'shortcut' }]);
         const out = finder.findPath(from, to, {
             policy: { useShortcuts: opts.useShortcuts, useTeleports: true },
-            state: {
-                members: true,
-                skills: { magic: 25 },
-                quests: {},
-                freeSlots: 25,
-                items: { 'Law rune': 1, 'Fire rune': 1, 'Air rune': 3 }
-            },
+            state: caster,
             maxExpansions: opts.maxExpansions
         });
         expect(out).toMatchObject({ ok: true, cost: opts.cost });
@@ -132,6 +165,31 @@ describe('PathFinder level-change avoidance', () => {
         expect(finder.findPath(start, landing)).toMatchObject({ ok: true, cost: 6 });
         expect(finder.findPath(start, { x: 3033, z: 3363, level: 0 })).toMatchObject({ ok: false, reason: 'unreachable' });
         expect(finder.findPath({ x: 3035, z: 3364, level: 1 }, { ...landing, level: 0 })).toMatchObject({ ok: true, cost: 6 });
+    });
+
+    test("walking away and back cannot reverse the Wizards' Tower staircase", () => {
+        const start = { x: 3103, z: 3161, level: 1 };
+        const ground = { x: 3105, z: 3160, level: 0 };
+        const landing = { ...ground, level: 1 };
+        const wrong = { x: 3103, z: 3158, level: 1 };
+        const north = { ...ground, z: ground.z + 1 };
+        const pack = fullyWalkablePack(0, ground.x >> 6, ground.z >> 6);
+        pack.fill(0, 13);
+        for (const [p, exits] of [[start, 0], [ground, 1], [north, 1 << 2], [landing, 0], [wrong, 0]] as const) {
+            const base = 13 + p.level * (4096 + 512);
+            const index = (p.x & 63) * 64 + (p.z & 63);
+            pack[base + 4096 + (index >> 3)] |= 1 << (index & 7);
+            pack[base + index] = exits;
+        }
+        const finder = new PathFinder(pack);
+        loadDefaultNavEdges(finder);
+        expect(finder.findPath(start, wrong)).toMatchObject({ ok: false, reason: 'unreachable' });
+        expect(finder.findPath(start, landing)).toMatchObject({ ok: false, reason: 'unreachable' });
+        expect(finder.findPath(ground, wrong)).toMatchObject({ ok: false, reason: 'unreachable' });
+        expect(finder.findPath(ground, landing)).toMatchObject({ ok: true, cost: 6 });
+
+        finder.addEdges([], [{ ...stair, from: north, to: wrong }]);
+        expect(finder.findPath(start, wrong)).toMatchObject({ ok: true, cost: 13 });
     });
 
     test('keeps the dungeon arrival when an equal-cost stair arrival cannot descend', () => {

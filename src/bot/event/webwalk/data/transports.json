@@ -342,28 +342,6 @@
   },
   {
     "from": {
-      "x": 3105,
-      "z": 3160,
-      "level": 0
-    },
-    "to": {
-      "x": 3105,
-      "z": 3160,
-      "level": 1
-    },
-    "locName": "Staircase",
-    "action": "Climb-up",
-    "kind": "stair",
-    "locId": 1738,
-    "locX": 3103,
-    "locZ": 3159,
-    "debugName": "spiralstairs",
-    "options": [
-      "Climb-up"
-    ]
-  },
-  {
-    "from": {
       "x": 3106,
       "z": 3162,
       "level": 0
