@@ -1,11 +1,10 @@
 // Coin and skill gates fail open without a WorldState snapshot and fail closed with one.
+import { loadDefaultFinder } from '../../lib/navigation.js';
 import { describe, expect, test } from 'bun:test';
-import { gunzipSync } from 'fflate';
 import fs from 'node:fs';
 import path from 'node:path';
 
 import { PathFinder } from '#/bot/event/webwalk/PathFinder.js';
-import { loadDefaultNavEdges } from '#/bot/event/webwalk/loadTransportGraph.js';
 import { meetsRequires, isEdgeAllowed, hasGatingRequires } from '#/bot/event/webwalk/requires.js';
 import { specialRequiresAt } from '#/bot/event/webwalk/specialRequires.js';
 import type { WorldStateData } from '#/bot/event/webwalk/worldStateData.js';
@@ -19,13 +18,7 @@ function loadFinder(): PathFinder | null {
     if (!fs.existsSync(packPath)) {
         return null;
     }
-    let bytes: Uint8Array = new Uint8Array(fs.readFileSync(packPath));
-    if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-        bytes = new Uint8Array(gunzipSync(bytes));
-    }
-    const finder = new PathFinder(bytes as Uint8Array);
-    loadDefaultNavEdges(finder);
-    return finder;
+    return loadDefaultFinder(packPath);
 }
 
 describe('requires without WorldState (pack fail-open)', () => {

@@ -1,24 +1,13 @@
+import { loadDefaultFinder } from '../../lib/navigation.js';
 import fs from 'node:fs';
 import path from 'node:path';
 
 import { describe, expect, test } from 'bun:test';
-import { gunzipSync } from 'fflate';
 
 import { PathFinder, type NavPoint } from '#/bot/event/webwalk/PathFinder.js';
-import { loadDefaultNavEdges } from '#/bot/event/webwalk/loadTransportGraph.js';
 
 const PACK_PATH = path.join(process.cwd(), 'out/collision.lcnav.gz');
 const HAS_COLLISION_PACK = fs.existsSync(PACK_PATH);
-
-function loadFinder(): PathFinder {
-    let bytes: Uint8Array = new Uint8Array(fs.readFileSync(PACK_PATH));
-    if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-        bytes = new Uint8Array(gunzipSync(bytes));
-    }
-    const finder = new PathFinder(bytes);
-    loadDefaultNavEdges(finder);
-    return finder;
-}
 
 /** The 2x2 tree the Seers gathering run chops; loc 1276 sits at (2722,3481) and covers (2723,3482). */
 const SEERS_TREE: NavPoint = { x: 2722, z: 3481, level: 0 };
@@ -39,7 +28,7 @@ const besideTree = (t: NavPoint): boolean =>
 // Why: be solid. That left the search with no goal, and the radius-5 fallback then called any walkable tile
 // Why: within five "arrived", which the walker refused and logged as "unreachable beyond".
 describe.skipIf(!HAS_COLLISION_PACK)('approaching a loc bigger than one tile', () => {
-    const finder = HAS_COLLISION_PACK ? loadFinder() : (null as unknown as PathFinder);
+    const finder = HAS_COLLISION_PACK ? loadDefaultFinder(PACK_PATH) : (null as unknown as PathFinder);
 
     test("the Seers tree's own square and its neighbours are all solid", () => {
         for (const b of SEERS_TREE_BODY) {

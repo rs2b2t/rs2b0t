@@ -1,16 +1,11 @@
 /** Derive level-1 platform connections and bridge routes. Run: bun tools/nav/upass-platform-route.ts */
+import { readCollisionPack } from '../lib/readCollisionPack.js';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { gunzipSync } from 'fflate';
-
 import { PathFinder, type NavPoint } from '#/bot/event/webwalk/PathFinder.js';
 
-let bytes: Uint8Array = new Uint8Array(fs.readFileSync('out/collision.lcnav.gz'));
-if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-    bytes = gunzipSync(bytes);
-}
-const finder = new PathFinder(bytes);
+const finder = new PathFinder(readCollisionPack('out/collision.lcnav.gz'));
 
 const MAPS = path.join(process.env.HOME ?? '', 'code/rs2b2t-content/maps');
 const bridges: NavPoint[] = [];

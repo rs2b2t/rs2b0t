@@ -1,12 +1,11 @@
+import { loadDefaultFinder } from '../../lib/navigation.js';
 import fs from 'node:fs';
 import path from 'node:path';
 
 import { describe, expect, test } from 'bun:test';
-import { gunzipSync } from 'fflate';
 
 import transports from '#/bot/event/webwalk/data/transports.json';
-import { PathFinder, type NavPoint, type TransportEdgeData } from '#/bot/event/webwalk/PathFinder.js';
-import { loadDefaultNavEdges } from '#/bot/event/webwalk/loadTransportGraph.js';
+import { type NavPoint, type TransportEdgeData } from '#/bot/event/webwalk/PathFinder.js';
 import { richTransportQuestMap } from '#/bot/event/webwalk/transportQuestReqs.js';
 import { emptyWorldStateData, type WorldStateData } from '#/bot/event/webwalk/worldStateData.js';
 import { CLUE_DB } from '#/bot/api/ai/clues/data/cluedb.js';
@@ -56,16 +55,6 @@ describe("the Gu'Tanoth battlement", () => {
 const PACK_PATH = path.join(process.cwd(), 'out/collision.lcnav.gz');
 const HAS_COLLISION_PACK = fs.existsSync(PACK_PATH);
 
-function loadFinder(): PathFinder {
-    let bytes: Uint8Array = new Uint8Array(fs.readFileSync(PACK_PATH));
-    if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-        bytes = new Uint8Array(gunzipSync(bytes));
-    }
-    const finder = new PathFinder(bytes);
-    loadDefaultNavEdges(finder);
-    return finder;
-}
-
 const SKILLS = Object.fromEntries(
     ['agility', 'attack', 'strength', 'defence', 'hitpoints', 'magic'].map(s => [s, 99])
 );
@@ -86,7 +75,7 @@ describe.skipIf(!HAS_COLLISION_PACK)('the ogre city dig', () => {
         const dig = CLUE_DB[OGRE_CITY_DIG]!.coord!;
         expect(dig).toEqual({ x: 2542, z: 3031, level: 0 });
 
-        const route = loadFinder().findPath(CATHERBY, dig, { state: kitted(true), useTeleportCatalog: false });
+        const route = loadDefaultFinder(PACK_PATH).findPath(CATHERBY, dig, { state: kitted(true), useTeleportCatalog: false });
         expect(route.ok).toBe(true);
         if (!route.ok) {
             return;
@@ -102,7 +91,7 @@ describe.skipIf(!HAS_COLLISION_PACK)('the ogre city dig', () => {
     // Why: route has to be pruned at plan time rather than walked to a wall the guard will not let it over.
     test('an account without Watch Tower is not routed there at all', () => {
         const dig = CLUE_DB[OGRE_CITY_DIG]!.coord!;
-        expect(loadFinder().findPath(CATHERBY, dig, { state: kitted(false), useTeleportCatalog: false }).ok).toBe(false);
+        expect(loadDefaultFinder(PACK_PATH).findPath(CATHERBY, dig, { state: kitted(false), useTeleportCatalog: false }).ok).toBe(false);
     }, 120_000);
 
     test('it is no longer allowlisted as a destination the pack cannot reach', () => {

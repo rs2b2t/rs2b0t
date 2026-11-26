@@ -1,8 +1,6 @@
 /** Check Biohazard stand tiles from each leg's starting region.
  * Why: mourner HQ needs quest crossings and stair edges; nearby walkable tiles may still be unreachable. */
-import fs from 'node:fs';
-
-import { gunzipSync } from 'fflate';
+import { readCollisionPack } from '../lib/readCollisionPack.js';
 
 import doorsJson from '../../src/bot/event/webwalk/data/doors.json';
 import stairsJson from '../../src/bot/event/webwalk/data/stairEdges.json';
@@ -10,11 +8,7 @@ import transportsJson from '../../src/bot/event/webwalk/data/transports.json';
 import { PathFinder, type DoorEdgeData, type NavPoint } from '../../src/bot/event/webwalk/PathFinder.js';
 import { BIO_TILE } from '../../src/bot/api/ai/quests/defs/biohazard/areas.js';
 
-let bytes: Uint8Array = new Uint8Array(fs.readFileSync('out/collision.lcnav.gz'));
-if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-    bytes = gunzipSync(bytes);
-}
-const finder = new PathFinder(bytes);
+const finder = new PathFinder(readCollisionPack('out/collision.lcnav.gz'));
 finder.addEdges(doorsJson as DoorEdgeData[], transportsJson as never, stairsJson);
 
 // Why: the HQ door is SCRIPT_REFUSED; only the quest crossing enters this region.

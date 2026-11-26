@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { collisionPack } from '../../lib/syntheticCollisionPack.js';
 import { gunzipSync } from 'fflate';
 import { existsSync, readFileSync } from 'node:fs';
 import { PathFinder } from '#/bot/event/webwalk/PathFinder.js';
@@ -6,12 +7,7 @@ import { loadDefaultNavEdges } from '#/bot/event/webwalk/loadTransportGraph.js';
 import { emptyWorldStateData, type WorldStateData } from '#/bot/event/webwalk/worldStateData.js';
 
 function fixture(): PathFinder {
-    const pack = new Uint8Array(10 + 3 + 4096 + 512);
-    pack.set([0x4c, 0x43, 0x4e, 0x56, 1, 1, 0, 0, 1, 0, 39, 51, 1]);
-    for (const x of [2556, 2559]) for (const z of [3299, 3300]) {
-        const index = (x & 63) * 64 + (z & 63);
-        pack[13 + 4096 + (index >> 3)] |= 1 << (index & 7);
-    }
+    const pack = collisionPack([{ x: 2556, z: 3299 }], [{ x: 2556, z: 3300 }], [{ x: 2559, z: 3299 }], [{ x: 2559, z: 3300 }]);
     const finder = new PathFinder(pack);
     loadDefaultNavEdges(finder);
     return finder;
@@ -51,16 +47,7 @@ for (const [Biohazard, allowed] of [['not_started', true], ['started', false], [
     test(`the garden mud patch is ${allowed ? 'open' : 'closed'} with Biohazard ${Biohazard}`, () => {
         const from = { x: 2566, z: 3330, level: 0 };
         const to = { x: 2562, z: 9737, level: 0 };
-        const size = 3 + 4096 + 512;
-        const pack = new Uint8Array(10 + 2 * size);
-        pack.set([0x4c, 0x43, 0x4e, 0x56, 1, 1, 0, 0, 2, 0]);
-        for (const [i, tile] of [from, to].entries()) {
-            const offset = 10 + i * size;
-            pack.set([tile.x >> 6, tile.z >> 6, 1], offset);
-            const index = (tile.x & 63) * 64 + (tile.z & 63);
-            pack[offset + 3 + 4096 + (index >> 3)] |= 1 << (index & 7);
-        }
-        const finder = new PathFinder(pack);
+        const finder = new PathFinder(collisionPack([from], [to]));
         loadDefaultNavEdges(finder);
         const state = { ...complete, quests: { ...complete.quests, Biohazard }, items: { Spade: 1 } };
         expect(finder.findPath(from, to, { state }).ok).toBe(allowed);

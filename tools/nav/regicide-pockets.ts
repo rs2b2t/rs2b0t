@@ -7,9 +7,8 @@
 //   bun tools/nav/regicide-pockets.ts            # report
 //   bun tools/nav/regicide-pockets.ts --bake     # rewrite src/bot/api/ai/quests/defs/regicide/seams.ts
 
+import { readCollisionPack } from '../lib/readCollisionPack.js';
 import fs from 'node:fs';
-
-import { gunzipSync } from 'fflate';
 
 import { PathFinder, type NavPoint } from '#/bot/event/webwalk/PathFinder.js';
 import { loadDefaultNavEdges } from '#/bot/event/webwalk/loadTransportGraph.js';
@@ -20,11 +19,7 @@ const ENGINE = process.env.ENGINE_DIR ?? `${process.env.HOME}/code/rs2b2t-engine
 const BAKE = process.argv.includes('--bake');
 const OUT = 'src/bot/api/ai/quests/defs/regicide/seams.ts';
 
-let bytes: Uint8Array = new Uint8Array(fs.readFileSync('out/collision.lcnav.gz'));
-if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-    bytes = gunzipSync(bytes);
-}
-const finder = new PathFinder(bytes);
+const finder = new PathFinder(readCollisionPack('out/collision.lcnav.gz'));
 loadDefaultNavEdges(finder);
 
 /** Quest stand tiles used to name discovered pockets. */

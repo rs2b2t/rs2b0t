@@ -2,9 +2,7 @@
  * Why: the three lever bits affect four interlocking doors excluded from the nav graph; disjoint room bounds let mineRegion classify tiles. */
 
 //   bun tools/nav/crest-mine-derive.ts
-import fs from 'node:fs';
-
-import { gunzipSync } from 'fflate';
+import { readCollisionPack } from '../lib/readCollisionPack.js';
 
 import { PathFinder } from '#/bot/event/webwalk/PathFinder.js';
 
@@ -19,11 +17,7 @@ for (let i = 0; i < args.length; i++) {
     }
 }
 
-let bytes: Uint8Array = new Uint8Array(fs.readFileSync(packPath));
-if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-    bytes = gunzipSync(bytes);
-}
-const finder = new PathFinder(bytes);
+const finder = new PathFinder(readCollisionPack(packPath));
 
 /** quest_crest.constant: crest_north_room_lever / _north_lever / _south_lever. */
 const NR = 1, N = 2, S = 4;

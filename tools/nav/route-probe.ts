@@ -4,9 +4,7 @@
 //   bun tools/nav/route-probe.ts --from 3222,3218,0 --to 2965,3378,0 --explain
 //   bun tools/nav/route-probe.ts --from 3019,9849,0 --to 2965,3378,0 --explain
 //   bun tools/nav/route-probe.ts --from 3222,3218,0 --to 3213,3424,0 --tele --magic 99 --runes
-import fs from 'node:fs';
-
-import { gunzipSync } from 'fflate';
+import { readCollisionPack } from '../lib/readCollisionPack.js';
 
 import { PathFinder, type NavPoint } from '#/bot/event/webwalk/PathFinder.js';
 import { loadDefaultNavEdges } from '#/bot/event/webwalk/loadTransportGraph.js';
@@ -53,12 +51,7 @@ for (let i = 0; i < args.length; i++) {
     }
 }
 
-let bytes: Uint8Array = new Uint8Array(fs.readFileSync(packPath));
-if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-    bytes = gunzipSync(bytes);
-}
-
-const finder = new PathFinder(bytes);
+const finder = new PathFinder(readCollisionPack(packPath));
 loadDefaultNavEdges(finder);
 console.log(
     `pack: ${finder.mapsquares} mapsquares, ${finder.doorEdges} door edges, ${finder.transportEdges} transport edges (members=${finder.members})`

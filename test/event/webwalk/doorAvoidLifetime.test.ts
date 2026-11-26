@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, mock, spyOn, test } from 'bun:test';
+import { collisionPack } from '../../lib/syntheticCollisionPack.js';
 
 import { reader } from '#/bot/adapter/ClientAdapter.js';
 import { LoopingBot } from '#/bot/api/bot/Bot.js';
@@ -21,18 +22,7 @@ const executor = Object.getPrototypeOf(WalkExecutor);
 let now: number;
 
 function finder(): PathFinder {
-    const bytes = new Uint8Array(10 + 3 + 4096 + 512);
-    bytes.set([0x4c, 0x43, 0x4e, 0x56, 1, 1]);
-    new DataView(bytes.buffer).setUint16(8, 1, true);
-    bytes[10] = inside.x >> 6;
-    bytes[11] = inside.z >> 6;
-    bytes[12] = 1;
-    const walk = bytes.subarray(13 + 4096);
-    for (const tile of [inside, outside]) {
-        const index = (tile.x & 63) * 64 + (tile.z & 63);
-        walk[index >> 3] |= 1 << (index & 7);
-    }
-    const result = new PathFinder(bytes);
+    const result = new PathFinder(collisionPack([inside], [outside]));
     result.addEdges([], transports as TransportEdgeData[]);
     return result;
 }

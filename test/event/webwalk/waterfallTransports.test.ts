@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { segmentPack } from '../../lib/syntheticCollisionPack.js';
 import { PathFinder, type TransportEdgeData } from '#/bot/event/webwalk/PathFinder.js';
 import transports from '#/bot/event/webwalk/data/transports.json';
 
@@ -41,83 +42,15 @@ const EXPECTED = [
     }
 ] as const satisfies readonly TransportEdgeData[];
 
-const DIRS = [
-    [0, 1],
-    [1, 0],
-    [0, -1],
-    [-1, 0],
-    [1, 1],
-    [1, -1],
-    [-1, -1],
-    [-1, 1]
-] as const;
-
-type Point = readonly [x: number, z: number];
-
-function key(x: number, z: number): string {
-    return `${x}|${z}`;
-}
-
-function line(tiles: Set<string>, from: Point, to: Point): void {
-    let [x, z] = from;
-    tiles.add(key(x, z));
-    while (x !== to[0] || z !== to[1]) {
-        x += Math.sign(to[0] - x);
-        z += Math.sign(to[1] - z);
-        tiles.add(key(x, z));
-    }
-}
-
-/**
- * A tiny collision pack with four disconnected islands matching the live exit
- * topology. Only the curated instance transports can connect those islands.
- */
 function waterfallExitPack(): Uint8Array {
-    const tiles = new Set<string>();
-    line(tiles, [2603, 9913], [2604, 9913]);
-    line(tiles, [2604, 9913], [2604, 9901]);
-    line(tiles, [2566, 9901], [2567, 9861]);
-    line(tiles, [2567, 9861], [2575, 9861]);
-    tiles.add(key(2511, 3463));
-    line(tiles, [2527, 3413], [2530, 3413]);
-
-    const bySquare = new Map<string, Point[]>();
-    for (const tile of tiles) {
-        const [x, z] = tile.split('|').map(Number);
-        const squareKey = key(x >> 6, z >> 6);
-        const square = bySquare.get(squareKey) ?? [];
-        square.push([x, z]);
-        bySquare.set(squareKey, square);
-    }
-
-    const perSquare = 3 + 4096 + 512;
-    const bytes = new Uint8Array(10 + bySquare.size * perSquare);
-    bytes.set([0x4c, 0x43, 0x4e, 0x56, 1, 1]);
-    new DataView(bytes.buffer).setUint16(8, bySquare.size, true);
-
-    let pos = 10;
-    for (const [squareKey, squareTiles] of bySquare) {
-        const [mx, mz] = squareKey.split('|').map(Number);
-        bytes[pos++] = mx;
-        bytes[pos++] = mz;
-        bytes[pos++] = 1;
-        const exits = bytes.subarray(pos, pos + 4096);
-        pos += 4096;
-        const walk = bytes.subarray(pos, pos + 512);
-        pos += 512;
-
-        for (const [x, z] of squareTiles) {
-            const index = (x & 63) * 64 + (z & 63);
-            walk[index >> 3] |= 1 << (index & 7);
-            for (let direction = 0; direction < DIRS.length; direction++) {
-                const [dx, dz] = DIRS[direction];
-                if (tiles.has(key(x + dx, z + dz))) {
-                    exits[index] |= 1 << direction;
-                }
-            }
-        }
-    }
-    return bytes;
+    return segmentPack([
+        [{ x: 2603, z: 9913 }, { x: 2604, z: 9913 }],
+        [{ x: 2604, z: 9913 }, EXPECTED[0].from],
+        [EXPECTED[0].to, { x: 2567, z: 9861 }],
+        [{ x: 2567, z: 9861 }, EXPECTED[1].from],
+        [EXPECTED[1].to],
+        [EXPECTED[2].to, { x: 2530, z: 3413 }]
+    ]);
 }
 
 function sameEdge(actual: TransportEdgeData, expected: TransportEdgeData): boolean {

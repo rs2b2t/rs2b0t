@@ -1,8 +1,7 @@
 /** Report crossing locs bordering each Underground Pass waypoint pocket. Run: bun tools/nav/upass-seams.ts [--maps ~/code/rs2b2t-content/maps] [--pack out/collision.lcnav.gz] */
+import { readCollisionPack } from '../lib/readCollisionPack.js';
 import fs from 'node:fs';
 import path from 'node:path';
-
-import { gunzipSync } from 'fflate';
 
 import { PathFinder, type NavPoint } from '#/bot/event/webwalk/PathFinder.js';
 
@@ -158,11 +157,7 @@ function readLocs(keep: (id: number) => boolean): Placed[] {
     return out;
 }
 
-let bytes: Uint8Array = new Uint8Array(fs.readFileSync(PACK));
-if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-    bytes = gunzipSync(bytes);
-}
-const finder = new PathFinder(bytes);
+const finder = new PathFinder(readCollisionPack(PACK));
 const locs = readLocs(id => SEAMS[id] !== undefined);
 const opLocs = readLocs(id => OP_LOCS.has(id));
 console.log(`${locs.length} seam loc(s) and ${opLocs.length} op-bearing loc(s) placed across the pass`);
