@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, jest, mock, spyOn, test } from 'bun:test
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import BotClient from '#/bot/runtime/BotClient.js';
-import { RenderGate } from '#/bot/runtime/RenderGate.js';
+import { RenderGate, RenderGateController } from '#/bot/runtime/RenderGate.js';
 import Pix8 from '#/client/graphics/Pix8.js';
 import PixMap from '#/client/graphics/PixMap.js';
 import { Client } from '#/client/shell/Client.js';
@@ -154,6 +154,36 @@ test('standalone client keeps its 35 ms title animation', async () => {
     clock.advanceTimersByTime(70);
     expect(putImageData).toHaveBeenCalledTimes(4);
     client.unloadTitle();
+});
+
+test('unparking after a hidden tick waits for the next rail tick', () => {
+    const gate = new RenderGateController();
+    gate.setMode('hidden');
+    gate.backgroundIntervalMs = 1000;
+    const flames = new TitleFlames([]);
+    const start = performance.now();
+    const draws: number[] = [];
+    flames.renderFlames = () => draws.push(performance.now() - start);
+    flames.start(gate);
+    clock.advanceTimersByTime(35);
+    gate.setMode('background');
+    clock.advanceTimersByTime(1050);
+    flames.close();
+    expect(draws).toEqual([70, 1085]);
+});
+
+test('a late focused callback resumes on the original tick grid', () => {
+    const start = Date.now();
+    let lateness = 0;
+    spyOn(performance, 'now').mockImplementation(() => Date.now() - start + lateness);
+    const flames = new TitleFlames([]);
+    const draws: number[] = [];
+    flames.renderFlames = () => draws.push(performance.now());
+    flames.start(new RenderGateController());
+    lateness = 48;
+    clock.advanceTimersByTime(140 - lateness);
+    flames.close();
+    expect(draws).toEqual([83, 105, 140]);
 });
 
 test('unloading while title progress is pending leaves no animation timer', async () => {
