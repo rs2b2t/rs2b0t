@@ -11,6 +11,7 @@ import { Skills } from '../../../../skills/Skills.js';
 import { GroundItems } from '../../../../grounditems/GroundItems.js';
 import { Locs } from '../../../../locs/Locs.js';
 import { Traversal } from '../../../../walking/Traversal.js';
+import { CLAY_ROCK_IDS, IRON_ROCK_IDS, COAL_ROCK_IDS } from '../../../../../data/miningRocks.js';
 import Tile from '../../../../../geometry/Tile.js';
 import { talkThrough } from '../../exec/primitives.js';
 import { openBankLeg } from '../../exec/steps.js';
@@ -172,8 +173,6 @@ async function mineFor(rockIds: readonly number[], item: string, want: number, a
     return now >= want;
 }
 
-const ROCKS = { clay: [2108, 2109], iron: [2092, 2093], coal: [2096, 2097] } as const;
-
 // Why: bronze pickaxes lie on the ground free, one 13 tiles from the Falador bank; Nurmof is at the bottom of the Dwarven Mine, so he's last.
 const PICKAXE_SPAWNS: readonly Tile[] = [
     new Tile(3009, 3342, 0), // Falador, south of the bank
@@ -292,7 +291,7 @@ async function makeUnfiredBowl(log: (m: string) => void): Promise<boolean> {
     if (!(await ensurePickaxe(log))) {
         return false;
     }
-    return mineFor(ROCKS.clay, SUPPLY_ITEM.CLAY, 1, SUPPLY_LOC.CLAY_ROCKS, log);
+    return mineFor(CLAY_ROCK_IDS, SUPPLY_ITEM.CLAY, 1, SUPPLY_LOC.CLAY_ROCKS, log);
 }
 
 /** Nails are 2 to a steel bar and nothing sells bars: 1 iron and 2 coal per bar at the Falador furnace, then the Dwarven Mine anvil. */
@@ -329,9 +328,9 @@ export async function smithNails(need: number, log: (m: string) => void): Promis
             return false;
         }
         if (ore() < bars) {
-            return mineFor(ROCKS.iron, SUPPLY_ITEM.IRON_ORE, bars, SUPPLY_LOC.IRON_ROCKS, log);
+            return mineFor(IRON_ROCK_IDS, SUPPLY_ITEM.IRON_ORE, bars, SUPPLY_LOC.IRON_ROCKS, log);
         }
-        return mineFor(ROCKS.coal, SUPPLY_ITEM.COAL, bars * 2, SUPPLY_LOC.COAL_ROCKS, log);
+        return mineFor(COAL_ROCK_IDS, SUPPLY_ITEM.COAL, bars * 2, SUPPLY_LOC.COAL_ROCKS, log);
     }
 
     if (ore() > 0 && coal() >= 2) {

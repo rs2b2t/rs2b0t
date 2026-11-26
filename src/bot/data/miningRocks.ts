@@ -1,14 +1,18 @@
+export const CLAY_ROCK_IDS = [2108, 2109] as const;
+export const IRON_ROCK_IDS = [2092, 2093] as const;
+export const COAL_ROCK_IDS = [2096, 2097] as const;
+
 /**
  * Ore loc ids from `rocks.loc` and `loc.pack`; all render as "Rocks", so ore and depleted states are distinguished by id.
  * Why: Dwarven iron spans two clusters, so `findRock` prefers the cluster nearest the player.
  */
 export const ROCK_TYPES: Record<string, number[]> = {
-    Clay: [2108, 2109],
+    Clay: [...CLAY_ROCK_IDS],
     Copper: [2090, 2091],
     Tin: [2094, 2095],
-    Iron: [2092, 2093], // ironrock1 / ironrock2 (mining_rock_fast, respawnrate ~6)
+    Iron: [...IRON_ROCK_IDS], // ironrock1 / ironrock2 (mining_rock_fast, respawnrate ~6)
     Silver: [2100, 2101],
-    Coal: [2096, 2097],
+    Coal: [...COAL_ROCK_IDS],
     Gold: [2098, 2099],
     Mithril: [2102, 2103],
     Adamantite: [2104, 2105],
