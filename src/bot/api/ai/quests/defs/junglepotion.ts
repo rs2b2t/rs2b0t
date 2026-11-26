@@ -31,12 +31,13 @@ interface JunglePotionHerb extends JungleHerb {
 
 export const JUNGLE_HERBS: readonly JunglePotionHerb[] = [
     {
-        ...SNAKE_WEED, key: 'snake weed', op: 'Search', at: new Tile(2760, 3014, 0)
+        ...SNAKE_WEED, key: 'snake weed', op: 'Search',
+        at: new Tile(2760, 3014, 0), stand: Tile.from(SNAKE_WEED.stand)
     },
     {
         ...ARDRIGAL, key: 'ardrigal', op: 'Search',
         // The palm is 2x2 over (2870-2871, 3115-3116); only its west side is open.
-        at: new Tile(2870, 3115, 0)
+        at: new Tile(2870, 3115, 0), stand: Tile.from(ARDRIGAL.stand)
     },
     {
         key: 'sito foil', name: 'Sito foil', id: 1530, unidId: 1529,
