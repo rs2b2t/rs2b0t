@@ -1,12 +1,12 @@
 import { categoryOf } from '../../api/market/categories.js';
 import { HERBS } from '../../data/herbs.js';
 import { ITEM_DB } from '../../data/itemdb.js';
-import { SECONDARIES } from '../PotionMaker/PotionMakerLogic.js';
+import { POTION_SECONDARIES } from '../../data/potionSecondaries.js';
 
 const supplies = new Set([
     ...ITEM_DB.filter(item => item.consumable || item.slot === 'quiver').map(item => item.name.toLowerCase()),
     ...HERBS.flatMap(herb => [herb.name.toLowerCase(), '#' + herb.unidId]),
-    ...SECONDARIES.map(item => item.name.toLowerCase()),
+    ...POTION_SECONDARIES.map(item => item.name.toLowerCase()),
     'herb', 'unfinished potion', 'coal', 'clay', 'soft clay', 'limestone', 'limestone brick', 'plank',
     'thread', 'feather', 'fishing bait', 'flax', 'bow string', 'wool', 'ball of wool', 'arrow shaft', 'headless arrow',
     'cannonball', 'cow hide', 'leather', 'hard leather', 'dragonhide', 'vial', 'vial of water', 'unicorn horn',

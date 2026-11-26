@@ -3,8 +3,8 @@ import { HERBS } from '../../data/herbs.js';
 import { RUNES } from '../../data/runeCraftLocations.js';
 import { ITEM_DB } from '../../data/itemdb.js';
 import { wildernessLevelAt } from '../../event/webwalk/wilderness.js';
-import { SECONDARIES, SHIELD_NAME } from '../HerbloreSecondaries/HerbloreSecondariesLogic.js';
-import { GEMS } from '../GemCutter/GemCutterLogic.js';
+import { SECONDARY_SOURCES, DRAGONFIRE_SHIELD } from '../../data/herbloreSecondarySources.js';
+import { GEMS } from '../../data/gems.js';
 import { FISH, POTIONS, WOODS } from './catalog.js';
 import { trainingTier } from './combatProgression.js';
 import { combatPlan } from './combat.js';
@@ -79,14 +79,14 @@ export function supplierProduction(snapshot: LevelerSnapshot, memory: SessionMem
     }
 
     const travelFood = ['Shark', 'Swordfish', 'Lobster', 'Salmon', 'Trout', 'Shrimps'].find(name => stockOf(s, name) >= 6);
-    for (const secondary of SECONDARIES) {
+    for (const secondary of SECONDARY_SOURCES) {
         if (secondary.name === "Toad's legs" || secondary.mode === 'buy' || secondary.mode === 'buy_grind') continue;
         const wilderness = !!secondary.anchor && wildernessLevelAt(secondary.anchor) > 0;
         if (wilderness && !s.wilderness || secondary.takeFood && !travelFood) continue;
         const food = secondary.takeFood ? travelFood : undefined;
         const needs: Requirement[] = food ? [{ item: food, count: 6, carry: 6 }] : [];
         if (secondary.bank && secondary.bank.x < 2840) needs.push({ item: 'Coins', count: 200, carry: 200 });
-        if (secondary.needShield) needs.push({ ...tool(SHIELD_NAME), equip: true });
+        if (secondary.needShield) needs.push({ ...tool(DRAGONFIRE_SHIELD), equip: true });
         if (secondary.keyName) needs.push(tool(secondary.keyName));
         if (secondary.toolName) needs.push(tool(secondary.toolName));
         if (secondary.grindFrom) needs.push(material(secondary.grindFrom));

@@ -3,7 +3,7 @@ import { categoryOf } from '../../api/market/categories.js';
 import { HERBS } from '../../data/herbs.js';
 import { ITEM_DB } from '../../data/itemdb.js';
 import { NAME_COLLISIONS } from '../../data/nameCollisions.js';
-import { SECONDARIES } from '../HerbloreSecondaries/HerbloreSecondariesLogic.js';
+import { SECONDARY_SOURCES } from '../../data/herbloreSecondarySources.js';
 import { dumpables, type Dumpable } from '../JiveMarketDumper/logic.js';
 import { marketLotSize } from './marketLots.js';
 import { RUNE_TARGETS } from './runes.js';
@@ -12,7 +12,7 @@ export const ECONOMY_SALE = 'sell-seers-surplus';
 export const ECONOMY_SALE_LOT = 1000;
 const reserves = new Map<string, number>();
 for (const item of ['Coal', 'Copper ore', 'Tin ore', 'Iron ore', 'Silver ore', 'Gold ore', 'Mithril ore', 'Adamantite ore', 'Runite ore',
-    'Limpwurt root', 'Unicorn horn', ...SECONDARIES.map(secondary => secondary.name)]) reserves.set(item.toLowerCase(), 100);
+    'Limpwurt root', 'Unicorn horn', ...SECONDARY_SOURCES.map(secondary => secondary.name)]) reserves.set(item.toLowerCase(), 100);
 for (const [item, count] of Object.entries(RUNE_TARGETS)) reserves.set(item.toLowerCase(), count);
 
 const gear = new Set(ITEM_DB.filter(item => tradeable(item.id) && item.slot).map(item => item.name.toLowerCase()));

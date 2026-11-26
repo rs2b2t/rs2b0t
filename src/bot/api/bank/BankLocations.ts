@@ -112,6 +112,14 @@ export const BANK_LOCATIONS: BankLocation[] = [
 
 export { bankDistance };
 
+export function bankTile(bankName: string): Tile {
+    const loc = BANK_LOCATIONS.find(b => b.name === bankName);
+    if (!loc) {
+        throw new Error(`bankTile: unknown bank '${bankName}'`);
+    }
+    return loc.tile;
+}
+
 /** The tile a bank is walked to, its approach when it has one. */
 export function approachOf(bank: BankLocation): Tile {
     return bank.approach ?? bank.tile;
