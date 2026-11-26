@@ -1,7 +1,7 @@
 import { expect, mock, spyOn, test } from 'bun:test';
 import { VaultPrompt } from '#/bot/multibox/VaultPrompt.js';
 import { ProfileVault, vault } from '#/bot/multibox/ProfileVault.js';
-import { applyBoxStorage, collectBoxStorage, parseProfileFile, serializeProfileFile } from '#/bot/multibox/ProfileTransfer.js';
+import { applyBoxStorage, collectBoxStorage, parseProfileFile, PROFILE_IMPORT_REVISION_KEY, serializeProfileFile } from '#/bot/multibox/ProfileTransfer.js';
 import { Credentials } from '#/bot/runtime/Credentials.js';
 import { SettingsPanel } from '#/bot/multibox/SettingsPanel.js';
 import { ResourcePanel } from '#/bot/multibox/ResourcePanel.js';
@@ -1027,6 +1027,51 @@ test('restore clears settings for profiles added by a peer before replacement', 
                 store.removeItem(peerKey);
                 store.removeItem(winnerKey);
             }
+        }
+    });
+});
+
+test.each(['selectedScript', 'creds'])('import loads the slot when only the requested %s fits in session storage', async suffix => {
+    await withWall('local', async wall => {
+        const panel = openSettings();
+        const profile = { username: 'sample', password: 'fixture', tab: 'Fleet' };
+        const key = 'rs2b0t:sample:' + suffix;
+        const value = suffix === 'creds' ? JSON.stringify({ username: 'sample', password: 'fixture' }) : 'Miner';
+        const backup = { profiles: [profile], tabs: ['Fleet'], activeTab: 'Fleet', storage: { sample: { [suffix]: value } } };
+        const previousRevision = localStorage.getItem(PROFILE_IMPORT_REVISION_KEY);
+        const session = Object.getOwnPropertyDescriptor(globalThis, 'sessionStorage')!;
+        const limited = new Storage();
+        const setItem = limited.setItem.bind(limited);
+        Object.defineProperty(limited, 'setItem', {
+            value(key: string, value: string) {
+                if (limited.length && limited.getItem(key) === null) throw new DOMException('session full', 'QuotaExceededError');
+                setItem(key, value);
+            }
+        });
+        Object.defineProperty(globalThis, 'sessionStorage', { configurable: true, value: limited });
+        try {
+            localStorage.removeItem(PROFILE_IMPORT_REVISION_KEY);
+            if (suffix === 'selectedScript') applyBoxStorage({}, []);
+            const beforeImport = localStorage.getItem(PROFILE_IMPORT_REVISION_KEY);
+            await panel.importText(serializeProfileFile(backup));
+            expect(panel.el.querySelector('#mbx-settings-error')!.textContent).toBe('');
+            expect(wall.slots().map(s => [s.username, s.tab])).toEqual([['sample', 'Fleet']]);
+            const reopened = new ProfileVault();
+            expect(await reopened.unlock('test-passphrase')).toBe(true);
+            expect({ ...reopened.snapshot(), storage: collectBoxStorage(['sample']) }).toEqual(backup);
+            expect(limited.getItem(key)).toBe(value);
+            expect(localStorage.getItem(key)).toBe(value);
+            const revision = localStorage.getItem(PROFILE_IMPORT_REVISION_KEY);
+            expect(revision).toBeTruthy();
+            expect(revision).not.toBe(beforeImport);
+            const edited = suffix === 'creds' ? JSON.stringify({ username: 'sample', password: 'updated' }) : 'Fisher';
+            limited.setItem(key, edited);
+            expect(collectBoxStorage(['sample']).sample[suffix]).toBe(edited);
+        } finally {
+            Object.defineProperty(globalThis, 'sessionStorage', session);
+            localStorage.removeItem(key);
+            if (previousRevision === null) localStorage.removeItem(PROFILE_IMPORT_REVISION_KEY);
+            else localStorage.setItem(PROFILE_IMPORT_REVISION_KEY, previousRevision);
         }
     });
 });

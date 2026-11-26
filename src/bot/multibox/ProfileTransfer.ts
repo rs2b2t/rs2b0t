@@ -1,7 +1,7 @@
 import { allowsLegacyBoxItem, boxKey, boxSuffix, disableLegacySetProfileSettings, isLegacySetProfileSetting, isSetProfile, legacyBoxSuffix } from '../runtime/box.js';
 import type { Profile } from './ProfileVault.js';
 import { desktopStorage, isEncodedSettingKey, storeKeys } from '../runtime/desktopStorage.js';
-import { keepSessionCredentials, PROFILE_IMPORT_REVISION_KEY, recordCredentialRevision } from '../runtime/profileImportSession.js';
+import { keepSessionCredentials, PROFILE_IMPORT_REVISION_KEY, recordCredentialRevision, releaseImportMarkers, sessionRevision, setSessionRevision } from '../runtime/profileImportSession.js';
 
 export { PROFILE_IMPORT_REVISION_KEY };
 
@@ -124,6 +124,7 @@ export function applyBoxStorage(storage: BoxStorageMap, wipe: string[]): void {
         stores.push(sessionStorage);
     }
     for (const store of stores) {
+        if (!desktopStorage && store === globalThis.sessionStorage) releaseImportMarkers(boxes.map(({ user }) => boxKey('creds', user)));
         for (const key of storeKeys(store)) {
             if (boxes.some(({ user, prefix }) => boxSuffix(key, prefix, user) !== null)) {
                 store.removeItem(key);
@@ -141,7 +142,7 @@ export function applyBoxStorage(storage: BoxStorageMap, wipe: string[]): void {
         for (const { user } of boxes) {
             recordCredentialRevision(boxKey('creds', user), Object.hasOwn(storage[user] ?? {}, 'creds') ? revision : null);
         }
-        sessionStorage.setItem(PROFILE_IMPORT_REVISION_KEY, revision);
+        setSessionRevision(PROFILE_IMPORT_REVISION_KEY, revision);
         localStorage.setItem(PROFILE_IMPORT_REVISION_KEY, revision);
     }
 }
@@ -149,7 +150,7 @@ export function applyBoxStorage(storage: BoxStorageMap, wipe: string[]): void {
 export function pendingSettingsImport(): string | null {
     if (desktopStorage || typeof localStorage === 'undefined' || typeof sessionStorage === 'undefined') return null;
     const revision = localStorage.getItem(PROFILE_IMPORT_REVISION_KEY);
-    return revision === sessionStorage.getItem(PROFILE_IMPORT_REVISION_KEY) ? null : revision;
+    return revision === sessionRevision(PROFILE_IMPORT_REVISION_KEY) ? null : revision;
 }
 
 export function refreshImportedSettings(users: string[], revision: string): void {
@@ -166,7 +167,7 @@ export function refreshImportedSettings(users: string[], revision: string): void
         }
         if (isCredential) recordCredentialRevision(key, value === null ? null : revision);
     }
-    sessionStorage.setItem(PROFILE_IMPORT_REVISION_KEY, revision);
+    setSessionRevision(PROFILE_IMPORT_REVISION_KEY, revision);
 }
 
 function readStore(store: Storage, usernames: string[], out: BoxStorageMap, legacy?: LegacySettings, desktopSession = false): void {

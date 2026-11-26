@@ -40,16 +40,16 @@ export const Credentials = {
             this.clear();
             return;
         }
-        const next = { username, password };
-        const user = boxId();
-        const key = boxKey('creds', user);
         const current = this.get();
-        const changed = current?.username !== username || current.password !== password;
+        if (current?.username === username && current.password === password) return;
+        const next = { username, password };
         if (hasStorage) {
-            if (changed) sessionStorage.setItem(key, JSON.stringify(next));
+            const user = boxId();
+            const key = boxKey('creds', user);
+            sessionStorage.setItem(key, JSON.stringify(next));
             if (user) recordCredentialRevision(key);
         }
-        if (changed) notify(next);
+        notify(next);
     },
 
     clear(): void {

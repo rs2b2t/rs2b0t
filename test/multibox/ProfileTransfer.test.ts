@@ -3,6 +3,7 @@ import { Loadouts } from '#/bot/api/loadout/loadoutStore.js';
 import { readProfileScript, readScriptSettings, replaceScriptSettings, storedScripts, writeProfileScript } from '#/bot/multibox/RosterStorage.js';
 import { SettingsPanel } from '#/bot/multibox/SettingsPanel.js';
 import type { Profile } from '#/bot/multibox/ProfileVault.js';
+import { Credentials } from '#/bot/runtime/Credentials.js';
 import { SettingsStore } from '#/bot/runtime/Settings.js';
 import { boxKey } from '#/bot/runtime/box.js';
 
@@ -287,6 +288,22 @@ describe('ProfileTransfer', () => {
             expect(JSON.parse(result.stdout.toString())).toEqual({ exportReads: 1, importReads: 1 });
         });
     }
+
+    test('observing unchanged credentials after a peer import exports the replacement password', () => {
+        const username = 'sample';
+        const creds = (password: string) => JSON.stringify({ username, password });
+        inBox(username, () => Credentials.save(username, 'previous'));
+        const session = Object.getOwnPropertyDescriptor(globalThis, 'sessionStorage')!;
+        Object.defineProperty(globalThis, 'sessionStorage', { configurable: true, value: new Storage() });
+        try {
+            applyBoxStorage({ sample: { creds: creds('replacement') } }, [username]);
+        } finally {
+            Object.defineProperty(globalThis, 'sessionStorage', session);
+        }
+
+        inBox(username, () => Credentials.save(username, 'previous'));
+        expect(collectBoxStorage([username])).toEqual({ sample: { creds: creds('replacement') } });
+    });
 
     test('a reloaded tab exports the imported script before its storage event', async () => {
         const session = Object.getOwnPropertyDescriptor(globalThis, 'sessionStorage')!;
