@@ -18,11 +18,11 @@ function hasSavedProfiles(key, raw) {
             const profiles = value.filter(p => typeof p?.username === 'string' && p.username.length > 0 && typeof p.password === 'string');
             return profiles.length > 0 && profiles.every(p => p.world === undefined || [1, 2, 3].includes(p.world));
         }
-        if (key !== vaultKey || value?.v !== 1 || (value.kdf !== undefined && value.kdf !== 'PBKDF2-SHA256')) return false;
+        if (key !== vaultKey || value?.v !== 1) return false;
         if (!Number.isInteger(value.iter) || value.iter <= 0 || value.iter > 0xffffffff) return false;
-        return typeof value.salt === 'string' && atob(value.salt).length === 16
-            && typeof value.iv === 'string' && atob(value.iv).length === 12
-            && typeof value.ct === 'string' && atob(value.ct).length > 16;
+        if (typeof value.salt !== 'string' || typeof value.iv !== 'string' || typeof value.ct !== 'string') return false;
+        atob(value.salt);
+        return atob(value.iv).length > 0 && atob(value.ct).length > 16;
     } catch {
         return false;
     }
@@ -127,4 +127,4 @@ function sharedStorage(dir) {
     };
 }
 
-module.exports = { sharedStorage };
+module.exports = { profileKeys, sharedStorage };

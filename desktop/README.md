@@ -46,8 +46,9 @@ Point at another server with `bun run start -- --server=https://your-host`, or
 `LCB_SERVER=… bun run start`.
 
 On first migration, the desktop looks for profiles on the configured origin, then
-`http://localhost:8081`. When both origins have the same setting, the 8081 value
-wins. If an older migration left the chooser empty, run
+`http://localhost:8081`. The panel still migrates script settings and selections
+from the configured origin when the shared store has no value for them.
+If an older migration left the chooser empty, run
 `B0T_RECOVER_LEGACY_PROFILES=1 bun run start -- --server=http://localhost:8082`
 once from `desktop/`, using the origin where you saved the profiles. On an
 initialized store, recovery imports only profiles. It can replace an empty

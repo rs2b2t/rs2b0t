@@ -2,7 +2,7 @@ const fs = require('node:fs');
 const { join, resolve } = require('node:path');
 const { tmpdir } = require('node:os');
 const { createHash } = require('node:crypto');
-const { sharedStorage } = require('./shared-storage.cjs');
+const { profileKeys, sharedStorage } = require('./shared-storage.cjs');
 const legacyOrigin = 'http://localhost:8081';
 
 function prepareStorage(app, serverUrl) {
@@ -58,7 +58,10 @@ function prepareStorage(app, serverUrl) {
                 const hidden = new BrowserWindow({ show: false });
                 try {
                     await hidden.loadURL(migrationUrl);
-                    return await hidden.webContents.executeJavaScript('Object.fromEntries(Object.entries(localStorage).filter(([key]) => key.startsWith("rs2b0t:")))');
+                    const entries = source === legacyOrigin
+                        ? 'Object.entries(localStorage).filter(([key]) => key.startsWith("rs2b0t:"))'
+                        : `${JSON.stringify(profileKeys)}.map(key => [key, localStorage[key]])`;
+                    return await hidden.webContents.executeJavaScript(`Object.fromEntries(${entries})`);
                 } finally {
                     hidden.destroy();
                     session.defaultSession.protocol.unhandle(scheme);

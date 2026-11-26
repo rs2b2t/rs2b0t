@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from 'bun:test';
+import { createCipheriv, pbkdf2Sync, randomBytes } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -165,12 +166,28 @@ test('profiles on the configured origin take precedence over the 8081 fallback',
 
 test('settings from 8081 keep precedence when the fallback supplies the roster', async () => {
     const script = 'rs2b0t:fixture-0:selectedScript';
+    const rail = 'rs2b0t:multibox:railHidden';
     const { launch, store } = fixture({
         [custom]: { [script]: 'Miner' },
-        [original]: { [accounts]: JSON.stringify(profiles), [script]: 'Fisher' }
+        [original]: { [accounts]: JSON.stringify(profiles), [script]: 'Fisher', [rail]: '1' }
     });
     expect(await launch(custom)).toEqual(profiles);
     expect(store.getItem(script)).toBe('Fisher');
+    expect(store.getItem(rail)).toBe('1');
+});
+
+test('first migration leaves custom-origin settings for the panel and imports only its profiles', async () => {
+    const rail = 'rs2b0t:multibox:railHidden';
+    const setting = 'rs2b0t:set:Miner:ore';
+    const script = 'rs2b0t:fixture:selectedScript';
+    const { launch, store, rendererStorage } = fixture({
+        [custom]: { [rail]: '1', [setting]: 'Tin', [script]: 'Miner', [accounts]: JSON.stringify(profiles) }
+    });
+    expect(await launch(custom)).toEqual(profiles);
+    expect(rendererStorage()).toMatchObject({ [setting]: 'Tin', [script]: 'Miner' });
+    expect(store.keys()).toEqual([accounts]);
+    await launch(custom);
+    expect(store.getItem(rail)).toBeNull();
 });
 
 test('explicit recovery survives a vault setup that already read the empty store', async () => {
@@ -244,7 +261,7 @@ test.each([
     ['truncated JSON', '[{"username":'],
     ['invalid roster', '[{"name":"fixture"}]'],
     ['missing ciphertext', '{"v":1,"iter":310000}'],
-    ['invalid vault encoding', '{"v":1,"iter":310000,"salt":"!","iv":"!","ct":"!"}']
+    ['invalid salt encoding', '{"v":1,"iter":310000,"salt":"!","iv":"AAAAAAAAAAAAAAAA","ct":"AAAAAAAAAAAAAAAAAAAAAAAA"}']
 ])('recovery skips %s and imports the populated fallback', async (_, value) => {
     const { launch, store } = fixture({ [custom]: { [vault]: value }, [original]: { [accounts]: JSON.stringify(profiles) } });
     store.seed({});
@@ -271,6 +288,25 @@ test('a migrated encrypted vault can be unlocked on the next launch', async () =
     await launch(custom);
     await launch(custom);
     expect(store.snapshot()).toEqual({ [vault]: saved });
+    const reopened = new ProfileVault(store);
+    expect(await reopened.unlock('fixture')).toBe(true);
+    expect(reopened.list()).toEqual(profiles.map(profile => ({ ...profile, tab: 'Main' })));
+});
+
+test.each<[string, boolean, number]>([
+    ['first migration', false, 12],
+    ['explicit recovery', true, 16]
+])('a fallback vault with a 32-byte salt unlocks after %s and relaunch', async (_, recover, ivLength) => {
+    const salt = randomBytes(32);
+    const iv = randomBytes(ivLength);
+    const iter = 310000;
+    const cipher = createCipheriv('aes-256-gcm', pbkdf2Sync('fixture', salt, iter, 32, 'sha256'), iv);
+    const ct = Buffer.concat([cipher.update(JSON.stringify(profiles)), cipher.final(), cipher.getAuthTag()]);
+    const saved = JSON.stringify({ v: 1, kdf: 'PBKDF2-SHA256', iter, salt: salt.toString('base64'), iv: iv.toString('base64'), ct: ct.toString('base64') });
+    const { launch, store } = fixture({ [original]: { [vault]: saved } });
+    if (recover) store.seed({});
+    await launch(custom, recover);
+    await launch(custom);
     const reopened = new ProfileVault(store);
     expect(await reopened.unlock('fixture')).toBe(true);
     expect(reopened.list()).toEqual(profiles.map(profile => ({ ...profile, tab: 'Main' })));
