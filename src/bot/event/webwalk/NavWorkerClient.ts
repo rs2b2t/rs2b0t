@@ -34,7 +34,7 @@ export class NavWorkerClient {
 
     private nextId = 1;
     private readonly pending = new Map<number, PendingRequest>();
-    private readonly readyWaiters: (() => void)[] = [];
+    private readonly readyWaiters = new Set<() => void>();
 
     isReady(): boolean {
         return this.state === 'ready';
@@ -68,27 +68,42 @@ export class NavWorkerClient {
     }
 
     async findPath(from: NavPoint, to: NavPoint, opts: FindPathOpts & { state: WorldStateData }): Promise<PathResult> {
+        const timeoutMs = opts.timeoutMs ?? FIND_TIMEOUT_MS;
+        const expiresAt = Date.now() + timeoutMs;
+        const timedOut = (): PathResult => ({ ok: false, reason: `path request timed out after ${timeoutMs}ms`, expanded: 0 });
         this.start();
 
         if (this.state === 'starting') {
-            await new Promise<void>(resolve => this.readyWaiters.push(resolve));
+            const startupFinished = await new Promise<boolean>(resolve => {
+                const wake = () => {
+                    clearTimeout(timer);
+                    resolve(true);
+                };
+                const timer = setTimeout(() => {
+                    this.readyWaiters.delete(wake);
+                    resolve(false);
+                }, expiresAt - Date.now());
+                this.readyWaiters.add(wake);
+            });
+            if (!startupFinished) return timedOut();
         }
         if (this.state !== 'ready' || !this.worker) {
             return { ok: false, reason: `navigator unavailable: ${this.failReason || this.state}`, expanded: 0 };
         }
 
-        const timeoutMs = opts.timeoutMs ?? FIND_TIMEOUT_MS;
+        const remainingMs = expiresAt - Date.now();
+        if (remainingMs <= 0) return timedOut();
         const id = this.nextId++;
         return new Promise<PathResult>(resolve => {
             const timer = setTimeout(() => {
                 this.pending.delete(id);
-                resolve({ ok: false, reason: `path request timed out after ${timeoutMs}ms`, expanded: 0 });
-            }, timeoutMs);
+                resolve(timedOut());
+            }, remainingMs);
             this.pending.set(id, { resolve, timer });
             this.worker!.postMessage({
                 type: 'path',
                 id,
-                expiresAt: Date.now() + timeoutMs,
+                expiresAt,
                 from,
                 to,
                 avoid: opts.avoidDoors,
@@ -137,10 +152,10 @@ export class NavWorkerClient {
     }
 
     private flushReadyWaiters(): void {
-        const waiters = this.readyWaiters.splice(0);
-        for (const waiter of waiters) {
+        for (const waiter of this.readyWaiters) {
             waiter();
         }
+        this.readyWaiters.clear();
     }
 }
 
