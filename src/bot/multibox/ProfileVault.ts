@@ -204,9 +204,16 @@ export class ProfileVault {
         return parsePayload(new TextDecoder().decode(plaintext));
     }
 
+    private compareAndSet(expected: string | null, value: string): boolean {
+        if (this.shared) return desktopStorage!.compareAndSet(KEY, expected, value);
+        if (this.storage!.getItem(KEY) !== expected) return false;
+        this.storage!.setItem(KEY, value);
+        return true;
+    }
+
     private sharedChange(change: (draft: ProfileVault) => Promise<void>, retry = true): Promise<void> {
         const generation = this.persistGeneration;
-        const write = this.sharedTail.then(async () => {
+        const update = async () => {
             for (let attempt = 0; attempt < 8; attempt++) {
                 this.assertUnlocked();
                 const expected = this.storage!.getItem(KEY);
@@ -230,7 +237,7 @@ export class ProfileVault {
                 draft.active = payload.activeTab;
                 await change(draft);
                 if (generation !== this.persistGeneration) throw new Error('Vault changed before the accounts were saved.');
-                if (desktopStorage!.compareAndSet(KEY, expected, values.get(KEY)!)) {
+                if (this.compareAndSet(expected, values.get(KEY)!)) {
                     this.cache = draft.cache;
                     this.customTabs = draft.customTabs;
                     this.active = draft.active;
@@ -239,7 +246,9 @@ export class ProfileVault {
                 if (!retry) break;
             }
             throw new Error('Saved accounts changed in another instance; try again.');
-        });
+        };
+        if (!this.shared) return this.queueReplacement(update);
+        const write = this.sharedTail.then(update);
         this.sharedTail = write.catch(() => {});
         return write;
     }
@@ -334,7 +343,10 @@ export class ProfileVault {
     }
 
     adoptGroupState(): { tabs: string[]; assignments: Map<string, string> } {
-        const assignments = new Map(this.assertUnlocked().map(p => [p.username, p.tab ?? MAIN_TAB]));
+        const assignments = new Map<string, string>();
+        for (const profile of this.assertUnlocked()) {
+            if (!assignments.has(profile.username)) assignments.set(profile.username, profile.tab ?? MAIN_TAB);
+        }
         this.sharedTabs = { tabs: [...this.customTabs], assignments };
         return this.sharedTabs;
     }
@@ -364,16 +376,22 @@ export class ProfileVault {
         return this.persistReplacement(() => payload);
     }
 
-    private async persistReplacement(build: () => VaultPayload): Promise<void> {
+    private persistReplacement(build: () => VaultPayload): Promise<void> {
         const generation = this.persistGeneration;
-        const write = Promise.all([this.worldTail, this.persistTail]).then(async () => {
-            if (generation !== this.persistGeneration) return;
+        return this.queueReplacement(async () => {
             const payload = build();
             await this.persist(undefined, payload);
             if (generation !== this.persistGeneration) return;
             this.cache = payload.profiles;
             this.customTabs = payload.tabs;
             this.active = payload.activeTab;
+        });
+    }
+
+    private async queueReplacement(change: () => Promise<void>): Promise<void> {
+        const generation = this.persistGeneration;
+        const write = Promise.all([this.worldTail, this.persistTail]).then(() => {
+            if (generation === this.persistGeneration) return change();
         });
         this.pendingReplacement = write.catch(() => {});
         try {
@@ -499,6 +517,17 @@ export class ProfileVault {
         await this.persist();
     }
 
+    async saveActiveTab(tab: string): Promise<void> {
+        if (this.pendingReplacement) return this.afterReplacement(() => this.saveActiveTab(tab));
+        this.assertUnlocked();
+        const select = async (draft: ProfileVault) => {
+            if (tab === draft.active || (tab !== MAIN_TAB && !draft.customTabs.includes(tab))) return;
+            draft.active = tab;
+            await draft.persist();
+        };
+        return this.storage ? this.sharedChange(select) : select(this);
+    }
+
     async saveTabState(tabs: string[], tabByUser: ReadonlyMap<string, string>, activeTab?: string): Promise<void> {
         if (this.pendingReplacement) return this.afterReplacement(() => this.saveTabState(tabs, tabByUser, activeTab));
         if (this.shared) {
@@ -579,7 +608,7 @@ export class ProfileVault {
             const blob: StoredBlob = { v: 1, kdf: 'PBKDF2-SHA256', iter: ITER, salt: b64(salt), iv: b64(iv), ct: b64(new Uint8Array(ct)) };
             const encoded = JSON.stringify(blob);
             if (this.shared) {
-                if (!desktopStorage!.compareAndSet(KEY, expected ?? null, encoded)) throw new Error('Saved accounts changed in another instance; unlock the vault again.');
+                if (!this.compareAndSet(expected ?? null, encoded)) throw new Error('Saved accounts changed in another instance; unlock the vault again.');
             } else {
                 this.storage!.setItem(KEY, encoded);
             }

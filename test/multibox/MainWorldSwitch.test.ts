@@ -231,6 +231,23 @@ test.each([
     });
 });
 
+test('refresh keeps the first imported row for an exact duplicate username', async () => {
+    await withWall('local', async wall => {
+        const profiles = ['A', 'B'].map(tab => ({ username: 'fixture', password: 'fixture', tab }));
+        const backup = { profiles, tabs: ['A', 'B'], activeTab: 'B' };
+        await openSettings().importText(serializeProfileFile({ ...backup, storage: {} }));
+        const [slot] = wall.slots();
+        expect(slot.tab).toBe('A');
+        wall.controller.addTab('Stale');
+        window.dispatchEvent(new StorageEvent('storage', { key: 'rs2b0t:multibox:profiles' }));
+        await waitFor(() => !wall.controller.tabs().includes('Stale'));
+        expect(wall.slots().map(s => [s.id, s.tab])).toEqual([[slot.id, 'A']]);
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('test-passphrase')).toBe(true);
+        expect(reopened.snapshot()).toEqual(backup);
+    });
+});
+
 test('a mixed import keeps an omitted slot in Work and saves a reused slot moved there', async () => {
     await withWall('local', async wall => {
         const panel = openSettings();
@@ -493,6 +510,36 @@ test('loading Work from the chooser keeps it active after adding a tab and reope
         } finally {
             saves.mockRestore();
         }
+    });
+});
+
+test('loading Work from a stale chooser preserves a newer saved assignment', async () => {
+    await withWall('local', async wall => {
+        const bob = { username: 'bob', password: 'fixture', tab: 'Work' };
+        await openSettings().importText(serializeProfileFile({
+            profiles: [bob], tabs: ['Work', 'Fleet'], activeTab: 'Fleet', storage: {}
+        }));
+        wall.controller.remove(wall.slots()[0].id);
+        const key = 'rs2b0t:multibox:profiles';
+        const beforeAdd = localStorage.getItem(key);
+        expect(await wall.addTab('Local')).toBe(true);
+        await waitFor(() => localStorage.getItem(key) !== beforeAdd);
+        document.getElementById('mbx-add')!.click();
+        await waitFor(() => !!document.querySelector('.mbx-load-group'));
+        const group = document.querySelector<HTMLButtonElement>('.mbx-load-group')!;
+        expect(group.textContent).toBe('Load group: Work (1)');
+        const other = new ProfileVault();
+        expect(await other.unlock('test-passphrase')).toBe(true);
+        await other.assignGroup(['bob'], 'Fleet');
+        const beforeSelection = localStorage.getItem(key);
+        group.click();
+        expect(wall.controller.activeTab()).toBe('Work');
+        await waitFor(() => localStorage.getItem(key) !== beforeSelection);
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('test-passphrase')).toBe(true);
+        expect(reopened.snapshot()).toEqual({
+            profiles: [{ ...bob, tab: 'Fleet' }], tabs: ['Work', 'Fleet', 'Local'], activeTab: 'Work'
+        });
     });
 });
 

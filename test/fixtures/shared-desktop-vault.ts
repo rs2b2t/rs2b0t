@@ -97,6 +97,10 @@ try {
     await first.refresh();
     assert.equal(first.list().find(p => p.username === 'first')?.tab, 'Main');
     assert.equal(first.list().find(p => p.username === 'second')?.tab, 'Logs');
+    await second.assignGroup(['second'], 'Fleet');
+    await first.saveActiveTab('Logs');
+    assert.equal(await reopened.unlock('fixture-passphrase'), true);
+    assert.deepEqual(reopened.snapshot(), { ...second.snapshot(), activeTab: 'Logs' });
     first.reset();
     await second.refresh();
     assert.equal(second.status(), 'empty');

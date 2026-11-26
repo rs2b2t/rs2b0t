@@ -340,7 +340,10 @@ function boot(): void {
             if (tab) controller.setActiveTab(tab);
             controller.addGroup(profiles);
             renderRail();
-            if (tab) afterTabRestore(() => persistTabState(tab));
+            if (tab) afterTabRestore(() => {
+                if (vault.status() !== 'unlocked' || controller.activeTab() !== tab) return;
+                orderWrite = orderWrite.then(() => vault.saveActiveTab(tab)).catch(err => console.error('[rs2b0t] failed to save active tab', err));
+            });
         }
     });
     document.body.appendChild(chooser.el);
