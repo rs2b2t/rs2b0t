@@ -80,6 +80,14 @@ test('combat preparation preserves its next milestone before the hard farm minim
 });
 
 
+test('hard clue melee preparation uses its own goal when the general target is lower', () => {
+    const s = snapshot();
+    s.target = 10;
+    Object.assign(s.levels, { attack: 10, strength: 10, defence: 1 });
+    const plan = hardCluePlan(s, memory(), () => 0);
+    expect('script' in plan && plan.prerequisiteLevels).toEqual({ strength: 15 });
+});
+
 test('rejecting a Wilderness clue still prepares the hard kit before invoking the solver', () => {
     const s = snapshot(); s.stock['#2723'] = 1; s.stock.shark = 0; s.levels.cooking = 70;
     const plan = hardCluePlan(s, memory(), () => 0);

@@ -26,7 +26,7 @@ export function ownedClueId(stock: Record<string, number>, eligible: (id: number
 function train(s: LevelerSnapshot, levels: Record<string, number>, memory: SessionMemory, random: () => number): Result | null {
     const missing = Object.entries(levels).find(([skill, level]) => (s.levels[skill] ?? 1) < level);
     if (!missing) return null;
-    const step = isMeleeSkill(missing[0]) ? earlyMeleeStep(s.levels, s.target) : undefined;
+    const step = isMeleeSkill(missing[0]) ? earlyMeleeStep(s.levels, missing[1]) : undefined;
     const skill = step?.skill ?? missing[0];
     const level = step && skill !== missing[0] ? step.level : Math.min(step?.level ?? missing[1], missing[1]);
     const plan = methodFor({ ...s, target: level, allowQuests: true }, skill, memory, random);

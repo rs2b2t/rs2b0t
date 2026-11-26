@@ -44,6 +44,8 @@ if (parallelism) {
     let nextId = 0;
     contextBridge.exposeInMainWorld('rs2b0tLoginCoordinator', {
         parallelism: Number(parallelism.split('=')[1]),
+        claimProfile: name => ipcRenderer.sendSync('rs2b0t-login', 0, 'claimProfile', name) === true,
+        releaseProfile: name => ipcRenderer.sendSync('rs2b0t-login', 0, 'releaseProfile', name),
         register() {
             const id = ++nextId;
             let waiting = false;

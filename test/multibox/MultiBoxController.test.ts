@@ -57,6 +57,27 @@ describe('MultiBoxController', () => {
         expect(ops.handles[60].mode).toBe('focused');
     });
 
+    test('group loads respect accounts already open in another wall', () => {
+        const profiles = new Set<string>();
+        const coordinator = Object.assign(new LoginCoordinator(), {
+            claimProfile(name: string) {
+                if (profiles.has(name)) return false;
+                profiles.add(name);
+                return true;
+            },
+            releaseProfile(name: string) { profiles.delete(name); }
+        });
+        const first = new MultiBoxController(new FakeOps(), coordinator);
+        const second = new MultiBoxController(new FakeOps(), coordinator);
+        const alice = { username: 'Alice', password: '' };
+        first.addGroup([alice]);
+        second.addGroup([{ ...alice, username: 'alice' }]);
+        expect(second.snapshot()).toHaveLength(0);
+        first.remove(first.snapshot()[0].id);
+        second.addGroup([alice]);
+        expect(second.snapshot()).toHaveLength(1);
+    });
+
     test('roster access rejects missing, loading and switching slots', async () => {
         const ops = new FakeOps();
         const c = new MultiBoxController(ops);

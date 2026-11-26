@@ -11,5 +11,7 @@ export interface LoginCoordination {
 }
 
 export interface LoginCoordinationRegistry {
+    claimProfile?(username: string): boolean;
+    releaseProfile?(username: string): void;
     register(): LoginCoordination;
 }

@@ -11,7 +11,7 @@ test('walls share login pacing and release queued slots on renderer exit', () =>
         const mainFrame = { url: 'http://localhost/wall' };
         const contents = Object.assign(new EventEmitter(), { mainFrame, ipc: new EventEmitter() });
         logins.attach(contents, 'http://localhost');
-        const send = (action: string, delay?: number) => {
+        const send = (action: string, delay?: number | string) => {
             const event: { senderFrame: typeof mainFrame; returnValue: unknown } = { senderFrame: mainFrame, returnValue: null };
             contents.ipc.emit('rs2b0t-login', event, 1, action, delay);
             return event.returnValue;
@@ -20,12 +20,19 @@ test('walls share login pacing and release queued slots on renderer exit', () =>
     };
     const a = attach();
     const b = attach();
+    expect(a.send('claimProfile', 'alice')).toBe(true);
+    b.send('releaseProfile', 'alice');
+    expect(b.send('claimProfile', 'alice')).toBe(false);
+    a.send('releaseProfile', 'alice');
+    expect(b.send('claimProfile', 'alice')).toBe(true);
+    expect(a.send('claimProfile', 'bob')).toBe(true);
     expect(a.send('requestPermit')).toBe(true);
     expect(a.send('requestPermit')).toBe(false);
     expect(b.send('requestPermit')).toBe(false);
     expect(b.send('queueStatus')).toEqual({ position: 2, total: 2 });
     a.contents.emit('render-process-gone');
     expect(b.send('queueStatus')).toEqual({ position: 1, total: 1 });
+    expect(b.send('claimProfile', 'bob')).toBe(true);
     now = 1000;
     expect(b.send('requestPermit')).toBe(true);
     b.send('holdFor', 20000);

@@ -14,6 +14,7 @@ import { Inventory, InvItem } from '#/bot/api/inventory/Inventory.js';
 import { Skills } from '#/bot/api/skills/Skills.js';
 import { Traversal } from '#/bot/api/walking/Traversal.js';
 import { BotHost } from '#/bot/runtime/BotHost.js';
+import { SettingsBag } from '#/bot/runtime/Settings.js';
 import { ScriptRegistry } from '#/bot/runtime/ScriptRegistry.js';
 import { ScriptAborted, ScriptContext } from '#/bot/runtime/ScriptContext.js';
 import { ScriptRunner } from '#/bot/runtime/ScriptRunner.js';
@@ -629,6 +630,7 @@ test('blocked supplies are rechecked and training starts when supplies arrive', 
 
 test('reaching every target still finishes the leveler', async () => {
     const bot = new AccountLeveler();
+    bot.settings = new SettingsBag({ supplySeers: false });
     const finish = spyOn(bot, 'requestFinish').mockImplementation(() => {});
     const patches = [finish,
         spyOn(Game, 'sceneReady').mockReturnValue(true),
@@ -771,6 +773,7 @@ test('a banked clue gets the first activity even when shopping and training are 
 
 test('a routine bank check sorts the open bank before selecting work', async () => {
     const bot = new AccountLeveler();
+    bot.settings = new SettingsBag({ supplySeers: false });
     const sort = spyOn(bankSorting, 'sortBank').mockResolvedValue({ sorted: true, moves: 1, mode: 'swap', unmatched: [], reason: 'sorted' });
     const patches = [sort, spyOn(bot['supplies'], 'bank').mockResolvedValue(true), spyOn(Bank, 'close').mockResolvedValue(true),
         spyOn(Game, 'myName').mockReturnValue(null), spyOn(Bank, 'items').mockReturnValue([]), spyOn(Skills, 'level').mockReturnValue(70),
