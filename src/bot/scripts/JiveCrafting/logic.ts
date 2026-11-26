@@ -63,11 +63,15 @@ export interface PackState {
 
 export type Step = { kind: 'craft' } | { kind: 'bank' };
 
+function ingredientSets(j: Jewel, counts: Pick<PackState, 'bars' | 'gems'>): number {
+    return j.gem ? Math.min(counts.bars, counts.gems) : counts.bars;
+}
+
 export function craftable(pack: PackState, j: Jewel): number {
     if (!pack.mould) {
         return 0;
     }
-    return j.gem ? Math.min(pack.bars, pack.gems) : pack.bars;
+    return ingredientSets(j, pack);
 }
 
 /** One step per loop, read off the pack alone so a restart lands on the same choice. */
@@ -90,7 +94,7 @@ export function withdrawPlan(j: Jewel, mouldHeld: boolean, stock: (name: string)
     if (j.gem && gems < 1) {
         return { ok: false, reason: `the bank has no ${j.gem}` };
     }
-    const sets = Math.min(setsPerTrip(j), bars, j.gem ? gems : bars);
+    const sets = Math.min(setsPerTrip(j), ingredientSets(j, { bars, gems }));
     return { ok: true, mould: !mouldHeld, bars: sets, gems: j.gem ? sets : 0 };
 }
 
