@@ -1,3 +1,4 @@
+import { customStep, talkTo, waitForJournal } from '../engine/questSteps.js';
 import { Execution } from '../../../execution/Execution.js';
 import { Game } from '../../../game/Game.js';
 import { ChatDialog } from '../../../ui/dialogue/ChatDialog.js';
@@ -312,7 +313,7 @@ export function goblinMailGatherStep(snap: QuestSnapshot, need = 1): QuestStep {
         return makeMailSpace;
     }
     if (heldCoins >= GOBLIN_DIPLOMACY_QUEST_COIN_RESERVE) {
-        return { kind: 'custom', name: 'farm goblin mail', run: farmGoblinMail };
+        return customStep('farm goblin mail', farmGoblinMail);
     }
     if (heldCoins < GOBLIN_DIPLOMACY_COIN_TARGET && snap.bankCoins > 0) {
         return {
@@ -326,7 +327,7 @@ export function goblinMailGatherStep(snap: QuestSnapshot, need = 1): QuestStep {
             bank: DRAYNOR_BANK
         };
     }
-    return { kind: 'custom', name: `earn ${GOBLIN_DIPLOMACY_COIN_TARGET} gp`, run: earnGoblinDiplomacyCoins };
+    return customStep(`earn ${GOBLIN_DIPLOMACY_COIN_TARGET} gp`, earnGoblinDiplomacyCoins);
 }
 
 function bankedDyeSupplies(snap: QuestSnapshot, dye: 'Orange dye' | 'Blue dye'): QuestStep | null {
@@ -411,8 +412,8 @@ export function decide(snap: QuestSnapshot): QuestStep {
         resetGoblinMailCombat();
         return { kind: 'done' };
     }
-    if (snap.journal === 'unknown') { return { kind: 'wait', reason: 'quest journal not loaded' }; }
-    if (snap.journal === 'notStarted') { return { kind: 'talk', stop: BARTENDER }; }
+    if (snap.journal === 'unknown') { return waitForJournal(); }
+    if (snap.journal === 'notStarted') { return talkTo(BARTENDER); }
 
     const plainMail = qty(snap, 'goblin mail');
     const orangeMail = has(snap, 'orange goblin mail');
@@ -425,7 +426,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return { kind: 'useOn', item: 'Blue dye', targetKind: 'item', target: 'Goblin mail', anchor: GENERAL.anchor, product: 'Blue goblin mail' };
     }
 
-    return { kind: 'talk', stop: GENERAL };
+    return talkTo(GENERAL);
 }
 
 export const goblindiplomacy: QuestModule = {
@@ -439,8 +440,8 @@ export const goblindiplomacy: QuestModule = {
     grind: ['Goblin'],
     gather: {
         'goblin mail': goblinMailGatherStep,
-        'orange dye': snap => bankedDyeSupplies(snap, 'Orange dye') ?? ({ kind: 'custom', name: 'make orange dye', run: makeOrangeDye }),
-        'blue dye': snap => bankedDyeSupplies(snap, 'Blue dye') ?? ({ kind: 'custom', name: 'make blue dye', run: makeBlueDye })
+        'orange dye': snap => bankedDyeSupplies(snap, 'Orange dye') ?? (customStep('make orange dye', makeOrangeDye)),
+        'blue dye': snap => bankedDyeSupplies(snap, 'Blue dye') ?? (customStep('make blue dye', makeBlueDye))
     },
     decide
 };

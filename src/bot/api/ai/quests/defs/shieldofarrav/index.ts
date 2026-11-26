@@ -1,3 +1,4 @@
+import { customStep, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { Game } from '../../../../game/Game.js';
 import { QUESTS } from '../../data/quests.js';
 import { bankedId, heldId, type QuestModule, type QuestSnapshot, type QuestStep } from '../../engine/types.js';
@@ -32,14 +33,14 @@ export function resetGangCache(): void {
 
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     if (snap.journal === 'complete') {
         return { kind: 'done' };
     }
     const stage = snap.progress?.stage ?? snap.stage;
     if (stage === undefined) {
-        return { kind: 'wait', reason: 'quest stage not readable' };
+        return waitStep('quest stage not readable');
     }
 
     const mine = gang();
@@ -59,7 +60,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         if (bankedId(snap, SOA_ID.STORE_KEY) > 0) {
             return { kind: 'withdraw', items: [{ name: 'Key', qty: 1, id: SOA_ID.STORE_KEY }] };
         }
-        return { kind: 'custom', name: 'recover the Phoenix weapon-store key', run: recoverStoreKey };
+        return customStep('recover the Phoenix weapon-store key', recoverStoreKey);
     }
 
     const handoff = decideHandoff({

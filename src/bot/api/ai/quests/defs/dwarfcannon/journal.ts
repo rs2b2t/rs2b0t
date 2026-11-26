@@ -1,6 +1,5 @@
-import { Modals } from '../../../../ui/widgets/Modals.js';
+import { questProgressAt, readQuestJournal } from '../../journalReader.js';
 import { normalizeJournal as normalize } from '../../journalText.js';
-import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 
 // Why: stages 6 and 7 render identical journal text and the same step drives both: at 6 the first Inspect flips to 7, at 7 Inspect opens the repair menu.
@@ -86,19 +85,6 @@ export function parseDwarfCannonJournal(lines: readonly string[] | string): Ques
     return stage === undefined ? undefined : { stage, flags: readFlags(text) };
 }
 
-export async function readDwarfCannonProgress(): Promise<QuestProgress | undefined> {
-    const status = Quests.status(MCANNON_QUEST);
-    if (status === 'complete') {
-        return { stage: MC_STAGE.COMPLETE, flags: new Set() };
-    }
-    if (status === 'notStarted') {
-        return { stage: MC_STAGE.NOT_STARTED, flags: new Set() };
-    }
-    if (status !== 'inProgress') {
-        return undefined;
-    }
-
-    const progress = parseDwarfCannonJournal(await Quests.journal(MCANNON_QUEST));
-    await Modals.closeIfOpen();
-    return progress;
+export function readDwarfCannonProgress(): Promise<QuestProgress | undefined> {
+    return readQuestJournal(MCANNON_QUEST, MC_STAGE, parseDwarfCannonJournal, questProgressAt);
 }

@@ -2,7 +2,7 @@
 
 //   bun e2e/aio-skip-quest-432-live.ts [http://127.0.0.1:8888]
 import type { Page } from 'playwright-core';
-import { launchBrowser, positionalArgs } from './lib/harness.js';
+import { fail, launchBrowser, positionalArgs } from './lib/harness.js';
 import { cheatQuiet, mainlandAccount, startScript, teleTo } from './tutorial/harness.js';
 
 const args = positionalArgs(process.argv.slice(2), 'http://127.0.0.1:8888');
@@ -15,11 +15,6 @@ const QUEUE = [
     { id: 'runemysteries', name: 'Rune Mysteries Quest' },
     { id: 'doric', name: "Doric's Quest" }
 ] as const;
-
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
-}
 
 type LogLine = { time: number; level: string; msg: string };
 

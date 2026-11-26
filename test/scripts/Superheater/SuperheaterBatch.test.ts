@@ -116,3 +116,64 @@ test('a rejected superheat cast yields to the leveler on the next loop', async (
     await bot.loop();
     expect(cast).toHaveBeenCalledTimes(1);
 });
+
+async function startStaffTask(bot: Alcher | Superheater) {
+    const finish = mock(() => {});
+    bot.bindFinish(finish);
+    const log = spyOn(bot, 'log').mockImplementation(() => {});
+    const open = spyOn(bot, 'openBank').mockResolvedValue(true);
+    spyOn(bot, 'resolveBank').mockResolvedValue(true);
+    const delay = spyOn(Execution, 'delayUntil').mockResolvedValue(true);
+    spyOn(Skills, 'level').mockReturnValue(55);
+    spyOn(Skills, 'xp').mockReturnValue(0);
+    spyOn(Game, 'sceneReady').mockReturnValue(true);
+    spyOn(ChatDialog, 'canContinue').mockReturnValue(false);
+    spyOn(ChatDialog, 'isOpen').mockReturnValue(false);
+    const pending = spyOn(EventSignal, 'pending').mockReturnValue(false);
+    spyOn(Equipment, 'contains').mockReturnValue(false);
+    spyOn(Inventory, 'used').mockReturnValue(0);
+    spyOn(Inventory, 'count').mockReturnValue(0);
+    await bot.onStart();
+    return { finish, log, open, delay, pending };
+}
+
+test.each([Alcher, Superheater])('%p retries a stalled staff withdrawal until the bank confirms all fire staves are gone', async Child => {
+    const bot = new Child();
+    const { finish, log, open } = await startStaffTask(bot);
+    spyOn(Bank, 'count').mockImplementationOnce(() => 1).mockReturnValue(0);
+    const withdraw = spyOn(Bank, 'withdrawX').mockResolvedValue(false);
+    const ready = spyOn(Bank, 'waitReady').mockResolvedValueOnce(false).mockResolvedValue(true);
+    await bot.loop();
+    expect(withdraw).toHaveBeenCalledWith('Staff of fire', 1);
+    expect(ready).toHaveBeenCalledWith(3500);
+    expect(log).toHaveBeenCalledWith('withdraw of Staff of fire stalled but the bank list is still settling — retrying');
+    expect(finish).not.toHaveBeenCalled();
+    await bot.loop();
+    expect(finish).toHaveBeenCalledWith('no fire staff in the bank');
+    expect(open).toHaveBeenCalledTimes(2);
+    expect(withdraw).toHaveBeenCalledTimes(1);
+});
+
+test.each([Alcher, Superheater])('%p handles an event arriving while waiting for Wield', async Child => {
+    const bot = new Child();
+    const { delay, open, pending } = await startStaffTask(bot);
+    spyOn(Bank, 'count').mockImplementation(name => Number(name === 'Fire battlestaff'));
+    const withdraw = spyOn(Bank, 'withdrawX').mockResolvedValue(true);
+    const close = spyOn(Bank, 'close').mockResolvedValue(true);
+    delay.mockImplementation(async (_predicate, timeout) => {
+        expect(timeout).toBe(3000);
+        pending.mockReturnValue(true);
+        return false;
+    });
+    const equip = spyOn(Equipment, 'equip').mockResolvedValue(true);
+    await bot.loop();
+    expect(withdraw).toHaveBeenCalledWith('Fire battlestaff', 1);
+    expect(close).toHaveBeenCalledTimes(1);
+    if (Child === Superheater) {
+        expect(equip).not.toHaveBeenCalled();
+        expect(open).toHaveBeenCalledTimes(1);
+    } else {
+        expect(equip).toHaveBeenCalledWith('Fire battlestaff');
+        expect(open).toHaveBeenCalledTimes(2);
+    }
+});

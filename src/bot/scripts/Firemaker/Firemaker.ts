@@ -3,7 +3,7 @@ import { depositAllExcept } from '../../api/bank/Banking.js';
 import { LoopingBot } from '../../api/bot/Bot.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
 import { Traversal } from '../../api/walking/Traversal.js';
 import { Bank } from '../../api/bank/Bank.js';
@@ -63,7 +63,7 @@ export default class Firemaker extends LoopingBot {
     private pendingBankGeneration: number | null = null;
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
 
         this.spotName = this.settings.str('location', 'Varrock East');
         this.plot = FIRE_SPOTS[this.spotName];

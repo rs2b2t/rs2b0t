@@ -1,6 +1,6 @@
 import { LoopingBot } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { Game } from '../../api/game/Game.js';
+import { waitForPlayerTile } from '../../api/game/Game.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { Bank } from '../../api/bank/Bank.js';
 import { Banking } from '../../api/bank/Banking.js';
@@ -15,7 +15,7 @@ export default class FlourCollector extends LoopingBot {
     private status = 'starting';
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
         if (!(await Execution.delayUntil(() => Quests.status(MURDER_NAME) !== 'unknown', 10_000))) {
             ScriptRunner.stop('could not read Murder Mystery status');
             return;

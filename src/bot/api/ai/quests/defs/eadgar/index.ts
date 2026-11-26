@@ -1,3 +1,4 @@
+import { talkTo, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { Quests } from '../../../../ui/questlog/Quests.js';
 import { Skills } from '../../../../skills/Skills.js';
 import { QUESTS } from '../../data/quests.js';
@@ -78,7 +79,7 @@ function sourceRobe(snap: QuestSnapshot): QuestStep | null {
     if (banked(snap, ER_ITEM.DIRTY_ROBE) > 0) {
         return withdraw(snap, [{ name: ER_ITEM.DIRTY_ROBE.name, id: ER_ITEM.DIRTY_ROBE.id, qty: 1 }]);
     }
-    return { kind: 'talk', stop: TEGID_ROBE };
+    return talkTo(TEGID_ROBE);
 }
 
 /** The parrot Eadgar wants back in hand before it can be hidden. */
@@ -93,7 +94,7 @@ function parrotInHand(snap: QuestSnapshot): QuestStep | null {
         return withdraw(snap, [{ name: ER_ITEM.DRUNK_PARROT.name, id: ER_ITEM.DRUNK_PARROT.id, qty: 1 }]);
     }
     // Eadgar replaces the item when neither inventory nor bank has one.
-    return { kind: 'talk', stop: EADGAR_TALK };
+    return talkTo(EADGAR_TALK);
 }
 
 // Why: Burntmeat consumes only the carried dummy, and Eadgar supplies replacements.
@@ -107,7 +108,7 @@ function fakeManInHand(snap: QuestSnapshot): QuestStep | null {
     if (banked(snap, ER_ITEM.FAKE_MAN) > 0) {
         return withdraw(snap, [{ name: ER_ITEM.FAKE_MAN.name, id: ER_ITEM.FAKE_MAN.id, qty: 1 }]);
     }
-    return { kind: 'talk', stop: EADGAR_TALK };
+    return talkTo(EADGAR_TALK);
 }
 
 function sourceStoreroomKey(snap: QuestSnapshot): QuestStep | null {
@@ -126,13 +127,13 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return { kind: 'done' };
     }
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     if (stage === undefined) {
-        return { kind: 'wait', reason: "Eadgar's Ruse journal stage unavailable" };
+        return waitStep("Eadgar's Ruse journal stage unavailable");
     }
     if (stage === EADGAR_STAGE.NOT_STARTED && Quests.status(TROLL_QUEST) !== 'complete') {
-        return { kind: 'wait', reason: "Troll Stronghold must be complete before Eadgar's Ruse" };
+        return waitStep("Troll Stronghold must be complete before Eadgar's Ruse");
     }
 
     const zone = eadgarZone(snap.tile);
@@ -145,7 +146,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
 
     switch (stage) {
         case EADGAR_STAGE.NOT_STARTED:
-            return prep() ?? { kind: 'talk', stop: SANFEW_START };
+            return prep() ?? talkTo(SANFEW_START);
         case EADGAR_STAGE.STARTED:
             return prep() ?? guardedTalk(EADGAR_TALK);
         case EADGAR_STAGE.SPOKE_EADGAR:
@@ -179,7 +180,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
                 ?? guarded('unlock the troll storeroom', unlockStoreroom);
         case EADGAR_STAGE.UNLOCKED_STOREROOM:
             if (held(snap, ER_ITEM.GOUTWEED) > 0) {
-                return { kind: 'talk', stop: SANFEW_FINISH };
+                return talkTo(SANFEW_FINISH);
             }
             // Why: Sanfew reads the goutweed out of the pack, so a banked one still finishes the quest.
             if (snap.bankKnown && banked(snap, ER_ITEM.GOUTWEED) > 0) {
@@ -187,7 +188,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
             }
             return prep() ?? guarded('take goutweed from the storeroom crate', takeGoutweed);
         default:
-            return { kind: 'wait', reason: `unrecognized Eadgar's Ruse stage ${stage}` };
+            return waitStep(`unrecognized Eadgar's Ruse stage ${stage}`);
     }
 }
 

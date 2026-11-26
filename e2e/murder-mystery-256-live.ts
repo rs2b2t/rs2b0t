@@ -4,9 +4,11 @@
 
 //   HEADED=1 bun e2e/murder-mystery-256-live.ts --stage 0 --until 5 --minutes 90 --tick 200
 //   HEADED=1 bun e2e/murder-mystery-256-live.ts --stage 2 --until 3 --minutes 40 --tick 200
+import { parseQuestArgs } from './lib/questArgs.js';
+import { printQuestLogs, questSnapshot, setQuestStats, teleportToQuestStart } from './lib/questHarness.js';
 import type { Page } from 'playwright-core';
 
-import { deployIsolatedClient, launchBrowser } from './lib/harness.js';
+import { deployIsolatedClient, fail, launchBrowser, logBotConsole } from './lib/harness.js';
 import {
     cheatQuiet,
     clearChatDialogs,
@@ -15,60 +17,23 @@ import {
     relog,
     seedItemsToBank,
     startScript,
-    teleTo,
     type BankSeedItem
 } from './tutorial/harness.js';
 
-interface Args {
-    base: string;
-    user: string;
-    stage: number;
-    until: number;
-    minutes: number;
-    tickMs: number;
-    food: string;
-    stats: number;
-    sus: number;
-    deploy: boolean;
-}
-
-function parse(argv: string[]): Args {
-    const out: Args = {
-        base: process.env.BASE ?? 'http://localhost:8890',
-        user: `mm${Date.now().toString(36).slice(-7)}`,
-        stage: 0,
-        until: 5,
-        minutes: 90,
-        tickMs: 300,
-        food: 'Lobster',
-        stats: 70,
-        sus: 0,
-        deploy: true
-    };
-    for (let i = 0; i < argv.length; i++) {
-        const flag = argv[i];
-        if (flag === '--no-deploy') { out.deploy = false; continue; }
-        const value = argv[++i];
-        if (value === undefined) { break; }
-        if (flag === '--base') { out.base = value; }
-        else if (flag === '--user') { out.user = value; }
-        else if (flag === '--stage') { out.stage = Number(value); }
-        else if (flag === '--until') { out.until = Number(value); }
-        else if (flag === '--minutes') { out.minutes = Number(value); }
-        else if (flag === '--tick') { out.tickMs = Number(value); }
-        else if (flag === '--food') { out.food = value; }
-        else if (flag === '--stats') { out.stats = Number(value); }
-        else if (flag === '--sus') { out.sus = Number(value); }
-    }
-    return out;
-}
-
-const args = parse(process.argv.slice(2));
-
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
-}
+const args = parseQuestArgs(process.argv.slice(2), {
+    base: process.env.BASE ?? 'http://localhost:8890',
+    user: `mm${Date.now().toString(36).slice(-7)}`,
+    stage: 0,
+    until: 5,
+    minutes: 90,
+    tickMs: 300,
+    food: 'Lobster',
+    stats: 70,
+    sus: 0,
+    deploy: true
+}, {
+    values: { '--sus': value => ({ sus: Number(value) }) }
+});
 
 const QUEST = 'Murder Mystery';
 const SEERS_BANK = { x: 2725, z: 3491, level: 0 };
@@ -83,21 +48,6 @@ const BANK_SEED: BankSeedItem[] = [
     { debugName: 'coins', displayName: 'Coins', qty: 2_000_000 },
     { debugName: 'lobster', displayName: 'Lobster', qty: 20 }
 ];
-
-const STATS = [
-    'attack', 'strength', 'defence', 'hitpoints', 'ranged', 'magic', 'prayer',
-    'cooking', 'woodcutting', 'fletching', 'fishing', 'firemaking', 'crafting',
-    'smithing', 'mining', 'herblore', 'agility', 'thieving', 'runecraft'
-];
-
-async function setStats(page: Page, level: number): Promise<void> {
-    for (const skill of STATS) {
-        await cheatQuiet(page, `setstat ${skill} ${level}`);
-    }
-    await clearChatDialogs(page, 'level-up dialog(s)');
-    await page.waitForTimeout(1500);
-    await clearChatDialogs(page, 'straggler dialog(s)');
-}
 
 /** `%murdersus` 1-6, in the order the content's own constants name them. */
 const SUSPECTS = ['Anna', 'Bob', 'Carol', 'David', 'Elizabeth', 'Frank'];
@@ -129,34 +79,6 @@ function itemsFor(stage: number, sus: number): string[] {
     return stage >= LEG.THREAD ? [thread] : [];
 }
 
-interface Snapshot {
-    pos: { x: number; z: number; level: number } | null;
-    status: string;
-    qp: number;
-    runner: string;
-    logs: { time: number; level: string; msg: string }[];
-}
-
-async function snapshot(page: Page): Promise<Snapshot> {
-    return page.evaluate(quest => {
-        const g = globalThis as never as {
-            __rs2b0t: {
-                reader: { worldTile(): { x: number; z: number; level: number } | null };
-                Quests: { status(n: string): string; points(): number };
-            };
-            rs2b0t: { runner: { state: string; ctx?: { log?: { time: number; level: string; msg: string }[] } } };
-        };
-        const ring = g.rs2b0t.runner.ctx?.log ?? [];
-        return {
-            pos: g.__rs2b0t.reader.worldTile(),
-            status: g.__rs2b0t.Quests.status(quest),
-            qp: g.__rs2b0t.Quests.points(),
-            runner: g.rs2b0t.runner.state,
-            logs: ring.slice(-80).map(l => ({ time: l.time, level: l.level, msg: l.msg }))
-        };
-    }, QUEST);
-}
-
 async function readLeg(page: Page): Promise<number> {
     const quest = (await getServerVarQuiet(page, 'murderquest')) ?? 0;
     if (quest >= 2) { return LEG.COMPLETE; }
@@ -178,13 +100,7 @@ const browser = await launchBrowser({ swiftshader: true });
 try {
     const page = await browser.newPage();
     const t0 = Date.now();
-    page.on('pageerror', e => console.log(`pageerror: ${e}`));
-    page.on('console', m => {
-        const txt = m.text();
-        if (txt.startsWith('[bot]')) {
-            console.log(`  [${Math.round((Date.now() - t0) / 1000)}s] ${txt}`);
-        }
-    });
+    logBotConsole(page, t0);
 
     await mainlandAccount(page, args.base, args.user, clientPage);
     console.log(`mainland-ready as '${args.user}'`);
@@ -192,7 +108,7 @@ try {
     await cheatQuiet(page, `speed ${args.tickMs}`);
     console.log(`tick rate: ${args.tickMs}ms`);
 
-    await setStats(page, args.stats);
+    await setQuestStats(page, args.stats);
     console.log(`stats: ${args.stats} across the board`);
 
     console.log(`seeding ${BANK_SEED.length} item type(s) into the Seers' Village bank`);
@@ -224,12 +140,7 @@ try {
     }
 
     const start = args.stage >= LEG.PRINTS ? MANSION_GUARD : SEERS_BANK;
-    if (!(await teleTo(page, start, 10, 25_000))) {
-        await clearChatDialogs(page, 'pre-tele dialog(s)');
-        if (!(await teleTo(page, start, 10, 25_000))) {
-            fail(`tele to ${start.x},${start.z} did not arrive`);
-        }
-    }
+    await teleportToQuestStart(page, start);
     console.log(`start tile → ${start.x},${start.z},${start.level}`);
 
     await page.evaluate(() => sessionStorage.setItem('rs2b0t:set:AIOQuester:quests', 'murder'));
@@ -242,7 +153,7 @@ try {
     let reached = 0;
     let queueChecked = false;
     while (Date.now() < deadline) {
-        const last = await snapshot(page);
+        const last = await questSnapshot(page, QUEST);
         // Why: the isolated client removes the race, so a queue line without this quest is
         // this run's own deploy failing rather than a neighbour's landing on top of it.
         const queue = last.logs.find(l => l.msg.startsWith('AIOQuester — queue:'));
@@ -259,10 +170,7 @@ try {
             `  t=${t}s pos=${last.pos ? `${last.pos.x},${last.pos.z},${last.pos.level}` : '?'}`
             + ` leg=${leg} journal=${last.status} qp=${last.qp} runner=${last.runner}`
         );
-        for (const l of last.logs) {
-            if (l.time > lastLogTime) { console.log(`      · [${l.level}] ${l.msg}`); }
-        }
-        if (last.logs.length > 0) { lastLogTime = Math.max(lastLogTime, ...last.logs.map(l => l.time)); }
+        lastLogTime = printQuestLogs(last.logs, lastLogTime);
 
         // A full run waits for the journal to go green: the quest-complete
         // recolour and the QP award land a tick behind %murderquest.

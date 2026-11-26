@@ -1,3 +1,4 @@
+import { customStep, waitStep } from '../../engine/questSteps.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Game } from '../../../../game/Game.js';
 import { GroundItem, GroundItems } from '../../../../grounditems/GroundItems.js';
@@ -119,18 +120,18 @@ export function arrowStep(snap: QuestSnapshot): QuestStep | null {
     if (flighted > 0) {
         return bones > 0
             ? useOn(CB_NAME.CHISEL, CB_NAME.WOLF_BONES, CB_NAME.ARROWTIPS)
-            : { kind: 'custom', name: 'kill a wolf for bones', run: killWolfForBones };
+            : customStep('kill a wolf for bones', killWolfForBones);
     }
     // Why: flighting spends 4 feathers per shaft and caps at 6 arrows, so build the shafts up first; feathering 3 at a time wastes 12 of the 25 Fycie sells.
     const batch = Math.min(6, remaining);
     if (shafts < batch) {
         return logs > 0
             ? useOn(CB_NAME.KNIFE, CB_NAME.ACHEY_LOGS, CB_NAME.SHAFT)
-            : { kind: 'custom', name: 'chop an achey tree', run: chopAchey };
+            : customStep('chop an achey tree', chopAchey);
     }
     if (feathers >= 4) {
         return useOn(CB_NAME.FEATHER, CB_NAME.SHAFT, CB_NAME.FLIGHTED);
     }
     // Why: decide() tops the feathers up before this runs, so reaching here means the shop leg is still outstanding.
-    return { kind: 'wait', reason: 'no feathers to flight the ogre arrow shafts with' };
+    return waitStep('no feathers to flight the ogre arrow shafts with');
 }

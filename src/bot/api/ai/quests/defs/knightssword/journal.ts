@@ -1,6 +1,5 @@
-import { Modals } from '../../../../ui/widgets/Modals.js';
+import { questProgressAt, readQuestJournal, type JournalCache } from '../../journalReader.js';
 import { normalizeJournal as normalize } from '../../journalText.js';
-import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 import { KS_QUEST, KS_STAGE } from './areas.js';
 
@@ -28,19 +27,8 @@ export function parseKnightsSwordJournal(lines: readonly string[] | string): Que
 }
 
 /** Last good read, so a failed read can't look like the quest went backwards. */
-let lastGood: QuestProgress | undefined;
+const cache: JournalCache<QuestProgress> = {};
 
-export async function readKnightsSwordProgress(): Promise<QuestProgress | undefined> {
-    const status = Quests.status(KS_QUEST);
-    if (status === 'complete') return { stage: KS_STAGE.COMPLETE, flags: new Set() };
-    if (status === 'notStarted') return { stage: KS_STAGE.NOT_STARTED, flags: new Set() };
-    if (status !== 'inProgress') return undefined;
-
-    const lines = await Quests.journal(KS_QUEST);
-    const progress = parseKnightsSwordJournal(lines);
-    await Modals.closeIfOpen();
-    if (progress) {
-        lastGood = progress;
-    }
-    return progress ?? lastGood;
+export function readKnightsSwordProgress(): Promise<QuestProgress | undefined> {
+    return readQuestJournal(KS_QUEST, KS_STAGE, parseKnightsSwordJournal, questProgressAt, cache);
 }

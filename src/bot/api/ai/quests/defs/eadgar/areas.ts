@@ -3,6 +3,8 @@ import type { QuestSnapshot } from '../../engine/types.js';
 import type { NpcStop } from '../../exec/primitives.js';
 import { trollZone } from '../trollstronghold/areas.js';
 
+export { bankedItem as banked, heldItem as held, heldOrBankedItem as owned, wornItem as worn } from '../../engine/snapshotItems.js';
+
 export interface EadgarItem {
     id: number;
     name: string;
@@ -207,20 +209,4 @@ export function committed(zone: EadgarZone): boolean {
 /** The bank a leg should open: pinned above the stile, nearest anywhere else. */
 export function questBank(snap: QuestSnapshot): Tile | undefined {
     return committed(eadgarZone(snap.tile)) ? ER_TILE.FALADOR_BANK : undefined;
-}
-
-export function held(snap: QuestSnapshot, item: EadgarItem): number {
-    return snap.invIds?.get(item.id) ?? 0;
-}
-
-export function banked(snap: QuestSnapshot, item: EadgarItem): number {
-    return snap.bankIds?.get(item.id) ?? 0;
-}
-
-export function owned(snap: QuestSnapshot, item: EadgarItem): number {
-    return held(snap, item) + banked(snap, item);
-}
-
-export function worn(snap: QuestSnapshot, item: EadgarItem): boolean {
-    return snap.wornIds?.has(item.id) ?? false;
 }

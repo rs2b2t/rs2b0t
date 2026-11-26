@@ -1,3 +1,4 @@
+import { customStep as custom, talkTo, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { findSceneTarget } from '../../exec/prompts.js';
 import { EventSignal } from '../../../../execution/EventSignal.js';
 import { Execution } from '../../../../execution/Execution.js';
@@ -10,7 +11,8 @@ import { Locs } from '../../../../locs/Locs.js';
 import { Npcs } from '../../../../npcs/Npcs.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import Tile from '../../../../../geometry/Tile.js';
-import { bankedId, hasFlag, heldId } from '../../engine/types.js';
+import { bankedId, cachedBankId, heldId, wornId } from '../../engine/snapshotItems.js';
+import { hasFlag } from '../../engine/types.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { QUESTS } from '../../data/quests.js';
 import { QuestFood } from '../../food.js';
@@ -571,22 +573,19 @@ async function leaveCrandor(log: (m: string) => void): Promise<boolean> {
     return Execution.delayUntil(() => !onCrandor(Game.tile()), 8000);
 }
 
-const custom = (name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep =>
-    ({ kind: 'custom', name, run });
-
 /** Where an item is, for logs that have to explain a decision. */
 function where(snap: QuestSnapshot, id: number): 'carried' | 'worn' | 'banked' | 'nowhere' {
-    if ((snap.invIds?.get(id) ?? 0) > 0) return 'carried';
-    if (snap.wornIds?.has(id)) return 'worn';
-    if ((snap.bankIds?.get(id) ?? 0) > 0) return 'banked';
+    if (heldId(snap, id) > 0) return 'carried';
+    if (wornId(snap, id)) return 'worn';
+    if (cachedBankId(snap, id) > 0) return 'banked';
     return 'nowhere';
 }
 
 /** Inventory, worn or bank. The quest is resumable from any of the three. */
 function anywhere(snap: QuestSnapshot, id: number): boolean {
-    return (snap.invIds?.get(id) ?? 0) > 0
-        || (snap.bankIds?.get(id) ?? 0) > 0
-        || (snap.wornIds?.has(id) ?? false);
+    return heldId(snap, id) > 0
+        || cachedBankId(snap, id) > 0
+        || wornId(snap, id);
 }
 
 const MAP_PIECES = [DS_ID.MAP_MELZAR, DS_ID.MAP_WORMBRAIN, DS_ID.MAP_ORACLE];
@@ -605,7 +604,7 @@ function coinsShort(snap: QuestSnapshot, price: number): QuestStep | null {
 
 /** A piece left in the bank reads to the journal as never found; fetch it back. */
 function bankedPieces(snap: QuestSnapshot): { name: string; qty: number; id: number }[] {
-    const want = [...MAP_PIECES, DS_ID.MAP].filter(id => (snap.bankIds?.get(id) ?? 0) > 0 && (snap.invIds?.get(id) ?? 0) === 0);
+    const want = [...MAP_PIECES, DS_ID.MAP].filter(id => cachedBankId(snap, id) > 0 && heldId(snap, id) === 0);
     return want.map(id => ({ name: id === DS_ID.MAP ? DS_ITEM.MAP : DS_ITEM.MAP_PART, qty: 1, id }));
 }
 
@@ -619,7 +618,7 @@ function hireNed(snap: QuestSnapshot): QuestStep {
             return { kind: 'withdraw', items: [{ name: DS_ITEM.MAP, qty: 1, id: DS_ID.MAP }] };
         }
     }
-    return { kind: 'talk', stop: NED_HIRE };
+    return talkTo(NED_HIRE);
 }
 
 // Why: Elvarg is level 83 with no bank on the island, and by now the shield is worn and the shopping spent, so the pack has the slots.
@@ -639,7 +638,7 @@ function gearUp(snap: QuestSnapshot): QuestStep | null {
         if ((snap.bankIds?.get(DS_ID.SHIELD) ?? 0) > 0) {
             return { kind: 'withdraw', items: [{ name: DS_ITEM.SHIELD, qty: 1, id: DS_ID.SHIELD }] };
         }
-        return { kind: 'talk', stop: DUKE };
+        return talkTo(DUKE);
     }
     // Why: the shield is worn so its slot is free for food, and the 3-fish float is sized for walking between banks, which Crandor has none of.
     const food = QuestFood.name;
@@ -704,15 +703,15 @@ function hullErrand(snap: QuestSnapshot): QuestStep | null {
         qty: planksWanted * SHIP_REPAIR.nailsPerPlank,
         source: (s, need) => {
             if (Skills.effective('smithing') < 34) {
-                return { kind: 'wait', reason: 'Smithing 34 is required to make nails; train Smithing or obtain and bank Nails' };
+                return waitStep('Smithing 34 is required to make nails; train Smithing or obtain and bank Nails');
             }
             if ((s.inv.get('steel bar') ?? 0) === 0) {
                 const bars = Math.ceil(need / 2);
                 if ((s.inv.get('iron ore') ?? 0) < bars && Skills.effective('mining') < 15) {
-                    return { kind: 'wait', reason: 'Mining 15 is required for iron ore; train Mining or obtain iron ore, steel bars or Nails' };
+                    return waitStep('Mining 15 is required for iron ore; train Mining or obtain iron ore, steel bars or Nails');
                 }
                 if ((s.inv.get('coal') ?? 0) < bars * 2 && Skills.effective('mining') < 30) {
-                    return { kind: 'wait', reason: 'Mining 30 is required for coal; train Mining or obtain coal, steel bars or Nails' };
+                    return waitStep('Mining 30 is required for coal; train Mining or obtain coal, steel bars or Nails');
                 }
             }
             return custom(
@@ -736,10 +735,10 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return { kind: 'done' };
     }
     if (stage === undefined) {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     if (stage === DRAGON_STAGE.NOT_STARTED) {
-        return { kind: 'talk', stop: GUILDMASTER };
+        return talkTo(GUILDMASTER);
     }
     if (stage === DRAGON_STAGE.SPOKEN_GUILDMASTER) {
         return custom('talk to Oziach', talkOziach);
@@ -793,7 +792,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
                         return charms;
                     }
                     if (!hasFlag(snap.progress, 'asked-oracle')) {
-                        return { kind: 'talk', stop: ORACLE };
+                        return talkTo(ORACLE);
                     }
                 }
                 return custom('the chest under Ice Mountain', oracleChest);
@@ -809,13 +808,13 @@ export function decide(snap: QuestSnapshot): QuestStep {
         }
         // Then the shield, on the way past Lumbridge to the docks.
         if (!hasFlag(snap.progress, 'has-shield') && !anywhere(snap, DS_ID.SHIELD)) {
-            return { kind: 'talk', stop: DUKE };
+            return talkTo(DUKE);
         }
         const forShip = coinsShort(snap, SHIP_PRICE);
         if (forShip) {
             return forShip;
         }
-        return { kind: 'talk', stop: KLARENSE };
+        return talkTo(KLARENSE);
     }
 
     if (stage === DRAGON_STAGE.BOUGHT_SHIP) {
@@ -834,7 +833,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
     if (stage === DRAGON_STAGE.NED_GIVEN_MAP) {
         const here = snap.tile;
         if (here && here.level >= 3) {
-            return { kind: 'talk', stop: NED_ABOARD };
+            return talkTo(NED_ABOARD);
         }
         if (!aboard(here)) {
             const gear = gearUp(snap);

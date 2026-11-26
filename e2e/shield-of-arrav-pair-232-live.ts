@@ -4,12 +4,11 @@
 
 //   HEADED=1 bun e2e/shield-of-arrav-pair-232-live.ts --certs 2 --tick 300 --minutes 90
 //   HEADED=1 bun e2e/shield-of-arrav-pair-232-live.ts --certs 6 --tick 300 --minutes 150
-import { existsSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { setQuestStats } from './lib/questHarness.js';
 
 import type { Page } from 'playwright-core';
 
-import { launchBrowser } from './lib/harness.js';
+import { deploySharedBundles, fail, launchBrowser } from './lib/harness.js';
 import {
     cheatQuiet,
     clearChatDialogs,
@@ -60,11 +59,6 @@ function parse(argv: string[]): Args {
 
 const args = parse(process.argv.slice(2));
 
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
-}
-
 const QUEST = 'Shield of Arrav';
 const VARROCK_WEST_BANK = { x: 3185, z: 3440, level: 0 };
 
@@ -73,21 +67,6 @@ const BANK_SEED: BankSeedItem[] = [
     { debugName: 'coins', displayName: 'Coins', qty: 2_000_000 },
     { debugName: 'lobster', displayName: 'Lobster', qty: 40 }
 ];
-
-const STATS = [
-    'attack', 'strength', 'defence', 'hitpoints', 'ranged', 'magic', 'prayer',
-    'cooking', 'woodcutting', 'fletching', 'fishing', 'firemaking', 'crafting',
-    'smithing', 'mining', 'herblore', 'agility', 'thieving', 'runecraft'
-];
-
-async function setStats(page: Page, level: number): Promise<void> {
-    for (const skill of STATS) {
-        await cheatQuiet(page, `setstat ${skill} ${level}`);
-    }
-    await clearChatDialogs(page, 'level-up dialog(s)');
-    await page.waitForTimeout(1500);
-    await clearChatDialogs(page, 'straggler dialog(s)');
-}
 
 interface Snapshot {
     pos: { x: number; z: number; level: number } | null;
@@ -117,26 +96,6 @@ async function snapshot(page: Page): Promise<Snapshot> {
     }, QUEST);
 }
 
-const DEPLOYED = ['botclient.js', 'botclient.js.map', 'navworker.js', 'navworker.js.map'];
-
-function deployBundle(): void {
-    const engine = process.env.ENGINE_DIR ?? `${homedir()}/code/rs2b2t-engine`;
-    const botDir = `${engine}/public/bot`;
-    if (!existsSync(botDir)) {
-        fail(`deploy: ${botDir} not found — set ENGINE_DIR to the engine serving ${args.base}`);
-    }
-    const build = Bun.spawnSync(['bun', 'run', 'build:bot'], { stdout: 'pipe', stderr: 'pipe' });
-    if (build.exitCode !== 0) {
-        fail(`deploy: build:bot failed\n${build.stderr.toString()}`);
-    }
-    const files = DEPLOYED.map(f => `out/${f}`).join(' ');
-    const copy = Bun.spawnSync(['sh', '-c', `cp ${files} "${botDir}/"`]);
-    if (copy.exitCode !== 0) {
-        fail(`deploy: could not copy the bundles into ${botDir}`);
-    }
-    console.log(`deploy: fresh ${DEPLOYED.join(', ')} -> ${botDir}`);
-}
-
 async function setArrav(page: Page, gang: string, partner: string, certs: number): Promise<void> {
     await page.evaluate(entries => {
         for (const [k, v] of Object.entries(entries)) {
@@ -149,7 +108,7 @@ async function bringUp(page: Page, user: string, gang: string, partner: string):
     await mainlandAccount(page, args.base, user);
     console.log(`mainland-ready as '${user}' (${gang})`);
     await cheatQuiet(page, `speed ${args.tickMs}`);
-    await setStats(page, args.stats);
+    await setQuestStats(page, args.stats);
     await seedItemsToBank(page, BANK_SEED, VARROCK_WEST_BANK);
     if (!(await teleTo(page, VARROCK_WEST_BANK, 10, 25_000))) {
         await clearChatDialogs(page, 'pre-tele dialog(s)');
@@ -161,7 +120,7 @@ async function bringUp(page: Page, user: string, gang: string, partner: string):
 }
 
 if (args.deploy) {
-    deployBundle();
+    deploySharedBundles(args.base);
 }
 
 console.log(

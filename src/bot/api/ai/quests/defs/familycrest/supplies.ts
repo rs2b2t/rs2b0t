@@ -1,9 +1,12 @@
 import { Skills } from '../../../../skills/Skills.js';
 import { Traversal } from '../../../../walking/Traversal.js';
+import { bankedName, cachedBankId as banked, heldId as held, heldName, wornId as worn } from '../../engine/snapshotItems.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { ANTIPOISON_IDS, DUEL_RING_IDS, FC_BANK, FC_ID, FC_ITEM, FC_SHOP, PICKAXES } from './areas.js';
 import type Tile from '../../../../../geometry/Tile.js';
 import { bestBanked, bestHeld, packWeapon, wieldedWeapon } from '../../weapons.js';
+
+export { banked, bankedName, held, heldName, worn };
 
 export interface FcItem {
     id: number;
@@ -74,26 +77,6 @@ export const BLAST_MINIMUM: readonly { item: FcItem; qty: number }[] = [
     { item: { id: FC_ID.FIRE_RUNE, name: FC_ITEM.FIRE_RUNE }, qty: 5 },
     { item: { id: FC_ID.DEATH_RUNE, name: FC_ITEM.DEATH_RUNE }, qty: 4 }
 ];
-
-export function held(snap: QuestSnapshot, id: number): number {
-    return snap.invIds?.get(id) ?? 0;
-}
-
-export function banked(snap: QuestSnapshot, id: number): number {
-    return snap.bankIds?.get(id) ?? 0;
-}
-
-export function worn(snap: QuestSnapshot, id: number): boolean {
-    return snap.wornIds?.has(id) ?? false;
-}
-
-export function heldName(snap: QuestSnapshot, name: string): number {
-    return snap.inv.get(name.toLowerCase()) ?? 0;
-}
-
-export function bankedName(snap: QuestSnapshot, name: string): number {
-    return snap.bank?.get(name.toLowerCase()) ?? 0;
-}
 
 export function heldAntipoison(snap: QuestSnapshot): number {
     return ANTIPOISON_IDS.reduce((sum, id) => sum + held(snap, id), 0);

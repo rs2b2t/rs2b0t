@@ -1,3 +1,4 @@
+import { customStep, waitForJournal, waitStep } from '../engine/questSteps.js';
 import { Modals } from '../../../ui/widgets/Modals.js';
 import { normalizeJournal as normalize } from '../journalText.js';
 import { Execution } from '../../../execution/Execution.js';
@@ -257,18 +258,18 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return { kind: 'done' };
     }
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     // Why: a carried unid outranks the journal since it only exists once picked, which the journal can't render.
     // Why: at `found_snake_weed` with the unid held the journal writes no line, and every other `found_` stage writes the previous "go and pick it" line.
     const carried = JUNGLE_HERBS.find(h => (snap.invIds?.get(h.unidId) ?? 0) > 0);
     if (carried) {
-        return { kind: 'custom', name: `identify the ${carried.name}`, run: identifyHerb(carried) };
+        return customStep(`identify the ${carried.name}`, identifyHerb(carried));
     }
 
     const stage = snap.stage;
     if (stage === undefined) {
-        return { kind: 'wait', reason: 'Jungle Potion journal stage unavailable' };
+        return waitStep('Jungle Potion journal stage unavailable');
     }
     const tile = snap.tile;
     const onIsland = tile && tile.x >= 2700 && tile.x <= 3010 && tile.z >= 2870 && tile.z <= 3260
@@ -294,26 +295,26 @@ export function decide(snap: QuestSnapshot): QuestStep {
             return { kind: 'withdraw', items, bank: ARDOUGNE_BANK };
         }
         if ((snap.inv.get('coins') ?? 0) < 60) {
-            return { kind: 'wait', reason: 'need 60 Coins for the outbound and return boat fares' };
+            return waitStep('need 60 Coins for the outbound and return boat fares');
         }
     }
     if (stage === JP_STAGE.NOT_STARTED) {
-        return { kind: 'custom', name: 'ask Trufitus for the herb-gathering job', run: startQuest };
+        return customStep('ask Trufitus for the herb-gathering job', startQuest);
     }
     if (stage >= JP_STAGE.FOUND_ALL_HERBS) {
-        return { kind: 'custom', name: 'let Trufitus commune with the gods', run: handInHerb };
+        return customStep('let Trufitus commune with the gods', handInHerb);
     }
 
     const herb = herbForStage(stage);
     if (!herb) {
-        return { kind: 'wait', reason: `Jungle Potion stage ${stage} is not implemented` };
+        return waitStep(`Jungle Potion stage ${stage} is not implemented`);
     }
     // Picking advances `get_` to `found_` and only `found_` accepts a hand-in, so a clean herb at a `get_` stage still gets re-picked.
     const held = snap.invIds?.get(herb.id) ?? 0;
     if (stage % 2 === 1 || held === 0) {
-        return { kind: 'custom', name: `pick ${herb.name}`, run: pickHerb(herb) };
+        return customStep(`pick ${herb.name}`, pickHerb(herb));
     }
-    return { kind: 'custom', name: `give the ${herb.name} to Trufitus`, run: handInHerb };
+    return customStep(`give the ${herb.name} to Trufitus`, handInHerb);
 }
 
 export const junglepotion: QuestModule = {

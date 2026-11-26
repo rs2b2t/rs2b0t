@@ -1,3 +1,4 @@
+import { customStep, talkTo, waitStep } from '../../engine/questSteps.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Game } from '../../../../game/Game.js';
 import { Traversal } from '../../../../walking/Traversal.js';
@@ -26,7 +27,7 @@ export function sourceBeers(snap: QuestSnapshot): QuestStep | null {
     if (stageOf(snap) >= PRINCE_STAGE.GUARD_DRUNK || held(snap, PA_ITEM.BEER.id) >= BEERS_NEEDED) {
         return null;
     }
-    return fromBank(snap, PA_ITEM.BEER, BEERS_NEEDED) ?? { kind: 'talk', stop: BARTENDER };
+    return fromBank(snap, PA_ITEM.BEER, BEERS_NEEDED) ?? talkTo(BARTENDER);
 }
 
 export function sourceRopes(snap: QuestSnapshot): QuestStep | null {
@@ -38,7 +39,7 @@ export function sourceRopes(snap: QuestSnapshot): QuestStep | null {
     if (held(snap, PA_ITEM.ROPE.id) >= want) {
         return null;
     }
-    return fromBank(snap, PA_ITEM.ROPE, want) ?? { kind: 'talk', stop: NED_ROPE };
+    return fromBank(snap, PA_ITEM.ROPE, want) ?? talkTo(NED_ROPE);
 }
 
 function missingKit(snap: QuestSnapshot): QuestStep | null {
@@ -58,16 +59,16 @@ function missingKit(snap: QuestSnapshot): QuestStep | null {
     if (held(snap, PA_ITEM.ROPE.id) === 0) {
         absent.push(PA_ITEM.ROPE.name);
     }
-    return absent.length > 0 ? { kind: 'wait', reason: `the break-in needs ${absent.join(', ')}` } : null;
+    return absent.length > 0 ? waitStep(`the break-in needs ${absent.join(', ')}`) : null;
 }
 
 export function decideJailbreak(snap: QuestSnapshot): QuestStep {
     if (stageOf(snap) === PRINCE_STAGE.PREP_FINISHED) {
-        return sourceBeers(snap) ?? { kind: 'talk', stop: JOE_BEER };
+        return sourceBeers(snap) ?? talkTo(JOE_BEER);
     }
     return (
         missingKit(snap)
-        ?? { kind: 'custom', name: 'tie Lady Keli, unlock the cell and free the prince', run: breakOut }
+        ?? customStep('tie Lady Keli, unlock the cell and free the prince', breakOut)
     );
 }
 

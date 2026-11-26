@@ -4,9 +4,11 @@
 //   HEADED=1 bun e2e/witchs-house-226-live.ts --stage 0 --minutes 60
 //   HEADED=1 bun e2e/witchs-house-226-live.ts --stage 2 --until 3 --stocked --minutes 20   # the mouse and the magnet
 //   HEADED=1 bun e2e/witchs-house-226-live.ts --stage 5 --until 6 --at 2901,3466,0 --stocked --minutes 25   # the fountain and the fight
+import { parseQuestArgs, type QuestArgs } from './lib/questArgs.js';
+import { printQuestLogs, teleportToQuestStart } from './lib/questHarness.js';
 import type { Page } from 'playwright-core';
 
-import { deployIsolatedClient, launchBrowser } from './lib/harness.js';
+import { deployIsolatedClient, fail, launchBrowser, logBotConsole } from './lib/harness.js';
 import {
     cheatQuiet,
     clearChatDialogs,
@@ -15,7 +17,6 @@ import {
     relog,
     seedItemsToBank,
     startScript,
-    teleTo,
     type BankSeedItem
 } from './tutorial/harness.js';
 
@@ -25,17 +26,10 @@ interface Tile {
     level: number;
 }
 
-interface Args {
-    base: string;
-    user: string;
-    stage: number;
-    until: number;
-    minutes: number;
-    tickMs: number;
+interface Args extends QuestArgs {
     skills: number;
     at: Tile | null;
     stocked: boolean;
-    deploy: boolean;
 }
 
 function parseTile(s: string): Tile {
@@ -46,43 +40,24 @@ function parseTile(s: string): Tile {
     return { x: x!, z: z!, level: level! };
 }
 
-function parse(argv: string[]): Args {
-    const out: Args = {
-        base: process.env.BASE ?? 'http://localhost:8890',
-        user: `wh${Date.now().toString(36).slice(-6)}`,
-        stage: 0,
-        until: 7,
-        minutes: 60,
-        tickMs: 300,
-        skills: 50,
-        at: null,
-        stocked: false,
-        deploy: true
-    };
-    for (let i = 0; i < argv.length; i++) {
-        const flag = argv[i];
-        if (flag === '--no-deploy') { out.deploy = false; continue; }
-        if (flag === '--stocked') { out.stocked = true; continue; }
-        const value = argv[++i];
-        if (value === undefined) { break; }
-        if (flag === '--base') { out.base = value; }
-        else if (flag === '--user') { out.user = value; }
-        else if (flag === '--stage') { out.stage = Number(value); }
-        else if (flag === '--until') { out.until = Number(value); }
-        else if (flag === '--minutes') { out.minutes = Number(value); }
-        else if (flag === '--tick') { out.tickMs = Number(value); }
-        else if (flag === '--skills') { out.skills = Number(value); }
-        else if (flag === '--at') { out.at = parseTile(value); }
+const args = parseQuestArgs<Args>(process.argv.slice(2), {
+    base: process.env.BASE ?? 'http://localhost:8890',
+    user: `wh${Date.now().toString(36).slice(-6)}`,
+    stage: 0,
+    until: 7,
+    minutes: 60,
+    tickMs: 300,
+    skills: 50,
+    at: null,
+    stocked: false,
+    deploy: true
+}, {
+    switches: { '--stocked': { stocked: true } },
+    values: {
+        '--skills': value => ({ skills: Number(value) }),
+        '--at': value => ({ at: parseTile(value) })
     }
-    return out;
-}
-
-const args = parse(process.argv.slice(2));
-
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
-}
+});
 
 const QUEST = "Witch's House";
 const FALADOR_BANK: Tile = { x: 2946, z: 3369, level: 0 };
@@ -169,13 +144,7 @@ const browser = await launchBrowser({ swiftshader: true });
 try {
     const page = await browser.newPage();
     const t0 = Date.now();
-    page.on('pageerror', e => console.log(`pageerror: ${e}`));
-    page.on('console', m => {
-        const txt = m.text();
-        if (txt.startsWith('[bot]')) {
-            console.log(`  [${Math.round((Date.now() - t0) / 1000)}s] ${txt}`);
-        }
-    });
+    logBotConsole(page, t0);
 
     await mainlandAccount(page, args.base, args.user, clientPage);
     console.log(`mainland-ready as '${args.user}'`);
@@ -214,12 +183,7 @@ try {
     }
 
     const start = args.at ?? FALADOR_BANK;
-    if (!(await teleTo(page, start, 10, 25_000))) {
-        await clearChatDialogs(page, 'pre-tele dialog(s)');
-        if (!(await teleTo(page, start, 10, 25_000))) {
-            fail(`tele to ${start.x},${start.z} did not arrive`);
-        }
-    }
+    await teleportToQuestStart(page, start);
     console.log(`start tile → ${start.x},${start.z},${start.level}`);
 
     // Gear is declared, never inferred. The quest wears whatever this says.
@@ -268,13 +232,7 @@ try {
             + ` ballquest=${stage} peak=${reached} journal=${last.status} qp=${last.qp}`
             + ` pack=${last.pack} runner=${last.runner}`
         );
-        for (const l of last.logs) {
-            if (l.time > lastLogTime) {
-                const at = ((l.time - t0) / 1000).toFixed(1).padStart(6);
-                console.log(`      ·${at}s [${l.level}] ${l.msg}`);
-            }
-        }
-        if (last.logs.length > 0) { lastLogTime = Math.max(lastLogTime, ...last.logs.map(l => l.time)); }
+        lastLogTime = printQuestLogs(last.logs, lastLogTime, t0);
 
         // A full run waits for the journal to go green: the recolour and the QP award land a tick
         // behind `%ballquest = ^ball_complete`.

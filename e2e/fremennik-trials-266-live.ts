@@ -5,9 +5,9 @@
 //   HEADED=1 bun e2e/fremennik-trials-266-live.ts --stage 0 --until 8 --minutes 180 --tick 200
 //   HEADED=1 bun e2e/fremennik-trials-266-live.ts --stage 5 --until 8 --minutes 45 --tick 200
 //   HEADED=1 bun e2e/fremennik-trials-266-live.ts --stage 1 --until 2 --minutes 60 --tick 200 --shark-shop
-import type { Page } from 'playwright-core';
-
-import { deployIsolatedClient, launchBrowser } from './lib/harness.js';
+import { parseQuestArgs } from './lib/questArgs.js';
+import { printQuestLogs, questSnapshot, setQuestStats, teleportToQuestStart } from './lib/questHarness.js';
+import { deployIsolatedClient, fail, launchBrowser, logBotConsole } from './lib/harness.js';
 import {
     cheatQuiet,
     clearChatDialogs,
@@ -16,60 +16,23 @@ import {
     relog,
     seedItemsToBank,
     startScript,
-    teleTo,
     type BankSeedItem
 } from './tutorial/harness.js';
 
-interface Args {
-    base: string;
-    user: string;
-    stage: number;
-    until: number;
-    minutes: number;
-    tickMs: number;
-    food: string;
-    stats: number;
-    deploy: boolean;
-    sharkShop: boolean;
-}
-
-function parse(argv: string[]): Args {
-    const out: Args = {
-        base: process.env.BASE ?? 'http://localhost:8890',
-        user: `ft${Date.now().toString(36).slice(-7)}`,
-        stage: 0,
-        until: 8,
-        minutes: 180,
-        tickMs: 200,
-        food: 'Lobster',
-        stats: 70,
-        deploy: true,
-        sharkShop: false
-    };
-    for (let i = 0; i < argv.length; i++) {
-        const flag = argv[i];
-        if (flag === '--no-deploy') { out.deploy = false; continue; }
-        if (flag === '--shark-shop') { out.sharkShop = true; continue; }
-        const value = argv[++i];
-        if (value === undefined) { break; }
-        if (flag === '--base') { out.base = value; }
-        else if (flag === '--user') { out.user = value; }
-        else if (flag === '--stage') { out.stage = Number(value); }
-        else if (flag === '--until') { out.until = Number(value); }
-        else if (flag === '--minutes') { out.minutes = Number(value); }
-        else if (flag === '--tick') { out.tickMs = Number(value); }
-        else if (flag === '--food') { out.food = value; }
-        else if (flag === '--stats') { out.stats = Number(value); }
-    }
-    return out;
-}
-
-const args = parse(process.argv.slice(2));
-
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
-}
+const args = parseQuestArgs(process.argv.slice(2), {
+    base: process.env.BASE ?? 'http://localhost:8890',
+    user: `ft${Date.now().toString(36).slice(-7)}`,
+    stage: 0,
+    until: 8,
+    minutes: 180,
+    tickMs: 200,
+    food: 'Lobster',
+    stats: 70,
+    deploy: true,
+    sharkShop: false
+}, {
+    switches: { '--shark-shop': { sharkShop: true } }
+});
 
 const QUEST = 'The Fremennik Trials';
 const SEERS_BANK = { x: 2725, z: 3491, level: 0 };
@@ -92,21 +55,6 @@ const BANK_SEED: BankSeedItem[] = [
 
 /** The one item with no source this side of Morytania. */
 const SHARK_SEED: BankSeedItem = { debugName: 'raw_shark', displayName: 'Raw shark', qty: 1 };
-
-const STATS = [
-    'attack', 'strength', 'defence', 'hitpoints', 'ranged', 'magic', 'prayer',
-    'cooking', 'woodcutting', 'fletching', 'fishing', 'firemaking', 'crafting',
-    'smithing', 'mining', 'herblore', 'agility', 'thieving', 'runecraft'
-];
-
-async function setStats(page: Page, level: number): Promise<void> {
-    for (const skill of STATS) {
-        await cheatQuiet(page, `setstat ${skill} ${level}`);
-    }
-    await clearChatDialogs(page, 'level-up dialog(s)');
-    await page.waitForTimeout(1500);
-    await clearChatDialogs(page, 'straggler dialog(s)');
-}
 
 // Why: `%viking` is one plus the vote count, and each trial keeps its own bit range in `%viking_bits`.
 // Why: seeding the votes alone leaves every range at not-started, and the bot walks back into a trial the journal says it has already won.
@@ -134,34 +82,6 @@ function votesOf(viking: number): number {
     return viking >= 10 ? 7 : Math.max(0, viking - 1);
 }
 
-interface Snapshot {
-    pos: { x: number; z: number; level: number } | null;
-    status: string;
-    qp: number;
-    runner: string;
-    logs: { time: number; level: string; msg: string }[];
-}
-
-async function snapshot(page: Page): Promise<Snapshot> {
-    return page.evaluate(quest => {
-        const g = globalThis as never as {
-            __rs2b0t: {
-                reader: { worldTile(): { x: number; z: number; level: number } | null };
-                Quests: { status(n: string): string; points(): number };
-            };
-            rs2b0t: { runner: { state: string; ctx?: { log?: { time: number; level: string; msg: string }[] } } };
-        };
-        const ring = g.rs2b0t.runner.ctx?.log ?? [];
-        return {
-            pos: g.__rs2b0t.reader.worldTile(),
-            status: g.__rs2b0t.Quests.status(quest),
-            qp: g.__rs2b0t.Quests.points(),
-            runner: g.rs2b0t.runner.state,
-            logs: ring.slice(-80).map(l => ({ time: l.time, level: l.level, msg: l.msg }))
-        };
-    }, QUEST);
-}
-
 if (args.stage < 0 || args.stage > TRIALS.length) {
     fail(`--stage counts finished trials and runs 0 to ${TRIALS.length}`);
 }
@@ -175,13 +95,7 @@ const browser = await launchBrowser({ swiftshader: true });
 try {
     const page = await browser.newPage();
     const t0 = Date.now();
-    page.on('pageerror', e => console.log(`pageerror: ${e}`));
-    page.on('console', m => {
-        const txt = m.text();
-        if (txt.startsWith('[bot]')) {
-            console.log(`  [${Math.round((Date.now() - t0) / 1000)}s] ${txt}`);
-        }
-    });
+    logBotConsole(page, t0);
 
     await mainlandAccount(page, args.base, args.user, clientPage);
     console.log(`mainland-ready as '${args.user}'`);
@@ -199,7 +113,7 @@ try {
     await cheatQuiet(page, `speed ${args.tickMs}`);
     console.log(`tick rate: ${args.tickMs}ms`);
 
-    await setStats(page, args.stats);
+    await setQuestStats(page, args.stats);
     console.log(`stats: ${args.stats} across the board`);
 
     const seed = args.sharkShop ? BANK_SEED : [...BANK_SEED, SHARK_SEED];
@@ -227,12 +141,7 @@ try {
         await clearChatDialogs(page, 'post-relog dialog(s)');
     }
 
-    if (!(await teleTo(page, SEERS_BANK, 10, 25_000))) {
-        await clearChatDialogs(page, 'pre-tele dialog(s)');
-        if (!(await teleTo(page, SEERS_BANK, 10, 25_000))) {
-            fail(`tele to ${SEERS_BANK.x},${SEERS_BANK.z} did not arrive`);
-        }
-    }
+    await teleportToQuestStart(page, SEERS_BANK);
     console.log(`start tile → ${SEERS_BANK.x},${SEERS_BANK.z},${SEERS_BANK.level}`);
 
     await page.evaluate(() => sessionStorage.setItem('rs2b0t:set:AIOQuester:quests', 'viking'));
@@ -244,7 +153,7 @@ try {
     let lastLogTime = 0;
     let reached = 0;
     while (Date.now() < deadline) {
-        const last = await snapshot(page);
+        const last = await questSnapshot(page, QUEST);
         const viking = (await getServerVarQuiet(page, 'viking')) ?? 0;
         const votes = votesOf(viking);
         reached = Math.max(reached, votes);
@@ -253,10 +162,7 @@ try {
             `  t=${t}s pos=${last.pos ? `${last.pos.x},${last.pos.z},${last.pos.level}` : '?'}`
             + ` votes=${votes}/7 journal=${last.status} qp=${last.qp} runner=${last.runner}`
         );
-        for (const l of last.logs) {
-            if (l.time > lastLogTime) { console.log(`      · [${l.level}] ${l.msg}`); }
-        }
-        if (last.logs.length > 0) { lastLogTime = Math.max(lastLogTime, ...last.logs.map(l => l.time)); }
+        lastLogTime = printQuestLogs(last.logs, lastLogTime);
 
         const done = args.until >= 8 ? last.status === 'complete' : votes >= args.until;
         if (done) {

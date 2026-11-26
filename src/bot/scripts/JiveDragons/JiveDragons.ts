@@ -6,7 +6,8 @@ import { paintClueProgress } from '../../api/ai/clues/cluePaint.js';
 import { AXES } from '../../api/acquisition/Tools.js';
 import { Bank } from '../../api/bank/Bank.js';
 import { nearestBankReachable } from '../../api/bank/BankLocations.js';
-import { TaskBot, type Task } from '../../api/bot/Bot.js';
+import type { Task } from '../../api/bot/Bot.js';
+import { HuntingBot, Parked } from '../../api/combat/hunting/HuntingBot.js';
 import { EMPTY_VIAL, SUPER_SET, plannedPotions, potionToSip, rangingPlan, type PotionPlan } from '../../api/combat/boostPotions.js';
 import { COMBAT_STYLE_OPTIONS, RANGE_STYLE_OPTIONS, parseCombatStyle, parseRangeStyle, type MeleeCombatStyle } from '../../api/combat/CombatStyle.js';
 import { castsAvailable } from '../../api/combat/CombatStyleLogic.js';
@@ -20,7 +21,7 @@ import { foodCount as foodCountIn, foodHealAmount, isEdibleFood, isFoodItem, sho
 import { Equipment } from '../../api/equipment/Equipment.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import { GroundItems, type GroundItem } from '../../api/grounditems/GroundItems.js';
 import { Inventory } from '../../api/inventory/Inventory.js';
 import { scriptFood, suppliesOf } from '../../api/loadout/loadoutPlan.js';
@@ -36,8 +37,8 @@ import { SPELL_DB } from '../../data/spelldb.js';
 import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
 import { Navigator } from '../../event/webwalk/Navigator.js';
 import Tile from '../../geometry/Tile.js';
-import { COMBAT_SKILLS, XpTracker, jiveFrame, paintLevels } from '../../paint/jive.js';
-import { fmtDuration, wrapText } from '../../paint/paintLogic.js';
+import { jiveFrame } from '../../paint/jive.js';
+import { fmtDuration } from '../../paint/paintLogic.js';
 import { ScriptRunner } from '../../runtime/ScriptRunner.js';
 import { SettingsStore, type SettingsBag, type SettingsSchema } from '../../runtime/Settings.js';
 import { Fight, HoldSafespot, Retreat, WalkToSpot, anchorFor, chasesTarget, type CombatHost } from '../../api/combat/hunting/combat.js';
@@ -57,19 +58,6 @@ const LOOT_WALK_MS = 30_000;
 const ASSERT_BATCH = 5;
 const ASSERT_RETRY_MS = 60_000;
 const SIP_RETRY_MS = 5000;
-const PARK_TICKS = 10;
-
-// Why: the byline owns the row under the body and the controls need the one above it, so the drop list and the park reason are budgeted against the tallest section.
-const LOOT_SHOWN = 6;
-const PARK_ROWS = 2;
-const PARK_FG = '#e0705a';
-/** The gap and the button row that follow every section. */
-const CONTROL_ROWS = 2;
-
-/** Cells laid out two across, the shape statGrid draws. */
-function inPairs<T>(cells: T[]): T[][] {
-    return Array.from({ length: Math.ceil(cells.length / 2) }, (_, i) => cells.slice(i * 2, i * 2 + 2));
-}
 
 const SHOW_MAGE = { key: 'combatStyle', anyOf: ['mage'] };
 const SHOW_RANGE = { key: 'combatStyle', anyOf: ['range'] };
@@ -722,16 +710,6 @@ async function dropVial(bot: JiveDragons): Promise<boolean> {
     return Execution.delayUntilTicks(() => Inventory.used() < before, 3);
 }
 
-class Parked implements Task {
-    constructor(private readonly bot: JiveDragons) {}
-    validate(): boolean {
-        return this.bot.parked;
-    }
-    async execute(): Promise<void> {
-        await Execution.delayTicks(PARK_TICKS);
-    }
-}
-
 // Why: the poison varp never reaches the client and poison_player prints its line once per fresh poisoning, so the line is the only signal and the mark moves past it whether or not a dose was there to answer it.
 
 class CurePoison implements Task {
@@ -1185,19 +1163,10 @@ class EnterLair implements Task {
     }
 }
 
-export default class JiveDragons extends TaskBot implements CombatHost {
-    override loopDelay = 600;
+export default class JiveDragons extends HuntingBot implements CombatHost {
     clueRestock = false;
 
-    status = 'starting';
-    startedAt = Date.now();
-    xp = new XpTracker(COMBAT_SKILLS, Skills);
-    killsTotal = 0;
-    bankTrips = 0;
-    looted = 0;
-    readonly lootCounts = new Map<string, number>();
     cluesSolved = 0;
-    safespotIdx = 0;
     activeStand = 1;
     pendingStand: number | null = null;
     private roaming = false;
@@ -1205,21 +1174,15 @@ export default class JiveDragons extends TaskBot implements CombatHost {
     buried = 0;
     sips = 0;
     specials = 0;
-    parked = false;
-    parkReason = '';
-    died = false;
-    targetIdx: number | null = null;
     fight: Fight | undefined;
     gearEquip = new GearEquip(this);
     lootRun: LootRun | null = null;
     burialRetryAt = 0;
 
-    private bankEmpty = false;
-    private supplyEmpty = false;
     solveClue: SolveClue | undefined;
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
 
         const base = enclaveTargets(siteFor(this.settings.str('site', 'taverley-blue')), this.settings.str('enclaveTargets', 'both'));
         this.activeStand = Math.min(Math.max(1, Math.trunc(this.settings.num('stand', 1))), base.stands?.length ?? 1);
@@ -1290,9 +1253,7 @@ export default class JiveDragons extends TaskBot implements CombatHost {
         AXE = SITE.axe === true ? this.settings.str('axe', 'Rune axe') : '';
         antifire.reset();
 
-        this.startedAt = Date.now();
-        this.xp.begin();
-        this.safespotIdx = 0;
+        this.beginHunt();
         lootSkip.clear();
         this.lootRun = null;
         this.keyState = SITE.keyItem === null ? 'held' : keyStatus(Inventory.countById(SITE.keyItem.id), Bank.countById(SITE.keyItem.id));
@@ -1410,23 +1371,11 @@ export default class JiveDragons extends TaskBot implements CombatHost {
         return huntNames(SITE).map(n => n.toLowerCase());
     }
 
-    setStatus(s: string): void {
-        this.status = s;
-    }
     /** Suppressed unless logDetail is Verbose, so the log ring keeps what matters. */
     vlog(msg: string): void {
         if (VERBOSE) {
             this.log(msg);
         }
-    }
-    parkFor(reason: string): void {
-        if (this.parked) {
-            return;
-        }
-        this.parked = true;
-        this.parkReason = reason;
-        this.setStatus('parked');
-        this.log(`PARKED: ${reason}`);
     }
     requestStand(n: number): void {
         const count = SITE.stands?.length ?? 1;
@@ -1529,75 +1478,17 @@ export default class JiveDragons extends TaskBot implements CombatHost {
     boneName(): string {
         return SITE.bones;
     }
-    safespotIndex(): number {
-        return this.safespotIdx;
-    }
-    setSafespotIndex(n: number): void {
-        this.safespotIdx = n;
-    }
-    countKill(): void {
-        this.killsTotal++;
-    }
     countBurial(): void {
         this.buried++;
     }
     countSip(): void {
         this.sips++;
     }
-    countLoot(name?: string | null): void {
-        this.looted++;
-        if (name) {
-            this.lootCounts.set(name, (this.lootCounts.get(name) ?? 0) + 1);
-        }
-    }
-    countBankTrip(): void {
-        this.bankTrips++;
-    }
-
-    // Why: a completed trip with no food is the one state the run cannot fix from inside, so it stops at the booth instead of walking back unable to heal.
-    // Why: a supply latch is survivable by comparison, and a full pack forces the next trip, which is where that one clears.
 
     /** What the last bank trip came back with. */
     noteTrip(food: boolean, supplies: boolean): void {
         this.clueRestock = false;
-        this.bankEmpty = !food;
-        this.supplyEmpty = !supplies;
-        if (!food) {
-            this.parkFor(`no '${FOOD_NAME}' left in the bank after a full trip. The run stopped at the booth rather than walk back to the dragons with no way to heal. Deposit food, or point the loadout at food the bank has, and restart.`);
-        }
-    }
-    bankKnownEmpty(): boolean {
-        return this.bankEmpty;
-    }
-    supplyKnownEmpty(): boolean {
-        return this.supplyEmpty;
-    }
-
-    /** The wireframe box around whatever the fight loop is watching. */
-    outlineTarget(ctx: CanvasRenderingContext2D): void {
-        if (this.targetIdx === null) {
-            return;
-        }
-        const box = reader.npcBox(this.targetIdx);
-        if (!box) {
-            return;
-        }
-        ctx.save();
-        ctx.strokeStyle = 'rgba(255, 224, 64, 0.55)';
-        ctx.lineWidth = 1.5;
-        ctx.lineJoin = 'round';
-        const edge = (a: number, b: number): void => {
-            ctx.beginPath();
-            ctx.moveTo(box[a].x, box[a].y);
-            ctx.lineTo(box[b].x, box[b].y);
-            ctx.stroke();
-        };
-        for (let i = 0; i < 4; i++) {
-            edge(i, (i + 1) % 4);
-            edge(4 + i, 4 + ((i + 1) % 4));
-            edge(i, 4 + i);
-        }
-        ctx.restore();
+        this.recordTrip(food, supplies, FOOD_NAME, 'walk back to the dragons');
     }
 
     override onPaint(ctx: CanvasRenderingContext2D): void {
@@ -1658,27 +1549,15 @@ export default class JiveDragons extends TaskBot implements CombatHost {
                 ...(ANTIFIRE_WANT > 0 ? [[{ text: `Antifire: ${antifire.ticksLeft() > 0 ? `${Math.round(antifire.ticksLeft() * 0.6)}s` : 'lapsed'}` }, { text: `Doses: ${antifireHeld()}` }]] : [])
             ]);
         } else if (section === 'Levels') {
-            paintLevels(p, this.xp.gains(), mins, CONTROL_ROWS);
+            this.paintLevels(p, mins);
         } else if (section === 'Loot') {
-            // Why: a p.list would draw from the panel edge and paint over the rail labels, so the drops go through the grid like every other row.
-            const top = [...this.lootCounts.entries()]
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, LOOT_SHOWN)
-                .map(([name, n]) => ({ text: `${n}x ${name}` }));
-            p.statGrid([[{ text: `Looted: ${this.looted}` }, { text: `Buried: ${this.buried}` }], ...inPairs(top)]);
+            this.paintLoot(p, { text: `Buried: ${this.buried}` });
         } else if (section === 'Clue') {
             p.statGrid([[{ text: `Solved: ${this.cluesSolved}` }, { text: `Clue: ${this.solveClue?.clueStatus() ?? 'idle'}` }]]);
             paintClueProgress(p, 'no clue in progress, grinding');
         }
 
-        if (this.parked) {
-            // Why: the controls are drawn after this, so the reason takes only the rows that still leave them inside the panel.
-            const room = Math.max(0, Math.min(PARK_ROWS, p.rowsLeft() - CONTROL_ROWS - Number(page === 'Options')));
-            const lines = wrapText(this.parkReason, p.cols(), 2);
-            for (const [i, line] of lines.slice(0, room).entries()) {
-                p.text(i === room - 1 && lines.length > room ? `${line}…` : line, PARK_FG);
-            }
-        }
+        this.paintParkReason(p, Number(page === 'Options'));
         p.gap();
         ScriptRunner.paintControls(p);
         p.end();

@@ -1,3 +1,4 @@
+import { customStep, talkTo, waitForJournal } from '../engine/questSteps.js';
 import { findSceneTarget } from '../exec/prompts.js';
 import { Execution } from '../../../execution/Execution.js';
 import { Game } from '../../../game/Game.js';
@@ -541,24 +542,24 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return { kind: 'done' };
     }
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     if (snap.journal === 'notStarted') {
-        return { kind: 'talk', stop: ROALD };
+        return talkTo(ROALD);
     }
     if (has(snap, 'golden key')) {
-        return { kind: 'custom', name: 'monument key swap', run: monumentLeg };
+        return customStep('monument key swap', monumentLeg);
     }
     if (has(snap, 'iron key')) {
-        return { kind: 'custom', name: 'unlock the cell', run: unlockLeg };
+        return customStep('unlock the cell', unlockLeg);
     }
     if (has(snap, 'bucket of water')) {
-        return { kind: 'custom', name: 'water chain', run: waterLeg };
+        return customStep('water chain', waterLeg);
     }
     if (has(snap, 'rune essence')) {
-        return { kind: 'custom', name: 'essence delivery', run: essenceLeg };
+        return customStep('essence delivery', essenceLeg);
     }
-    return { kind: 'custom', name: 'locate phase', run: spineLeg };
+    return customStep('locate phase', spineLeg);
 }
 
 export const priestperil: QuestModule = {

@@ -12,7 +12,7 @@ import { TaskBot } from '../../api/bot/Bot.js';
 import { ShiloSupplyTrip } from './ShiloSupplyTrip.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import { Sustain } from '../../api/sustain/Sustain.js';
 import Tile from '../../geometry/Tile.js';
 import { Bank, withdrawOp, type BackpackItem } from '../../api/bank/Bank.js';
@@ -593,7 +593,7 @@ export default class GatheringBot extends TaskBot {
     private combatClearUntilTick = 0;
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
 
         this.startedAt = Date.now();
         this.targetType = this.settings.str('targetType', 'loc').toLowerCase();

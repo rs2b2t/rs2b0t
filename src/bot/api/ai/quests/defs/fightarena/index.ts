@@ -1,6 +1,8 @@
+import { customStep as custom, talkTo, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { prepareStrikeStaff, prepareStrikes, STRIKE_RUNES, STRIKE_STAVES } from '../../strike.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import { talkStrict, type NpcStop } from '../../exec/primitives.js';
+import { wornId as worn } from '../../engine/snapshotItems.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { QUESTS } from '../../data/quests.js';
 import { FA_NPC, FA_OBJ, FA_TILE, pocketOf, type FaPocket } from './areas.js';
@@ -29,16 +31,12 @@ const LADY_SERVIL: NpcStop = {
 };
 
 const held = (snap: QuestSnapshot, id: number): boolean => (snap.invIds?.get(id) ?? 0) > 0;
-const worn = (snap: QuestSnapshot, id: number): boolean => snap.wornIds?.has(id) ?? false;
 const disguised = (snap: QuestSnapshot): boolean => worn(snap, FA_OBJ.HELMET) || worn(snap, FA_OBJ.ARMOUR);
 
 // Why: door1 lets one piece through, but the drunk guard's `~wearing_khazard_armour` wants both, so half a disguise loops at him forever.
 const hasBoth = (snap: QuestSnapshot): boolean =>
     (held(snap, FA_OBJ.HELMET) || worn(snap, FA_OBJ.HELMET))
     && (held(snap, FA_OBJ.ARMOUR) || worn(snap, FA_OBJ.ARMOUR));
-
-const custom = (name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep =>
-    ({ kind: 'custom', name, run });
 
 const CHEST = custom('search the guards\' chest', searchChest);
 const WEAR_DISGUISE = custom('wear the Khazard disguise', wearKhazard);
@@ -134,7 +132,7 @@ export function kitWanted(snap: QuestSnapshot): string[] {
 
 function outsideStep(snap: QuestSnapshot, stage: number): QuestStep {
     if (stage <= FA_STAGE.NOT_STARTED || stage >= FA_STAGE.FREED_SERVILS) {
-        return { kind: 'talk', stop: LADY_SERVIL };
+        return talkTo(LADY_SERVIL);
     }
     if (stage < FA_STAGE.DEFEATED_BOUNCER) {
         const staff = prepareStrikeStaff(snap, SUPPLY_KEEP);
@@ -205,18 +203,18 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return { kind: 'done' };
     }
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     const stage = snap.stage;
     if (stage === undefined) {
-        return { kind: 'wait', reason: 'Fight Arena stage unavailable' };
+        return waitStep('Fight Arena stage unavailable');
     }
     if (stage >= FA_STAGE.COMPLETE) {
         return { kind: 'done' };
     }
     const where: FaPocket = pocketOf(snap.tile);
     if (where === 'jeremyCell') {
-        return { kind: 'wait', reason: 'standing inside Jeremy\'s cell — nothing routes out' };
+        return waitStep('standing inside Jeremy\'s cell — nothing routes out');
     }
     if (where === 'prisonCell') {
         return HENGRAD;

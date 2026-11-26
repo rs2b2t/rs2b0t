@@ -1,3 +1,4 @@
+import { customStep as custom, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { QUESTS } from '../../data/quests.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { hasFlag } from '../../engine/types.js';
@@ -33,10 +34,6 @@ import {
     smithElementalShield,
     startWaterWheel
 } from './workshop.js';
-
-function custom(name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep {
-    return { kind: 'custom', name, run };
-}
 
 function needSmeltMaterials(snap: QuestSnapshot): boolean {
     return held(snap, EW_ITEM.ELEMENTAL_METAL.id) === 0
@@ -75,12 +72,12 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return { kind: 'done' };
     }
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
 
     const stage = snap.progress?.stage ?? snap.stage;
     if (stage === undefined) {
-        return { kind: 'wait', reason: 'Elemental Workshop stage unavailable' };
+        return waitStep('Elemental Workshop stage unavailable');
     }
     if (stage === EW_STAGE.COMPLETE) {
         return { kind: 'done' };
@@ -116,7 +113,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
     // Once we have the bar or shield, finish at the workbench (or leave if missing tools).
     if (held(snap, EW_ITEM.ELEMENTAL_SHIELD.id) > 0) {
         // Making the shield completes the quest server-side; wait for journal.
-        return { kind: 'wait', reason: 'waiting for Elemental Workshop quest complete' };
+        return waitStep('waiting for Elemental Workshop quest complete');
     }
 
     if (held(snap, EW_ITEM.ELEMENTAL_METAL.id) > 0) {
@@ -148,7 +145,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
                 return bankKey;
             }
             if (stage < EW_STAGE.ENTERED) {
-                return { kind: 'wait', reason: 'need the Battered key to open the smithy wall' };
+                return waitStep('need the Battered key to open the smithy wall');
             }
             // Stage already entered: enterWorkshop will Push the odd wall.
         }
@@ -160,7 +157,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
             return load;
         }
         if (!hasPickaxe(snap) && needSmeltMaterials(snap)) {
-            return { kind: 'wait', reason: 'need a pickaxe before entering the Elemental Workshop' };
+            return waitStep('need a pickaxe before entering the Elemental Workshop');
         }
         return custom('enter the Elemental Workshop', enterWorkshop);
     }

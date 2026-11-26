@@ -1,12 +1,16 @@
+import { waitStep } from '../../engine/questSteps.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { GroundItems } from '../../../../grounditems/GroundItems.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
 import { Traversal } from '../../../../walking/Traversal.js';
 import { Bank } from '../../../../bank/Bank.js';
 import { QuestFood } from '../../food.js';
+import { cachedBankId as bankedId, heldId } from '../../engine/snapshotItems.js';
 import type { QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { findSceneTarget, settleScene, useOnLoc } from '../../exec/prompts.js';
 import { SM_ID, SM_LOC, SM_LOC_ID, SM_NAME, SM_STAGE, SM_TILE, VARROCK_GENERAL } from './areas.js';
+
+export { bankedId, heldId };
 
 export const COIN_TARGET = 30_000;
 export const COIN_LOW = 5_000;
@@ -26,9 +30,6 @@ export const SM_TOOLS: readonly string[] = [
     'tarromin', 'unfinished potion', 'serum 207', 'loar remains', 'olive oil',
     'sacred oil', 'pyre logs', 'plank', 'limestone brick', 'swamp paste'
 ];
-
-export const heldId = (snap: QuestSnapshot, id: number): number => snap.invIds?.get(id) ?? 0;
-export const bankedId = (snap: QuestSnapshot, id: number): number => snap.bankIds?.get(id) ?? 0;
 
 /** Serum 207 by dose count, highest first, `next_obj_stage` walks a vial down this list. */
 export const SERUM_BY_DOSE: readonly (readonly [number, number])[] = [
@@ -96,7 +97,7 @@ export function recoverPyreSupplies(snap: QuestSnapshot, needLogs: boolean, need
     if ((snap.freeSlots ?? items.length) < items.length) {
         const keep = [...SM_TOOLS, ...(QuestFood.name ? [QuestFood.name.toLowerCase()] : [])];
         const expendable = [...snap.inv].some(([name, count]) => count > 0 && !keep.some(k => name.toLowerCase().includes(k)));
-        return expendable ? { kind: 'deposit', keep } : { kind: 'wait', reason: 'no pack room for pyre recovery' };
+        return expendable ? { kind: 'deposit', keep } : waitStep('no pack room for pyre recovery');
     }
     return { kind: 'withdraw', items };
 }
@@ -153,7 +154,7 @@ export function recoverSerum(snap: QuestSnapshot, stage: number): QuestStep | nu
     if (snap.freeSlots === 0) {
         const keep = ['coins', 'serum 207', 'pyre logs', 'loar remains', 'sacred oil', 'olive oil'];
         const expendable = [...snap.inv].some(([name, count]) => count > 0 && !keep.some(k => name.toLowerCase().includes(k)));
-        return expendable ? { kind: 'deposit', keep } : { kind: 'wait', reason: 'no pack room for serum recovery' };
+        return expendable ? { kind: 'deposit', keep } : waitStep('no pack room for serum recovery');
     }
     return { kind: 'withdraw', items: [{ ...item, qty: 1 }] };
 }

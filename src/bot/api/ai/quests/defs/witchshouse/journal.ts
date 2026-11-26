@@ -1,6 +1,5 @@
-import { Modals } from '../../../../ui/widgets/Modals.js';
+import { questProgressAt, readQuestJournal } from '../../journalReader.js';
 import { normalizeJournal } from '../../journalText.js';
-import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 import { WITCHS_HOUSE_QUEST } from './areas.js';
 
@@ -42,19 +41,6 @@ export function parseWitchsHouseJournal(lines: readonly string[] | string): Ques
 
 // Why: `witch.rs2` can reset the varp from 3 to 1, so do not retain a later cached stage.
 
-export async function readWitchsHouseProgress(): Promise<QuestProgress | undefined> {
-    const status = Quests.status(WITCHS_HOUSE_QUEST);
-    if (status === 'complete') {
-        return { stage: WH_STAGE.COMPLETE, flags: new Set() };
-    }
-    if (status === 'notStarted') {
-        return { stage: WH_STAGE.NOT_STARTED, flags: new Set() };
-    }
-    if (status !== 'inProgress') {
-        return undefined;
-    }
-
-    const progress = parseWitchsHouseJournal(await Quests.journal(WITCHS_HOUSE_QUEST));
-    await Modals.closeIfOpen();
-    return progress;
+export function readWitchsHouseProgress(): Promise<QuestProgress | undefined> {
+    return readQuestJournal(WITCHS_HOUSE_QUEST, WH_STAGE, parseWitchsHouseJournal, questProgressAt);
 }

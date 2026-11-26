@@ -1,6 +1,8 @@
 // docs/QUESTS.md
+import { customStep as custom, talkTo, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { prepareStrikes, STRIKE_RUNES } from '../../strike.js';
 import { QUESTS } from '../../data/quests.js';
+import { heldId as held } from '../../engine/snapshotItems.js';
 import type { QuestModule, QuestSnapshot, QuestStep } from '../../engine/types.js';
 import { FOOD_FLOAT, QuestFood } from '../../food.js';
 import {
@@ -38,14 +40,6 @@ import {
 
 /** Lobsters to have in the pack before dropping in on the demon. */
 const DEMON_FOOD = 8;
-
-function custom(name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep {
-    return { kind: 'custom', name, run };
-}
-
-function held(snap: QuestSnapshot, id: number): number {
-    return snap.invIds?.get(id) ?? 0;
-}
 
 function foodName(): string | null {
     return QuestFood.name;
@@ -95,9 +89,9 @@ function invasionPlans(snap: QuestSnapshot): QuestStep {
 
 export function decide(snap: QuestSnapshot): QuestStep {
     if (snap.journal === 'complete') { return { kind: 'done' }; }
-    if (snap.journal === 'unknown') { return { kind: 'wait', reason: 'quest journal not loaded' }; }
+    if (snap.journal === 'unknown') { return waitForJournal(); }
     const stage = snap.stage;
-    if (stage === undefined) { return { kind: 'wait', reason: 'The Grand Tree journal stage unavailable' }; }
+    if (stage === undefined) { return waitStep('The Grand Tree journal stage unavailable'); }
 
     // Why: the twig legs live on Glough's pillar floor, a 7-tile pocket with no baked way off it, so the kit is bought on the ground before the first climb.
     // Why: a bank step decided in the pocket has no route and burns its budget proving so, so anyone up there still owing gear climbs back down for it.
@@ -121,16 +115,16 @@ export function decide(snap: QuestSnapshot): QuestStep {
         case GT_STAGE.STARTED:
             // Why: Hazelmere hands nothing over without the sample, and `~check_narnode_items` replaces a lost one.
             return held(snap, GT_OBJ.BARK) > 0
-                ? { kind: 'talk', stop: HAZELMERE }
-                : roomFor(snap, 2) ?? { kind: 'talk', stop: NARNODE };
+                ? talkTo(HAZELMERE)
+                : roomFor(snap, 2) ?? talkTo(NARNODE);
         case GT_STAGE.SPOKEN_HAZELMERE:
-            return { kind: 'talk', stop: NARNODE };
+            return talkTo(NARNODE);
         case GT_STAGE.RELAYED_MESSAGE:
-            return { kind: 'talk', stop: GLOUGH };
+            return talkTo(GLOUGH);
         case GT_STAGE.SPOKEN_GLOUGH:
-            return { kind: 'talk', stop: NARNODE };
+            return talkTo(NARNODE);
         case GT_STAGE.FOUND_PRISONER:
-            return { kind: 'talk', stop: CHARLIE };
+            return talkTo(CHARLIE);
         case GT_STAGE.SPOKEN_PRISONER:
             return custom("search Glough's cupboard", searchCupboard);
         case GT_STAGE.FOUND_JOURNAL:
@@ -141,7 +135,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
                 : custom('take the glider to Karamja', flyToKaramja);
         case GT_STAGE.OBTAINED_LUMBER_ORDER:
             return inStronghold(snap.tile)
-                ? { kind: 'talk', stop: CHARLIE }
+                ? talkTo(CHARLIE)
                 : custom("ride Femi's cart into the stronghold", femiCart);
         case GT_STAGE.CLUE_CHARLIE:
             return invasionPlans(snap);
@@ -149,23 +143,23 @@ export function decide(snap: QuestSnapshot): QuestStep {
             if (held(snap, GT_OBJ.INVASION_PLANS) === 0) {
                 return invasionPlans(snap);
             }
-            return roomFor(snap, 4) ?? { kind: 'talk', stop: NARNODE };
+            return roomFor(snap, 4) ?? talkTo(NARNODE);
         case GT_STAGE.GIVEN_TWIGS: {
             const twig = nextTwig(snap);
             return twig === null
-                ? { kind: 'talk', stop: NARNODE }
+                ? talkTo(NARNODE)
                 : custom(`lay twig ${twig + 1} of 4 on its pillar`, placeTwig(twig));
         }
         case GT_STAGE.UNLOCKED_TRAPDOOR:
             return custom('take the trapdoor and kill the Black Demon', fightBlackDemon);
         case GT_STAGE.DEFEATED_BLACK_DEMON:
-            return { kind: 'talk', stop: NARNODE_UNDER };
+            return talkTo(NARNODE_UNDER);
         case GT_STAGE.SEARCHING_DACONIA:
             return held(snap, GT_OBJ.DACONIA) > 0
                 ? custom('give the King the Daconia rock', giveRock)
                 : custom('search the roots for the Daconia rock', searchNextRoot);
         default:
-            return { kind: 'wait', reason: `unhandled Grand Tree stage ${stage}` };
+            return waitStep(`unhandled Grand Tree stage ${stage}`);
     }
 }
 

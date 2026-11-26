@@ -4,7 +4,7 @@ import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { EventSignal } from '../../api/execution/EventSignal.js';
 import { Execution } from '../../api/execution/Execution.js';
 import { buryOneInFight } from '../../api/combat/fightUpkeep.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import Tile from '../../geometry/Tile.js';
 import { DeathRecovery } from '../../api/tasks/DeathRecovery.js';
 import { ContinueDialog } from '../../api/tasks/ContinueDialog.js';
@@ -659,7 +659,7 @@ export default class MossGiant extends TaskBot {
     died = false;
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
 
         STYLE = (this.settings.str('combatStyle', 'melee') as 'melee' | 'mage' | 'range');
         MELEE_STYLE = parseCombatStyle(this.settings.str('meleeStyle', 'strength'));

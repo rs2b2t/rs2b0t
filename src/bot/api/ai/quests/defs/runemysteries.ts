@@ -1,3 +1,4 @@
+import { talkTo, waitForJournal } from '../engine/questSteps.js';
 import { Modals } from '../../../ui/widgets/Modals.js';
 import { Quests } from '../../../ui/questlog/Quests.js';
 import { normalizeJournal } from '../journalText.js';
@@ -15,8 +16,6 @@ export const WIZARD_HOPS: LadderHop[] = [
     { stand: new Tile(3104, 9576, 0), locName: 'Ladder', op: 'Climb-up', arrive: new Tile(3105, 3162, 0) }
 ];
 
-const TALK = (stop: NpcStop): QuestStep => ({ kind: 'talk', stop });
-
 const RECOVER_PROBES: NpcStop[] = [AUBURY, SEDRIDOR, DUKE];
 
 export function decide(snap: QuestSnapshot): QuestStep {
@@ -24,18 +23,18 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return { kind: 'done' };
     }
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     if (snap.journal === 'notStarted') {
-        return TALK(DUKE);
+        return talkTo(DUKE);
     }
     const stage = snap.progress?.stage ?? snap.stage;
-    if (stage === 2) return TALK(SEDRIDOR);
-    if (stage === 4) return TALK(AUBURY);
+    if (stage === 2) return talkTo(SEDRIDOR);
+    if (stage === 4) return talkTo(AUBURY);
     for (const [name, stop] of [['Notes', SEDRIDOR], ['Research package', AUBURY], ['Air talisman', SEDRIDOR]] as const) {
         const key = name.toLowerCase();
         if ((snap.inv.get(key) ?? 0) > 0) {
-            return TALK(stop);
+            return talkTo(stop);
         }
         if ((snap.bank?.get(key) ?? 0) > 0) {
             return { kind: 'withdraw', items: [{ name, qty: 1 }] };
@@ -44,7 +43,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
     if (!snap.bankKnown) {
         return { kind: 'scanBank' };
     }
-    return TALK(RECOVER_PROBES[snap.noProgress % RECOVER_PROBES.length]);
+    return talkTo(RECOVER_PROBES[snap.noProgress % RECOVER_PROBES.length]);
 }
 
 export const runemysteries: QuestModule = {

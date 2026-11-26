@@ -1,3 +1,4 @@
+import { customStep } from '../../engine/questSteps.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
 import { Locs } from '../../../../locs/Locs.js';
@@ -54,11 +55,7 @@ export function seasoningStep(snap: QuestSnapshot): QuestStep | null {
         return null;
     }
     if (missing.loc !== undefined) {
-        return {
-            kind: 'custom',
-            name: `pick a ${missing.name.toLowerCase()}`,
-            run: pickPatch(missing.loc, missing.name, missing.id, missing.tile)
-        };
+        return customStep(`pick a ${missing.name.toLowerCase()}`, pickPatch(missing.loc, missing.name, missing.id, missing.tile));
     }
     return { kind: 'grabGround', item: missing.name, anchor: missing.tile, waitIfMissing: true };
 }

@@ -7,7 +7,7 @@ import { Trade } from '../../api/trade/Trade.js';
 import { SOA_ID } from '../../api/ai/quests/defs/shieldofarrav/areas.js';
 import { HERO_ID } from '../../api/ai/quests/defs/heroquest/areas.js';
 import { ArravConfig, resolveGang, type ArravGang } from '../../api/ai/quests/defs/shieldofarrav/config.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import { Inventory, type InvItem } from '../../api/inventory/Inventory.js';
 import { Paint, type PaintLine } from '../../paint/Paint.js';
 import { fmtDuration } from '../../paint/paintLogic.js';
@@ -170,7 +170,7 @@ export default class AIOQuester extends TaskBot {
     private questSince = Date.now();
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
         this.startedAt = Date.now();
         this.stepSince = this.startedAt;
         this.questSince = this.startedAt;

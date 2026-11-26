@@ -1,13 +1,8 @@
-import { launchBrowser, startFromLibrary } from './lib/harness.js';
+import { fail, launchBrowser, startFromLibrary } from './lib/harness.js';
 
 const base = process.argv[2] ?? 'http://localhost:8890';
 const username = process.argv[3] ?? `smoke${Date.now().toString(36).slice(-7)}`;
 const password = process.argv[4] ?? 'test';
-
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
-}
 
 const browser = await launchBrowser();
 

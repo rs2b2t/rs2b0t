@@ -1,6 +1,5 @@
-import { Modals } from '../../../../ui/widgets/Modals.js';
+import { questProgressAt, readQuestJournal, type JournalCache } from '../../journalReader.js';
 import { normalizeJournal as normalize } from '../../journalText.js';
-import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 import { CB_QUEST, CB_STAGE } from './areas.js';
 
@@ -28,24 +27,8 @@ export function parseChompyJournal(lines: readonly string[] | string): QuestProg
 }
 
 /** A failed read doesn't mean the quest went backwards. */
-let lastGood: QuestProgress | undefined;
+const cache: JournalCache<QuestProgress> = {};
 
-export async function readChompyProgress(): Promise<QuestProgress | undefined> {
-    const status = Quests.status(CB_QUEST);
-    if (status === 'complete') {
-        return { stage: CB_STAGE.COMPLETE, flags: new Set<string>() };
-    }
-    if (status === 'notStarted') {
-        return { stage: CB_STAGE.NOT_STARTED, flags: new Set<string>() };
-    }
-    if (status !== 'inProgress') {
-        return undefined;
-    }
-    const progress = parseChompyJournal(await Quests.journal(CB_QUEST));
-    // Why: the ogre chest, the bait refusal and every objbox in Rantz's chain sit on main, and while one is up the journal read comes back empty.
-    await Modals.closeIfOpen();
-    if (progress) {
-        lastGood = progress;
-    }
-    return progress ?? lastGood;
+export function readChompyProgress(): Promise<QuestProgress | undefined> {
+    return readQuestJournal(CB_QUEST, CB_STAGE, parseChompyJournal, questProgressAt, cache);
 }

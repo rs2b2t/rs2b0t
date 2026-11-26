@@ -2,7 +2,7 @@ import { foodHealAmount, shouldEatToUseFood, MIN_EAT_HP } from '../../api/combat
 import { createReturnToAnchorTask, resolveRunAnchor, tileWithinLeash } from '../../api/tasks/Anchor.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import { Reachability } from '../../event/webwalk/geometry/Reachability.js';
 import Tile from '../../geometry/Tile.js';
 import { ChatDialog } from '../../api/ui/dialogue/ChatDialog.js';
@@ -87,7 +87,7 @@ export default class ThievingBot extends TaskBot {
     private stunnedUntilTick = 0;
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
 
         this.target = this.settings.str('target', 'Man');
         this.action = this.settings.str('action', 'Pickpocket');

@@ -9,7 +9,7 @@ import { homedir } from 'node:os';
 
 import type { Page } from 'playwright-core';
 
-import { launchBrowser } from './lib/harness.js';
+import { fail, launchBrowser, logBotConsole } from './lib/harness.js';
 import { cheatQuiet, clearChatDialogs, mainlandAccount, relog, teleTo } from './tutorial/harness.js';
 
 interface Args {
@@ -52,11 +52,6 @@ function parse(argv: string[]): Args {
 }
 
 const args = parse(process.argv.slice(2));
-
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
-}
 
 /** West of the grid, beside the portcullis lever. */
 const GRID_WEST = { x: 2467, z: 9677, level: 0 };
@@ -156,13 +151,7 @@ const browser = await launchBrowser({ swiftshader: true });
 try {
     const page = await browser.newPage();
     const t0 = Date.now();
-    page.on('pageerror', e => console.log(`pageerror: ${e}`));
-    page.on('console', m => {
-        const txt = m.text();
-        if (txt.startsWith('[bot]')) {
-            console.log(`  [${Math.round((Date.now() - t0) / 1000)}s] ${txt}`);
-        }
-    });
+    logBotConsole(page, t0);
 
     await mainlandAccount(page, args.base, args.user);
     await cheatQuiet(page, `speed ${args.tickMs}`);

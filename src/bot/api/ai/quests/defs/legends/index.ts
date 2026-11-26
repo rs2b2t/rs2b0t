@@ -1,3 +1,4 @@
+import { customStep as step, waitForJournal, waitStep } from '../../engine/questSteps.js';
 import { Execution } from '../../../../execution/Execution.js';
 import { Inventory } from '../../../../inventory/Inventory.js';
 import { Npcs } from '../../../../npcs/Npcs.js';
@@ -71,10 +72,6 @@ import { LQ_SHOP } from './areas.js';
 import { BRAVERY_HERBS, identifyHerb, pickHerb } from './gather.js';
 import { readLegendsProgress } from './journal.js';
 import { driveUntil } from './scene.js';
-
-function step(name: string, run: (log: (m: string) => void) => Promise<boolean>): QuestStep {
-    return { kind: 'custom', name, run };
-}
 
 // Why: Each sealed Karamja pocket requires its scripted exit before normal pathfinding can resume.
 
@@ -409,7 +406,7 @@ function stageBowl(snap: QuestSnapshot): QuestStep {
     // Why: this is the last branch that still has a bank behind it. The fill is next and `jungle_tree` boils the bowl off on any chop back across the band.
     const flask = held(snap, LQ_ID.BOOK_OF_BINDING) > 0 && potsHeld(snap) === 0 && potsBanked(snap) === 0;
     if (flask) {
-        return { kind: 'wait', reason: 'no prayer potion in the pack or the bank, and opening the book drains nine tenths of the prayer bar before the demon lands a blow' };
+        return waitStep('no prayer potion in the pack or the bank, and opening the book drains nine tenths of the prayer bar before the demon lands a blow');
     }
     if (held(snap, LQ_ID.HOLLOW_REED) === 0) {
         return step('cut a hollow reed at the sacred pool', cutReed);
@@ -450,7 +447,7 @@ function stageBook(snap: QuestSnapshot): QuestStep {
         return fightKit;
     }
     if (potsHeld(snap) === 0 && potsBanked(snap) === 0) {
-        return { kind: 'wait', reason: 'no prayer potion in the pack or the bank, and opening the book drains nine tenths of the prayer bar before the demon lands a blow' };
+        return waitStep('no prayer potion in the pack or the bank, and opening the book drains nine tenths of the prayer bar before the demon lands a blow');
     }
     return step('open the Book of Binding on Ungadulu', summonAndFight);
 }
@@ -609,7 +606,7 @@ function stageSacredWater(snap: QuestSnapshot): QuestStep {
         return stageGrow(snap);
     }
     if (held(snap, LQ_ID.GOLD_BOWL_BLESSED) === 0) {
-        return { kind: 'wait', reason: 'no empty blessed bowl to fill at the source' };
+        return waitStep('no empty blessed bowl to fill at the source');
     }
     return viyeldiStep(snap, 'shift the boulder and fill the bowl at the source', collectSacredWater);
 }
@@ -647,7 +644,7 @@ function stageReplace(snap: QuestSnapshot): QuestStep {
         }
         // Why: same silence as the octagram: `potionTopUp` answers null when the bank has no flask, and Protect from Melee can't be raised on an empty prayer bar.
         if (potsHeld(snap) === 0 && potsBanked(snap) === 0) {
-            return { kind: 'wait', reason: 'no prayer potion in the pack or the bank, and replacing the totem spawns Nezikchened on the spot' };
+            return waitStep('no prayer potion in the pack or the bank, and replacing the totem spawns Nezikchened on the spot');
         }
         return step('replace the evil totem and kill what comes out', replaceEvilTotem);
     }
@@ -666,13 +663,13 @@ function choose(snap: QuestSnapshot): QuestStep {
         return escapePocket(snap) ?? { kind: 'done' };
     }
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     if (snap.stage === undefined) {
-        return { kind: 'wait', reason: 'Legends Quest journal stage unavailable' };
+        return waitStep('Legends Quest journal stage unavailable');
     }
     if (area === 'unknown') {
-        return { kind: 'wait', reason: 'player location unavailable' };
+        return waitStep('player location unavailable');
     }
 
     const spent = (snap.freeSlots ?? 9) <= 1 ? spentNow(snap) : [];
@@ -758,7 +755,7 @@ function choose(snap: QuestSnapshot): QuestStep {
         case LQ_STAGE.TRAINING_4:
             return inTheOpen(snap, step("take Radimus' four training sessions", takeTraining));
         default:
-            return { kind: 'wait', reason: `Legends Quest stage ${stage} is not implemented` };
+            return waitStep(`Legends Quest stage ${stage} is not implemented`);
     }
 }
 

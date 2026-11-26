@@ -1,3 +1,4 @@
+import { customStep as custom, waitStep as wait } from '../../engine/questSteps.js';
 import { TB_FOODS } from './loadout.js';
 import { Skills } from '../../../../skills/Skills.js';
 import { QUESTS } from '../../data/quests.js';
@@ -63,14 +64,11 @@ import {
     tiadecheStage,
     tinsayStage
 } from './supplies.js';
-import { useOnNpc, type Log } from './talk.js';
+import { useOnNpc } from './talk.js';
 
 export { TBWT_QUEST, TB_ID, TB_LUBUFU, TB_MAIN, TB_TAMAYU, TB_TIADECHE, TB_TINSAY } from './areas.js';
 export { parseTbwtJournal, readTbwtProgress, TB_FLAG } from './journal.js';
 export { outstandingSupplies, prepare, TB_PROVEN } from './supplies.js';
-
-const custom = (name: string, run: (log: Log) => Promise<boolean>): QuestStep => ({ kind: 'custom', name, run });
-const wait = (reason: string): QuestStep => ({ kind: 'wait', reason });
 
 /** The vessel in whichever state the pack holds it. */
 function vesselHeld(snap: QuestSnapshot): number {

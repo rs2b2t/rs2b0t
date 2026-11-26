@@ -1,25 +1,13 @@
 import { reader } from '../../../../../adapter/ClientAdapter.js';
 import { Inventory, type InvItem } from '../../../../inventory/Inventory.js';
 import { QuestFood } from '../../food.js';
+import { bankedId, heldId, wornId } from '../../engine/snapshotItems.js';
 import type { QuestSnapshot } from '../../engine/types.js';
 
-// Why: Key, Herb, Chest and Door each name more than one object, so a name lookup silently accepts the wrong one.
-
-export function heldId(snap: QuestSnapshot, id: number): number {
-    return snap.invIds?.get(id) ?? 0;
-}
-
-// Why: Keep unread bank state distinct from an empty bank.
-export function bankedId(snap: QuestSnapshot, id: number): number {
-    return snap.bankKnown ? (snap.bankIds?.get(id) ?? 0) : 0;
-}
+export { bankedId, heldId, wornId };
 
 export function anywhere(snap: QuestSnapshot, id: number): number {
     return heldId(snap, id) + bankedId(snap, id) + (snap.wornIds?.has(id) ? 1 : 0);
-}
-
-export function wornId(snap: QuestSnapshot, id: number): boolean {
-    return snap.wornIds?.has(id) ?? false;
 }
 
 export function liveItem(id: number): InvItem | null {

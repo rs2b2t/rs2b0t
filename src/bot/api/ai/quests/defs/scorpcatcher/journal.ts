@@ -1,7 +1,6 @@
-import { Modals } from '../../../../ui/widgets/Modals.js';
+import { questProgressAt, readQuestJournal } from '../../journalReader.js';
 import { normalizeJournal as normalize } from '../../journalText.js';
 // docs/QUESTS.md
-import { Quests } from '../../../../ui/questlog/Quests.js';
 import type { QuestProgress } from '../../engine/types.js';
 import { SC_STAGE } from './areas.js';
 
@@ -35,18 +34,6 @@ export function parseScorpionJournal(lines: readonly string[] | string): QuestPr
     return undefined;
 }
 
-export async function readScorpionProgress(): Promise<QuestProgress | undefined> {
-    const status = Quests.status(QUEST);
-    if (status === 'complete') {
-        return { stage: SC_STAGE.COMPLETE, flags: new Set() };
-    }
-    if (status === 'notStarted') {
-        return { stage: SC_STAGE.NOT_STARTED, flags: new Set() };
-    }
-    if (status !== 'inProgress') {
-        return undefined;
-    }
-    const progress = parseScorpionJournal(await Quests.journal(QUEST));
-    await Modals.closeIfOpen();
-    return progress;
+export function readScorpionProgress(): Promise<QuestProgress | undefined> {
+    return readQuestJournal(QUEST, SC_STAGE, parseScorpionJournal, questProgressAt);
 }

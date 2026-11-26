@@ -1,3 +1,4 @@
+import { customStep, waitForJournal, waitStep } from '../engine/questSteps.js';
 import { Modals } from '../../../ui/widgets/Modals.js';
 import { normalizeJournal as journalText } from '../journalText.js';
 import { Execution } from '../../../execution/Execution.js';
@@ -241,11 +242,7 @@ function stageFifty(snap: QuestSnapshot): QuestStep {
             bank: VARROCK_WEST_BANK
         };
     }
-    return {
-        kind: 'custom',
-        name: 'stage 50: collect Cadava berries from their ground spawns',
-        run: pickBerries
-    };
+    return customStep('stage 50: collect Cadava berries from their ground spawns', pickBerries);
 }
 
 export function decide(snap: QuestSnapshot): QuestStep {
@@ -253,10 +250,10 @@ export function decide(snap: QuestSnapshot): QuestStep {
         return { kind: 'done' };
     }
     if (snap.journal === 'unknown') {
-        return { kind: 'wait', reason: 'quest journal not loaded' };
+        return waitForJournal();
     }
     if (snap.stage === undefined) {
-        return { kind: 'wait', reason: 'Romeo & Juliet stage unavailable' };
+        return waitStep('Romeo & Juliet stage unavailable');
     }
 
     switch (snap.stage) {
@@ -275,7 +272,7 @@ export function decide(snap: QuestSnapshot): QuestStep {
         case ROMEO_JULIET_STAGE.JULIET_IN_CRYPT:
             return talkAtStage(60, 'tell Romeo that Juliet took the potion', ROMEO);
         default:
-            return { kind: 'wait', reason: `unrecognized Romeo & Juliet stage ${snap.stage}` };
+            return waitStep(`unrecognized Romeo & Juliet stage ${snap.stage}`);
     }
 }
 

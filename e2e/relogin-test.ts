@@ -1,13 +1,8 @@
-import { launchBrowser, positionalArgs, startFromLibrary } from './lib/harness.js';
+import { fail, launchBrowser, positionalArgs, startFromLibrary } from './lib/harness.js';
 
 const args = positionalArgs(process.argv.slice(2), 'http://localhost:8890');
 const base = args[0];
 const username = args[1] ?? `relog${Date.now().toString(36).slice(-7)}`;
-
-function fail(msg: string): never {
-    console.error(`FAIL: ${msg}`);
-    process.exit(1);
-}
 
 type Rs2b0t = {
     rs2b0t: {

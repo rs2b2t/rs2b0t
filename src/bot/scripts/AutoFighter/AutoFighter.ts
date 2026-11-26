@@ -1,7 +1,7 @@
 import { configuredLootNames } from '../../api/bank/bankRules.js';
 import { TaskBot, type Task } from '../../api/bot/Bot.js';
 import { Execution } from '../../api/execution/Execution.js';
-import { Game } from '../../api/game/Game.js';
+import { Game, waitForPlayerTile } from '../../api/game/Game.js';
 import { ContinueDialog } from '../../api/tasks/ContinueDialog.js';
 import { DeathRecovery } from '../../api/tasks/DeathRecovery.js';
 import {
@@ -334,7 +334,7 @@ export default class AutoFighter extends TaskBot {
     resumeAttack = true;
 
     override async onStart(): Promise<void> {
-        await Execution.delayUntil(() => Game.ingame() && Game.tile() !== null, 0);
+        await waitForPlayerTile();
 
         TARGET = this.settings.str('target', 'Guard').trim() || 'Guard';
         const spotMode = this.settings.str('spot', START_POSITION);
