@@ -11,17 +11,18 @@ export function boxId(): string {
     return new URLSearchParams(location.search).get('box') ?? '';
 }
 
+const setProfilePrefix = 'rs2b0t::profile:set:';
+
 export function boxKey(suffix: string, id = boxId()): string {
-    // Why: every standalone setting under rs2b0t:set: contains a literal colon in its suffix.
-    if (id === 'set') suffix = suffix.replaceAll('%', '%25').replaceAll(':', '%3A');
+    if (id === 'set' && suffix.includes(':')) return setProfilePrefix + suffix;
     if (!id && suffix.startsWith('set:set:')) return `rs2b0t::${suffix}`;
     return id ? `rs2b0t:${id}:${suffix}` : `rs2b0t:${suffix}`;
 }
 
 export function boxSuffix(key: string, prefix: string, id: string): string | null {
+    if (id === 'set' && key.startsWith(setProfilePrefix)) return key.slice(setProfilePrefix.length);
     if (!key.startsWith(prefix) || (id === 'set' && key.includes(':', prefix.length))) return null;
-    const suffix = key.slice(prefix.length);
-    return id === 'set' ? suffix.replaceAll('%3A', ':').replaceAll('%25', '%') : suffix;
+    return key.slice(prefix.length);
 }
 
 export function isLegacySetProfileSetting(suffix: string): boolean {
@@ -41,11 +42,15 @@ function legacyKey(suffix: string, id: string): string | null {
 }
 
 function allowsLegacy(store: Storage, key: string, id: string): boolean {
+    const cleared = `rs2b0t::cleared:${key}`;
     if (id === 'set') {
         if (store.getItem(setProfileMigrationKey) !== null) return false;
-        if (typeof localStorage !== 'undefined' && store !== localStorage && localStorage.getItem(setProfileMigrationKey) !== null) return false;
+        if (typeof localStorage !== 'undefined' && store !== localStorage) {
+            if (localStorage.getItem(setProfileMigrationKey) !== null) return false;
+            if (desktopStorage && localStorage.getItem(cleared) !== null) return false;
+        }
     }
-    return store.getItem(`rs2b0t::cleared:${key}`) === null;
+    return store.getItem(cleared) === null;
 }
 
 export function readBoxItem(suffix: string, id: string): string | null {

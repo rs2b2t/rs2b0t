@@ -121,6 +121,26 @@ describe('ProfileTransfer', () => {
         expect(JSON.parse(result.stdout.toString())).toEqual({ threshold: 20, syncReads: 0 });
     });
 
+    test('desktop export respects a profile setting cleared in another session', () => {
+        const result = Bun.spawnSync(['bun', 'test/fixtures/roster-desktop-storage.ts', '--export-cleared']);
+        expect(result.exitCode, result.stderr.toString()).toBe(0);
+        expect(JSON.parse(result.stdout.toString())).toEqual({ offered: [], restored: 20 });
+    });
+
+    test('restoring set preserves literal pre-upgrade percent escapes alongside colon-bearing keys', () => {
+        localStorage.setItem('rs2b0t:set:plugin%3Amode', 'literal');
+        expect(collectBoxStorage(['set'])).toEqual({ set: { 'plugin%3Amode': 'literal' } });
+        localStorage.setItem(boxKey('plugin:mode', 'set'), 'nested');
+        const profiles = [{ username: 'set', password: '' }];
+        const file = serializeProfileFile({ ...snap, profiles, storage: collectBoxStorage(['set']) });
+        const { storage } = parseProfileFile(file);
+        expect(storage.set).toEqual({ 'plugin%3Amode': 'literal', 'plugin:mode': 'nested' });
+        applyBoxStorage(storage, ['set']);
+        sessionStorage.clear();
+        expect(localStorage.getItem(boxKey('plugin%3Amode', 'set'))).toBe('literal');
+        expect(localStorage.getItem(boxKey('plugin:mode', 'set'))).toBe('nested');
+    });
+
     test('restores a colon-bearing profile key from its own export', () => {
         const key = boxKey('plugin:mode', 'set');
         localStorage.setItem(key, 'walk');
@@ -286,7 +306,7 @@ describe('ProfileTransfer', () => {
     test('export reads legacy values from both storage layers before the profile is opened', () => {
         localStorage.setItem('rs2b0t:set:set:Miner:rock', 'iron');
         sessionStorage.setItem('rs2b0t:set:set:Miner:rock', 'coal');
-        localStorage.setItem('rs2b0t:set:set%3AMiner%3Atool', 'pickaxe');
+        localStorage.setItem(boxKey('set:Miner:tool', 'set'), 'pickaxe');
         localStorage.setItem('rs2b0t:set:set:Miner:tool', 'old');
 
         expect(collectBoxStorage(['set'], () => true)).toEqual({ set: { 'set:Miner:rock': 'coal', 'set:Miner:tool': 'pickaxe' } });
@@ -329,7 +349,7 @@ describe('ProfileTransfer', () => {
                 store.setItem('rs2b0t:set:set:travel:mode', 'walk');
                 store.setItem('rs2b0t:set:selectedScript', 'Miner');
                 store.setItem('rs2b0t:set:set:Global:runEnergyMin', '31');
-                store.setItem('rs2b0t:set:set%3AGlobal%3ArunEnergyMin', '32');
+                store.setItem(boxKey(threshold, 'set'), '32');
                 store.setItem('rs2b0t:set:set:Loadouts:sets', JSON.stringify([{ ...loadout, name: 'profile' }]));
             }
             const entries: Record<string, string> = { [threshold]: '42' };

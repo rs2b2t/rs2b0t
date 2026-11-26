@@ -14,6 +14,24 @@ Reflect.set(globalThis, 'rs2b0tDesktopStorage', {
     subscribe: listener => { notify = listener; }
 } satisfies DesktopStorage);
 await import('../../src/bot/panel/desktopStorage.js');
+if (process.argv.includes('--export-cleared')) {
+    const { SettingsStore } = await import('../../src/bot/runtime/Settings.js');
+    const { applyBoxStorage, collectBoxStorage } = await import('../../src/bot/multibox/ProfileTransfer.js');
+    const browser = Reflect.get(window, 'happyDOM') as { setURL(url: string): void };
+    browser.setURL('http://localhost/bot.html?box=set');
+    const legacy = 'rs2b0t:set:set:Global:runEnergyMin';
+    localStorage.setItem(legacy, '73');
+    SettingsStore.clear('Global', 'runEnergyMin');
+    sessionStorage.clear();
+    sessionStorage.setItem(legacy, '42');
+    assert.equal(SettingsStore.globalBag().num('runEnergyMin'), 20);
+    const offered: string[] = [];
+    const storage = collectBoxStorage(['set'], suffix => { offered.push(suffix); return true; });
+    applyBoxStorage(storage, ['set']);
+    sessionStorage.clear();
+    console.log(JSON.stringify({ offered, restored: SettingsStore.globalBag().num('runEnergyMin') }));
+    process.exit(0);
+}
 if (process.argv.includes('--export-edited-login')) {
     const { applyBoxStorage, collectBoxStorage, serializeProfileFile } = await import('../../src/bot/multibox/ProfileTransfer.js');
     const { Credentials } = await import('../../src/bot/runtime/Credentials.js');

@@ -1,5 +1,5 @@
 import { isRosterScript } from './RosterTypes.js';
-import { boxKey, boxSuffix, clearBoxItem, profileStorageKeys, readBoxItem } from '../runtime/box.js';
+import { boxKey, clearBoxItem, profileStorageKeys, readBoxItem } from '../runtime/box.js';
 
 function canonicalScript(script: string): string {
     return script === 'NatureCrafter' ? 'JiveRC' : script;
@@ -32,9 +32,9 @@ function scriptEntries(username: string, script: string) {
     const names = script === 'JiveRC' ? ['NatureCrafter', script] : [script];
     return names.flatMap(name => {
         const prefix = boxKey(`set:${name}:`, username);
-        return keys(prefix, username).flatMap(key => {
-            const setting = boxSuffix(key, prefix, username);
-            return setting === null ? [] : [{ suffix: `set:${name}:${setting}`, setting }];
+        return keys(prefix, username).map(key => {
+            const setting = key.slice(prefix.length);
+            return { suffix: `set:${name}:${setting}`, setting };
         });
     });
 }
@@ -64,8 +64,8 @@ export function storedScripts(usernames: string[]): string[] {
         if (selected) scripts.add(selected);
         const prefix = boxKey('set:', username);
         for (const key of savedKeys) {
-            const suffix = boxSuffix(key, prefix, username);
-            if (suffix === null) continue;
+            if (!key.startsWith(prefix)) continue;
+            const suffix = key.slice(prefix.length);
             const end = suffix.indexOf(':');
             if (end > 0) scripts.add(canonicalScript(suffix.slice(0, end)));
         }
