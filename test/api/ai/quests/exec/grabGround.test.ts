@@ -7,6 +7,7 @@ import { GroundItems } from '#/bot/api/grounditems/GroundItems.js';
 import { Inventory } from '#/bot/api/inventory/Inventory.js';
 import { Traversal } from '#/bot/api/walking/Traversal.js';
 import { executeStep } from '#/bot/api/ai/quests/exec/steps.js';
+import { groundItemQuery } from '../../../../lib/groundItemQuery.js';
 import { stubProps } from '../../../../lib/stubSingletons.js';
 
 const ANCHOR = new Tile(3227, 3300, 0);
@@ -45,21 +46,7 @@ const restoreWalk = stubProps(Traversal, {
     }
 });
 const restoreGround = stubProps(GroundItems, {
-    query: () => {
-        let matches = [...ground];
-        const chain = {
-            name: (...names: string[]) => {
-                matches = matches.filter(item => names.includes(item.name));
-                return chain;
-            },
-            within: (distance: number) => {
-                matches = matches.filter(item => item.distance() <= distance);
-                return chain;
-            },
-            nearest: () => matches.sort((a, b) => a.distance() - b.distance())[0] ?? null
-        };
-        return chain as never;
-    }
+    query: () => groundItemQuery(ground) as never
 });
 
 afterAll(() => {
@@ -123,13 +110,7 @@ describe('grabGround', () => {
         const restoreQuery = stubProps(GroundItems, {
             query: () => {
                 queries += 1;
-                const matches = queries >= 2 ? [item] : [];
-                const chain = {
-                    name: () => chain,
-                    within: () => chain,
-                    nearest: () => matches[0] ?? null
-                };
-                return chain as never;
+                return groundItemQuery(queries >= 2 ? [item] : []) as never;
             }
         });
         try {
