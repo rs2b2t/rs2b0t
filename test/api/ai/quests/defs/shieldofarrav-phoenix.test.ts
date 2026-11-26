@@ -4,34 +4,11 @@ import { SOA_ID } from '#/bot/api/ai/quests/defs/shieldofarrav/areas.js';
 import { ArravConfig } from '#/bot/api/ai/quests/defs/shieldofarrav/config.js';
 import { SOA_STAGE } from '#/bot/api/ai/quests/defs/shieldofarrav/journal.js';
 import { phoenixStep } from '#/bot/api/ai/quests/defs/shieldofarrav/phoenix.js';
-import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
+
+import { arravSnapshot } from './shieldofarrav-snapshot.fixture.js';
 
 const VARROCK = { x: 3210, z: 3490, level: 0 };
-
-function at(
-    stage: number,
-    flags: string[] = [],
-    ids: [number, number][] = [],
-    bankIds: [number, number][] = [],
-    bankKnown = true
-): QuestSnapshot {
-    return {
-        journal: 'inProgress',
-        inv: new Map(),
-        invIds: new Map(ids),
-        worn: new Set(),
-        wornIds: new Set(),
-        noProgress: 0,
-        bankCoins: 2_000_000,
-        bank: new Map(),
-        bankIds: new Map(bankIds),
-        bankKnown,
-        tile: VARROCK as QuestSnapshot['tile'],
-        freeSlots: 20,
-        stage,
-        progress: { stage, flags: new Set(flags) }
-    };
-}
+const at = arravSnapshot.bind(null, VARROCK);
 
 afterEach(() => {
     ArravConfig.partner = '';
