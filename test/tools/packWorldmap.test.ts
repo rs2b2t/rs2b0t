@@ -205,6 +205,44 @@ test('a failed overlay copy leaves the published JAG and manifest in place', () 
     }
 });
 
+test('retrying a failed label repair publishes a complete PNG', () => {
+    const root = mkdtempSync(join(tmpdir(), 'pack-label-retry-'));
+    try {
+        const dest = join(root, 'published');
+        const args = ['--if-needed', '--publish-to', dest];
+        writeFileSync(join(root, 'worldmap.jag'), townMap);
+        bakeMap(root, ...args);
+        const { labelsOverlayUrl } = JSON.parse(readFileSync(join(dest, 'worldmap-basemap.manifest.json'), 'utf8'));
+        const staged = join(root, labelsOverlayUrl);
+        const published = join(dest, labelsOverlayUrl);
+        const original = readFileSync(published);
+        rmSync(staged);
+
+        const preload = join(root, 'fail-label-write.cjs');
+        writeFileSync(preload, `
+            const fs = require('node:fs');
+            const write = fs.writeFileSync;
+            fs.writeFileSync = (file, data, ...args) => {
+                if (file.startsWith(${JSON.stringify(staged)})) {
+                    write(file, data.subarray(0, 8));
+                    throw new Error('injected ENOSPC');
+                }
+                return write(file, data, ...args);
+            };
+        `);
+        expect(() => execFileSync(process.execPath, ['--no-install', '--preload', preload, ...bakeArgs(root, ...args)],
+            { cwd: root, env: { HOME: root }, stdio: 'pipe' })).toThrow(/injected ENOSPC/);
+        expect(readFileSync(published).equals(original)).toBe(true);
+
+        bakeMap(root, ...args);
+        const repaired = readFileSync(published);
+        expect(decodePng(repaired).width).toBe(1600);
+        expect(repaired.equals(original)).toBe(true);
+    } finally {
+        rmSync(root, { recursive: true, force: true });
+    }
+});
+
 for (const operation of ['copyFileSync', 'renameSync']) {
     test(`a failed manifest ${operation} preserves the published JAG and manifest`, () => {
         const root = mkdtempSync(join(tmpdir(), 'publish-manifest-'));

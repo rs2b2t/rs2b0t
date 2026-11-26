@@ -133,8 +133,13 @@ function findLocalJag(opts: BakeArgs, previous: BakeManifest | null) {
 
 function replaceFile(file: string, data: string | Uint8Array): void {
     const temp = `${file}.${process.pid}.tmp`;
-    fs.writeFileSync(temp, data);
-    fs.renameSync(temp, file);
+    try {
+        fs.writeFileSync(temp, data);
+        fs.renameSync(temp, file);
+    } catch (err) {
+        fs.rmSync(temp, { force: true });
+        throw err;
+    }
 }
 
 function stageJag(outDir: string, source: string | null, bytes: Uint8Array): void {
@@ -501,12 +506,12 @@ async function buildBasemap(opts: BakeArgs): Promise<BakeManifest> {
     const multiPng = encodePngRgba(result.multiRgba, width, height);
     const freePng = encodePngRgba(result.freeRgba, width, height);
 
-    fs.writeFileSync(path.join(opts.outDir, terrainName), terrainPng);
-    fs.writeFileSync(path.join(opts.outDir, keyName), keyPng);
-    fs.writeFileSync(path.join(opts.outDir, labelsName), labelsPng);
-    fs.writeFileSync(path.join(opts.outDir, multiName), multiPng);
-    fs.writeFileSync(path.join(opts.outDir, freeName), freePng);
-    fs.writeFileSync(
+    replaceFile(path.join(opts.outDir, terrainName), terrainPng);
+    replaceFile(path.join(opts.outDir, keyName), keyPng);
+    replaceFile(path.join(opts.outDir, labelsName), labelsPng);
+    replaceFile(path.join(opts.outDir, multiName), multiPng);
+    replaceFile(path.join(opts.outDir, freeName), freePng);
+    replaceFile(
         path.join(opts.outDir, keyIndexName),
         JSON.stringify(result.keyIndex, null, 2) + '\n'
     );
@@ -516,7 +521,7 @@ async function buildBasemap(opts: BakeArgs): Promise<BakeManifest> {
     for (const [typeId, rgba] of Object.entries(result.keyTypeRgba)) {
         const name = `worldmap-key-type-${typeId}.${fp}.png`;
         const png = encodePngRgba(rgba, width, height);
-        fs.writeFileSync(path.join(opts.outDir, name), png);
+        replaceFile(path.join(opts.outDir, name), png);
         keyTypeOverlayUrls[typeId] = `./${name}`;
         keyTypeBytes += png.length;
     }
@@ -528,7 +533,7 @@ async function buildBasemap(opts: BakeArgs): Promise<BakeManifest> {
         try {
             const marker = await extractMapmarkerPng(new Uint8Array(fs.readFileSync(mediaPath)), 0);
             const markerName = `worldmap-player-marker.${fp}.png`;
-            fs.writeFileSync(path.join(opts.outDir, markerName), marker);
+            replaceFile(path.join(opts.outDir, markerName), marker);
             playerMarkerUrl = `./${markerName}`;
             console.log(`  player marker: ${markerName} (${(marker.length / 1024).toFixed(1)} KB)`);
         } catch (e) {
