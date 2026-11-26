@@ -1007,6 +1007,7 @@ export class WorldMapPicker {
                                 SettingsStore.saveBakePreference(key, value);
                                 if (bakeEdits.get(key) === value) bakeEdits.delete(key);
                             } catch {
+                                if (!bakeEdits.has(key)) bakeEdits.set(key, value);
                                 failed.push(MAP_PICKER_SETTINGS[key].label ?? key);
                             }
                         }

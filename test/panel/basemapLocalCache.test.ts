@@ -510,6 +510,50 @@ describe('map picker bake settings drafts', () => {
         }
     });
 
+    test.each([false, true])('Retry keeps a rejected preference after Settings reopens (borders edited again: %p)', async editBorders => {
+        SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'skipRebuildConfirm', 'true');
+        const first = Promise.withResolvers<ReturnType<typeof rebuiltMap>>();
+        const bake = spyOn(basemapRegen, 'regenerateBasemap').mockReturnValueOnce(first.promise).mockResolvedValue(rebuiltMap());
+        try {
+            await withPicker(async () => {
+                openSettings();
+                bakeCheckbox('Map-square borders').click();
+                clickRebuild(true);
+                expect(bake).toHaveBeenCalledWith(prefs({ borders: true }));
+                escapeSettings();
+                openSettings();
+                bakeCheckbox('NPC dots').click();
+                const borders = bakeCheckbox('Map-square borders');
+                if (editBorders) {
+                    borders.click();
+                    borders.click();
+                }
+
+                const setItem = localStorage.setItem;
+                Object.defineProperty(localStorage, 'setItem', { configurable: true, value() {
+                    throw new DOMException('storage full', 'QuotaExceededError');
+                } });
+                try {
+                    first.resolve(rebuiltMap());
+                    await new Promise<void>(resolve => setImmediate(resolve));
+                    expect(document.querySelector('.rs2b0t-modal [role="alert"]')?.textContent).toContain('Map-square borders');
+                    expect(stored('bakeBorders')).toEqual({ local: null, session: null });
+                } finally {
+                    Object.defineProperty(localStorage, 'setItem', { value: setItem });
+                }
+
+                expect(borders.checked).toBe(!editBorders);
+                clickRebuild(true);
+                await new Promise<void>(resolve => setImmediate(resolve));
+                expect(stored('bakeBorders').local).toBe(String(!editBorders));
+                expect(stored('bakeNpcs').local).toBe('true');
+                expect(bake).toHaveBeenLastCalledWith(prefs({ borders: !editBorders, npcs: true }));
+            });
+        } finally {
+            bake.mockRestore();
+        }
+    });
+
     test('Settings shows the rebuild failure and retries with the same draft', async () => {
         SettingsStore.save(MAP_PICKER_SETTINGS_NS, 'skipRebuildConfirm', 'true');
         const bake = spyOn(basemapRegen, 'regenerateBasemap')
