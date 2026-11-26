@@ -10,7 +10,8 @@ import type JagFile from '#/client/io/JagFile.js';
 import OnDemandProvider from '#/client/io/OnDemandProvider.js';
 import OnDemandRequest from '#/client/io/OnDemandRequest.js';
 import Packet from '#/client/io/Packet.js';
-import { publisherTrafficChannel } from '#/client/io/TrafficChannel.js';
+import type { TrafficMessage } from '#/client/io/TrafficMeter.js';
+import { openWorkerTrafficPort } from '#/client/io/TrafficChannel.js';
 
 declare const ONDEMAND_WORKER_URL: string;
 
@@ -33,6 +34,7 @@ export default class OnDemand extends OnDemandProvider {
     cycle: number = 0;
     failCount: number = 0;
     worker: Worker | null = null;
+    private closeWorker?: () => void;
     private workerError: Error | null = null;
     private lastIngame: boolean = false;
     private workerMessageId: number = 0;
@@ -140,7 +142,7 @@ export default class OnDemand extends OnDemandProvider {
 
     stop() {
         this.worker?.postMessage({ type: 'stop' });
-        this.terminateWorker();
+        this.closeWorker?.();
     }
 
     private terminateWorker() {
@@ -151,6 +153,7 @@ export default class OnDemand extends OnDemandProvider {
             this.worker.terminate();
             this.worker = null;
         }
+        this.closeWorker = undefined;
         this.resolveWorkerAcks();
     }
 
@@ -337,14 +340,18 @@ export default class OnDemand extends OnDemandProvider {
         }
 
         const url = new URL(typeof ONDEMAND_WORKER_URL === 'undefined' ? './ondemandworker.js' : ONDEMAND_WORKER_URL, import.meta.url);
-        const worker = new Worker(url, { type: 'module', name: publisherTrafficChannel() });
+        const worker = new Worker(url, { type: 'module' });
         this.worker = worker;
         this.lastIngame = this.app.ingame;
 
+        const terminate = () => this.terminateWorker();
+        const traffic = openWorkerTrafficPort(terminate);
+        this.closeWorker = traffic?.close ?? terminate;
         let loaded = false;
         worker.onmessage = (event: MessageEvent): void => {
             loaded = true;
             const message = event.data as
+                | TrafficMessage
                 | { type: 'ready' }
                 | { type: 'completed'; archive: number; file: number; urgent: boolean; data: ArrayBuffer | null }
                 | { type: 'message'; message: string }
@@ -352,7 +359,9 @@ export default class OnDemand extends OnDemandProvider {
                 | { type: 'ack'; id: number }
                 | { type: 'error'; error: string };
 
-            if (message.type === 'completed') {
+            if (message.type === 'rs2b0t:traffic') {
+                traffic?.port.postMessage(message);
+            } else if (message.type === 'completed') {
                 this.receiveCompleted(message.archive, message.file, message.urgent, message.data);
             } else if (message.type === 'message') {
                 this.message = message.message;
@@ -377,13 +386,13 @@ export default class OnDemand extends OnDemandProvider {
             }
             this.workerError = new Error(event.message || 'Asset worker failed to load');
             console.error(this.workerError);
-            this.terminateWorker();
+            this.closeWorker?.();
             this.requests = new LinkList2();
             for (const pending of this.pendingByArchive) pending.clear();
             this.completed.clear();
         };
 
-        worker.postMessage({
+        const init = {
             type: 'init',
             versions: this.versions,
             crcs: this.crcs,
@@ -391,7 +400,21 @@ export default class OnDemand extends OnDemandProvider {
             secured: TARGET.tls,
             ingame: this.app.ingame,
             dbEnabled: !!this.app.db
-        });
+        };
+        if (traffic) {
+            try {
+                worker.postMessage({ ...init, trafficPort: traffic.port }, [traffic.port]);
+            } catch {
+                try {
+                    worker.postMessage({ ...init, trafficPort: 'relay' });
+                } catch (error) {
+                    this.closeWorker();
+                    throw error;
+                }
+            }
+            return;
+        }
+        worker.postMessage(traffic === undefined ? init : { ...init, trafficPort: null });
     }
 
     private postWorker(message: unknown): void {
