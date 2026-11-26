@@ -446,6 +446,12 @@ async function main(): Promise<void> {
         playerMarkerUrl,
         jagBytes: bytes.length
     };
+    const packagedJag = path.join(opts.outDir, 'worldmap.jag');
+    if (path.resolve(source) !== path.resolve(packagedJag)) {
+        const tempJag = `${packagedJag}.${process.pid}.tmp`;
+        fs.writeFileSync(tempJag, bytes);
+        fs.renameSync(tempJag, packagedJag);
+    }
     const manPath = path.join(opts.outDir, BASEMAP_MANIFEST_NAME);
     fs.writeFileSync(manPath, JSON.stringify(manifest, null, 2) + '\n');
 

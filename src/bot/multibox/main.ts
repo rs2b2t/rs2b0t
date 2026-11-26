@@ -413,11 +413,7 @@ function boot(): void {
 
     function loadImportedProfiles(): void {
         const live = new Set(controller.snapshot().map(slot => slot.username));
-        for (const p of vault.list()) {
-            if (!live.has(p.username)) {
-                controller.add(p);
-            }
-        }
+        controller.addGroup(vault.list().filter(profile => !live.has(profile.username)));
         persistTabState();
         renderRail();
     }
