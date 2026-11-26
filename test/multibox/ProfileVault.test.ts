@@ -167,7 +167,7 @@ describe('ProfileVault', () => {
         const v = new ProfileVault();
         await v.setup('pw');
         await v.upsert({ username: 'alice', password: 'a' });
-        v.reset();
+        await v.reset();
         expect(v.status()).toBe('empty');
         expect(localStorage.getItem(KEY)).toBeNull();
         expect(() => v.list()).toThrow();
@@ -177,10 +177,57 @@ describe('ProfileVault', () => {
         const v = new ProfileVault();
         await v.setup('pw');
         const pending = v.upsert({ username: 'alice', password: 'a' });
-        v.reset();
+        await v.reset();
         await pending;
         expect(v.status()).toBe('empty');
         expect(localStorage.getItem(KEY)).toBeNull();
+    });
+
+    test('reset during another tab\'s world write leaves the vault empty', async () => {
+        const first = new ProfileVault();
+        await first.setup('pw');
+        await first.upsert({ username: 'alice', password: 'a' });
+        const second = new ProfileVault();
+        let reset: Promise<void> | undefined;
+        const write = localStorage.setItem;
+        Object.defineProperty(localStorage, 'setItem', { configurable: true, value: (key: string, value: string) => {
+            reset = second.reset();
+            write(key, value);
+        } });
+        try {
+            await first.setWorld('alice', 2);
+            await reset;
+        } finally {
+            Object.defineProperty(localStorage, 'setItem', { configurable: true, value: write });
+        }
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('pw')).toBe(false);
+        expect(reopened.status()).toBe('empty');
+    });
+
+    test('a queued upsert rejects when refresh observes a reset from another tab', async () => {
+        const first = new ProfileVault();
+        await first.setup('pw');
+        await new ProfileVault().reset();
+        const refresh = first.refresh();
+        const save = first.upsert({ username: 'alice', password: 'a' });
+        await refresh;
+        await expect(save).rejects.toThrow(/vault/i);
+        expect(new ProfileVault().status()).toBe('empty');
+    });
+
+    test('a recreated profile can be saved to its former group', async () => {
+        const v = new ProfileVault();
+        await v.setup('pw');
+        const profile = { username: 'alice', password: 'a' };
+        await v.upsert(profile);
+        await v.assignGroup(['alice'], 'Miners');
+        await v.remove('alice');
+        await v.upsert(profile);
+        await v.saveTabState(['Miners'], new Map([['alice', 'Miners']]), 'Main');
+        const reopened = new ProfileVault();
+        expect(await reopened.unlock('pw')).toBe(true);
+        expect(reopened.list()).toEqual([{ ...profile, tab: 'Miners' }]);
     });
 
     test('setup while locked throws', async () => {

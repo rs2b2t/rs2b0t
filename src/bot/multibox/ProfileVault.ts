@@ -25,6 +25,11 @@ const MAIN_TAB = 'Main';
 const hasLocal = typeof localStorage !== 'undefined';
 type VaultStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
+function withBrowserLock<T>(change: () => T): Promise<T> {
+    if (!navigator.locks?.request) throw new Error('Saving profiles requires a browser with Web Locks support.');
+    return navigator.locks.request(KEY, change);
+}
+
 interface StoredBlob {
     v: number;
     kdf: string;
@@ -164,6 +169,7 @@ export class ProfileVault {
     private salt: Uint8Array<ArrayBuffer> | null = null;
     private persistTail = Promise.resolve();
     private persistGeneration = 0;
+    private lastResetGeneration = 0;
     private worldTail = Promise.resolve();
     private pendingImport: Promise<void> | null = null;
 
@@ -178,9 +184,8 @@ export class ProfileVault {
 
     private async compareAndSet(expected: string | null, value: string): Promise<boolean> {
         if (desktopStorage) return desktopStorage.compareAndSet(KEY, expected, value);
-        if (!navigator.locks?.request) throw new Error('Saving profiles requires a browser with Web Locks support.');
         const generation = this.persistGeneration;
-        return navigator.locks.request(KEY, () => {
+        return withBrowserLock(() => {
             if (generation !== this.persistGeneration || this.storage!.getItem(KEY) !== expected) return false;
             this.storage!.setItem(KEY, value);
             return true;
@@ -321,17 +326,19 @@ export class ProfileVault {
         return true;
     }
 
-    reset(): void {
-        this.persistGeneration++;
-        if (this.storage) {
-            this.storage!.removeItem(KEY);
-            this.storage!.removeItem(LEGACY_KEY);
-        }
-        this.cache = null;
-        this.customTabs = [];
-        this.active = MAIN_TAB;
-        this.key = null;
-        this.salt = null;
+    async reset(): Promise<void> {
+        const clear = () => {
+            this.storage?.removeItem(LEGACY_KEY);
+            this.storage?.removeItem(KEY);
+            this.lastResetGeneration = ++this.persistGeneration;
+            this.cache = null;
+            this.customTabs = [];
+            this.active = MAIN_TAB;
+            this.key = null;
+            this.salt = null;
+        };
+        if (this.shared && !desktopStorage) await withBrowserLock(clear);
+        else clear();
     }
 
     list(): Profile[] {
@@ -400,7 +407,7 @@ export class ProfileVault {
             try {
                 await this.sharedChange(draft => draft.upsert(p));
             } catch (error) {
-                if (desktopStorage || generation === this.persistGeneration || this.status() !== 'empty') throw error;
+                if (desktopStorage || generation >= this.lastResetGeneration || this.status() !== 'empty') throw error;
             }
             return;
         }
@@ -486,7 +493,11 @@ export class ProfileVault {
     }
 
     async remove(username: string): Promise<void> {
-        if (this.shared) return this.sharedChange(draft => draft.remove(username));
+        if (this.shared) {
+            await this.sharedChange(draft => draft.remove(username));
+            this.sharedTabs.assignments.delete(username);
+            return;
+        }
         if (this.pendingImport) return this.afterImport(() => this.remove(username));
         this.cache = this.assertUnlocked().filter(x => x.username !== username);
         await this.persist();

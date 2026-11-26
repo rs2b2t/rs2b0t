@@ -33,8 +33,6 @@ function captureListeners(target: EventTarget): () => void {
     };
 }
 
-let fixtureId = 0;
-
 async function withWall(mode: 'local' | 'proxy', check: (wall: Wall) => Promise<void>): Promise<void> {
     const previousMode = process.env.RS2B0T_TARGET;
     process.env.RS2B0T_TARGET = mode;
@@ -56,7 +54,7 @@ async function withWall(mode: 'local' | 'proxy', check: (wall: Wall) => Promise<
     const browser = Reflect.get(window, 'happyDOM') as { setURL(url: string): void };
     try {
         browser.setURL(mode === 'proxy' ? 'https://w1.rs2b2t.com/rs2b0t/wall' : 'http://localhost:8890/multibox.html?nodeid=42&world=2');
-        vault.reset();
+        await vault.reset();
         await vault.setup('test-passphrase');
         await vault.upsert({ username: 'alice', password: 'a', world: 1 });
         await vault.upsert({ username: 'bob', password: 'b', world: 2 });
@@ -66,7 +64,7 @@ async function withWall(mode: 'local' | 'proxy', check: (wall: Wall) => Promise<
             el.id = `mbx-${id}`;
             document.body.appendChild(el);
         }
-        const entry = `../../src/bot/multibox/main.ts?fixture=${mode}-${fixtureId++}`;
+        const entry = `../../src/bot/multibox/main.ts?fixture=${crypto.randomUUID()}`;
         await import(entry);
         if (!Reflect.get(globalThis, 'multibox')) document.dispatchEvent(new Event('DOMContentLoaded'));
         wall = Reflect.get(globalThis, 'multibox') as Wall;
@@ -87,7 +85,7 @@ async function withWall(mode: 'local' | 'proxy', check: (wall: Wall) => Promise<
         freeze.mockRestore();
         if (observer) Object.defineProperty(window, 'PerformanceObserver', observer);
         else Reflect.deleteProperty(window, 'PerformanceObserver');
-        vault.reset();
+        await vault.reset();
         Reflect.deleteProperty(globalThis, 'multibox');
         document.body.innerHTML = '';
         browser.setURL(previousUrl);
@@ -171,7 +169,7 @@ test('roster closes when shared profiles are reset or relocked', async () => {
         await new Promise(resolve => setTimeout(resolve, 0));
         const roster = document.getElementById('mbx-roster')!;
         expect(roster.hidden).toBe(false);
-        const refresh = spyOn(vault, 'refresh').mockImplementation(async () => { vault.reset(); });
+        const refresh = spyOn(vault, 'refresh').mockImplementation(() => vault.reset());
         try {
             window.dispatchEvent(new StorageEvent('storage', { key: 'rs2b0t:multibox:profiles' }));
             await new Promise(resolve => setTimeout(resolve, 0));

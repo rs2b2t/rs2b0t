@@ -9,11 +9,11 @@ const clearAll = () => {
 };
 beforeEach(async () => {
     clearAll();
-    vault.reset();
+    await vault.reset();
     await vault.setup('pw');
 });
-afterEach(() => {
-    vault.reset();
+afterEach(async () => {
+    await vault.reset();
     clearAll();
 });
 

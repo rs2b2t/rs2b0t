@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { ProfileVault } from '#/bot/multibox/ProfileVault.js';
 import { VaultPrompt } from '#/bot/multibox/VaultPrompt.js';
 
@@ -93,10 +93,36 @@ describe('VaultPrompt', () => {
         const p = prompt.ensureUnlocked();
         q('#mbx-vault-reset').click();
         expect(vault.status()).toBe('locked');
-        q('#mbx-vault-reset').click();
+        await navigator.locks.request('rs2b0t:multibox:profiles', async () => {
+            q('#mbx-vault-reset').click();
+            await Promise.resolve();
+            expect(vault.status()).toBe('locked');
+            expect(q('#mbx-vault-confirm')).toBeNull();
+        });
+        await until(() => !!q('#mbx-vault-confirm'));
         expect(vault.status()).toBe('empty');
         expect(q('#mbx-vault-confirm')).not.toBeNull();
         prompt.el.click();
         await p;
+    });
+
+    test('a denied reset keeps the unlock form and allows retry', async () => {
+        await new ProfileVault().setup('pw');
+        const { vault, prompt } = make();
+        const pending = prompt.ensureUnlocked();
+        const lock = spyOn(navigator.locks, 'request').mockRejectedValueOnce(new Error('lock denied'));
+        try {
+            q('#mbx-vault-reset').click();
+            q('#mbx-vault-reset').click();
+            await until(() => q('.mbx-vault-error').textContent === 'lock denied');
+            expect(vault.status()).toBe('locked');
+            q('#mbx-vault-reset').click();
+            await until(() => !!q('#mbx-vault-confirm'));
+            expect(vault.status()).toBe('empty');
+        } finally {
+            lock.mockRestore();
+            prompt.el.click();
+            await pending;
+        }
     });
 });

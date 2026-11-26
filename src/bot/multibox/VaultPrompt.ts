@@ -132,14 +132,21 @@ export class VaultPrompt {
         const reset = div('mbx-vault-reset', 'forgot? start over');
         reset.id = 'mbx-vault-reset';
         let armed = false;
-        reset.addEventListener('click', () => {
+        reset.addEventListener('click', async () => {
+            if (go.disabled) return;
             if (!armed) {
                 armed = true;
                 reset.textContent = 'really wipe all saved profiles?';
                 return;
             }
-            this.vault.reset();
-            this.render();
+            go.disabled = true;
+            try {
+                await this.vault.reset();
+                this.render();
+            } catch (error) {
+                err.textContent = error instanceof Error ? error.message : String(error);
+                go.disabled = false;
+            }
         });
         this.box.append(title, form, err, reset);
         pass.focus();

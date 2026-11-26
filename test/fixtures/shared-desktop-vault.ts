@@ -93,7 +93,7 @@ try {
     await first.refresh();
     assert.equal(first.list().find(p => p.username === 'first')?.tab, 'Main');
     assert.equal(first.list().find(p => p.username === 'second')?.tab, 'Logs');
-    first.reset();
+    await first.reset();
     await second.refresh();
     assert.equal(second.status(), 'empty');
     const results = await Promise.allSettled([first.setup('one'), second.setup('two')]);
