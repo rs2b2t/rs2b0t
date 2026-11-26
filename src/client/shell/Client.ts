@@ -8,7 +8,7 @@ import GameShell from '#/client/shell/GameShell.js';
 import { MiniMenuAction } from '#/client/shell/MiniMenuAction.js';
 import MobileKeyboard from '#/client/shell/MobileKeyboard.js';
 import MouseTracking from '#/client/shell/MouseTracking.js';
-import Skill, { buildExperienceThresholds } from '#/client/shell/Skill.js';
+import Skill from '#/client/shell/Skill.js';
 import TitleFlames from '#/client/shell/TitleFlames.js';
 
 import FloType from '#/client/config/FloType.js';
@@ -76,6 +76,8 @@ import WordFilter from '#/client/wordfilter/WordFilter.js';
 import WordPack from '#/client/wordfilter/WordPack.js';
 
 import JagFX from '#/client/sound/JagFX.js';
+
+import { buildExperienceThresholds } from '#/shared/experience.js';
 
 const MAX_PLAYER_COUNT = 2048;
 const LOCAL_PLAYER_INDEX = 2047;
