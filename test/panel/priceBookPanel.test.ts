@@ -165,8 +165,8 @@ describe('editing a row', () => {
 
     test.each([
         { side: 'buy', other: 'sell', pin: '250', derived: '90', afterMid: '180', afterSpread: '160' },
-        { side: 'sell', other: 'buy', pin: '80', derived: '110', afterMid: '220', afterSpread: '240' }
-    ])('resumes derived $side pricing and keeps the other panel\'s $other pin', ({ side, other, pin, derived, afterMid, afterSpread }) => {
+        { side: 'sell', other: 'buy', pin: '75', derived: '110', afterMid: '220', afterSpread: '240' }
+    ])('keeps $side derived and $other pinned after a stale panel toggles selling', ({ side, other, pin, derived, afterMid, afterSpread }) => {
         const panel = openPanel();
         const row = '[data-item="440"]';
         const field = (role: string) => panel.root.querySelector<HTMLInputElement>(`${row} input[data-role="${role}"]`)!;
@@ -176,23 +176,24 @@ describe('editing a row', () => {
             input.dispatchEvent(new Event('change'));
         };
 
-        change(field('buy'), '75');
+        change(field('buy'), '80');
         change(field('sell'), '125');
         const second = new PriceBookPanel();
         document.body.appendChild(second.root);
         second.open('seers');
         change(second.root.querySelector<HTMLInputElement>(`${row} input[data-role="${other}"]`)!, pin);
-        second.close();
         expect(clear()).not.toBeNull();
         clear()!.click();
         expect(clear()).toBeNull();
         expect(field(side).value).toBe(derived);
         expect(field(other).value).toBe(pin);
 
+        second.root.querySelector<HTMLButtonElement>(`${row} [data-role=selling]`)!.click();
+        second.close();
         const key = boxKey('set:PriceBooks:books');
         const [book] = JSON.parse(localStorage.getItem(key)!);
         expect(book.rows.find((r: { id: number }) => r.id === 440)).toEqual({
-            id: 440, mid: 100, cap: 0, buying: true, selling: true, [other]: Number(pin)
+            id: 440, mid: 100, cap: 0, buying: true, selling: false, [other]: Number(pin)
         });
         panel.close();
         sessionStorage.removeItem(key);

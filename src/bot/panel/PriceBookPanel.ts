@@ -124,7 +124,7 @@ export class PriceBookPanel {
             this.window.appendChild(this.bookFields(book));
             this.window.appendChild(this.shelfBar(all));
             this.window.appendChild(this.filterBar(shown.length, onShelf.length));
-            this.window.appendChild(this.table(book, shown));
+            this.window.appendChild(this.table(shown));
             this.window.appendChild(this.addBar());
             if (this.adding) {
                 this.window.appendChild(this.picker(book, cat));
@@ -526,7 +526,7 @@ export class PriceBookPanel {
         return wrap;
     }
 
-    private table(book: PriceBook, rows: readonly DisplayRow[]): HTMLElement {
+    private table(rows: readonly DisplayRow[]): HTMLElement {
         const table = el('div', 'rs2b0t-pricebook-table');
         table.dataset.scroll = 'table';
         table.appendChild(this.headRow());
@@ -537,7 +537,7 @@ export class PriceBookPanel {
             return table;
         }
         for (const row of rows) {
-            table.appendChild(this.itemRow(book, row));
+            table.appendChild(this.itemRow(row));
         }
         return table;
     }
@@ -676,14 +676,7 @@ export class PriceBookPanel {
             const add = el('button', 'rs2b0t-button rs2b0t-pricebook-shelf-add');
             add.textContent = missing.length === 0 ? '✓' : `+ add ${missing.length}`;
             add.disabled = missing.length === 0;
-            add.addEventListener('click', () =>
-                this.commit(
-                    addRows(
-                        book,
-                        missing.map(r => ({ id: r.id, cost: r.cost }))
-                    )
-                )
-            );
+            add.addEventListener('click', () => this.editCurrent(current => addRows(current, missing)));
             line.appendChild(add);
 
             list.appendChild(line);
@@ -692,7 +685,7 @@ export class PriceBookPanel {
         return box;
     }
 
-    private itemRow(book: PriceBook, row: DisplayRow): HTMLElement {
+    private itemRow(row: DisplayRow): HTMLElement {
         const line = el('div', 'rs2b0t-pricebook-row');
         line.dataset.item = String(row.id);
         if (!row.valid) {
@@ -711,10 +704,10 @@ export class PriceBookPanel {
         line.appendChild(this.priceCell(row, 'sell', row.pinnedSell));
         line.appendChild(this.priceCell(row, 'cap'));
 
-        line.appendChild(this.sideToggle('buying', row.buying, () => this.commit(toggleSide(book, row.id, 'buying'))));
-        line.appendChild(this.sideToggle('selling', row.selling, () => this.commit(toggleSide(book, row.id, 'selling'))));
+        line.appendChild(this.sideToggle('buying', row.buying, () => this.editCurrent(book => toggleSide(book, row.id, 'buying'))));
+        line.appendChild(this.sideToggle('selling', row.selling, () => this.editCurrent(book => toggleSide(book, row.id, 'selling'))));
 
-        line.appendChild(this.action('drop', '✕', () => this.commit(dropRow(book, row.id))));
+        line.appendChild(this.action('drop', '✕', () => this.editCurrent(book => dropRow(book, row.id))));
         return line;
     }
 
@@ -824,7 +817,7 @@ export class PriceBookPanel {
             if (hit.added) {
                 line.dataset.added = 'true';
             } else {
-                line.addEventListener('click', () => this.commit(addRow(book, hit.id, hit.cost)));
+                line.addEventListener('click', () => this.editCurrent(current => addRow(current, hit.id, hit.cost)));
             }
             results.appendChild(line);
         }
