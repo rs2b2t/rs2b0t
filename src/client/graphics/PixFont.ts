@@ -307,6 +307,14 @@ export default class PixFont extends Linkable2 {
     }
 
     plotLetter(data: Int8Array, x: number, y: number, w: number, h: number, rgb: number): void {
+        this.plotClippedLetter(data, x, y, w, h, rgb, false, 0);
+    }
+
+    plotLetterTrans(data: Int8Array, x: number, y: number, w: number, h: number, rgb: number, alpha: number): void {
+        this.plotClippedLetter(data, x, y, w, h, rgb, true, alpha);
+    }
+
+    private plotClippedLetter(data: Int8Array, x: number, y: number, w: number, h: number, rgb: number, translucent: boolean, alpha: number): void {
         x |= 0;
         y |= 0;
         w |= 0;
@@ -348,7 +356,11 @@ export default class PixFont extends Linkable2 {
         }
 
         if (w > 0 && h > 0) {
-            this.plot(Pix2D.pixels, data, rgb, srcOff, dstOff, w, h, dstStep, srcStep);
+            if (translucent) {
+                this.plotTrans(Pix2D.pixels, data, rgb, srcOff, dstOff, w, h, dstStep, srcStep, alpha);
+            } else {
+                this.plot(Pix2D.pixels, data, rgb, srcOff, dstOff, w, h, dstStep, srcStep);
+            }
         }
     }
 
@@ -396,52 +408,6 @@ export default class PixFont extends Linkable2 {
 
             dstOff += dstStep;
             srcOff += srcStep;
-        }
-    }
-
-    plotLetterTrans(data: Int8Array, x: number, y: number, w: number, h: number, rgb: number, alpha: number): void {
-        x |= 0;
-        y |= 0;
-        w |= 0;
-        h |= 0;
-
-        let dstOff: number = x + y * Pix2D.width;
-        let dstStep: number = Pix2D.width - w;
-
-        let srcStep: number = 0;
-        let srcOff: number = 0;
-
-        if (y < Pix2D.clipMinY) {
-            const cutoff: number = Pix2D.clipMinY - y;
-            h -= cutoff;
-            y = Pix2D.clipMinY;
-            srcOff += cutoff * w;
-            dstOff += cutoff * Pix2D.width;
-        }
-
-        if (y + h >= Pix2D.clipMaxY) {
-            h -= y + h + 1 - Pix2D.clipMaxY;
-        }
-
-        if (x < Pix2D.clipMinX) {
-            const cutoff: number = Pix2D.clipMinX - x;
-            w -= cutoff;
-            x = Pix2D.clipMinX;
-            srcOff += cutoff;
-            dstOff += cutoff;
-            srcStep += cutoff;
-            dstStep += cutoff;
-        }
-
-        if (x + w >= Pix2D.clipMaxX) {
-            const cutoff: number = x + w + 1 - Pix2D.clipMaxX;
-            w -= cutoff;
-            srcStep += cutoff;
-            dstStep += cutoff;
-        }
-
-        if (w > 0 && h > 0) {
-            this.plotTrans(Pix2D.pixels, data, rgb, srcOff, dstOff, w, h, dstStep, srcStep, alpha);
         }
     }
 
