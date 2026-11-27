@@ -524,12 +524,8 @@ export default class MarketMaker extends TaskBot {
             return false;
         }
 
-        const units = new Map<number, number>();
-        for (const item of Bank.items()) {
-            const id = unnotedId(this.cat, item.id);
-            units.set(id, (units.get(id) ?? 0) + item.count);
-        }
-        this.ledger.setStock([...units].map(([id, count]) => ({ id, count })));
+        const entries = Bank.items().map(item => ({ id: unnotedId(this.cat, item.id), count: item.count }));
+        this.ledger.setStock(entries);
         return true;
     }
 
