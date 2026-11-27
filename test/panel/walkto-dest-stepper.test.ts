@@ -16,6 +16,14 @@ function stubCtx(): CanvasRenderingContext2D {
     } as never as CanvasRenderingContext2D;
 }
 
+function paintDestination(current: string): string | null {
+    const p = Paint.begin(stubCtx(), { dock: 'chatbox' });
+    p.title('WalkTo');
+    const picked = p.stepper('dest', 'Destination', WALK_OPTIONS, current);
+    p.end();
+    return picked;
+}
+
 let regions: { id: string; x: number; y: number; w: number; h: number }[] = [];
 
 beforeEach(() => {
@@ -40,58 +48,34 @@ test('cycleOption is case-insensitive and handles unknown current', () => {
 });
 
 test('WALK_OPTIONS stepper publishes prev/mid/next widgets', () => {
-    const p = Paint.begin(stubCtx(), { dock: 'chatbox' });
-    p.title('WalkTo');
-    p.stepper('dest', 'Destination', WALK_OPTIONS, 'Lumbridge');
-    p.end();
+    paintDestination('Lumbridge');
     expect(regions.some(r => r.id === 'step:dest:prev')).toBe(true);
     expect(regions.some(r => r.id === 'step:dest:mid')).toBe(true);
     expect(regions.some(r => r.id === 'step:dest:next')).toBe(true);
 });
 
 test('one next click advances a single destination (no overshoot)', () => {
-    const paint = (): string | null => {
-        const p = Paint.begin(stubCtx(), { dock: 'chatbox' });
-        p.title('WalkTo');
-        const picked = p.stepper('dest', 'Destination', WALK_OPTIONS, 'Lumbridge');
-        p.end();
-        return picked;
-    };
-    paint();
+    paintDestination('Lumbridge');
     const next = regions.find(r => r.id === 'step:dest:next')!;
     const cx = next.x + next.w / 2;
     const cy = next.y + next.h / 2;
     expect(paintState.pointerDown(cx, cy)).toBe(true);
-    const picked = paint();
+    const picked = paintDestination('Lumbridge');
     expect(picked).toBe(WALK_OPTIONS[1]);
     // Second paint without a new click returns null (click already consumed).
-    expect(paint()).toBeNull();
+    expect(paintDestination('Lumbridge')).toBeNull();
 });
 
 test('prev click goes to last option from first', () => {
-    const paint = (): string | null => {
-        const p = Paint.begin(stubCtx(), { dock: 'chatbox' });
-        p.title('WalkTo');
-        const picked = p.stepper('dest', 'Destination', WALK_OPTIONS, WALK_OPTIONS[0]!);
-        p.end();
-        return picked;
-    };
-    paint();
+    paintDestination(WALK_OPTIONS[0]!);
     const prev = regions.find(r => r.id === 'step:dest:prev')!;
     expect(paintState.pointerDown(prev.x + 2, prev.y + 2)).toBe(true);
-    expect(paint()).toBe(WALK_OPTIONS[WALK_OPTIONS.length - 1]);
+    expect(paintDestination(WALK_OPTIONS[0]!)).toBe(WALK_OPTIONS[WALK_OPTIONS.length - 1]);
 });
 
 test('mid label click does not cycle', () => {
-    const paint = (): string | null => {
-        const p = Paint.begin(stubCtx(), { dock: 'chatbox' });
-        p.title('WalkTo');
-        const picked = p.stepper('dest', 'Destination', WALK_OPTIONS, 'Varrock');
-        p.end();
-        return picked;
-    };
-    paint();
+    paintDestination('Varrock');
     const mid = regions.find(r => r.id === 'step:dest:mid')!;
     expect(paintState.pointerDown(mid.x + 2, mid.y + 2)).toBe(true);
-    expect(paint()).toBeNull();
+    expect(paintDestination('Varrock')).toBeNull();
 });
