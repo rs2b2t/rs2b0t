@@ -1,6 +1,5 @@
 import { PriceBooks } from '../api/market/bookStore.js';
 import { exportOrderbooks, MAX_VALUE, mergeOrderbooks, parseOrderbookFile } from '../api/market/orderbook-format.js';
-import type { PriceBook as TransferBook } from '../api/market/orderbook-format.js';
 import { liveCatalog, type Catalog } from '../api/market/catalog.js';
 import { DEFAULT_MARGIN, DEFAULT_MAX_TRADE, removeBook, rowOf, uniqueBookName, upsertBook, type PriceBook } from '../api/market/priceBook.js';
 import { CATEGORIES, shelves, type Category } from '../api/market/categories.js';
@@ -41,7 +40,7 @@ export class PriceBookPanel {
     private renaming = false;
     private readonly iconRetry = new ItemIconRetry(() => this.fillIcons());
     private importRevision = 0;
-    private stagedImport: { filename: string; books: TransferBook[]; conflicts: string[] } | null = null;
+    private stagedImport: { filename: string; books: PriceBook[]; conflicts: string[] } | null = null;
     private importError: string | null = null;
 
     constructor() {
@@ -399,7 +398,7 @@ export class PriceBookPanel {
         return box;
     }
 
-    private importConflicts(books: readonly TransferBook[], existing = PriceBooks.all()): string[] {
+    private importConflicts(books: readonly PriceBook[], existing = PriceBooks.all()): string[] {
         const names = new Set(existing.map(book => book.name.toLowerCase()));
         return books.filter(book => names.has(book.name.toLowerCase())).map(book => book.name);
     }
