@@ -1,5 +1,5 @@
-/** @typedef {{ id:number, mid:number, buy?:number, sell?:number, margin?:number, cap:number, buying:boolean, selling:boolean }} PriceRow */
-/** @typedef {{ name:string, margin:number, maxTradeValue:number, rows:PriceRow[] }} PriceBook */
+/** @typedef {import('./priceBook.js').PriceRow} PriceRow */
+/** @typedef {import('./priceBook.js').PriceBook} PriceBook */
 
 export const MAX_FILE_BYTES = 1048576;
 
