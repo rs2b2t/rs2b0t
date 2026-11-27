@@ -1,6 +1,7 @@
 import Packet from '#/client/io/Packet.js';
 
 import Envelope from '#/client/sound/Envelope.js';
+import { SAMPLE_RATE } from '#/client/sound/SampleRate.js';
 
 export default class Filter {
     static coeff: Float32Array[] = [new Float32Array(8), new Float32Array(8)];
@@ -75,7 +76,7 @@ export default class Filter {
 
     private frequency(value: number): number {
         const hz: number = Math.pow(2.0, value) * 32.703197;
-        return (hz * Math.PI) / 11025.0;
+        return (hz * Math.PI) / (SAMPLE_RATE / 2);
     }
 
     private frequencyFor(direction: number, pair: number, t: number): number {
