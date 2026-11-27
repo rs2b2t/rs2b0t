@@ -1,13 +1,10 @@
 import assert from 'node:assert/strict';
-import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import type { Client as GameClient } from '#/client/shell/Client.js';
+import { mountCanvas } from './mountCanvas.js';
 
-GlobalRegistrator.register({ url: 'http://localhost/?box' });
-Object.defineProperty(globalThis, 'BroadcastChannel', { value: undefined });
-const canvas = document.createElement('canvas');
-canvas.id = 'canvas';
-Object.assign(canvas, { getContext: () => ({ fillRect() {} }) });
-document.body.appendChild(canvas);
+mountCanvas(canvas => {
+    Object.assign(canvas, { getContext: () => ({ fillRect() {} }) });
+});
 
 const { Client } = await import('#/client/shell/Client.js');
 const { default: Database } = await import('#/client/io/Database.js');
