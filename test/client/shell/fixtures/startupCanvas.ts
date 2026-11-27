@@ -1,31 +1,27 @@
 import assert from 'node:assert/strict';
-import { GlobalRegistrator } from '@happy-dom/global-registrator';
+import { mountCanvas } from './mountCanvas.js';
 
-GlobalRegistrator.register({ url: 'http://localhost/?box' });
-Object.defineProperty(globalThis, 'BroadcastChannel', { value: undefined });
-
-const canvas = document.createElement('canvas');
-canvas.id = 'canvas';
-canvas.width = 765;
-canvas.height = 503;
 let fullCanvasAllocations = 0;
 const messages: string[] = [];
 const paints: { image: ImageData; x: number; y: number }[] = [];
-Object.assign(canvas, {
-    getContext: () => ({
-        createImageData(width: number, height: number) {
-            if (width === canvas.width && height === canvas.height) fullCanvasAllocations++;
-            return { width, height, data: new Uint8ClampedArray(width * height * 4) };
-        },
-        putImageData(image: ImageData, x: number, y: number) {
-            paints.push({ image, x, y });
-        },
-        fillText(text: string) { messages.push(text); },
-        fillRect() {},
-        strokeRect() {}
-    })
+const canvas = mountCanvas(canvas => {
+    canvas.width = 765;
+    canvas.height = 503;
+    Object.assign(canvas, {
+        getContext: () => ({
+            createImageData(width: number, height: number) {
+                if (width === canvas.width && height === canvas.height) fullCanvasAllocations++;
+                return { width, height, data: new Uint8ClampedArray(width * height * 4) };
+            },
+            putImageData(image: ImageData, x: number, y: number) {
+                paints.push({ image, x, y });
+            },
+            fillText(text: string) { messages.push(text); },
+            fillRect() {},
+            strokeRect() {}
+        })
+    });
 });
-document.body.appendChild(canvas);
 
 const { Client } = await import('#/client/shell/Client.js');
 const { MapView } = await import('#/client/mapview/MapView.js');

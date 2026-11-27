@@ -1,32 +1,30 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import type { Client as GameClient } from '#/client/shell/Client.js';
+import { mountCanvas } from './mountCanvas.js';
 
-GlobalRegistrator.register({ url: 'http://localhost/?box' });
-Object.defineProperty(globalThis, 'BroadcastChannel', { value: undefined });
-const canvas = document.createElement('canvas');
-canvas.id = 'canvas';
 const digest = createHash('sha256');
 let allocations = 0;
 let bytes = 0;
 let draws = 0;
-Object.assign(canvas, {
-    getContext: () => ({
-        createImageData(width: number, height: number) {
-            const data = new Uint8ClampedArray(width * height * 4);
-            allocations++;
-            bytes += data.byteLength;
-            return { width, height, data };
-        },
-        putImageData(image: ImageData, x: number, y: number) {
-            digest.update(JSON.stringify([image.width, image.height, x, y]));
-            digest.update(image.data);
-            draws++;
-        }
-    })
+mountCanvas(canvas => {
+    Object.assign(canvas, {
+        getContext: () => ({
+            createImageData(width: number, height: number) {
+                const data = new Uint8ClampedArray(width * height * 4);
+                allocations++;
+                bytes += data.byteLength;
+                return { width, height, data };
+            },
+            putImageData(image: ImageData, x: number, y: number) {
+                digest.update(JSON.stringify([image.width, image.height, x, y]));
+                digest.update(image.data);
+                draws++;
+            }
+        })
+    });
 });
-document.body.appendChild(canvas);
+
 const { Client } = await import('#/client/shell/Client.js');
 const { default: Pix2D } = await import('#/client/graphics/Pix2D.js');
 
