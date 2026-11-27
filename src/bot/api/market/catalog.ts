@@ -138,13 +138,16 @@ function preferWorn(matches: readonly ObjRecord[], unstrung: boolean): ObjRecord
 
 /** Exact match, forgiving a plural. */
 // Why: people ask for "1k maple longbows", and the item is called "Maple longbow".
-function exactish(cat: Catalog, q: string): ObjRecord[] {
-    const hit = cat.items.filter(r => normalizeItemName(r.name) === q);
+function withPluralFallback(q: string, lookup: (name: string) => ObjRecord[]): ObjRecord[] {
+    const hit = lookup(q);
     if (hit.length > 0 || !q.endsWith('s')) {
         return hit;
     }
-    const singular = q.slice(0, -1);
-    return cat.items.filter(r => normalizeItemName(r.name) === singular);
+    return lookup(q.slice(0, -1));
+}
+
+function exactish(cat: Catalog, q: string): ObjRecord[] {
+    return withPluralFallback(q, name => cat.items.filter(r => normalizeItemName(r.name) === name));
 }
 
 /** Swap "dhide" and the like for the display name they stand in for. */
@@ -167,11 +170,7 @@ function withIds(cat: Catalog, ids: readonly number[]): ObjRecord[] {
 
 /** The name the shop would say back, spoken to it. */
 function byLabel(cat: Catalog, q: string): ObjRecord[] {
-    const direct = withIds(cat, BY_LABEL.get(q) ?? []);
-    if (direct.length > 0 || !q.endsWith('s')) {
-        return direct;
-    }
-    return withIds(cat, BY_LABEL.get(q.slice(0, -1)) ?? []);
+    return withPluralFallback(q, label => withIds(cat, BY_LABEL.get(label) ?? []));
 }
 
 /** Narrow a repeated name with the words the customer supplied. */
