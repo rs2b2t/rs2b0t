@@ -87,9 +87,11 @@ function queryReturning(locs: any[]) {
     };
 }
 
-test('opens a closed chest before delegating to its bank action', async () => {
-    let chestOpen = false;
+function chestFixture(scenario: 'initially-closed' | 'already-open' | 'search-only') {
+    let chestOpen = scenario !== 'initially-closed';
+    const openAction = scenario === 'search-only' ? 'Search' : 'Bank';
     const interactions: string[] = [];
+    const delegated: { name: string; op: string }[] = [];
     const closed = {
         name: 'Closed chest',
         actions: () => ['Open'],
@@ -101,24 +103,31 @@ test('opens a closed chest before delegating to its bank action', async () => {
     };
     const opened = {
         name: 'Open chest',
-        actions: () => (chestOpen ? ['Bank', 'Shut'] : [])
+        actions: () => (chestOpen ? [openAction, 'Shut'] : [])
     };
     (Locs as any).query = queryReturning([closed, opened]);
     (Bank as any).isOpen = () => false;
-    (Execution as any).delayUntil = async (condition: () => boolean) => condition();
-    (Execution as any).delayTicks = async () => {};
-
-    const delegated: { name: string; op: string }[] = [];
     (Bank as any).openNearest = async (name: string, op: string) => {
         delegated.push({ name, op });
         return true;
     };
 
-    const result = await Bank.openNearestAccess({
+    if (scenario !== 'already-open') {
+        (Execution as any).delayUntil = async (condition: () => boolean) => condition();
+        (Execution as any).delayTicks = async () => {};
+    }
+
+    const access = {
         name: 'Open chest',
         op: 'Bank',
         openFirst: { name: 'Closed chest', op: 'Open' }
-    });
+    };
+    return { access, interactions, delegated };
+}
+
+test('opens a closed chest before delegating to its bank action', async () => {
+    const { access, interactions, delegated } = chestFixture('initially-closed');
+    const result = await Bank.openNearestAccess(access);
 
     expect(result).toBe(true);
     expect(interactions).toEqual(['Open']);
@@ -126,30 +135,8 @@ test('opens a closed chest before delegating to its bank action', async () => {
 });
 
 test('uses an already-open bank chest without touching the closed one', async () => {
-    const interactions: string[] = [];
-    const closed = {
-        name: 'Closed chest',
-        actions: () => ['Open'],
-        interact: async (op: string) => {
-            interactions.push(op);
-            return true;
-        }
-    };
-    const opened = { name: 'Open chest', actions: () => ['Bank', 'Shut'] };
-    (Locs as any).query = queryReturning([closed, opened]);
-    (Bank as any).isOpen = () => false;
-
-    const delegated: { name: string; op: string }[] = [];
-    (Bank as any).openNearest = async (name: string, op: string) => {
-        delegated.push({ name, op });
-        return true;
-    };
-
-    const result = await Bank.openNearestAccess({
-        name: 'Open chest',
-        op: 'Bank',
-        openFirst: { name: 'Closed chest', op: 'Open' }
-    });
+    const { access, interactions, delegated } = chestFixture('already-open');
+    const result = await Bank.openNearestAccess(access);
 
     expect(result).toBe(true);
     expect(interactions).toEqual([]);
@@ -157,36 +144,12 @@ test('uses an already-open bank chest without touching the closed one', async ()
 });
 
 test('fails safely when opening never exposes the configured bank action', async () => {
-    let attempts = 0;
-    const closed = {
-        name: 'Closed chest',
-        actions: () => ['Open'],
-        interact: async () => {
-            attempts++;
-            return true;
-        }
-    };
-    const opened = { name: 'Open chest', actions: () => ['Search', 'Shut'] };
-    (Locs as any).query = queryReturning([closed, opened]);
-    (Bank as any).isOpen = () => false;
-    (Execution as any).delayUntil = async (condition: () => boolean) => condition();
-    (Execution as any).delayTicks = async () => {};
-
-    let delegated = false;
-    (Bank as any).openNearest = async () => {
-        delegated = true;
-        return true;
-    };
-
-    const result = await Bank.openNearestAccess({
-        name: 'Open chest',
-        op: 'Bank',
-        openFirst: { name: 'Closed chest', op: 'Open' }
-    });
+    const { access, interactions, delegated } = chestFixture('search-only');
+    const result = await Bank.openNearestAccess(access);
 
     expect(result).toBe(false);
-    expect(attempts).toBe(3);
-    expect(delegated).toBe(false);
+    expect(interactions).toEqual(['Open', 'Open', 'Open']);
+    expect(delegated).toEqual([]);
 });
 
 test('Miner nearest-bank flow carries Duel Arena chest access through', async () => {
