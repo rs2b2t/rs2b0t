@@ -8,11 +8,11 @@ import { settleScene } from '../../exec/prompts.js';
 import { Skills } from '../../../../skills/Skills.js';
 import type Tile from '../../../../../geometry/Tile.js';
 import { SM_ID, SM_LOC_ID, SM_TILE } from './areas.js';
-import { sacredOilDoses } from './temple.js';
+import { DOSES_PER_PYRE_LOG, PYRE_OIL_VIALS, sacredOilDoses } from './oil.js';
+
+export { DOSES_PER_PYRE_LOG };
 
 const PYRE_RADIUS = 10;
-/** Normal logs need 2 doses of sacred oil. */
-export const DOSES_PER_PYRE_LOG = 2;
 
 const pyreOfType = (id: number): Loc | null =>
     Locs.query().where(l => l.id === id).within(PYRE_RADIUS).nearest();
@@ -47,8 +47,8 @@ export async function makePyreLogs(log: (m: string) => void): Promise<boolean> {
         log(`only ${sacredOilDoses()} dose(s) of sacred oil — a pyre log wants ${DOSES_PER_PYRE_LOG}`);
         return false;
     }
-    const oil = [SM_ID.SACRED_OIL4, SM_ID.SACRED_OIL3, SM_ID.SACRED_OIL2]
-        .map(id => Inventory.items().find(i => i.id === id))
+    const oil = PYRE_OIL_VIALS
+        .map(vial => Inventory.items().find(i => i.id === vial.sacred))
         .find(item => item !== undefined);
     const logs = Inventory.items().find(i => i.id === SM_ID.LOGS);
     if (!oil || !logs) {
