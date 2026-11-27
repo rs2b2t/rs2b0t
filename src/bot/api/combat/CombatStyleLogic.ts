@@ -1,4 +1,5 @@
 import { SPELL_DB, STAFF_RUNES, type SpellRow } from '#/bot/data/spelldb.js';
+import { castsFromRunes } from '../magic/castsFromRunes.js';
 
 const STAFF_SPELLS_COM0 = 1830;
 export const AUTO_CHOOSE_COM = 353;
@@ -43,10 +44,7 @@ export function spellButtonCom(spellName: string): number {
 
 export function castsAvailable(spellName: string, wielded: string[], held: (rune: string) => number): number {
     const costs = runesPerCast(spellName, wielded);
-    if (!costs || costs.length === 0) {
-        return costs ? Number.POSITIVE_INFINITY : 0;
-    }
-    return Math.min(...costs.map(c => Math.floor(held(c.rune) / c.count)));
+    return costs === null ? 0 : castsFromRunes(costs, held);
 }
 
 export function runeWithdrawList(spellName: string, wielded: string[], casts: number): { rune: string; count: number }[] {

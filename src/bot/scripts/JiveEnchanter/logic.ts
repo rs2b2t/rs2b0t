@@ -1,3 +1,4 @@
+import { castsFromRunes } from '../../api/magic/castsFromRunes.js';
 import { SAPPHIRE, EMERALD, RUBY, DIAMOND, DRAGONSTONE, type Amulet } from '../../data/amulets.js';
 
 export const COSMIC = 'Cosmic rune';
@@ -78,7 +79,7 @@ export function runesPerCast(j: Jewel, wielded: readonly string[]): Rune[] {
 }
 
 export function castsAffordable(j: Jewel, wielded: readonly string[], held: (rune: string) => number): number {
-    return Math.min(...runesPerCast(j, wielded).map(r => Math.floor(held(r.rune) / r.count)));
+    return castsFromRunes(runesPerCast(j, wielded), held);
 }
 
 /** Pack slots left for jewels once every rune the cast needs has a stack. */
@@ -109,13 +110,14 @@ export type Plan = { ok: true; jewels: number; runes: Rune[] } | { ok: false; re
 export function tripPlan(j: Jewel, wielded: readonly string[], pack: Counts, bank: Counts): Plan {
     const perCast = runesPerCast(j, wielded);
     const room = Math.max(0, jewelSlots(j, wielded) - pack.jewels);
-    const fundable = Math.min(...perCast.map(r => Math.floor((pack.rune(r.rune) + bank.rune(r.rune)) / r.count)));
+    const available = (rune: string) => pack.rune(rune) + bank.rune(rune);
+    const fundable = castsFromRunes(perCast, available);
     const total = Math.min(pack.jewels + Math.min(room, bank.jewels), fundable);
     if (total < 1) {
         if (pack.jewels + bank.jewels < 1) {
             return { ok: false, reason: `the bank has no ${j.label}` };
         }
-        const short = perCast.find(r => pack.rune(r.rune) + bank.rune(r.rune) < r.count)!;
+        const short = perCast.find(r => available(r.rune) < r.count)!;
         return { ok: false, reason: `the bank has no ${short.rune}` };
     }
     const runes = perCast.map(r => ({ rune: r.rune, count: total * r.count - pack.rune(r.rune) })).filter(r => r.count > 0);
