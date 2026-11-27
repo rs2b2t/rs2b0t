@@ -20,6 +20,7 @@ import { ChatDialog } from '#/bot/api/ui/dialogue/ChatDialog.js';
 import Tile from '#/bot/geometry/Tile.js';
 import { Reachability } from '#/bot/event/webwalk/geometry/Reachability.js';
 import { Traversal } from '#/bot/api/walking/Traversal.js';
+import { saradominWizard } from './saradomin-wizard.fixture.js';
 
 let tick: number;
 let pack: InvItemSnapshot[];
@@ -36,9 +37,7 @@ beforeEach(() => {
     tick = 0; energy = 1000; armed = false; events = []; advance = () => {};
     pack = [item(185, 'Superantipoison(1)'), item(385, 'Shark', 15), item(1231, 'Dragon dagger(p)')];
     worn = [];
-    npcs = [{ index: 4, id: 1, anim: -1, name: 'Saradomin Wizard', level: 65, size: 1,
-        tile: { x: 3000, z: 3000, level: 0 }, distance: 1, ops: ['Attack'], inCombat: true,
-        health: 40, totalHealth: 40, faceEntity: 32768 }];
+    npcs = [saradominWizard()];
     GameMessages.reset();
     ClueExecutor.resetSession();
     spyOn(reader, 'inventory').mockImplementation(() => pack);
@@ -109,9 +108,7 @@ test('ranged guardians keep the bow, shoot from range, and stop when equipped ar
     expect(mode).toBe(1);
     expect(events.some(e => e.startsWith('attack:'))).toBe(true);
 
-    npcs = [{ index: 4, id: 1, anim: -1, name: 'Saradomin Wizard', level: 65, size: 1,
-        tile: { x: 3000, z: 3000, level: 0 }, distance: 5, ops: ['Attack'], inCombat: true,
-        health: 40, totalHealth: 40, faceEntity: 32768 }];
+    npcs = [saradominWizard(5)];
     worn = worn.filter(i => i.slot !== 13);
     const attacks = events.filter(e => e.startsWith('attack:')).length;
     expect(await fightGuardian('Saradomin Wizard', () => {}, protection)).toBe('supplies-needed');

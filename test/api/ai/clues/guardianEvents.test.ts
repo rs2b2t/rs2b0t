@@ -16,6 +16,7 @@ import { Sustain } from '#/bot/api/sustain/Sustain.js';
 import { ChatDialog } from '#/bot/api/ui/dialogue/ChatDialog.js';
 import { Quests } from '#/bot/api/ui/questlog/Quests.js';
 import { Traversal } from '#/bot/api/walking/Traversal.js';
+import { saradominWizard } from './saradomin-wizard.fixture.js';
 
 let tick: number;
 let pending: boolean;
@@ -32,9 +33,7 @@ beforeEach(() => {
     tick = 0; pending = false; interrupted = false; digs = 0; drinks = 0; attacks = [];
     pack = [item(3526, 'Clue scroll (hard)'), item(185, 'Superantipoison(1)'), item(385, 'Shark', 15),
         item(952, 'Spade'), item(2574, 'Sextant'), item(2575, 'Watch'), item(2576, 'Chart')];
-    npcs = [{ index: 4, id: 1, anim: -1, name: 'Saradomin Wizard', level: 65, size: 1,
-        tile: { x: 3000, z: 3000, level: 0 }, distance: 1, ops: ['Attack'], inCombat: true,
-        health: 40, totalHealth: 40, faceEntity: 32768 }];
+    npcs = [saradominWizard()];
     GameMessages.reset();
     ClueExecutor.resetSession();
     spyOn(reader, 'inventory').mockImplementation(() => pack);
