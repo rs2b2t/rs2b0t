@@ -12,6 +12,7 @@ import { EventSignal } from '#/bot/api/execution/EventSignal.js';
 import { Loc, Locs } from '#/bot/api/locs/Locs.js';
 import { Traversal } from '#/bot/api/walking/Traversal.js';
 import Tile from '#/bot/geometry/Tile.js';
+import { equippedDisguiseSnapshot } from './blackknight-snapshot.fixture.js';
 
 test('sabotage waits for the delayed confirmation after the cabbage disappears', async () => {
     let consumed = false;
@@ -44,7 +45,7 @@ test('sabotage waits for the delayed confirmation after the cabbage disappears',
         })
     ];
     try {
-        const step = decide({ journal: 'inProgress', stage: 2, inv: new Map([['cabbage', 1]]), worn: new Set(['iron chainbody', 'bronze med helm']), noProgress: 0, bankCoins: 0 });
+        const step = decide(equippedDisguiseSnapshot(2));
         if (step.kind !== 'custom') throw new Error('expected sabotage step');
         await step.run(() => {});
         expect(confirmed).toBe(true);
@@ -80,7 +81,7 @@ test('listening finishes all nine dialogue pages across page-turn gaps', async (
         })
     ];
     try {
-        const step = decide({ journal: 'inProgress', stage: 1, inv: new Map([['cabbage', 1]]), worn: new Set(['iron chainbody', 'bronze med helm']), noProgress: 0, bankCoins: 0 });
+        const step = decide(equippedDisguiseSnapshot(1));
         if (step.kind !== 'custom') throw new Error('expected grill step');
         await step.run(() => {});
         expect(pages).toBe(9);
