@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { decide } from '#/bot/api/ai/quests/defs/blackknight.js';
 import type { QuestSnapshot } from '#/bot/api/ai/quests/engine/types.js';
+import { equippedDisguiseSnapshot } from './blackknight-snapshot.fixture.js';
 
 function snap(over: Partial<QuestSnapshot> = {}): QuestSnapshot {
     return { journal: 'inProgress', stage: 1, inv: new Map(), worn: new Set(), noProgress: 0, bankCoins: 0, ...over };
@@ -23,7 +24,7 @@ describe('Black Knight decide', () => {
         expect(s.kind === 'equip' && s.item).toBe('Bronze med helm');
     });
     test('in progress, disguise worn, cabbage held → infiltrate', () => {
-        const s = decide(snap({ worn: wearing('iron chainbody', 'bronze med helm'), inv: held('Cabbage') }));
+        const s = decide(equippedDisguiseSnapshot(1));
         expect(s.kind).toBe('custom');
         expect(s.kind === 'custom' && s.name).toBe('listen at the grill');
     });
