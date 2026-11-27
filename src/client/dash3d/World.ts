@@ -477,17 +477,9 @@ export default class World {
     }
 
     delLoc(level: number, x: number, z: number): void {
-        const tile: Square | null = this.squares[level][x][z];
-        if (!tile) {
-            return;
-        }
-
-        for (let l: number = 0; l < tile.spriteCount; l++) {
-            const loc: Sprite | null = tile.sprites![l];
-            if (loc && ((loc.typecode >> 29) & 0x3) === 2 && loc.minTileX === x && loc.minTileZ === z) {
-                this.delSprite(loc);
-                return;
-            }
+        const sprite = this.findSceneryAtOrigin(level, x, z);
+        if (sprite) {
+            this.delSprite(sprite);
         }
     }
 
@@ -515,19 +507,7 @@ export default class World {
     }
 
     getScene(level: number, x: number, z: number): Sprite | null {
-        const tile: Square | null = this.squares[level][x][z];
-        if (!tile) {
-            return null;
-        }
-
-        for (let l: number = 0; l < tile.spriteCount; l++) {
-            const sprite: Sprite | null = tile.sprites![l];
-            if (sprite && ((sprite.typecode >> 29) & 0x3) === 2 && sprite.minTileX === x && sprite.minTileZ === z) {
-                return sprite;
-            }
-        }
-
-        return null;
+        return this.findSceneryAtOrigin(level, x, z);
     }
 
     getGd(level: number, x: number, z: number): GroundDecor | null {
@@ -550,13 +530,17 @@ export default class World {
     }
 
     sceneSprite(level: number, x: number, z: number): Sprite | null {
+        return this.findSceneryAtOrigin(level, x, z);
+    }
+
+    private findSceneryAtOrigin(level: number, x: number, z: number): Sprite | null {
         const tile: Square | null = this.squares[level][x][z];
         if (!tile) {
             return null;
         }
 
-        for (let l: number = 0; l < tile.spriteCount; l++) {
-            const sprite: Sprite | null = tile.sprites![l];
+        for (let i = 0; i < tile.spriteCount; i++) {
+            const sprite: Sprite | null = tile.sprites![i];
             if (sprite && ((sprite.typecode >> 29) & 0x3) === 2 && sprite.minTileX === x && sprite.minTileZ === z) {
                 return sprite;
             }
