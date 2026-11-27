@@ -108,6 +108,7 @@ import {
 import {
     cookBatchAfterLoad,
     cookFilterLabel,
+    countMatching,
     countRawInBank,
     isBurntFishName,
     isCookedFishName,
@@ -3928,7 +3929,7 @@ export default class GatheringBot extends TaskBot {
     }
 
     cookableRawCount(): number {
-        return Inventory.items().filter(i => rawMatchesCookFilter(i.name, this.cookFishFilter)).length;
+        return countMatching(Inventory.items(), name => rawMatchesCookFilter(name, this.cookFishFilter));
     }
 
     bankOnlyRawCount(): number {

@@ -1,4 +1,5 @@
 import type { WorldTile } from '../../adapter/ClientAdapter.js';
+import { countMatching, lastMatchingIndex } from '../../api/cooking/CookingInventory.js';
 import { FIRE_SPOTS, localFirePlot, type FirePlot } from '../../api/firemaking/Firemaking.js';
 
 export interface PackItem {
@@ -10,16 +11,11 @@ function matches(name: string | null, pattern: string): boolean {
 }
 
 export function countRaw(items: readonly PackItem[], pattern: string): number {
-    return items.filter(i => matches(i.name, pattern)).length;
+    return countMatching(items, name => matches(name, pattern));
 }
 
 export function lastRawIndex(items: readonly PackItem[], pattern: string): number {
-    for (let i = items.length - 1; i >= 0; i--) {
-        if (matches(items[i].name, pattern)) {
-            return i;
-        }
-    }
-    return -1;
+    return lastMatchingIndex(items, name => matches(name, pattern));
 }
 
 // Why: four banks already carry a hand-walked burn strip in FIRE_SPOTS, which beats a blind box around the stand: the Varrock East strip is the street north of the bank, and an 8-tile box only clips its edge.
