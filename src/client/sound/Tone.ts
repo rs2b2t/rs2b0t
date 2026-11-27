@@ -2,6 +2,7 @@ import Packet from '#/client/io/Packet.js';
 
 import Envelope from '#/client/sound/Envelope.js';
 import Filter from '#/client/sound/Filter.js';
+import { SAMPLE_RATE } from '#/client/sound/SampleRate.js';
 import { mulShift16 } from '#/client/util/JsUtil.js';
 
 export default class Tone {
@@ -41,7 +42,7 @@ export default class Tone {
     filterRange: Envelope | null = null;
 
     generate(sampleCount: number, length: number): Int32Array {
-        Tone.buf ??= new Int32Array(22050 * 10);
+        Tone.buf ??= new Int32Array(SAMPLE_RATE * 10);
         for (let sample = 0; sample < sampleCount; sample++) {
             Tone.buf[sample] = 0;
         }

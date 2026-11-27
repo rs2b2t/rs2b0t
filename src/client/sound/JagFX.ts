@@ -1,5 +1,6 @@
 import Packet from '#/client/io/Packet.js';
 
+import { SAMPLE_RATE, millisecondsToSamples } from '#/client/sound/SampleRate.js';
 import Tone from '#/client/sound/Tone.js';
 
 import { TypedArray1d } from '#/client/util/Arrays.js';
@@ -84,7 +85,7 @@ export default class JagFX {
     }
 
     getWave(loopCount: number): Packet {
-        const waveBytes = JagFX.waveBytes ??= new Uint8Array(22050 * 20);
+        const waveBytes = JagFX.waveBytes ??= new Uint8Array(SAMPLE_RATE * 20);
         const waveBuffer = JagFX.waveBuffer ??= new Packet(waveBytes);
         const length = this.makeSound(loopCount, waveBytes);
         waveBuffer.pos = 0;
@@ -95,8 +96,8 @@ export default class JagFX {
         waveBuffer.ip4(16);
         waveBuffer.ip2(1);
         waveBuffer.ip2(1);
-        waveBuffer.ip4(22050);
-        waveBuffer.ip4(22050);
+        waveBuffer.ip4(SAMPLE_RATE);
+        waveBuffer.ip4(SAMPLE_RATE);
         waveBuffer.ip2(1);
         waveBuffer.ip2(8);
         waveBuffer.p4(0x64617461);
@@ -118,9 +119,9 @@ export default class JagFX {
             return 0;
         }
 
-        let sampleCount = ((duration * 22050) / 1000) | 0;
-        let loopStart = ((this.loopBegin * 22050) / 1000) | 0;
-        let loopStop = ((this.loopEnd * 22050) / 1000) | 0;
+        let sampleCount = millisecondsToSamples(duration);
+        let loopStart = millisecondsToSamples(this.loopBegin);
+        let loopStop = millisecondsToSamples(this.loopEnd);
 
         if (loopStart < 0 || loopStop < 0 || loopStop > sampleCount || loopStart >= loopStop) {
             loopCount = 0;
@@ -134,8 +135,8 @@ export default class JagFX {
         for (let i = 0; i < 10; i++) {
             const tone = this.tones[i];
             if (tone !== null) {
-                const toneSampleCount = ((tone.length * 22050) / 1000) | 0;
-                const start = ((tone.start * 22050) / 1000) | 0;
+                const toneSampleCount = millisecondsToSamples(tone.length);
+                const start = millisecondsToSamples(tone.start);
                 const samples = tone.generate(toneSampleCount, tone.length);
 
                 for (let sample = 0; sample < toneSampleCount; sample++) {
