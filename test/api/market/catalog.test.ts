@@ -174,6 +174,7 @@ describe('displayName', () => {
 describe('resolveByName with aliases', () => {
     test('the key halves answer to their halves', () => {
         expect(ids('loop half of key')).toEqual([987]);
+        expect(ids('loop half of keys')).toEqual([987]);
         expect(ids('tooth half of key')).toEqual([985]);
         // Why: the display name carries an "a" the player's own words for it do not.
         expect(ids('loop half of a key')).toEqual([987]);
